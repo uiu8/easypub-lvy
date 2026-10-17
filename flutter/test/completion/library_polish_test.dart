@@ -137,9 +137,9 @@ void main() {
                       as RenderRepaintBoundary)
                   .toImage();
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          await File(
+          await (await File(
             '../artifacts/library-polish-20261008/library-${size.width.toInt()}.png',
-          ).writeAsBytes(bytes!.buffer.asUint8List());
+          ).create(recursive: true)).writeAsBytes(bytes!.buffer.asUint8List());
           image.dispose();
         });
         await t.pumpWidget(const SizedBox());

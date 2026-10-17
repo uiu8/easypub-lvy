@@ -157,9 +157,9 @@ void main() {
                     as RenderRepaintBoundary)
                 .toImage();
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        await File(
+        await (await File(
           '../artifacts/chapter-workspace-20261009/actual-repair-preview.png',
-        ).writeAsBytes(bytes!.buffer.asUint8List());
+        ).create(recursive: true)).writeAsBytes(bytes!.buffer.asUint8List());
         image.dispose();
       });
       expect(find.text('甲段正文。', findRichText: true), findsWidgets);

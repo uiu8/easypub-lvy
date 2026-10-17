@@ -63,7 +63,6 @@ import '../settings/settings_page.dart';
 import '../../application/settings_service.dart';
 import '../../application/app_update_service.dart';
 import 'update_prompt.dart';
-import 'book_tabs.dart';
 import '../../infrastructure/native_catalog_picker.dart';
 import '../shell/page_menu.dart';
 import '../grain.dart';
@@ -158,7 +157,6 @@ class _RewriteAppState extends State<RewriteApp> {
     restoreWorkspaceView();
     conversionDraft.addListener(saveOutputDraft);
     router.routerDelegate.addListener(routeAccepted);
-    widget.library.books.addListener(pruneBookTabs);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) routeAccepted();
     });
@@ -200,11 +198,6 @@ class _RewriteAppState extends State<RewriteApp> {
   /// 自动更新（V68）：整个程序一个；顶栏提示与设置页共用。
   AppUpdateController? updates;
 
-  /// 书籍标签页（V69，G-073）。
-  final bookTabs = BookTabs();
-  void pruneBookTabs() =>
-      bookTabs.retain(widget.library.books.value.map((b) => b.id).toSet());
-
   final quickActivity = ValueNotifier<bool>(false);
   String? restoredRoute;
   Map<String, dynamic> issueViewJson(IssueViewState value) => {
@@ -231,11 +224,9 @@ class _RewriteAppState extends State<RewriteApp> {
     final raw = (library as WorkspaceAutosaveService).readDraft('workspace/UI');
     if (raw == null) {
       restoredRoute = null;
-      bookTabs.restore(null, const {});
       return;
     }
     final ids = library.books.value.map((b) => b.id).toSet();
-    bookTabs.restore(raw['tabs'], ids);
     final path = raw['route'] as String?;
     if (path != null) {
       final uri = Uri.tryParse(path);
@@ -294,7 +285,6 @@ class _RewriteAppState extends State<RewriteApp> {
     if (library is! WorkspaceAutosaveService) return;
     (library as WorkspaceAutosaveService).writeDraft('workspace/UI', {
       'route': router.routerDelegate.currentConfiguration.uri.toString(),
-      'tabs': bookTabs.toJson(),
       'chapters': {
         for (final e in chapterViews.entries)
           e.key: {
@@ -330,7 +320,6 @@ class _RewriteAppState extends State<RewriteApp> {
   }
 
   void routeAccepted() {
-    bookTabs.visit(router.routerDelegate.currentConfiguration.uri);
     final segments =
         router.routerDelegate.currentConfiguration.uri.pathSegments;
     if (segments.length > 1 &&
@@ -758,8 +747,6 @@ class _RewriteAppState extends State<RewriteApp> {
   void dispose() {
     autoImportResume?.dispose();
     updates?.dispose();
-    widget.library.books.removeListener(pruneBookTabs);
-    bookTabs.dispose();
     lifecycle?.workspaceGeneration.removeListener(workspaceReplaced);
     appearanceSettings?.snapshot.removeListener(appearanceChanged);
     appearanceSettings?.snapshot.removeListener(outputDefaultsChanged);
@@ -856,28 +843,6 @@ class _RewriteAppState extends State<RewriteApp> {
                     router.go('/tasks'),
                 const SingleActivator(LogicalKeyboardKey.keyK, control: true):
                     openCommandPalette,
-                // 书籍标签页（V69，G-073）：切换与关闭。
-                const SingleActivator(
-                  LogicalKeyboardKey.tab,
-                  control: true,
-                ): () {
-                  if (bookTabs.neighbor(1) case final l?) router.go(l);
-                },
-                const SingleActivator(
-                  LogicalKeyboardKey.tab,
-                  control: true,
-                  shift: true,
-                ): () {
-                  if (bookTabs.neighbor(-1) case final l?) router.go(l);
-                },
-                const SingleActivator(
-                  LogicalKeyboardKey.keyW,
-                  control: true,
-                ): () {
-                  if (bookTabs.active case final id?) {
-                    if (bookTabs.close(id) case final l?) router.go(l);
-                  }
-                },
               },
               child: DeskSearchHost(
                 child: _WorkspaceControls(owner: this, child: child!),

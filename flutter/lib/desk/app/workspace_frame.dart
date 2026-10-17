@@ -207,12 +207,6 @@ class _Workspace extends StatelessWidget {
                 anchored: true,
               ),
             ),
-            // 书籍标签页（V69，G-073）：没有打开的书时不占位置。
-            BookTabBar(
-              tabs: app.bookTabs,
-              library: library,
-              onOpen: (location) => context.go(location),
-            ),
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

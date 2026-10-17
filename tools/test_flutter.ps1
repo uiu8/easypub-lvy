@@ -21,7 +21,7 @@ Push-Location $root
 try {
     . (Join-Path $PSScriptRoot 'project_env.ps1')
     if (-not $KindlingPath) { $KindlingPath = Join-Path $root 'third_party/kindling/target/release/kindling-cli.exe' }
-    if (-not $BokaiPath) { $BokaiPath = Join-Path $root 'artifacts/release/EasyPub-workspace-autosave-20261008-win-x64/converters/bokai.exe' }
+    if (-not $BokaiPath) { $BokaiPath = Join-Path $root 'artifacts/engines/bokai.exe' }
     foreach ($path in @($PythonPath, $KindlingPath, $BokaiPath)) {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing test dependency: $path" }
     }

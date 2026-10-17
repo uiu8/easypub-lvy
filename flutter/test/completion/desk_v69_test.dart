@@ -10,71 +10,14 @@ import 'package:easypub_desktop/src/rust/frb_generated.dart';
 import 'package:easypub_desktop/application/library_service.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
-import 'package:easypub_desktop/desk/app/book_tabs.dart';
 import 'package:easypub_desktop/desk/app/rewrite_app.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/tokens.dart';
 
 class NoPicker extends Fake implements BookFilePicker {}
 
-/// V69：主题色（G-072）与书籍标签页（G-073）。
+/// V69：主题色（G-072）。书籍标签页（G-073）已在 V71 删除，这里确认它不再出现。
 void main() {
-  group('标签模型', () {
-    test('打开、更新位置、上限 8 个时去掉最久没用的、关闭与相邻', () {
-      final tabs = BookTabs();
-      tabs.visit(Uri.parse('/books/a/checks'));
-      tabs.visit(Uri.parse('/books/b/layout'));
-      tabs.visit(Uri.parse('/books/a/chapters?node=1'));
-      expect(tabs.tabs.map((t) => t.bookId), ['a', 'b']);
-      expect(tabs.tabs.first.location, '/books/a/chapters?node=1');
-      expect(tabs.active, 'a');
-      tabs.visit(Uri.parse('/settings'));
-      expect(tabs.active, isNull, reason: '非书页面不属于任何标签');
-      expect(tabs.tabs.length, 2);
-
-      for (final id in ['c', 'd', 'e', 'f', 'g', 'h']) {
-        tabs.visit(Uri.parse('/books/$id/overview'));
-      }
-      expect(tabs.tabs.length, 8);
-      tabs.visit(Uri.parse('/books/a/overview'));
-      tabs.visit(Uri.parse('/books/i/overview'));
-      expect(tabs.tabs.length, 8);
-      expect(tabs.indexOf('b'), -1, reason: 'b 最久没用，被去掉');
-      expect(tabs.indexOf('a'), isNonNegative);
-
-      // 相邻（循环）。
-      expect(tabs.neighbor(1), tabs.tabs.first.location);
-      expect(tabs.neighbor(-1), tabs.tabs[tabs.tabs.length - 2].location);
-      // 关闭当前标签：转到相邻标签；关闭非当前标签：不跳转。
-      expect(tabs.close('c'), isNull);
-      final next = tabs.close('i');
-      expect(next, tabs.tabs.last.location);
-      expect(tabs.active, isNull);
-    });
-
-    test('保存与恢复：只恢复书库里还在、地址合法的标签；移出书库的书自动去掉', () {
-      final tabs = BookTabs()
-        ..visit(Uri.parse('/books/a/checks?rule=check.number_gap'))
-        ..visit(Uri.parse('/books/b/layout'));
-      final saved = tabs.toJson();
-      final again = BookTabs()
-        ..restore(
-          [
-            ...saved,
-            {'book': 'x', 'route': '/books/x/checks'},
-            {'book': 'a', 'route': '/books/a/layout'},
-            {'book': 'c', 'route': '/books/d/layout'},
-            'junk',
-          ],
-          {'a', 'b', 'c'},
-        );
-      expect(again.toJson(), saved);
-      again.retain({'b'});
-      expect(again.tabs.map((t) => t.bookId), ['b']);
-      expect((BookTabs()..restore(null, {'a'})).tabs, isEmpty);
-    });
-  });
-
   test('主题色：只换强调色三件套；未知值回落墨灰', () {
     final teal = deskTheme(accent: 'teal');
     final desk = teal.extension<Desk>()!;
@@ -113,7 +56,7 @@ void main() {
     }
   });
 
-  testWidgets('整机：两本书的标签切换、关闭、Ctrl+W、保存；设置里换主题色', (t) async {
+  testWidgets('整机：两本书之间切换没有标签条，Ctrl+W 不改页面，不保存标签；设置里换主题色', (t) async {
     t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       const MethodChannel('window_manager'),
       (call) async => call.method == 'isMaximized' ? false : null,
@@ -168,37 +111,25 @@ void main() {
     await settle();
     GoRouter router() => GoRouter.of(t.element(find.byType(Scaffold).first));
     String path() => router().routeInformationProvider.value.uri.path;
-    expect(find.byKey(ValueKey(('book-tab', a))), findsOneWidget);
+    expect(find.byKey(const ValueKey('book-tabs')), findsNothing);
 
     router().go('/books/${Uri.encodeComponent(b)}/information');
     await settle();
-    expect(find.byKey(ValueKey(('book-tab', a))), findsOneWidget);
-    expect(find.byKey(ValueKey(('book-tab', b))), findsOneWidget);
-    expect(find.textContaining('雾港来信'), findsWidgets);
-
-    // 点 a 的标签：回到 a 最后停留的页面。
-    await t.tap(find.byKey(ValueKey(('book-tab', a))));
-    await settle();
-    expect(path(), '/books/${Uri.encodeComponent(a)}/overview');
-    expect(library.selection.value.current, a);
-
-    // 保存：标签随工作区一起写入。
-    final saved = library.readDraft('workspace/UI')!['tabs'] as List;
-    expect(saved.map((e) => (e as Map)['book']), [a, b]);
-
-    // 关闭当前标签 a：转到 b。
-    await t.tap(find.byKey(ValueKey(('book-tab-close', a))));
-    await settle();
-    expect(path(), '/books/${Uri.encodeComponent(b)}/information');
+    expect(find.byKey(const ValueKey('book-tabs')), findsNothing);
     expect(find.byKey(ValueKey(('book-tab', a))), findsNothing);
+    expect(library.selection.value.current, b);
 
-    // Ctrl+W 关闭最后一个：回书库，标签条消失。
+    // 工作区只保存当前页面，不再有标签。
+    final saved = library.readDraft('workspace/UI')!;
+    expect(saved.containsKey('tabs'), false);
+    expect(saved['route'], '/books/${Uri.encodeComponent(b)}/information');
+
+    // Ctrl+W 不再关闭任何东西。
     await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await t.sendKeyEvent(LogicalKeyboardKey.keyW);
     await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await settle();
-    expect(path(), '/');
-    expect(find.byKey(const ValueKey('book-tab-new')), findsNothing);
+    expect(path(), '/books/${Uri.encodeComponent(b)}/information');
 
     // 设置里换主题色：立即生效并保存。
     GoRouter.of(t.element(find.byType(Scaffold).first)).go('/settings');

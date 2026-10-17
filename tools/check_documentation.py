@@ -30,6 +30,10 @@ def contrast(a: str, b: str) -> float:
 def main() -> None:
     errors = ["Missing artifact: " + path for path in REQUIRED if not (ROOT / path).is_file()]
     links_checked = 0
+    # artifacts/ 是 git 忽略的本机输出（测试日志、截图、发布包），会按需清理，新克隆里也没有；
+    # 指向它的链接只计数，不算失效。
+    artifact_links = 0
+    artifacts_root = (ROOT / "artifacts").resolve()
     docs = [ROOT / "README.md", ROOT / "DEVELOPMENT.md", *sorted((ROOT / "docs").rglob("*.md")), ROOT / "contracts/README.md"]
     for path in docs:
         text = path.read_text(encoding="utf-8", errors="strict")
@@ -46,6 +50,9 @@ def main() -> None:
             target = Path(destination)
             if not target.is_absolute():
                 target = path.parent / target
+            if artifacts_root in target.resolve().parents:
+                artifact_links += 1
+                continue
             links_checked += 1
             if not target.exists():
                 errors.append(f"Broken local link in {path.relative_to(ROOT)}: {destination}")
@@ -81,6 +88,7 @@ def main() -> None:
         errors.append("Scenario matrix is not nine rows")
     report = {"checked_at": datetime.now(timezone.utc).isoformat(), "passed": not errors,
               "markdown_files": len(docs), "local_links_checked": links_checked,
+              "artifact_links_skipped": artifact_links,
               "scenarios": len(scenarios), "pending_matrix_cells": cells,
               "matrix_status_counts": status_counts,
               "contrast_math_only": checks, "errors": errors,

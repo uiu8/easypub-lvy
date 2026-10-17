@@ -76,22 +76,8 @@ extension _CommandPalette on _RewriteAppState {
         disabledReason: current == null ? '先选择书稿' : null,
         run: () => book('rules'),
       ),
-      DeskCommand(
-        id: 'G-073',
-        label: '关闭当前标签',
-        group: group,
-        initials: 'gbdqbq',
-        shortcut: 'Ctrl W',
-        icon: Icons.close_rounded,
-        disabledReason: bookTabs.active == null ? '当前页面不属于某本书' : null,
-        run: () {
-          if (bookTabs.active case final id?) {
-            if (bookTabs.close(id) case final l?) go(l);
-          }
-        },
-      ),
     ];
-    // 按书名切换（V70，G-076）：只在输入后出现；有标签时回到标签记住的页面。
+    // 按书名切换（V70，G-076）：只在输入后出现，打开书稿概览。
     final books = [
       for (final b in widget.library.books.value)
         DeskCommand(
@@ -102,14 +88,7 @@ extension _CommandPalette on _RewriteAppState {
           keywords: b.author,
           icon: Icons.menu_book_outlined,
           searchOnly: true,
-          run: () {
-            final i = bookTabs.indexOf(b.id);
-            go(
-              i >= 0
-                  ? bookTabs.tabs[i].location
-                  : bookPageLocation(b.id, 'overview'),
-            );
-          },
+          run: () => go(bookPageLocation(b.id, 'overview')),
         ),
     ];
     await showDeskCommandPalette(context, recent: recent(), onRun: remember, [

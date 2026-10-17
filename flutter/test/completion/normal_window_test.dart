@@ -29,7 +29,8 @@ void main() {
       late PrototypeState state;
       late LegacyLibraryAdapter library;
       late File source;
-      final root = Directory('../artifacts/layout-window-20261008');
+      final root = Directory('../artifacts/layout-window-20261008')
+        ..createSync(recursive: true);
       await t.runAsync(() async {
         await RustLib.init(
           externalLibrary: ExternalLibrary.open(

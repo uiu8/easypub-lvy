@@ -165,8 +165,9 @@ void main() {
                     as RenderRepaintBoundary)
                 .toImage();
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        await File('../artifacts/kfx-implementation-20261008/settings-kfx.png')
-            .writeAsBytes(bytes!.buffer.asUint8List());
+        await (await File(
+          '../artifacts/kfx-implementation-20261008/settings-kfx.png',
+        ).create(recursive: true)).writeAsBytes(bytes!.buffer.asUint8List());
         image.dispose();
       });
     },
