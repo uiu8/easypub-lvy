@@ -30,7 +30,9 @@ import '../application/block_annotation_service.dart';
 import 'legacy_block_annotation_session.dart';
 import '../application/manual_note_service.dart';
 import 'legacy_manual_note_session.dart';
+import '../application/app_update_service.dart';
 import '../application/rule_catalog_service.dart';
+import 'legacy_app_update_service.dart';
 import 'legacy_rule_catalog_service.dart';
 import '../application/supplemental_page_service.dart';
 import 'legacy_supplemental_page_session.dart';
@@ -74,6 +76,7 @@ class LegacyLibraryAdapter
         BlockAnnotationLibrary,
         ManualNoteLibrary,
         RuleCatalogLibrary,
+        AppUpdateLibrary,
         SupplementalPageLibrary,
         ChapterRulesService,
         LibraryBulkSelection,
@@ -775,6 +778,13 @@ class LegacyLibraryAdapter
   @override
   RuleCatalogService openRuleCatalog(String bookId) =>
       LegacyRuleCatalogService(_backend, bookId);
+
+  /// 自动更新（V68）：与书库无关，整个程序一个。
+  @override
+  late final AppUpdateService appUpdates = LegacyAppUpdateService();
+
+  @override
+  bool get updateBlockedByTasks => _backend.queueActive;
 
   @override
   SupplementalPageSession openSupplementalPages(String bookId) =>

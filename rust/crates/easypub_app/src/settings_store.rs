@@ -23,6 +23,8 @@ static NEXT: AtomicU64 = AtomicU64::new(1);
 #[serde(deny_unknown_fields)]
 pub struct Configuration {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule_defaults: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recognition_defaults: Option<easypub_core::chapter_rules::RuleSet>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recognition_presets: Vec<easypub_core::chapter_rules::Preset>,
@@ -60,6 +62,9 @@ pub struct Configuration {
     pub ui_scale: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_density: Option<String>,
+    /// V69：主题色编号（ink / teal / blue / violet / ochre / rose）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_accent: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_follow_system_scale: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -94,6 +99,12 @@ pub struct Configuration {
     pub check_before_conversion: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restore_window: Option<bool>,
+    /// V68：启动时检查更新（缺省为开）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update_check_on_start: Option<bool>,
+    /// V68：用户选择“跳过这个版本”的批次号。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update_skipped_release: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generate_cover: Option<bool>,
     #[serde(default, skip_serializing)]
@@ -134,9 +145,16 @@ impl Configuration {
         fields
     }
     fn validate(&self) -> Result<(), ApiError> {
-        if self.supplemental_templates_blob.is_some() { return Err(invalid()); }
+        if self.supplemental_templates_blob.is_some() {
+            return Err(invalid());
+        }
         crate::supplemental_pages::validate_templates(&self.supplemental_templates)?;
-        if let Some(rules) = &self.recognition_defaults { rules.compile()?; }
+        if let Some(defaults) = &self.rule_defaults {
+            crate::rule_toggles::validate_defaults(defaults)?;
+        }
+        if let Some(rules) = &self.recognition_defaults {
+            rules.compile()?;
+        }
         easypub_core::chapter_rules::validate_presets(&self.recognition_presets)?;
         crate::folder_mapping::validate_rules(&self.folder_rules)?;
         if self
@@ -145,13 +163,25 @@ impl Configuration {
         {
             return Err(error(ErrorCode::InvalidRule, "check_ui_scale"));
         }
-        if self.ui_density.as_deref().is_some_and(|v| !matches!(v, "standard" | "compact")) {
+        if self
+            .ui_density
+            .as_deref()
+            .is_some_and(|v| !matches!(v, "standard" | "compact"))
+        {
             return Err(error(ErrorCode::InvalidRule, "check_ui_density"));
         }
-        if self.epub_conversion_mode.as_deref().is_some_and(|v| !matches!(v, "layout" | "original")) {
+        if self
+            .epub_conversion_mode
+            .as_deref()
+            .is_some_and(|v| !matches!(v, "layout" | "original"))
+        {
             return Err(error(ErrorCode::InvalidRule, "check_epub_conversion_mode"));
         }
-        if self.parallel_books.as_deref().is_some_and(|v| !matches!(v, "auto" | "1" | "2" | "4" | "8")) {
+        if self
+            .parallel_books
+            .as_deref()
+            .is_some_and(|v| !matches!(v, "auto" | "1" | "2" | "4" | "8"))
+        {
             return Err(error(ErrorCode::InvalidRule, "check_parallel_books"));
         }
         // Missing directories remain valid favorites so removable drives and
@@ -256,9 +286,10 @@ impl Configuration {
             return Err(error(ErrorCode::InvalidRule, "check_kfx_converter"));
         }
         if let Some(pipeline) = &self.automatic_cleanup_pipeline
-            && !pipeline.is_empty() {
-                easypub_core::cleanup_rules::validate_pipeline(pipeline)?;
-            }
+            && !pipeline.is_empty()
+        {
+            easypub_core::cleanup_rules::validate_pipeline(pipeline)?;
+        }
         crate::cleanup_presets::validate(&self.cleanup_presets)?;
         layout_presets::validate(&self.layout_presets)
     }
@@ -319,10 +350,20 @@ fn batch_bytes(path: &Path, expected: &str) -> Result<Vec<u8>, ApiError> {
 }
 fn expand_batches(directory: &Path, configuration: &mut Configuration) -> Result<(), ApiError> {
     if let Some(digest) = configuration.supplemental_templates_blob.take() {
-        if !configuration.supplemental_templates.is_empty() || digest.len() != 64
-            || !digest.bytes().all(|c| c.is_ascii_hexdigit()) { return Err(invalid()); }
-        let bytes = batch_bytes(&directory.join("template-records").join(format!("{digest}.json")), &digest)?;
-        configuration.supplemental_templates = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
+        if !configuration.supplemental_templates.is_empty()
+            || digest.len() != 64
+            || !digest.bytes().all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(invalid());
+        }
+        let bytes = batch_bytes(
+            &directory
+                .join("template-records")
+                .join(format!("{digest}.json")),
+            &digest,
+        )?;
+        configuration.supplemental_templates =
+            serde_json::from_slice(&bytes).map_err(|_| invalid())?;
     }
     let mut total = 0usize;
     for batch in &mut configuration.output_batches {
@@ -380,8 +421,10 @@ fn externalize_batches(
         *batch = serde_json::json!({"$batch_blob": digest});
     }
     if !configuration.supplemental_templates.is_empty() {
-        let bytes = serde_json::to_vec(&configuration.supplemental_templates).map_err(|_| invalid())?;
-        configuration.supplemental_templates_blob = Some(store_blob(&directory.join("template-records"), &bytes)?);
+        let bytes =
+            serde_json::to_vec(&configuration.supplemental_templates).map_err(|_| invalid())?;
+        configuration.supplemental_templates_blob =
+            Some(store_blob(&directory.join("template-records"), &bytes)?);
         configuration.supplemental_templates.clear();
     }
     Ok(())
@@ -644,7 +687,11 @@ mod tests {
     fn auto_import_folders_roundtrip_and_reject_relative_paths() {
         let dir = directory();
         let folder = dir.join("自动入库").to_string_lossy().into_owned();
-        let removed = dir.join("自动入库").join("甲.txt").to_string_lossy().into_owned();
+        let removed = dir
+            .join("自动入库")
+            .join("甲.txt")
+            .to_string_lossy()
+            .into_owned();
         let first = save(
             &dir,
             None,
@@ -666,17 +713,39 @@ mod tests {
         let empty = serde_json::to_value(Configuration::default()).unwrap();
         assert!(empty.get("auto_import_folders").is_none());
         // V27：EPUB 默认转换路径只接受 layout / original。
-        let mode = Configuration { epub_conversion_mode: Some("original".into()), ..Default::default() };
+        let mode = Configuration {
+            epub_conversion_mode: Some("original".into()),
+            ..Default::default()
+        };
         let saved = save(&dir, load(&dir).unwrap().token.as_deref(), mode).unwrap();
-        assert_eq!(load(&dir).unwrap().configuration.epub_conversion_mode.as_deref(), Some("original"));
-        let bad = Configuration { epub_conversion_mode: Some("其他".into()), ..Default::default() };
+        assert_eq!(
+            load(&dir)
+                .unwrap()
+                .configuration
+                .epub_conversion_mode
+                .as_deref(),
+            Some("original")
+        );
+        let bad = Configuration {
+            epub_conversion_mode: Some("其他".into()),
+            ..Default::default()
+        };
         assert!(save(&dir, saved.token.as_deref(), bad).is_err());
         // V38：同时处理的书只接受 auto / 1 / 2 / 4 / 8。
-        let books = Configuration { parallel_books: Some("4".into()), ..Default::default() };
+        let books = Configuration {
+            parallel_books: Some("4".into()),
+            ..Default::default()
+        };
         let saved = save(&dir, load(&dir).unwrap().token.as_deref(), books).unwrap();
-        assert_eq!(load(&dir).unwrap().configuration.parallel_books.as_deref(), Some("4"));
+        assert_eq!(
+            load(&dir).unwrap().configuration.parallel_books.as_deref(),
+            Some("4")
+        );
         for value in ["3", "16", "0", "自动"] {
-            let bad = Configuration { parallel_books: Some(value.into()), ..Default::default() };
+            let bad = Configuration {
+                parallel_books: Some(value.into()),
+                ..Default::default()
+            };
             assert!(save(&dir, saved.token.as_deref(), bad).is_err(), "{value}");
         }
     }

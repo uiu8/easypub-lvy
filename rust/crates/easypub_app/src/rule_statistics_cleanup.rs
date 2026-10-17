@@ -40,7 +40,7 @@ fn ranges(mut ranges: Vec<(u32, u32)>) -> Vec<(u32, u32)> {
     }
     result
 }
-fn fallback(kind: &str) -> Option<Value> {
+pub(crate) fn fallback(kind: &str) -> Option<Value> {
     if matches!(
         kind,
         "literal_replace" | "regex_replace" | "multiline_regex_replace"

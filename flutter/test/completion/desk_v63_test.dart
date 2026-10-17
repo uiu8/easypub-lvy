@@ -92,19 +92,16 @@ void main() {
         )
         .text;
     await until(() => status().startsWith('已统计'), '统计完成');
+    // V64 起规则按页签分组：逐个页签确认四个自动组都在。
     for (final title in ['文本清理', '章节识别', '章节检查', '排版识别']) {
-      await t.scrollUntilVisible(
-        find.byKey(ValueKey(('rule-group', title))),
-        300,
-        scrollable: find.byType(Scrollable).last,
-      );
+      final i = ruleGroups.indexWhere((g) => g.$3 == title);
+      await t.tap(find.byKey(ValueKey('rules-tab-$i')));
+      await t.pump();
+      expect(find.byKey(ValueKey(('rule-group', title))), findsOneWidget);
     }
     final row = find.byKey(ValueKey(('rule-row', system.id)));
-    await t.scrollUntilVisible(
-      row,
-      200,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await t.ensureVisible(row);
+    await t.pump();
     expect(
       find.descendant(of: row, matching: find.text('1 处')),
       findsOneWidget,
@@ -141,7 +138,7 @@ void main() {
     // 修正前状态会一直停在“取消中”。
     await until(
       () => find
-          .descendant(of: row, matching: find.text('关闭 · 如果开启：1 处'))
+          .descendant(of: row, matching: find.text('开启会命中 1 处'))
           .evaluate()
           .isNotEmpty,
       '关闭后重新统计',

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:collection/collection.dart';
 
 import '../application/cleanup_rule_resolution.dart';
 import '../application/rule_catalog_service.dart';
@@ -20,6 +22,7 @@ class LegacyRuleCatalogService implements RuleCatalogService {
   bool _disposed = false, _running = false, _cancelled = false, _stale = false;
   int? _jobId;
   String? _guard;
+  final _plans = <String, Map<String, dynamic>>{};
   @override
   ValueListenable<RuleStatisticsState> get state => _state;
 
@@ -28,8 +31,196 @@ class LegacyRuleCatalogService implements RuleCatalogService {
     'cleanup_pipeline': resolveCleanupRules(
       backend.globalConfiguration,
       bookDraft: backend.cleanup.drafts[bookId],
+      pendingPipeline:
+          backend.production.drafts[bookId]?.ruleOptions['cleanup_pipeline']
+              as List?,
     ).pipeline,
+    'reference_catalog': backend.savedReferenceCatalog(bookId),
+    'preflight': _preflightCounts(),
   };
+
+  Map<String, int> _preflightCounts() {
+    final settings = backend.production.settings(bookId);
+    final language = settings['language'] as String? ?? '';
+    final cover = settings['cover_path'] as String? ?? '';
+    final format = backend.globalConfiguration['output_format'];
+    final engine =
+        backend.globalConfiguration[format == 'KFX'
+                ? 'kfx_converter'
+                : 'kindle_converter']
+            as String?;
+    return {
+      'title': (settings['title'] as String).trim().isEmpty ? 1 : 0,
+      'language': language.isEmpty || language == 'und' ? 1 : 0,
+      'cover': cover.isEmpty || !File(cover).existsSync() ? 1 : 0,
+      'imported_images':
+          (backend.production.importedResourcesFor(bookId)?['pending_images']
+                      as List? ??
+                  [])
+              .length,
+      if (format == 'EPUB') 'converter': 0,
+      if (format != null && format != 'EPUB' && engine != null)
+        'converter': File(engine).existsSync() ? 0 : 1,
+    };
+  }
+
+  Map<String, dynamic> _toggleInput(String scope) => {
+    ..._input(),
+    'book_id': bookId,
+    'scope': scope,
+    'base': backend.manuscript.effectiveBase(bookId),
+    'effective_history': backend.manuscript.effectiveHistories[bookId],
+    'production_history': backend.production.histories[bookId],
+    'cleanup_draft': backend.cleanup.drafts[bookId],
+    'configuration': backend.globalConfiguration,
+    'history': backend.production.drafts[bookId]?.ruleToggleHistory,
+    'membership': backend.bookMembership[bookId],
+    'removal_epoch': backend.removalEpoch,
+  };
+
+  @override
+  Future<Map<String, dynamic>> settings({String scope = 'book'}) async =>
+      Map<String, dynamic>.from(await _call('settings', _toggleInput(scope)));
+
+  @override
+  Future<Map<String, dynamic>> previewToggles(
+    List<Map<String, dynamic>> changes, {
+    String scope = 'book',
+  }) async {
+    if (_disposed || !_available) throw const FormatException('当前无法预览规则');
+    final input = (jsonDecode(jsonEncode(_toggleInput(scope))) as Map)
+        .cast<String, dynamic>();
+    final result = Map<String, dynamic>.from(
+      await _call('preview_toggles', {...input, 'changes': changes}),
+    );
+    if (!const DeepCollectionEquality().equals(input, _toggleInput(scope))) {
+      throw const FormatException('书稿或设置已变化，请重新预览。');
+    }
+    _plans.clear();
+    _plans[result['plan_id'] as String] = {
+      'input': input,
+      'changes': jsonDecode(jsonEncode(changes)),
+    };
+    return result;
+  }
+
+  @override
+  Future<void> applyToggles(String planId) async {
+    final plan = _plans[planId];
+    if (plan == null || _disposed || !_available) {
+      throw const FormatException('计划已过期，请重新预览。');
+    }
+    final input = plan['input'] as Map<String, dynamic>;
+    final scope = input['scope'] as String;
+    void validate() {
+      if (!const DeepCollectionEquality().equals(input, _toggleInput(scope))) {
+        throw const FormatException('书稿或设置已变化，请重新预览。');
+      }
+    }
+
+    validate();
+    final result = await _call('apply_toggles', {
+      ..._toggleInput(scope),
+      'changes': plan['changes'],
+      'plan_id': planId,
+    });
+    validate();
+    if (scope == 'global') {
+      if (!await backend.saveGlobalConfigurationPatch({
+        'rule_defaults': result['defaults'],
+      })) {
+        throw const FormatException('新书默认保存失败，未应用。');
+      }
+    } else {
+      final snapshot = Map<String, dynamic>.from(result['snapshot'] as Map);
+      final book = backend.shelf.books.firstWhere((b) => b.id == bookId);
+      final draft = backend.production.draftFromProduction(
+        book,
+        snapshot['settings'] as Map,
+        backend.production.drafts[bookId]?.epubResources,
+      );
+      final history = Map<String, dynamic>.from(result['history'] as Map);
+      snapshot['settings'] = backend.production.valuesOf(draft);
+      (history['states'] as List).last['after'] = snapshot;
+      draft.ruleToggleHistory = history;
+      final effective = (snapshot['effective_history'] as Map?)
+          ?.cast<String, dynamic>();
+      final production = (snapshot['production_history'] as Map?)
+          ?.cast<String, dynamic>();
+      validate();
+      backend.change(() {
+        backend.production.drafts[bookId] = draft;
+        if (effective == null) {
+          backend.manuscript.effectiveHistories.remove(bookId);
+        } else {
+          backend.manuscript.effectiveHistories[bookId] = effective;
+        }
+        if (production == null) {
+          backend.production.histories.remove(bookId);
+        } else {
+          backend.production.histories[bookId] = production;
+        }
+      });
+    }
+    _plans.remove(planId);
+  }
+
+  /// 历史页调用；三领域一起恢复，后续编辑不匹配时拒绝覆盖。
+  Future<void> moveHistory({required bool undo}) async {
+    final guard = jsonEncode(_toggleInput('book'));
+    final draft = backend.production.drafts[bookId]!;
+    final history = (jsonDecode(jsonEncode(draft.ruleToggleHistory)) as Map)
+        .cast<String, dynamic>();
+    final cursor = history['cursor'] as int;
+    final states = history['states'] as List;
+    final index = undo ? cursor : cursor + 1;
+    if (index < 1 || index >= states.length) {
+      throw const FormatException('没有可恢复的规则记录。');
+    }
+    final entry = states[index] as Map;
+    final expected = entry[undo ? 'after' : 'before'] as Map;
+    final current = {
+      'settings': backend.production.settings(bookId),
+      'effective_history': backend.manuscript.effectiveHistories[bookId],
+      'production_history': backend.production.histories[bookId],
+    };
+    if (!const DeepCollectionEquality().equals(current, expected)) {
+      throw const FormatException('规则之后还有修改，请先撤销后续修改。');
+    }
+    final result = await _call('restore_toggles', {
+      ..._toggleInput('book'),
+      'undo': undo,
+    });
+    if (guard != jsonEncode(_toggleInput('book'))) {
+      throw const FormatException('书稿已变化，请重新选择记录。');
+    }
+    final next = result['snapshot'] as Map;
+    final book = backend.shelf.books.firstWhere((b) => b.id == bookId);
+    final restored = backend.production.draftFromProduction(
+      book,
+      next['settings'] as Map,
+      draft.epubResources,
+    );
+    history['cursor'] = (result['history'] as Map)['cursor'];
+    restored.ruleToggleHistory = history;
+    backend.change(() {
+      backend.production.drafts[bookId] = restored;
+      final effective = next['effective_history'] as Map?;
+      if (effective == null) {
+        backend.manuscript.effectiveHistories.remove(bookId);
+      } else {
+        backend.manuscript.effectiveHistories[bookId] = effective
+            .cast<String, dynamic>();
+      }
+      final production = next['production_history'] as Map?;
+      if (production == null) {
+        backend.production.histories.remove(bookId);
+      } else {
+        backend.production.histories[bookId] = production
+            .cast<String, dynamic>();
+      }
+    });
+  }
 
   void _publish(
     RuleStatisticsPhase phase, {

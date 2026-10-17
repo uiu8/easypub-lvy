@@ -81,7 +81,7 @@ pub(super) fn collect(
             manual.push(n.clone());
         }
     }
-    let notes = Notes::with_manual(book, &manual, true);
+    let notes = Notes::with_options(book, &manual, true, &settings.rule_options);
     for pair in notes.automatic_report(book, settings.note_style == "popup") {
         checkpoint(cancel)?;
         let location = loc.byte(pair["reference_start"].as_u64().expect("reference") as usize);
@@ -147,6 +147,11 @@ pub(super) fn collect(
             "box",
             "center",
         );
+        let classified = if annotation.is_none() {
+            settings.rule_options.verse(line, classified)
+        } else {
+            classified
+        };
         previous = if annotation.is_none() {
             classified.map(|(_, c)| c)
         } else {
@@ -196,6 +201,11 @@ pub(super) fn collect(
             &settings.system_block_style,
             &settings.verse_block_style,
         );
+        let current = if annotation.is_none() {
+            settings.rule_options.verse(line, current)
+        } else {
+            current
+        };
         current_previous = if annotation.is_none() {
             current.map(|(_, c)| c)
         } else {
@@ -205,7 +215,7 @@ pub(super) fn collect(
         let scene = annotation.is_none()
             && node.is_none()
             && !current_notes.has_line(start)
-            && render::is_scene_break(line);
+            && settings.rule_options.scene(line);
         if scene {
             stats
                 .get_mut("layout.scene")

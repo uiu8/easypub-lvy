@@ -202,6 +202,8 @@ pub struct Settings {
     /// 诗词样式（V50，LAY-122），见 [VERSE_BLOCK_STYLES]。
     #[serde(default = "crate::production::default_verse_block_style")]
     pub verse_block_style: String,
+    #[serde(default)]
+    pub rule_options: crate::rule_options::Options,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub block_annotations: Vec<crate::block_annotations::Annotation>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -301,6 +303,7 @@ impl From<&crate::project::ProjectBook> for Settings {
             first_paragraph_style: book.first_paragraph_style.clone(),
             system_block_style: book.system_block_style.clone(),
             verse_block_style: book.verse_block_style.clone(),
+            rule_options: book.rule_options.clone(),
             block_annotations: book.block_annotations.clone(),
             manual_notes: book.manual_notes.clone(),
             supplemental_pages: book.supplemental_pages.clone(),
@@ -411,6 +414,7 @@ impl Settings {
         Ok(())
     }
     pub fn validate(&self, lines: u32) -> Result<(), ApiError> {
+        self.rule_options.validate()?;
         crate::block_annotations::validate(&self.block_annotations)?;
         crate::manual_notes::validate(&self.manual_notes)?;
         crate::supplemental_pages::validate(&self.supplemental_pages)?;
@@ -1277,7 +1281,20 @@ pub fn run(
     if value["op"] == "supplemental_templates" && !apply {
         return crate::supplemental_pages::templates(value);
     }
+    // V68 自动更新：只读检查与下载，不涉及书稿，也不走制作事务。
+    if value["op"] == "app_update" {
+        if apply || confirmed || !plan_id.is_empty() {
+            return Err(invalid());
+        }
+        return crate::app_update::run(value);
+    }
     if value["op"] == "rule_catalog" {
+        if matches!(
+            value["action"].as_str(),
+            Some("settings" | "preview_toggles" | "apply_toggles" | "restore_toggles")
+        ) {
+            return crate::rule_toggles::run(service, value);
+        }
         if apply || confirmed || !plan_id.is_empty() {
             return Err(invalid());
         }

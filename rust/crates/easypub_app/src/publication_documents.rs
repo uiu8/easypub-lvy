@@ -296,7 +296,12 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
     let book = prepared.book();
     let m = prepared.manifest();
     let notes = (m.note_style == "popup" || !m.manual_notes.is_empty()).then(|| {
-        crate::publication_notes::Notes::with_manual(book, &m.manual_notes, m.note_style == "popup")
+        crate::publication_notes::Notes::with_options(
+            book,
+            &m.manual_notes,
+            m.note_style == "popup",
+            &m.rule_options,
+        )
     });
     if (!m.additional_css.is_empty() && !m.css_dependencies.rewritten)
         || m.css_media.iter().any(|r| {
@@ -428,6 +433,11 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             &m.system_block_style,
             &m.verse_block_style,
         );
+        let line_block = if annotation.is_none() {
+            m.rule_options.verse(line, line_block)
+        } else {
+            line_block
+        };
         previous_line = if annotation.is_none() {
             line_block.map(|(_, class)| class)
         } else {
@@ -548,7 +558,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             && annotation.is_none()
             && node.is_none()
             && m.scene_break_style != "off"
-            && is_scene_break(original);
+            && m.rule_options.scene(original);
         if scene {
             first_pending = true;
             let vertical = m.writing_mode == "vertical";

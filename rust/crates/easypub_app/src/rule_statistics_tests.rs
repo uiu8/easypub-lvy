@@ -26,7 +26,7 @@ fn catalog_covers_handoff_and_statistics_match_engines_without_mutation() {
     let rows = catalog["rules"].as_array().unwrap();
     let ids: std::collections::BTreeSet<_> =
         rows.iter().map(|r| r["id"].as_str().unwrap()).collect();
-    assert_eq!(ids.len(), 94);
+    assert_eq!(ids.len(), 104);
     assert_eq!(ids.len(), rows.len());
     for (prefix, expected) in [
         ("chapter.recognize.", 12),
@@ -65,8 +65,16 @@ fn catalog_covers_handoff_and_statistics_match_engines_without_mutation() {
             assert!(ids.contains(parent));
         }
         assert!(
-            ["chapter_recognition", "chapter_check", "cleanup", "layout"]
-                .contains(&row["group"].as_str().unwrap())
+            [
+                "chapter_recognition",
+                "chapter_check",
+                "cleanup",
+                "layout",
+                "catalog_check",
+                "preflight",
+                "manual"
+            ]
+            .contains(&row["group"].as_str().unwrap())
         );
     }
     assert_eq!(
@@ -254,4 +262,237 @@ fn manual_priority_invalid_records_and_read_only_job_cache_and_cancellation() {
         crate::production::run(&service, input.to_string(), true, String::new(), true).is_err()
     );
     assert_eq!(source.original_bytes(), fixture().as_bytes());
+}
+
+/// 同一本确定性合成长稿、同一请求；直接计算跳过跨请求缓存。
+#[test]
+#[ignore = "手动记录 V67 修改前后统计耗时"]
+fn hypothetical_timing_sample() {
+    let text: String = (1..=300)
+        .map(|n| {
+            format!(
+                "第{}章 标题\n{}\n＊＊＊\n床前明月光，疑是地上霜。\n正文①\n①注释内容\n",
+                n * 2,
+                "这是用于统计耗时的确定性正文。\n".repeat(80)
+            )
+        })
+        .collect();
+    let source = SourceSnapshot::from_utf8(text.into_bytes(), RULE_ID, || false).unwrap();
+    let mut req = request(&source);
+    let rule_set = RuleSet {
+        disabled_checks: vec!["number_gap".into()],
+        disabled_recognition: vec!["prose".into()],
+        ..Default::default()
+    };
+    let mut structure = easypub_core::structure::Structure::recognized(&source);
+    structure.recognition_rules = Some(rule_set);
+    req["structure"] = json!(structure);
+    req["settings"]["verse_block_style"] = json!("center");
+    req["settings"]["scene_break_style"] = json!("keep");
+    req["settings"]["rule_options"] =
+        json!({"scene_symbols":"*", "disabled":["layout.verse.five"]});
+    let mut times = Vec::new();
+    let mut counts = Value::Null;
+    for i in 0..6 {
+        let r = calculate(
+            &source,
+            serde_json::from_value(req.clone()).unwrap(),
+            json!([]),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        if i > 0 {
+            times.push(r["elapsed_ms"].as_f64().unwrap());
+        }
+        let rows = rules(&r);
+        counts = json!({"gap":rows["check.number_gap"]["count"],"five":rows["layout.verse.five"]["count"],"scene":rows["layout.scene.uff0a"]["count"]});
+    }
+    println!(
+        "V67_TIMING {}",
+        json!({"bytes":source.decoded_text().len(),"content_sha256":digest(source.original_bytes()),"elapsed_ms":times,"counts":counts})
+    );
+}
+
+#[test]
+fn hypothetical_counts_and_locations_preserve_other_filters_and_original_state() {
+    let source = SourceSnapshot::from_utf8(
+        (fixture() + "第三章 重复\n正文不同。\n三章更新完毕\n第三卷还差几页。\n序幕\n正文。\n＊＊＊\n第一百一十八章 前\n正文。\n第一百一十久章 疑似错字\n正文。\n第一百二十章 后\n正文。\n第六章 后记（求月票）\n正文。\n").into_bytes(),
+        RULE_ID,
+        || false,
+    )
+    .unwrap();
+    let mut input = request(&source);
+    input["settings"]["scene_break_style"] = json!("keep");
+    input["settings"]["verse_block_style"] = json!("center");
+    input["settings"]["system_block_style"] = json!("box");
+    input["settings"]["note_style"] = json!("popup");
+    let base_rules = RuleSet {
+        force_heading: "序幕".into(),
+        title_suffixes: "（求月票）".into(),
+        non_heading: "第五章 结尾".into(),
+        ..Default::default()
+    };
+    let mut structure = easypub_core::structure::Structure::recognized(&source);
+    structure.recognition_rules = Some(base_rules.clone());
+    input["structure"] = json!(structure);
+    let pipeline = json!([{"kind":"collapse_blank_lines"}]);
+    let invoke = |req: Value| {
+        calculate(
+            &source,
+            serde_json::from_value(req).unwrap(),
+            pipeline.clone(),
+            &AtomicBool::new(false),
+        )
+        .unwrap()
+    };
+    let before = invoke(input.clone());
+    let catalog = crate::rule_catalog::catalog();
+    for id in [
+        "check.number_gap",
+        "check.number_reset.repeated_number",
+        "layout.verse",
+        "layout.verse.five",
+        "layout.verse.seven",
+        "layout.verse.attribution",
+        "layout.scene",
+        "layout.scene.uff0a",
+        "layout.note.circled",
+        "layout.note.bracket",
+        "layout.note.definition_prefix",
+        "chapter.recognize.force_heading",
+        "chapter.recognize.title_suffixes",
+        "chapter.recognize.number_corrections",
+        "chapter.recognize.non_heading",
+        "chapter.recognize.author_note",
+        "chapter.recognize.prose",
+    ] {
+        let row = catalog["rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == id)
+            .unwrap();
+        let mut ruleset = base_rules.clone();
+        let mut settings = serde_json::from_value(input["settings"].clone()).unwrap();
+        crate::rule_toggles::toggle(
+            row,
+            &mut ruleset,
+            &mut settings,
+            &mut pipeline.clone(),
+            false,
+        )
+        .unwrap();
+        let mut disabled = input.clone();
+        disabled["structure"]["recognition_rules"] = json!(ruleset);
+        disabled["settings"] = json!(settings);
+        let saved = disabled.clone();
+        let after = invoke(disabled.clone());
+        let a = rules(&before)[id];
+        let b = rules(&after)[id];
+        assert!(
+            a["count"].as_u64().unwrap() > 0,
+            "sample must hit {id}: {a}"
+        );
+        assert_eq!(b["enabled"], false, "{id}");
+        assert_eq!(b["hypothetical"], true, "{id}");
+        assert_eq!(b["count"], a["count"], "{id}");
+        assert_eq!(b["unit"], a["unit"], "{id}");
+        let offsets = |r: &Value| {
+            r["locations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|p| p["utf8_start"].clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(offsets(b), offsets(a), "{id}");
+        assert_eq!(disabled, saved);
+        assert_eq!(after["content_id"], before["content_id"]);
+        if id == "check.number_gap" {
+            let (book, _) =
+                publication_resources::compose(&source, serde_json::from_value(disabled).unwrap())
+                    .unwrap();
+            let view = SourceSnapshot::for_effective_diagnostics(&book).unwrap();
+            let plan: Value =
+                serde_json::from_str(&view.repair_plan_json("[\"number-gap\"]").unwrap()).unwrap();
+            assert!(
+                plan["actions"].as_array().unwrap().is_empty(),
+                "actual checks remain disabled"
+            );
+        }
+    }
+    // A child simulation restores its parent, but must not enable the disabled sibling.
+    let mut siblings = input.clone();
+    siblings["settings"]["verse_block_style"] = json!("off");
+    siblings["settings"]["rule_options"] =
+        json!({"disabled":["layout.verse.five","layout.verse.seven"]});
+    let r = invoke(siblings);
+    assert_eq!(rules(&r)["layout.verse.five"]["count"], 1);
+    assert_eq!(rules(&r)["layout.verse.seven"]["count"], 1);
+    assert_eq!(rules(&r)["layout.verse"]["count"], 0);
+    assert_eq!(rules(&r)["layout.verse.attribution"]["count"], 0);
+}
+
+#[test]
+fn hypothetical_catalog_counts_require_a_reference_and_keep_real_locations() {
+    let source = SourceSnapshot::from_utf8(
+        "第一章 开始\n正文。\n第三章 后来\n正文乙。\n第五章 结尾\n正文丙。\n"
+            .as_bytes()
+            .to_vec(),
+        RULE_ID,
+        || false,
+    )
+    .unwrap();
+    let reference = crate::catalog::parse_text(
+        "第三章 改名\n第一章 开始\n第二章 缺少",
+        "样书",
+        "",
+        "paste",
+        Some(3),
+    )
+    .unwrap();
+    let mut req = request(&source);
+    let invoke = |req: Value, catalog: Value| {
+        let mut result = calculate(
+            &source,
+            serde_json::from_value(req.clone()).unwrap(),
+            json!([]),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        enrich(
+            &source,
+            &json!({"publication":req,"reference_catalog":catalog}),
+            &mut result,
+        )
+        .unwrap();
+        result
+    };
+    let before = invoke(req.clone(), json!(reference));
+    req["settings"]["rule_options"] = json!({"disabled":["catalog_check.missing","catalog_check.extra","catalog_check.title","catalog_check.order"]});
+    let after = invoke(req.clone(), json!(reference));
+    for id in [
+        "catalog_check.missing",
+        "catalog_check.extra",
+        "catalog_check.title",
+        "catalog_check.order",
+    ] {
+        assert_eq!(rules(&before)[id]["count"], 1, "{id}");
+        assert_eq!(rules(&after)[id]["count"], 1, "{id}");
+        assert_eq!(rules(&after)[id]["enabled"], false);
+        assert_eq!(rules(&after)[id]["hypothetical"], true);
+        assert_eq!(
+            rules(&after)[id]["locations"],
+            rules(&before)[id]["locations"]
+        );
+    }
+    let unavailable = invoke(req, Value::Null);
+    assert_eq!(
+        rules(&unavailable)["catalog_check.missing"]["count"],
+        Value::Null
+    );
+    assert_eq!(
+        rules(&unavailable)["catalog_check.missing"]["hypothetical"],
+        false
+    );
 }

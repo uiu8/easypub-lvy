@@ -109,6 +109,8 @@ pub struct Manifest {
     pub system_block_style: String,
     /// 诗词样式（V50，LAY-122）。
     pub verse_block_style: String,
+    #[serde(default)]
+    pub rule_options: crate::rule_options::Options,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub block_annotations: Vec<crate::block_annotations::Annotation>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -479,6 +481,7 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         first_paragraph_style: settings.first_paragraph_style.clone(),
         system_block_style: settings.system_block_style.clone(),
         verse_block_style: settings.verse_block_style.clone(),
+        rule_options: settings.rule_options.clone(),
         block_annotations: settings.block_annotations.clone(),
         manual_notes: settings.manual_notes.clone(),
         supplemental_pages: settings.supplemental_pages.clone(),

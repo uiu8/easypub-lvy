@@ -23,6 +23,9 @@ class LegacyCleanupSession extends ChangeNotifier
   ResolvedCleanupRules get resolvedRules => resolveCleanupRules(
     backend.globalConfiguration,
     bookDraft: backend.cleanup.drafts[bookId],
+    pendingPipeline:
+        backend.production.drafts[bookId]?.ruleOptions['cleanup_pipeline']
+            as List?,
   );
   late String _guard;
   int _generation = 0;
@@ -408,7 +411,9 @@ class LegacyCleanupSession extends ChangeNotifier
                 'cleanup':
                     history['history'][history['cursor']]['base']['cleanup'],
                 // 章节修改基于检查点时带上原始操作，才能分两段换算（CLEAN-105）。
-                'checkpoint_root': ?backend.manuscript.effectiveCheckpointRoot(bookId),
+                'checkpoint_root': ?backend.manuscript.effectiveCheckpointRoot(
+                  bookId,
+                ),
               },
             'effective_check': {'offset': 0},
           }),
@@ -482,13 +487,32 @@ class LegacyCleanupSession extends ChangeNotifier
     if (rebased != null && rebased.skipped > impact.skipped.length) {
       throw const FormatException('章节修改的换算结果与检测时不一致，请重新检测。');
     }
+    PreparedStateChange? preparedRules;
+    final options = backend.production.drafts[bookId]?.ruleOptions;
+    if (options?['cleanup_pipeline'] != null) {
+      final nextOptions = Map<String, dynamic>.from(options!)
+        ..remove('cleanup_pipeline');
+      final plan = await backend.production.previewChanges({
+        bookId: {
+          'op': 'patch',
+          'fields': {
+            'rule_options': {'op': 'set', 'value': nextOptions},
+          },
+        },
+      });
+      preparedRules = await backend.production.prepareCommit(plan);
+    }
     // No await between the guard and publication of the validated candidate.
     guard();
+    preparedRules?.validate();
     _pending = null;
     backend.change(() {
       backend.cleanup.histories[bookId] = candidate.history;
       backend.cleanup.drafts[bookId] = cleanup;
-      if (rebased != null) backend.manuscript.effectiveHistories[bookId] = rebased.history;
+      preparedRules?.publish();
+      if (rebased != null) {
+        backend.manuscript.effectiveHistories[bookId] = rebased.history;
+      }
       backend.cleanup.historyStatus[bookId] = rebased == null
           ? '清理方案已采用，可撤销；另存项目后保留历史。'
           : '清理方案已采用；${rebased.kept} 处章节修改已换算到清理后的文本'

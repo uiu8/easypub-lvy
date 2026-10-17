@@ -120,6 +120,7 @@ class ProductionStore {
       'writing_mode': d.writingMode,
       'vertical_digits': d.verticalDigits,
       'heading_style': d.headingStyle,
+      'rule_options': d.ruleOptions,
       'scene_break_style': d.sceneBreakStyle,
       'note_style': d.noteStyle,
       'first_paragraph_style': d.firstParagraphStyle,
@@ -261,7 +262,9 @@ class ProductionStore {
     Map v,
     Map<String, dynamic>? resources,
   ) {
-    final d = BookDraft(book)..epubResources = resources;
+    final d = BookDraft(book)
+      ..epubResources = resources
+      ..ruleToggleHistory = drafts[book.id]?.ruleToggleHistory;
     d
       ..metadataOrigins = Map<String, dynamic>.from(
         v['metadata_origins'] as Map? ?? {},
@@ -291,6 +294,7 @@ class ProductionStore {
       ..writingMode = v['writing_mode'] as String? ?? 'horizontal'
       ..verticalDigits = (v['vertical_digits'] as num? ?? 2).toInt()
       ..headingStyle = v['heading_style'] as String? ?? 'classic'
+      ..ruleOptions = Map<String, dynamic>.from(v['rule_options'] as Map? ?? {})
       ..sceneBreakStyle = v['scene_break_style'] as String? ?? 'keep'
       ..noteStyle = v['note_style'] as String? ?? 'off'
       ..firstParagraphStyle = v['first_paragraph_style'] as String? ?? 'normal'

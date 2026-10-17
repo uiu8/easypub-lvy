@@ -61,6 +61,9 @@ import '../rules/rules_page.dart';
 import '../../application/rule_catalog_service.dart';
 import '../settings/settings_page.dart';
 import '../../application/settings_service.dart';
+import '../../application/app_update_service.dart';
+import 'update_prompt.dart';
+import 'book_tabs.dart';
 import '../../infrastructure/native_catalog_picker.dart';
 import '../shell/page_menu.dart';
 import '../grain.dart';
@@ -137,7 +140,9 @@ class _RewriteAppState extends State<RewriteApp> {
     final next = appearanceSettings!.snapshot.value;
     if (next.reducedMotion == appearance?.reducedMotion &&
         next.configuration['ui_scale'] ==
-            appearance?.configuration['ui_scale']) {
+            appearance?.configuration['ui_scale'] &&
+        next.configuration['ui_accent'] ==
+            appearance?.configuration['ui_accent']) {
       return;
     }
     appearance = next;
@@ -153,6 +158,7 @@ class _RewriteAppState extends State<RewriteApp> {
     restoreWorkspaceView();
     conversionDraft.addListener(saveOutputDraft);
     router.routerDelegate.addListener(routeAccepted);
+    widget.library.books.addListener(pruneBookTabs);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) routeAccepted();
     });
@@ -170,6 +176,17 @@ class _RewriteAppState extends State<RewriteApp> {
       appearanceSettings!.snapshot.addListener(outputDefaultsChanged);
       appearanceSettings!.load();
     }
+    if (widget.library case final AppUpdateLibrary u
+        when appearanceSettings != null) {
+      final settings = appearanceSettings!;
+      updates = AppUpdateController(
+        service: u.appUpdates,
+        readConfig: () => settings.snapshot.value.configuration,
+        saveConfig: settings.savePatch,
+        blockedByTasks: () => u.updateBlockedByTasks,
+      );
+      unawaited(updates!.start());
+    }
     // 文件夹自动入库（V26，FOLD-080）：窗口回到前台时同步一次。
     if (widget.library case final FolderAutoImportService auto) {
       autoImportResume = AppLifecycleListener(
@@ -179,6 +196,14 @@ class _RewriteAppState extends State<RewriteApp> {
   }
 
   AppLifecycleListener? autoImportResume;
+
+  /// 自动更新（V68）：整个程序一个；顶栏提示与设置页共用。
+  AppUpdateController? updates;
+
+  /// 书籍标签页（V69，G-073）。
+  final bookTabs = BookTabs();
+  void pruneBookTabs() =>
+      bookTabs.retain(widget.library.books.value.map((b) => b.id).toSet());
 
   final quickActivity = ValueNotifier<bool>(false);
   String? restoredRoute;
@@ -206,9 +231,11 @@ class _RewriteAppState extends State<RewriteApp> {
     final raw = (library as WorkspaceAutosaveService).readDraft('workspace/UI');
     if (raw == null) {
       restoredRoute = null;
+      bookTabs.restore(null, const {});
       return;
     }
     final ids = library.books.value.map((b) => b.id).toSet();
+    bookTabs.restore(raw['tabs'], ids);
     final path = raw['route'] as String?;
     if (path != null) {
       final uri = Uri.tryParse(path);
@@ -267,6 +294,7 @@ class _RewriteAppState extends State<RewriteApp> {
     if (library is! WorkspaceAutosaveService) return;
     (library as WorkspaceAutosaveService).writeDraft('workspace/UI', {
       'route': router.routerDelegate.currentConfiguration.uri.toString(),
+      'tabs': bookTabs.toJson(),
       'chapters': {
         for (final e in chapterViews.entries)
           e.key: {
@@ -302,6 +330,7 @@ class _RewriteAppState extends State<RewriteApp> {
   }
 
   void routeAccepted() {
+    bookTabs.visit(router.routerDelegate.currentConfiguration.uri);
     final segments =
         router.routerDelegate.currentConfiguration.uri.pathSegments;
     if (segments.length > 1 &&
@@ -728,6 +757,9 @@ class _RewriteAppState extends State<RewriteApp> {
   @override
   void dispose() {
     autoImportResume?.dispose();
+    updates?.dispose();
+    widget.library.books.removeListener(pruneBookTabs);
+    bookTabs.dispose();
     lifecycle?.workspaceGeneration.removeListener(workspaceReplaced);
     appearanceSettings?.snapshot.removeListener(appearanceChanged);
     appearanceSettings?.snapshot.removeListener(outputDefaultsChanged);
@@ -748,7 +780,10 @@ class _RewriteAppState extends State<RewriteApp> {
   Widget application(SettingsSnapshot? prefs) => MaterialApp.router(
     key: ValueKey(workspaceGeneration),
     title: 'EasyPub++',
-    theme: deskTheme(compact: prefs?.configuration['ui_density'] == 'compact'),
+    theme: deskTheme(
+      compact: prefs?.configuration['ui_density'] == 'compact',
+      accent: prefs?.configuration['ui_accent'] as String?,
+    ),
     scrollBehavior: const DeskScrollBehavior(),
     debugShowCheckedModeBanner: false,
     routerConfig: router,
@@ -762,55 +797,100 @@ class _RewriteAppState extends State<RewriteApp> {
         ? Duration.zero
         : DeskMotion.slow,
     themeAnimationCurve: DeskMotion.easeOut,
-    builder: (context, child) => PendingScope(
-      registry: pendingChanges,
-      child: WorkspaceDraftScope(
-        guard: workspaceDraftGuard,
-        child: MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            disableAnimations:
-                MediaQuery.of(context).disableAnimations ||
-                prefs?.reducedMotion == true,
-            textScaler: TextScaler.linear(
-              ((prefs?.configuration['ui_scale'] as num?)?.toDouble() ?? 1) *
-                  (prefs?.configuration['ui_follow_system_scale'] != false
-                      ? MediaQuery.textScalerOf(context).scale(1)
-                      : 1),
+    builder: (context, child) => _withUpdates(
+      PendingScope(
+        registry: pendingChanges,
+        child: WorkspaceDraftScope(
+          guard: workspaceDraftGuard,
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              disableAnimations:
+                  MediaQuery.of(context).disableAnimations ||
+                  prefs?.reducedMotion == true,
+              textScaler: TextScaler.linear(
+                ((prefs?.configuration['ui_scale'] as num?)?.toDouble() ?? 1) *
+                    (prefs?.configuration['ui_follow_system_scale'] != false
+                        ? MediaQuery.textScalerOf(context).scale(1)
+                        : 1),
+              ),
             ),
-          ),
-          child: CallbackShortcuts(
-            bindings: {
-              const SingleActivator(LogicalKeyboardKey.digit1, alt: true): () =>
-                  router.go('/'),
-              const SingleActivator(LogicalKeyboardKey.digit2, alt: true): () =>
-                  router.go('/folders'),
-              const SingleActivator(LogicalKeyboardKey.digit3, alt: true): () =>
-                  router.go(
-                    bookPageLocation(
-                      widget.library.selection.value.current,
-                      'chapters',
-                    ),
+            child: CallbackShortcuts(
+              bindings: {
+                const SingleActivator(
+                  LogicalKeyboardKey.digit1,
+                  alt: true,
+                ): () =>
+                    router.go('/'),
+                const SingleActivator(
+                  LogicalKeyboardKey.digit2,
+                  alt: true,
+                ): () =>
+                    router.go('/folders'),
+                const SingleActivator(
+                  LogicalKeyboardKey.digit3,
+                  alt: true,
+                ): () => router.go(
+                  bookPageLocation(
+                    widget.library.selection.value.current,
+                    'chapters',
                   ),
-              const SingleActivator(LogicalKeyboardKey.digit4, alt: true): () =>
-                  router.go(
-                    bookPageLocation(
-                      widget.library.selection.value.current,
-                      'checks',
-                    ),
+                ),
+                const SingleActivator(
+                  LogicalKeyboardKey.digit4,
+                  alt: true,
+                ): () => router.go(
+                  bookPageLocation(
+                    widget.library.selection.value.current,
+                    'checks',
                   ),
-              const SingleActivator(LogicalKeyboardKey.digit5, alt: true): () =>
-                  router.go('/conversion'),
-              const SingleActivator(LogicalKeyboardKey.digit6, alt: true): () =>
-                  router.go('/tasks'),
-              const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-                  openCommandPalette,
-            },
-            child: DeskSearchHost(
-              child: _WorkspaceControls(owner: this, child: child!),
+                ),
+                const SingleActivator(
+                  LogicalKeyboardKey.digit5,
+                  alt: true,
+                ): () =>
+                    router.go('/conversion'),
+                const SingleActivator(
+                  LogicalKeyboardKey.digit6,
+                  alt: true,
+                ): () =>
+                    router.go('/tasks'),
+                const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+                    openCommandPalette,
+                // 书籍标签页（V69，G-073）：切换与关闭。
+                const SingleActivator(
+                  LogicalKeyboardKey.tab,
+                  control: true,
+                ): () {
+                  if (bookTabs.neighbor(1) case final l?) router.go(l);
+                },
+                const SingleActivator(
+                  LogicalKeyboardKey.tab,
+                  control: true,
+                  shift: true,
+                ): () {
+                  if (bookTabs.neighbor(-1) case final l?) router.go(l);
+                },
+                const SingleActivator(
+                  LogicalKeyboardKey.keyW,
+                  control: true,
+                ): () {
+                  if (bookTabs.active case final id?) {
+                    if (bookTabs.close(id) case final l?) router.go(l);
+                  }
+                },
+              },
+              child: DeskSearchHost(
+                child: _WorkspaceControls(owner: this, child: child!),
+              ),
             ),
           ),
         ),
       ),
     ),
   );
+
+  Widget _withUpdates(Widget child) => switch (updates) {
+    final c? => AppUpdateScope(controller: c, child: child),
+    null => child,
+  };
 }

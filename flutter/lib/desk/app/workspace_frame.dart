@@ -184,12 +184,34 @@ class _Workspace extends StatelessWidget {
                 reviewState: reviewState,
               ),
               onSearch: () => app.openCommandPalette(context),
-              status: _SaveStatus(library: library),
+              status: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 自动更新（V68）：有新版本 / 下载中 / 待重启时出现。
+                  if (AppUpdateScope.maybeOf(context) case final updates?)
+                    UpdatePill(
+                      controller: updates,
+                      leave: () => confirmWorkspaceLeave(
+                        context,
+                        library,
+                        picker,
+                        action: '重启更新',
+                      ),
+                    ),
+                  _SaveStatus(library: library),
+                ],
+              ),
               trailing: ProjectMenu(
                 library: library,
                 picker: picker,
                 anchored: true,
               ),
+            ),
+            // 书籍标签页（V69，G-073）：没有打开的书时不占位置。
+            BookTabBar(
+              tabs: app.bookTabs,
+              library: library,
+              onOpen: (location) => context.go(location),
             ),
             Expanded(
               child: Row(
@@ -300,7 +322,8 @@ class _Workspace extends StatelessWidget {
             shortLabel: '检查',
             icon: Icons.fact_check_outlined,
             shortcut: 'Alt 4',
-            selected: title == '检查与修复',
+            // 规则页从检查页进入（V64，CH-279），左栏不单列，打开时仍高亮“检查”。
+            selected: title == '检查与修复' || title == '识别与检查规则',
             onTap: () => openBook('checks'),
             // 状态点取自书稿的缓存检查状态（BookSummary.status），不触发新的检查。
             dot: switch (book?.status) {
@@ -320,13 +343,6 @@ class _Workspace extends StatelessWidget {
             icon: Icons.cleaning_services_outlined,
             selected: title == '文本清理',
             onTap: () => openBook('cleanup'),
-          ),
-          DeskRailEntry(
-            label: '识别与检查规则',
-            shortLabel: '规则',
-            icon: Icons.rule_rounded,
-            selected: title == '识别与检查规则',
-            onTap: () => openBook('rules'),
           ),
           DeskRailEntry(
             label: '书籍信息',

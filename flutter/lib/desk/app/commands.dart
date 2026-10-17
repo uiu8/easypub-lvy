@@ -3,6 +3,7 @@ part of 'rewrite_app.dart';
 /// 命令面板（G-062），自 rewrite_app.dart 拆出。
 extension _CommandPalette on _RewriteAppState {
   /// 命令面板（G-062）：页面跳转与既有入口；不包含任何直接修改书稿的应用动作。
+  /// V70：最上方“最近使用”与“当前书”组，输入书名可以切换到那本书（G-074–076）。
   Future<void> openCommandPalette([BuildContext? from]) async {
     final context = from ?? router.routerDelegate.navigatorKey.currentContext;
     if (context == null || !context.mounted) return;
@@ -31,7 +32,88 @@ extension _CommandPalette on _RewriteAppState {
       shortcut: shortcut,
       run: run,
     );
-    await showDeskCommandPalette(context, [
+    // 最近使用（V70，G-075）：随工作区保存，最近的在前，最多 5 条。
+    List<String> recent() =>
+        ((autosave?.readDraft('workspace/palette'))?['recent'] as List? ?? [])
+            .whereType<String>()
+            .toList();
+    void remember(DeskCommand c) => autosave?.writeDraft('workspace/palette', {
+      'recent': [c.key, ...recent().where((k) => k != c.key)].take(5).toList(),
+    });
+    // 当前书（V70，G-074）：组名带书名；没有当前书或正在转换时说明原因。
+    final title = widget.library.books.value
+        .where((b) => b.id == current)
+        .firstOrNull
+        ?.title;
+    final group = title == null ? '当前书' : '当前书 · $title';
+    final convertReason = current == null
+        ? '先选择书稿'
+        : busy
+        ? '等待当前操作完成'
+        : null;
+    final currentBook = [
+      for (final format in const ['EPUB', 'AZW3', 'MOBI', 'KFX'])
+        DeskCommand(
+          id: 'G-074',
+          label: '转换当前书为 $format',
+          group: group,
+          initials: 'zhdqsw${format.toLowerCase()}',
+          keywords: '输出 ${format.toLowerCase()}',
+          icon: Icons.arrow_forward_rounded,
+          disabledReason: convertReason,
+          // 与底栏先点选格式、再点“转换当前书”相同：输出格式随之改为所选格式。
+          run: () async {
+            await updateOutputFormat(format);
+            if (context.mounted) await quickConvert(context, bookId: current);
+          },
+        ),
+      DeskCommand(
+        id: 'G-074',
+        label: '识别与检查规则',
+        group: group,
+        initials: 'sbyjcgz',
+        icon: Icons.tune_rounded,
+        disabledReason: current == null ? '先选择书稿' : null,
+        run: () => book('rules'),
+      ),
+      DeskCommand(
+        id: 'G-073',
+        label: '关闭当前标签',
+        group: group,
+        initials: 'gbdqbq',
+        shortcut: 'Ctrl W',
+        icon: Icons.close_rounded,
+        disabledReason: bookTabs.active == null ? '当前页面不属于某本书' : null,
+        run: () {
+          if (bookTabs.active case final id?) {
+            if (bookTabs.close(id) case final l?) go(l);
+          }
+        },
+      ),
+    ];
+    // 按书名切换（V70，G-076）：只在输入后出现；有标签时回到标签记住的页面。
+    final books = [
+      for (final b in widget.library.books.value)
+        DeskCommand(
+          id: 'G-076',
+          label: '打开：${b.title}',
+          group: '书稿',
+          initials: '',
+          keywords: b.author,
+          icon: Icons.menu_book_outlined,
+          searchOnly: true,
+          run: () {
+            final i = bookTabs.indexOf(b.id);
+            go(
+              i >= 0
+                  ? bookTabs.tabs[i].location
+                  : bookPageLocation(b.id, 'overview'),
+            );
+          },
+        ),
+    ];
+    await showDeskCommandPalette(context, recent: recent(), onRun: remember, [
+      ...currentBook,
       page(
         'G-005',
         '书库',
@@ -218,6 +300,7 @@ extension _CommandPalette on _RewriteAppState {
         disabledReason: autosave == null ? '当前运行环境没有自动保存服务' : null,
         run: () => autosave?.flushWorkspace(),
       ),
+      ...books,
     ]);
   }
 }

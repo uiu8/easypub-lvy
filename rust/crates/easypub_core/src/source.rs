@@ -367,13 +367,21 @@ impl SourceSnapshot {
             .numbering_pairs()
             .iter()
             .filter(|(a, b, old, new)| {
-                new < old
+                (new < old
                     || (new == old
                         && (a.title.trim() != b.title.trim()
                             || self.lines[a.source_line as usize..b.source_line as usize - 1]
                                 .iter()
                                 .any(|&(start, end)| !self.text[start..end].trim().is_empty()))
-                        && !crate::chapter_rules::ordered_parts(&a.title, &b.title))
+                        && !crate::chapter_rules::ordered_parts(&a.title, &b.title)))
+                    && self.check_enabled(
+                        "number-reset",
+                        Some(if new == old {
+                            "repeated-number"
+                        } else {
+                            "number-reversal"
+                        }),
+                    )
             })
             .count();
         let prose = self.prose_headings().len();
@@ -397,15 +405,25 @@ impl SourceSnapshot {
         if self.chapters.is_empty() {
             findings.push(serde_json::json!({"id":"no-headings","title":"未识别章节标题","severity":"error","count":1}));
         }
+        findings.retain(|v| self.check_enabled(v["id"].as_str().unwrap(), None));
         serde_json::json!({"source_id":self.summary.source_id,"revision":self.summary.revision,"line_count":self.summary.line_count,"chapter_count":self.summary.chapter_count,"findings":findings}).to_string()
+    }
+
+    fn check_enabled(&self, id: &str, subtype: Option<&str>) -> bool {
+        self.rules
+            .as_ref()
+            .is_none_or(|r| r.rules.check_enabled(id, subtype))
     }
 
     /// Numbered titles without “第” that should be offered a prefix. Prose
     /// headings and author notes are excluded: they belong back in the body,
     /// and “第两章合一章” would be a nonsensical rename (V12).
     pub fn missing_prefix_chapters(&self) -> Vec<&ChapterSummary> {
-        let prose: std::collections::BTreeSet<u32> =
-            self.prose_headings().iter().map(|c| c.source_line).collect();
+        let prose: std::collections::BTreeSet<u32> = self
+            .prose_headings()
+            .iter()
+            .map(|c| c.source_line)
+            .collect();
         self.chapters
             .iter()
             .filter(|c| {
@@ -724,7 +742,7 @@ impl SourceSnapshot {
             .map(|r| r.suppressed(self))
             .transpose()?
             .unwrap_or_default();
-        selected.retain(|id| !suppressed.contains(id));
+        selected.retain(|id| !suppressed.contains(id) && self.check_enabled(id, None));
         let wants_duplicate = selected.iter().any(|id| id == "duplicate-title");
         let wants_reset = selected.iter().any(|id| id == "number-reset");
         let wants_no_headings = selected.iter().any(|id| id == "no-headings");
@@ -848,7 +866,10 @@ impl SourceSnapshot {
             }));
         }
         actions.retain(|action| {
-            !suppressed
+            self.check_enabled(
+                action["finding_id"].as_str().unwrap_or(""),
+                action["subtype"].as_str(),
+            ) && !suppressed
                 .iter()
                 .any(|id| action["id"].as_str() == Some(id.as_str()))
         });

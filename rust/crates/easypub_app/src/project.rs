@@ -49,6 +49,8 @@ pub struct Project {
 #[serde(deny_unknown_fields)]
 pub struct ProjectBook {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule_toggle_history: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recognition_draft: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub layout_origins: crate::layout_settings::Origins,
@@ -121,6 +123,8 @@ pub struct ProjectBook {
     /// 诗词样式（V50，LAY-122）。
     #[serde(default = "crate::production::default_verse_block_style")]
     pub verse_block_style: String,
+    #[serde(default)]
+    pub rule_options: crate::rule_options::Options,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub block_annotations: Vec<crate::block_annotations::Annotation>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -381,6 +385,9 @@ impl Project {
             }
             if let Some(review) = &b.review {
                 review.validate_shape()?;
+            }
+            if let Some(history) = &b.rule_toggle_history {
+                crate::rule_toggles::validate_history(history)?;
             }
             if let Some(history) = &b.production_history {
                 history.validate(u32::MAX)?;
@@ -840,6 +847,7 @@ mod tests {
             ErrorCode::StaleRevision
         );
         let make = |path: &Path, id: String, title: &str| ProjectBook {
+            rule_toggle_history: None,
             recognition_draft: None,
             metadata_origins: BTreeMap::new(),
             layout_origins: BTreeMap::new(),
@@ -875,6 +883,7 @@ mod tests {
             first_paragraph_style: crate::production::default_first_paragraph_style(),
             system_block_style: crate::production::default_system_block_style(),
             verse_block_style: crate::production::default_verse_block_style(),
+            rule_options: Default::default(),
             block_annotations: Vec::new(),
             manual_notes: Vec::new(),
             supplemental_pages: Vec::new(),

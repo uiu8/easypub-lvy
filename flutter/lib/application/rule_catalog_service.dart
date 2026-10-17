@@ -13,7 +13,14 @@ class RuleDescriptor {
           ? null
           : Map<String, dynamic>.unmodifiable(v['toggle'] as Map),
       defaultEnabled = v['default'] as bool,
-      order = v['order'] as int;
+      order = v['order'] as int,
+      locked = v['locked'] == true,
+      lockedReason = v['locked_reason'] as String?,
+      offValue = v['off_value'],
+      onValue = v['on_value'];
+  final bool locked;
+  final String? lockedReason;
+  final Object? offValue, onValue;
   final String id, group, label, description, effect, category;
   final String? parent;
   final Map<String, dynamic>? toggle;
@@ -45,7 +52,14 @@ class RuleStatistic {
   RuleStatistic.fromJson(Map v)
     : id = v['id'] as String,
       enabled = v['enabled'] as bool,
-      count = v['count'] as int,
+      hypothetical = v['hypothetical'] == true,
+      count = v['count'] as int? ?? 0,
+      countAvailable = v['count'] != null,
+      affects = List.unmodifiable(
+        (v['affects'] as List? ?? []).cast<Map>().map(
+          (r) => Map<String, dynamic>.unmodifiable(r),
+        ),
+      ),
       unit = v['unit'] as String,
       status = v['status'] as String,
       reason = v['reason'] as String?,
@@ -62,6 +76,9 @@ class RuleStatistic {
   final String? reason;
   final bool enabled;
   final int count, invalidCount;
+  final bool countAvailable;
+  final bool hypothetical;
+  final List<Map<String, dynamic>> affects;
   final List<RuleLocation> locations;
 
   /// 完整的当前有效书稿行范围，首尾都包含；不受 locations 的 50 处限制。
@@ -107,12 +124,29 @@ class RuleStatisticsState {
   final String? reason;
 }
 
+/// 章节问题对应的规则编号（V64，CH-279）：类别 number-gap 对应 check.number_gap；
+/// 编号重复 / 编号回退两个细分对应“编号回退或重复”下的细分规则。
+String chapterIssueRule(String category, String? subtype) {
+  final base = 'check.${category.replaceAll('-', '_')}';
+  return switch (subtype) {
+    'repeated-number' => '$base.repeated_number',
+    'number-reversal' => '$base.number_reversal',
+    _ => base,
+  };
+}
+
 abstract interface class RuleCatalogLibrary {
   RuleCatalogService openRuleCatalog(String bookId);
 }
 
 /// 每本书一个只读服务。配置或有效书稿变化时，旧结果失效并取消在途计算。
 abstract interface class RuleCatalogService {
+  Future<Map<String, dynamic>> settings({String scope = 'book'});
+  Future<Map<String, dynamic>> previewToggles(
+    List<Map<String, dynamic>> changes, {
+    String scope = 'book',
+  });
+  Future<void> applyToggles(String planId);
   ValueListenable<RuleStatisticsState> get state;
   Future<List<RuleDescriptor>> catalog();
 

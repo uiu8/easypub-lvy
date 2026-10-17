@@ -1,4 +1,7 @@
 import 'dart:convert';
+
+import 'legacy_rule_catalog_service.dart';
+
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -140,6 +143,7 @@ class LegacyChangeHistoryService
     '结构': backend.manuscript.structureHistories[id],
     '文本清理': backend.cleanup.histories[id],
     '制作': backend.production.histories[id],
+    '规则开关': backend.production.drafts[id]?.ruleToggleHistory,
   };
   List<dynamic> states(Map<String, dynamic> history) =>
       ((history['states'] ?? history['history']) as List)
@@ -280,6 +284,21 @@ class LegacyChangeHistoryService
       final list = states(h), cursor = h['cursor'] as int;
       for (var i = list.length - 1; i > 0; i--) {
         final domain = entry.key;
+        if (domain == '章节' || domain == '制作') {
+          final combined = backend.production.drafts[bookId]?.ruleToggleHistory;
+          final key = domain == '章节'
+              ? 'effective_history'
+              : 'production_history';
+          if ((combined?['states'] as List? ?? []).skip(1).cast<Map>().any((s) {
+            final h = (s['after'] as Map)[key] as Map?;
+            return h != null &&
+                h['cursor'] == i &&
+                jsonEncode((h['states'] ?? h['history'])[i]) ==
+                    jsonEncode(list[i]);
+          })) {
+            continue;
+          }
+        }
         var category = domain;
         if (domain == '制作') {
           final a = list[i - 1] as Map, b = list[i] as Map;
@@ -333,7 +352,11 @@ class LegacyChangeHistoryService
           '$bookId/$domain/$i',
           bookId,
           domain,
-          recognition ? '重新识别章节' : '修改$category',
+          domain == '规则开关'
+              ? '规则开关'
+              : recognition
+              ? '重新识别章节'
+              : '修改$category',
           i,
           i <= cursor,
           i == cursor,
@@ -554,6 +577,13 @@ class LegacyChangeHistoryService
       throw const FormatException('当前不能恢复此记录；请先结束其他操作或重新选择当前一步。');
     }
     switch (record.domain) {
+      case '规则开关':
+        final service = LegacyRuleCatalogService(backend, record.bookId);
+        try {
+          await service.moveHistory(undo: undo);
+        } finally {
+          service.dispose();
+        }
       case '制作':
         final plan = await backend.production.previewChanges({
           record.bookId: command,

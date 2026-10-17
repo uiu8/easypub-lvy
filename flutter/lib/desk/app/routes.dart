@@ -293,6 +293,8 @@ extension _Routes on _RewriteAppState {
                   key: ValueKey(state.uri.toString()),
                   library: widget.library as RuleCatalogLibrary,
                   bookId: state.pathParameters['bookId']!,
+                  focusRule: state.uri.queryParameters['rule'],
+                  onBack: () => context.go(bookDestination(state, 'checks')),
                   onOpenLocation: (at) => context.go(
                     bookDestination(
                       state,
@@ -325,6 +327,11 @@ extension _Routes on _RewriteAppState {
           title: '检查与修复',
           child: BookChecksPage(
             viewState: checksView(state.pathParameters['bookId']!),
+            onRules: widget.library is RuleCatalogLibrary
+                ? (rule) => context.go(
+                    bookDestination(state, 'rules', query: {'rule': ?rule}),
+                  )
+                : null,
             onOpenDomain: (domain) => context.go(
               domain == 'output'
                   ? Uri(

@@ -19,6 +19,7 @@ class ConversionPreflightIssue {
     required this.detail,
     this.canOpenRepair = false,
     this.category = 'general',
+    this.ruleId,
     this.isCoverIssue = false,
     this.action = ConversionPreflightAction.overview,
   });
@@ -28,6 +29,7 @@ class ConversionPreflightIssue {
   final String detail;
   final bool canOpenRepair;
   final String category;
+  final String? ruleId;
   final bool isCoverIssue;
   final ConversionPreflightAction action;
 
@@ -37,6 +39,7 @@ class ConversionPreflightIssue {
     'detail': detail,
     'can_open_repair': canOpenRepair,
     'category': category,
+    if (ruleId != null) 'rule_id': ruleId,
     'is_cover_issue': isCoverIssue,
     'action': action.name,
   };
@@ -47,6 +50,7 @@ class ConversionPreflightIssue {
       orElse: () => ConversionPreflightLevel.info,
     );
     return ConversionPreflightIssue(
+      ruleId: json['rule_id'] as String?,
       level: level,
       title: json['title']?.toString() ?? '检查项',
       detail: json['detail']?.toString() ?? '',

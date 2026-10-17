@@ -151,6 +151,27 @@ const _reasons = <String, String>{
   'restart_application': '请重新启动程序后再试。',
   'use_action_object': '内部请求格式不对。请重新打开页面。',
   'use_supported_action': '这个操作不受支持。请换一种方式。',
+  // 自动更新（V68）。
+  'update_network': '连不上 GitHub。请检查网络，或稍后再试；也可以到发布页手动下载。',
+  'update_not_found': '发布页上没有找到更新信息。请稍后再试，或到发布页手动下载。',
+  'update_signature_invalid': '更新信息的签名不对，已拒绝。请到发布页手动下载，或向作者反馈。',
+  'update_manifest_invalid': '更新信息的格式不对，已拒绝。请到发布页手动下载。',
+  'update_source_invalid': '更新地址不受信任，已拒绝。',
+  'update_check_first': '请先重新检查更新。',
+  'update_busy': '正在下载更新，请等它完成或先取消。',
+  'update_download_failed': '下载没有完成。请检查网络后重试。',
+  'update_checksum_mismatch': '下载的文件与发布信息不一致，已丢弃。请重试。',
+  'update_package_invalid': '发布包里的文件没有通过核对，已丢弃，没有替换任何文件。',
+  'update_disk_write_failed': '写入下载文件失败。请检查磁盘空间后重试。',
+  'update_app_dir_not_writable': '程序目录不能写入，无法自动更新。请把程序解压到自己的文件夹，或到发布页手动下载。',
+  'update_not_packaged': '开发版本不能自动更新。',
+  'update_not_ready': '还没有下载好的新版本。',
+  'update_no_backup': '没有可以回退的上一版。',
+  'update_updater_missing': '程序目录里缺少更新程序，无法自动更新。请到发布页手动下载新版本。',
+  'update_launch_failed': '无法启动更新程序。请稍后重试，或到发布页手动下载。',
+  'update_replace_failed': '替换文件失败',
+  'update_staging_invalid': '下载的新版本不完整',
+  'update_staging_missing': '下载的新版本不见了',
 };
 
 /// 把异常换成给用户看的说明。[fallback] 写“哪一步没有完成”，在没有更具体原因时使用。

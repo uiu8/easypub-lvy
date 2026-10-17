@@ -75,6 +75,14 @@ impl Notes {
         manual: &[crate::manual_notes::Note],
         automatic: bool,
     ) -> Self {
+        Self::with_options(book, manual, automatic, &Default::default())
+    }
+    pub(crate) fn with_options(
+        book: &EffectiveBook,
+        manual: &[crate::manual_notes::Note],
+        automatic: bool,
+        options: &crate::rule_options::Options,
+    ) -> Self {
         use crate::manual_notes::{Body, invalid_reason};
         let mut result = Self::default();
         let mut reserved = BTreeMap::<usize, Vec<(usize, usize)>>::new();
@@ -173,7 +181,7 @@ impl Notes {
                 let heading = headings.peek().filter(|n| n.start == offset).copied();
                 if let Some(node) = heading {
                     if matches!(node.role, Role::Chapter | Role::Front | Role::Volume) {
-                        result.finish(&mut candidates);
+                        result.finish(&mut candidates, options);
                     }
                     headings.next();
                 }
@@ -240,21 +248,28 @@ impl Notes {
                 }
                 offset += length + newline;
             }
-            result.finish(&mut candidates);
+            result.finish(&mut candidates, options);
         }
         for links in result.lines.values_mut() {
             links.sort_by_key(|l| (l.from, l.to));
         }
         result
     }
-    fn finish(&mut self, candidates: &mut BTreeMap<u32, Candidates>) {
+    fn finish(
+        &mut self,
+        candidates: &mut BTreeMap<u32, Candidates>,
+        options: &crate::rule_options::Options,
+    ) {
         for c in std::mem::take(candidates).into_values() {
             if c.references.len() != 1 || c.definitions.len() != 1 {
                 continue;
             }
             let reference = c.references.into_iter().next().unwrap();
             let definition = c.definitions.into_iter().next().unwrap();
-            if reference.line >= definition.line || definition.marker.is_empty() {
+            if reference.line >= definition.line
+                || definition.marker.is_empty()
+                || !options.note(&reference.marker, &definition.marker)
+            {
                 continue;
             }
             for (o, is_definition) in [(&reference, false), (&definition, true)] {

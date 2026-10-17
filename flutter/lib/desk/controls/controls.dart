@@ -8,41 +8,47 @@ export 'choice.dart';
 export 'select_all.dart';
 
 // 编辑台表单控件（V8 由 Paper 兼容层迁入并改名）：按钮、文字、表单栅格、滚动区、可调分栏与 Material 主题。
-// 控件颜色一律取 context.desk 令牌；主题只有浅色一套，取值即 Desk.light。
+// 控件颜色一律取 context.desk 令牌；主题只有浅色一套，取值即 Desk.light 换上所选主题色（V69，G-072）。
 
-/// 编辑台 Material 主题；[compact] 为紧凑密度。
-ThemeData deskTheme({bool compact = false}) => _Ink.themeFor(compact: compact);
+/// 编辑台 Material 主题；[compact] 为紧凑密度，[accent] 为主题色编号（见 deskAccents）。
+ThemeData deskTheme({bool compact = false, String? accent}) =>
+    _Ink.themeFor(compact: compact, accent: deskAccentOf(accent));
 
 /// 主题内部用的浅色值（与 Desk.light 相同，常量形式供主题构造）。
 abstract final class _Ink {
   static const canvas = Color(0xFFF6F4EF), surface = Color(0xFFFCFBF8);
   static const ink = Color(0xFF1F1E1B), muted = Color(0xFF5E5A53);
   static const line = Color(0xFFE4E0D7), lineStrong = Color(0xFFD3CEC3);
-  static const accent = Color(0xFF6F6A63), onAccent = Color(0xFFF7F5F0);
+
+  /// 浮层悬停凹底与提示文字：中性色，不随主题色变化。
+  static const onAccent = Color(0xFFF7F5F0);
   static const selected = Color(0xFFECE9E4);
   static const pen = Color(0xFFA94434);
   static final _controlScheme = ColorScheme.fromSeed(
-    seedColor: accent,
+    seedColor: const Color(0xFF6F6A63),
     surface: surface,
   );
-  static ThemeData themeFor({bool compact = false}) => ThemeData(
+  static ThemeData themeFor({
+    bool compact = false,
+    required DeskAccent accent,
+  }) => ThemeData(
     useMaterial3: true,
     visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     fontFamily: sansFamily,
     fontFamilyFallback: deskFallback,
-    extensions: const [Desk.light],
+    extensions: [Desk.light.withAccent(accent)],
     scaffoldBackgroundColor: canvas,
     dividerColor: line,
-    colorScheme: ColorScheme.fromSeed(seedColor: accent).copyWith(
-      primary: accent,
-      onPrimary: onAccent,
+    colorScheme: ColorScheme.fromSeed(seedColor: accent.accent).copyWith(
+      primary: accent.accent,
+      onPrimary: accent.onAccent,
       error: pen,
       surface: surface,
       onSurface: ink,
       onSurfaceVariant: muted,
       outline: line,
-      secondaryContainer: selected,
+      secondaryContainer: accent.soft,
     ),
     textTheme: const TextTheme(
       bodyMedium: TextStyle(fontSize: 14, height: 1.45, color: ink),
@@ -196,7 +202,7 @@ abstract final class _Ink {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: accent, width: 1.4),
+        borderSide: BorderSide(color: accent.accent, width: 1.4),
       ),
     ),
     tooltipTheme: TooltipThemeData(

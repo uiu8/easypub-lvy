@@ -91,6 +91,19 @@ class BookDraft {
   // 章节标题样式（V36，LAY-117）。
   String headingStyle = 'classic';
   // 场景分隔样式（V46，LAY-118）。
+  static const _ruleOptionDefaults = <String, dynamic>{
+    'cleanup_pipeline': null,
+    'scene_symbols': null,
+    'disabled': <String>[],
+    'restore_values': <String, dynamic>{},
+  };
+  Map<String, dynamic> _ruleOptions = {..._ruleOptionDefaults};
+  Map<String, dynamic> get ruleOptions => _ruleOptions;
+  set ruleOptions(Map<String, dynamic> value) {
+    _ruleOptions = {..._ruleOptionDefaults, ...value};
+  }
+
+  Map<String, dynamic>? ruleToggleHistory;
   String sceneBreakStyle = 'keep';
   String noteStyle = 'off';
   // 章首段落样式（V49，LAY-119）。
@@ -802,6 +815,11 @@ class PrototypeState extends ChangeNotifier {
             ..writingMode = v['writing_mode'] as String? ?? 'horizontal'
             ..verticalDigits = (v['vertical_digits'] as num? ?? 2).toInt()
             ..headingStyle = v['heading_style'] as String? ?? 'classic'
+            ..ruleOptions = Map<String, dynamic>.from(
+              v['rule_options'] as Map? ?? {},
+            )
+            ..ruleToggleHistory = (v['rule_toggle_history'] as Map?)
+                ?.cast<String, dynamic>()
             ..sceneBreakStyle = v['scene_break_style'] as String? ?? 'keep'
             ..noteStyle = v['note_style'] as String? ?? 'off'
             ..firstParagraphStyle =
@@ -940,12 +958,28 @@ class PrototypeState extends ChangeNotifier {
           throw const FormatException('入库映射未完成，请检查命中规则的字段和封面资源；书稿尚未加入书库。');
         }
       }
+      final ruleDefaults = globalConfiguration['rule_defaults'] as Map?;
+      if (existing < 0 && ruleDefaults != null) {
+        final values = production.valuesOf(draft);
+        values.addAll((ruleDefaults['layout'] as Map).cast<String, dynamic>());
+        values['layout_origins'] = <String, dynamic>{};
+        values['rule_options'] = {
+          ...(ruleDefaults['rule_options'] as Map).cast<String, dynamic>(),
+          'cleanup_pipeline': ruleDefaults['pipeline'],
+        };
+        draft = production.draftFromProduction(book, values, importedResources);
+        importedHistory = null;
+      }
       var importedStructure = source.initialStructure;
       if (existing < 0 &&
           source.originPath == null &&
-          globalConfiguration['recognition_defaults'] is Map) {
+          (ruleDefaults?['rules'] ??
+                  globalConfiguration['recognition_defaults'])
+              is Map) {
         final defaults = Map<String, dynamic>.from(
-          globalConfiguration['recognition_defaults'] as Map,
+          (ruleDefaults?['rules'] ??
+                  globalConfiguration['recognition_defaults'])
+              as Map,
         )..['origin'] = 'import_default';
         final recognized = jsonDecode(
           await api.editStructureDraft(
@@ -1045,6 +1079,9 @@ class PrototypeState extends ChangeNotifier {
           'writing_mode': d.writingMode,
           'vertical_digits': d.verticalDigits,
           'heading_style': d.headingStyle,
+          'rule_options': d.ruleOptions,
+          if (d.ruleToggleHistory != null)
+            'rule_toggle_history': d.ruleToggleHistory,
           'scene_break_style': d.sceneBreakStyle,
           'note_style': d.noteStyle,
           'first_paragraph_style': d.firstParagraphStyle,
@@ -1306,6 +1343,11 @@ class PrototypeState extends ChangeNotifier {
           ..writingMode = row['writing_mode'] as String? ?? 'horizontal'
           ..verticalDigits = (row['vertical_digits'] as num? ?? 2).toInt()
           ..headingStyle = row['heading_style'] as String? ?? 'classic'
+          ..ruleOptions = Map<String, dynamic>.from(
+            row['rule_options'] as Map? ?? {},
+          )
+          ..ruleToggleHistory = (row['rule_toggle_history'] as Map?)
+              ?.cast<String, dynamic>()
           ..sceneBreakStyle = row['scene_break_style'] as String? ?? 'keep'
           ..noteStyle = row['note_style'] as String? ?? 'off'
           ..firstParagraphStyle =

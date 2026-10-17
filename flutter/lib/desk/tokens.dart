@@ -136,8 +136,17 @@ class Desk extends ThemeExtension<Desk> {
     ),
   ];
 
+  /// 换成另一种主题色（V69，G-072）：只换强调色三件套，语义色与底色不变。
+  Desk withAccent(DeskAccent a) =>
+      copyWith(accent: a.accent, accentInk: a.onAccent, accentSoft: a.soft);
+
   @override
-  Desk copyWith({double? grain}) => Desk(
+  Desk copyWith({
+    double? grain,
+    Color? accent,
+    Color? accentInk,
+    Color? accentSoft,
+  }) => Desk(
     dark: dark,
     canvas: canvas,
     rail: rail,
@@ -149,9 +158,9 @@ class Desk extends ThemeExtension<Desk> {
     ink: ink,
     ink2: ink2,
     ink3: ink3,
-    accent: accent,
-    accentInk: accentInk,
-    accentSoft: accentSoft,
+    accent: accent ?? this.accent,
+    accentInk: accentInk ?? this.accentInk,
+    accentSoft: accentSoft ?? this.accentSoft,
     pen: pen,
     penSoft: penSoft,
     warn: warn,
@@ -168,6 +177,63 @@ class Desk extends ThemeExtension<Desk> {
   @override
   Desk lerp(Desk? other, double t) => t < .5 ? this : (other ?? this);
 }
+
+/// 主题色（V69，G-072）：强调色、其上文字色、浅底色。都与宣纸底色保持足够对比；默认墨灰。
+@immutable
+class DeskAccent {
+  const DeskAccent(this.id, this.label, this.accent, this.onAccent, this.soft);
+  final String id, label;
+  final Color accent, onAccent, soft;
+}
+
+const deskAccents = [
+  DeskAccent(
+    'ink',
+    '墨灰',
+    Color(0xFF6F6A63),
+    Color(0xFFF7F5F0),
+    Color(0xFFECE9E4),
+  ),
+  DeskAccent(
+    'teal',
+    '青',
+    Color(0xFF2F6B5E),
+    Color(0xFFF3F8F6),
+    Color(0xFFE1EEEA),
+  ),
+  DeskAccent(
+    'blue',
+    '蓝',
+    Color(0xFF2F5D8A),
+    Color(0xFFF4F7FB),
+    Color(0xFFE2EAF3),
+  ),
+  DeskAccent(
+    'violet',
+    '紫',
+    Color(0xFF5B4E8C),
+    Color(0xFFF6F5FB),
+    Color(0xFFE8E5F2),
+  ),
+  DeskAccent(
+    'ochre',
+    '赭',
+    Color(0xFF8A5A2B),
+    Color(0xFFFBF6F0),
+    Color(0xFFF1E7DA),
+  ),
+  DeskAccent(
+    'rose',
+    '玫',
+    Color(0xFF8C4361),
+    Color(0xFFFBF4F7),
+    Color(0xFFF1E2E9),
+  ),
+];
+
+/// 设置值（`ui_accent`）对应的主题色；未知或缺省为墨灰。
+DeskAccent deskAccentOf(Object? id) =>
+    deskAccents.firstWhere((a) => a.id == id, orElse: () => deskAccents.first);
 
 extension DeskContext on BuildContext {
   /// 未挂主题扩展的独立测试宿主回落到浅色令牌。

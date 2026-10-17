@@ -47,6 +47,9 @@ class LegacyBookCheckSession extends ChangeNotifier
     final rules = resolveCleanupRules(
       backend.globalConfiguration,
       bookDraft: backend.cleanup.drafts[id],
+      pendingPipeline:
+          backend.production.drafts[id]?.ruleOptions['cleanup_pipeline']
+              as List?,
     ).fingerprint;
     final key = '${version ?? backend.publicationContext(id)}\u0000$rules';
     final cache = _guards[backend] ??= {};
@@ -159,6 +162,9 @@ class LegacyBookCheckSession extends ChangeNotifier
   bool get _cleanupEnabled => resolveCleanupRules(
     backend.globalConfiguration,
     bookDraft: backend.cleanup.drafts[bookId],
+    pendingPipeline:
+        backend.production.drafts[bookId]?.ruleOptions['cleanup_pipeline']
+            as List?,
   ).enabled;
 
   final PrototypeState backend;
@@ -417,7 +423,9 @@ class LegacyBookCheckSession extends ChangeNotifier
             ),
           );
         }
-        final positions = await backend.production.illustrationPositions(bookId);
+        final positions = await backend.production.illustrationPositions(
+          bookId,
+        );
         validate();
         for (var i = 0; i < positions.length; i++) {
           final status = positions[i]['status'];

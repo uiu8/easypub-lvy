@@ -1,3 +1,4 @@
+mod app_update;
 pub mod repair_session;
 pub mod sessions;
 pub mod transaction;
@@ -11,9 +12,11 @@ pub mod project;
 
 pub mod block_annotations;
 pub mod manual_notes;
-pub mod rule_catalog;
-pub mod rule_statistics;
 pub mod production;
+pub mod rule_catalog;
+pub mod rule_options;
+pub mod rule_statistics;
+pub mod rule_toggles;
 pub mod supplemental_pages;
 
 pub mod assets;

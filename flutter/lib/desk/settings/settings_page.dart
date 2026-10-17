@@ -16,6 +16,8 @@ import '../../application/conversion_desktop.dart';
 import '../../application/library_service.dart';
 import '../../application/check_cache_service.dart';
 import '../../application/app_info.dart';
+import '../shell/workspace_leave.dart';
+import '../app/update_prompt.dart';
 import '../../application/parallel_books.dart';
 import '../../application/crash_log_service.dart';
 import '../errors.dart';
@@ -324,6 +326,27 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     ),
   );
+
+  /// 版本与更新（V68，SET-071–073）：检查、下载、重启更新与回退；没有更新服务时不显示。
+  List<Widget> _updateGroup() {
+    if (AppUpdateScope.maybeOf(context) == null) return const [];
+    final library = widget.library, picker = widget.picker;
+    return [
+      groupTitle('版本与更新', ''),
+      settingCard(
+        UpdateSettingsGroup(
+          leave: library == null || picker == null
+              ? () async => true
+              : () => confirmWorkspaceLeave(
+                  context,
+                  library,
+                  picker,
+                  action: '重启更新',
+                ),
+        ),
+      ),
+    ];
+  }
 
   /// 本版更新（SET-066）：摘自包内说明；开发版本不显示。
   List<Widget> _releaseNotesGroup() {
@@ -1008,6 +1031,60 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget body(SettingsSnapshot state) => switch (tab) {
     0 => section('外观与交互', [
       valueField('主题', '宣纸'),
+      const SizedBox(height: 12),
+      // 主题色（V69，G-072）：点色块立即生效并保存。
+      Row(
+        key: const ValueKey('settings-accent'),
+        children: [
+          Expanded(
+            child: Text('主题色', style: ui(13, c: context.desk.ink)),
+          ),
+          for (final a in deskAccents)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Tooltip(
+                message: a.label,
+                child: Semantics(
+                  button: true,
+                  selected:
+                      deskAccentOf(state.configuration['ui_accent']).id == a.id,
+                  label: '主题色：${a.label}',
+                  child: InkWell(
+                    key: ValueKey('settings-accent-${a.id}'),
+                    customBorder: const CircleBorder(),
+                    onTap: saving ? null : () => save({'ui_accent': a.id}),
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: a.accent,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color:
+                              deskAccentOf(state.configuration['ui_accent'])
+                                      .id ==
+                                  a.id
+                              ? context.desk.ink
+                              : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      child:
+                          deskAccentOf(state.configuration['ui_accent']).id ==
+                              a.id
+                          ? Icon(
+                              Icons.check_rounded,
+                              size: 14,
+                              color: a.onAccent,
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
       const SizedBox(height: 12),
       DeskChoice<double>(
         key: ValueKey(state.configuration['ui_scale']),
@@ -1773,6 +1850,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
       ),
+      ..._updateGroup(),
       ..._releaseNotesGroup(),
       ..._crashLogGroup(),
       groupTitle('许可与依赖', '随发布包提供第三方许可；转换工具许可分别列出。'),

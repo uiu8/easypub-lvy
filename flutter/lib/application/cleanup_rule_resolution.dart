@@ -22,6 +22,7 @@ class ResolvedCleanupRules {
 ResolvedCleanupRules resolveCleanupRules(
   Map<String, dynamic> configuration, {
   Map<String, dynamic>? bookDraft,
+  List<dynamic>? pendingPipeline,
 }) {
   List<Map<String, dynamic>>? from(
     Map<String, dynamic> value,
@@ -41,6 +42,15 @@ ResolvedCleanupRules resolveCleanupRules(
     return null;
   }
 
+  if (pendingPipeline != null) {
+    return ResolvedCleanupRules(
+      'book',
+      pendingPipeline
+          .cast<Map>()
+          .map((r) => r.cast<String, dynamic>())
+          .toList(),
+    );
+  }
   final book = bookDraft == null ? null : from(bookDraft, 'pipeline', 'rules');
   if (book != null) {
     if (bookDraft?['pipeline'] is! List && bookDraft?['rules'] is List) {

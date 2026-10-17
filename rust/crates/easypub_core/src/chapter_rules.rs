@@ -12,6 +12,10 @@ use sha2::{Digest, Sha256};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RuleSet {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disabled_checks: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disabled_recognition: Vec<String>,
     pub version: u32,
     pub origin: String,
     pub chapter_pattern: String,
@@ -44,6 +48,8 @@ pub struct RuleSet {
 impl Default for RuleSet {
     fn default() -> Self {
         Self {
+            disabled_checks: Vec::new(),
+            disabled_recognition: Vec::new(),
             version: 2,
             origin: "builtin".into(),
             chapter_pattern: String::new(),
@@ -134,8 +140,7 @@ fn phrases(value: &str, field: &str) -> Result<Vec<Phrase>, ApiError> {
             Some(pattern) => {
                 recognition::reject_unsupported_regex(pattern.trim())?;
                 Phrase::Pattern(
-                    Regex::new(pattern.trim())
-                        .map_err(|e| invalid(field, &format!("{e}")))?,
+                    Regex::new(pattern.trim()).map_err(|e| invalid(field, &format!("{e}")))?,
                 )
             }
             None => Phrase::Contains(line.to_owned()),
@@ -205,7 +210,49 @@ fn expression(value: &str, field: &str) -> Result<Option<Regex>, ApiError> {
         .map_err(|e| invalid(field, &format!("{e}")))
 }
 impl RuleSet {
+    pub fn enabled(&self, id: &str) -> bool {
+        !self.disabled_recognition.iter().any(|v| v == id)
+    }
+    pub fn check_enabled(&self, id: &str, subtype: Option<&str>) -> bool {
+        let id = id.replace('-', "_");
+        !self.disabled_checks.iter().any(|v| {
+            v == &id || subtype.is_some_and(|s| v == &format!("{id}.{}", s.replace('-', "_")))
+        })
+    }
     pub fn compile(&self) -> Result<CompiledRules, ApiError> {
+        if self.disabled_checks.iter().any(|id| {
+            !matches!(
+                id.as_str(),
+                "duplicate_content"
+                    | "prose_heading"
+                    | "unrecognized_heading"
+                    | "duplicate_title"
+                    | "number_reset"
+                    | "number_gap"
+                    | "no_headings"
+                    | "missing_heading_prefix"
+                    | "heading_number_typo"
+                    | "number_reset.repeated_number"
+                    | "number_reset.number_reversal"
+            )
+        }) || self.disabled_recognition.iter().any(|id| {
+            !matches!(
+                id.as_str(),
+                "volume"
+                    | "section"
+                    | "level_chapter"
+                    | "numeric"
+                    | "normalize_numeric"
+                    | "author_note"
+                    | "prose"
+                    | "number_corrections"
+                    | "non_heading"
+                    | "force_heading"
+                    | "title_suffixes"
+            )
+        }) {
+            return Err(invalid("disabled_rules", "未知或不可关闭的规则"));
+        }
         if self.version != 2 {
             return Err(invalid("version", "识别规则版本不受支持"));
         }
@@ -239,6 +286,9 @@ impl RuleSet {
         )
     }
     pub fn corrections(&self) -> Result<Vec<(char, char)>, ApiError> {
+        if !self.enabled("number_corrections") {
+            return Ok(Vec::new());
+        }
         let mut result = Vec::new();
         if self.number_corrections.len() > 2048 {
             return Err(invalid("编号错字表", "最多2048字节"));
@@ -312,12 +362,14 @@ impl CompiledRules {
     /// 非标题词库命中：这一行永远不算标题。
     pub fn is_non_heading(&self, text: &str) -> bool {
         let text = text.trim();
-        self.non_heading.iter().any(|p| p.matches(text))
+        self.rules.enabled("non_heading") && self.non_heading.iter().any(|p| p.matches(text))
     }
     /// 标题词库命中（且不在非标题词库中）。
     pub fn is_forced_heading(&self, text: &str) -> bool {
         let text = text.trim();
-        !self.is_non_heading(text) && self.force_heading.iter().any(|p| p.matches(text))
+        self.rules.enabled("force_heading")
+            && !self.is_non_heading(text)
+            && self.force_heading.iter().any(|p| p.matches(text))
     }
     /// 用户允许重复的标题（CH-258）：相邻同名时不报“连续重复标题”。
     pub fn allows_duplicate_title(&self, title: &str) -> bool {
@@ -345,7 +397,7 @@ impl CompiledRules {
     }
     /// 按“标题后缀清理”去掉标题末尾的后缀（CH-260）；没有变化或会清空标题时返回 None。
     pub fn clean_title(&self, title: &str) -> Option<String> {
-        if self.suffixes.is_empty() {
+        if !self.rules.enabled("title_suffixes") || self.suffixes.is_empty() {
             return None;
         }
         let original = title.trim();
@@ -374,7 +426,8 @@ impl CompiledRules {
         (current != original).then_some(current)
     }
     pub fn explicitly_matches(&self, text: &str) -> bool {
-        self.is_forced_heading(text) || self.chapter.as_ref().is_some_and(|r| r.is_match(text))
+        self.is_forced_heading(text)
+            || self.chapter.as_ref().is_some_and(|r| r.is_match(text))
             || self.rules.hierarchy
                 && [&self.volume, &self.level_chapter, &self.section]
                     .iter()
@@ -402,11 +455,15 @@ impl CompiledRules {
                 (&self.level_chapter, Role::Chapter, "level_chapter"),
                 (&self.section, Role::Section, "section"),
             ] {
+                if !self.rules.enabled(rule_id) {
+                    continue;
+                }
                 if let Some(regex) = regex
-                    && let Some(mut m) = parse_match(regex, text, role) {
-                        m.rule_id = rule_id;
-                        return Some(m);
-                    }
+                    && let Some(mut m) = parse_match(regex, text, role)
+                {
+                    m.rule_id = rule_id;
+                    return Some(m);
+                }
             }
         }
         if let Some(regex) = &self.chapter {
@@ -414,7 +471,7 @@ impl CompiledRules {
                 return Some(m);
             }
         } else if recognition::is_default_heading(text)
-            && !recognition::is_author_note_heading(text)
+            && (!self.rules.enabled("author_note") || !recognition::is_author_note_heading(text))
         {
             let number = crate::source::numbered_heading(text);
             let role = if self.rules.hierarchy {
@@ -426,8 +483,16 @@ impl CompiledRules {
             } else {
                 Role::Chapter
             };
+            let rule_id = match role {
+                Role::Volume => "volume",
+                Role::Section => "section",
+                _ => "chapter",
+            };
+            if !self.rules.enabled(rule_id) {
+                return None;
+            }
             return Some(Match {
-                rule_id: match role { Role::Volume => "volume", Role::Section => "section", _ => "chapter" },
+                rule_id,
                 role,
                 number: number.map(|v| v.0),
                 marker: number.map(|v| v.1),
@@ -436,16 +501,17 @@ impl CompiledRules {
             });
         }
         if self.rules.numeric
-            && let Some(n) = self.numeric.matches(text) {
-                return Some(Match {
-                    rule_id: "numeric",
-                    role: Role::Chapter,
-                    number: Some(n.number),
-                    marker: Some('章'),
-                    title: n.title,
-                    numeric: true,
-                });
-            }
+            && let Some(n) = self.numeric.matches(text)
+        {
+            return Some(Match {
+                rule_id: "numeric",
+                role: Role::Chapter,
+                number: Some(n.number),
+                marker: Some('章'),
+                title: n.title,
+                numeric: true,
+            });
+        }
         None
     }
     pub fn numbering(&self, text: &str) -> Option<(u32, char)> {
@@ -490,7 +556,11 @@ impl CompiledRules {
                     && [&self.volume, &self.level_chapter, &self.section]
                         .iter()
                         .any(|r| r.as_ref().is_some_and(|r| r.is_match(&text[a..b])));
-            if !m.numeric && !custom && recognition::is_prose_heading(&text[a..b], dominant) {
+            if self.rules.enabled("prose")
+                && !m.numeric
+                && !custom
+                && recognition::is_prose_heading(&text[a..b], dominant)
+            {
                 continue;
             }
             if m.numeric {
@@ -568,6 +638,22 @@ pub fn rebuild(
     preserve_decisions: bool,
 ) -> Result<(crate::publication::EffectiveBook, serde_json::Value), ApiError> {
     let compiled = rules.compile()?;
+    let mut previous = book.tree.recognition_rules.clone().unwrap_or_default();
+    previous.disabled_checks = rules.disabled_checks.clone();
+    if previous == *rules
+        && book
+            .tree
+            .recognition_rules
+            .as_ref()
+            .is_some_and(|r| r.disabled_checks != rules.disabled_checks)
+    {
+        let before = book.tree.nodes.len();
+        book.tree.recognition_rules = Some(rules.clone());
+        return Ok((
+            book,
+            serde_json::json!({"kind":"recognize","before_count":before,"added":0,"removed":0,"changed":0,"rule_version":rules.version,"rule_fingerprint":rules.fingerprint()}),
+        ));
+    }
     let source = SourceSnapshot::from_utf8(
         book.text.as_bytes().to_vec(),
         crate::source::RULE_ID,
@@ -715,11 +801,8 @@ pub fn rebuild(
             );
             text.push_str(&book.text[b..lines.get(i + 1).map_or(book.text.len(), |v| v.0)]);
         }
-        let updated = SourceSnapshot::from_utf8(
-            text.as_bytes().to_vec(),
-            crate::source::RULE_ID,
-            || false,
-        )?;
+        let updated =
+            SourceSnapshot::from_utf8(text.as_bytes().to_vec(), crate::source::RULE_ID, || false)?;
         let updated_lines = updated.decoded_line_ranges();
         for node in &mut book.tree.nodes {
             node.start = updated_lines[node.source_line as usize - 1].0;
@@ -799,7 +882,8 @@ mod tests {
         assert!(value.get("force_heading").is_none());
         // 已识别为标题的行命中非标题词库时，检查列为“正文被当成标题”。
         let text = "第1章 甲\n正文\n两章合一章，更比两章强！\n感谢\n第2章 乙\n正文\n";
-        let source = SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let source =
+            SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
         let mut structure = Structure::new(&source);
         structure
             .put(
@@ -1000,13 +1084,26 @@ mod tests {
     fn exceptions_quiet_allowed_findings_and_clean_title_suffixes_only() {
         // 三个例外留空时不参与序列化：已有规则的指纹不变。
         let value = serde_json::to_value(RuleSet::default()).unwrap();
-        for key in ["allowed_duplicate_titles", "allowed_number_gaps", "title_suffixes"] {
+        for key in [
+            "allowed_duplicate_titles",
+            "allowed_number_gaps",
+            "title_suffixes",
+        ] {
             assert!(value.get(key).is_none(), "{key}");
         }
         for bad in [
-            RuleSet { allowed_number_gaps: "九章".into(), ..Default::default() },
-            RuleSet { allowed_number_gaps: "5-3".into(), ..Default::default() },
-            RuleSet { title_suffixes: "re:(?=x)".into(), ..Default::default() },
+            RuleSet {
+                allowed_number_gaps: "九章".into(),
+                ..Default::default()
+            },
+            RuleSet {
+                allowed_number_gaps: "5-3".into(),
+                ..Default::default()
+            },
+            RuleSet {
+                title_suffixes: "re:(?=x)".into(),
+                ..Default::default()
+            },
         ] {
             assert!(bad.compile().is_err());
         }
@@ -1021,7 +1118,9 @@ mod tests {
         assert!(!compiled.allows_number_gap(8, 9));
         assert!(!compiled.allows_number_gap(100, 101));
         assert_eq!(
-            compiled.clean_title("第一章 夜渡（第二更）（求月票）").as_deref(),
+            compiled
+                .clean_title("第一章 夜渡（第二更）（求月票）")
+                .as_deref(),
             Some("第一章 夜渡")
         );
         assert_eq!(compiled.clean_title("第二章 夜渡"), None);
@@ -1035,13 +1134,17 @@ mod tests {
         let book = compose(&source, &Structure::new(&source), None).unwrap();
         let ids = |book: &crate::publication::EffectiveBook| {
             let view = SourceSnapshot::for_effective_diagnostics(book).unwrap();
-            let report: serde_json::Value =
-                serde_json::from_str(&view.diagnostic_json()).unwrap();
+            let report: serde_json::Value = serde_json::from_str(&view.diagnostic_json()).unwrap();
             report["findings"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .map(|f| (f["id"].as_str().unwrap().to_owned(), f["count"].as_u64().unwrap()))
+                .map(|f| {
+                    (
+                        f["id"].as_str().unwrap().to_owned(),
+                        f["count"].as_u64().unwrap(),
+                    )
+                })
                 .collect::<std::collections::BTreeMap<_, _>>()
         };
         let before = ids(&book);
@@ -1065,7 +1168,9 @@ mod tests {
         assert_eq!(summary["changed"], 1);
         assert!(cleaned.text.contains("\n第五章 远行\n丙\n"));
         assert_eq!(
-            cleaned.text.replace("第五章 远行\n", "第五章 远行（求月票）\n"),
+            cleaned
+                .text
+                .replace("第五章 远行\n", "第五章 远行（求月票）\n"),
             text
         );
         assert_eq!(cleaned.source_to_output_lines, book.source_to_output_lines);

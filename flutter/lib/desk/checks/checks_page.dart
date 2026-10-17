@@ -32,6 +32,7 @@ class BookChecksPage extends StatefulWidget {
     required this.onCleanup,
     this.onOpenDomain,
     this.viewState,
+    this.onRules,
   });
   final LibraryService library;
   final CheckViewState? viewState;
@@ -48,6 +49,9 @@ class BookChecksPage extends StatefulWidget {
   final VoidCallback onCleanup;
   final void Function(String)? onOpenDomain;
   final void Function(ChapterIssue? issue) onChapter;
+
+  /// 打开识别与检查规则页（V64，CH-279）；ruleId 不为空时定位到这条规则。
+  final void Function(String? ruleId)? onRules;
   @override
   State<BookChecksPage> createState() => _BookChecksPageState();
 }
@@ -325,6 +329,17 @@ class _BookChecksPageState extends State<BookChecksPage> {
               style: ui(12, c: d.ink3),
             ),
           const SizedBox(width: 10),
+          if (widget.onRules case final open?) ...[
+            DeskButton(
+              '规则',
+              key: const ValueKey('checks-rules'),
+              quiet: true,
+              icon: Icons.tune_rounded,
+              tooltip: '识别与检查规则：查看每条规则在本书的命中',
+              onPressed: () => open(null),
+            ),
+            const SizedBox(width: 6),
+          ],
           busy
               ? DeskButton('取消检查', icon: Icons.stop_rounded, onPressed: cancel)
               : DeskButton(
@@ -537,6 +552,7 @@ class _BookChecksPageState extends State<BookChecksPage> {
                         onChapter: widget.onChapter,
                         onRepair: widget.onRepair,
                         onRepairIssue: widget.onRepairIssue,
+                        onRule: widget.onRules,
                         onAddNonHeading: widget.library is ChapterRulesService
                             ? (phrase) async {
                                 await showChapterRulesDialog(

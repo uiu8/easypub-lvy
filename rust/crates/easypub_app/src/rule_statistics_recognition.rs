@@ -82,45 +82,6 @@ pub(super) fn collect(
                 .hit(loc.line(n.source_line));
         }
     }
-    // Only the disabled option changes. Other filters and minimum body length remain intact.
-    for (needed, hypothetical, ids) in [
-        (
-            !rules.hierarchy,
-            RuleSet {
-                hierarchy: true,
-                ..rules.clone()
-            },
-            vec!["volume", "section", "level_chapter"],
-        ),
-        (
-            !rules.numeric,
-            RuleSet {
-                numeric: true,
-                ..rules.clone()
-            },
-            vec!["numeric", "normalize_numeric"],
-        ),
-    ] {
-        if !needed {
-            continue;
-        }
-        checkpoint(cancel)?;
-        let h = hypothetical.compile()?;
-        for n in h.recognize(source) {
-            let (a, b) = loc.lines[n.source_line as usize - 1];
-            let m = h
-                .matched(&source.decoded_text()[a..b])
-                .expect("recognized match");
-            for id in &ids {
-                if *id == m.rule_id || (*id == "normalize_numeric" && m.numeric) {
-                    stats
-                        .get_mut(&format!("{prefix}{id}"))
-                        .expect("rule")
-                        .hit(loc.line(n.source_line));
-                }
-            }
-        }
-    }
     for id in ["non_heading", "author_note", "prose"] {
         stats.get_mut(&format!("{prefix}{id}")).expect("rule").unit = "excluded_lines";
     }
@@ -161,6 +122,15 @@ pub(super) fn collect(
                 .hit(loc.line(line));
         }
     }
+    Ok(())
+}
+
+pub(super) fn collect_checks(
+    source: &SourceSnapshot,
+    loc: &Locations<'_>,
+    stats: &mut Statistics,
+    cancel: &AtomicBool,
+) -> Result<(), ApiError> {
     checkpoint(cancel)?;
     let check_ids: Vec<_> = stats
         .keys()

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../errors.dart';
 
 import '../../application/chapter_service.dart';
+import '../../application/rule_catalog_service.dart';
 import '../controls/controls.dart';
 import 'batch_repair_dialog.dart';
 import '../chapters/dialogs/body_compare_dialog.dart';
@@ -29,6 +30,7 @@ class CheckIssueBrowser extends StatefulWidget {
     this.viewState,
     this.onChanged,
     this.onAddNonHeading,
+    this.onRule,
   });
   final ChapterSession session;
   final bool enabled;
@@ -41,6 +43,9 @@ class CheckIssueBrowser extends StatefulWidget {
 
   /// 把一行文字加入本书非标题词库（打开识别规则面板核对后应用）。
   final Future<void> Function(String phrase)? onAddNonHeading;
+
+  /// 点问题类型名：打开规则页并定位到这类问题的规则（V64，CH-279）。
+  final void Function(String ruleId)? onRule;
 
   /// 队列常驻所需宽度。
   static const queueBreakpoint = 760.0;
@@ -927,12 +932,41 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                 ],
               ),
               const SizedBox(height: 2),
-              Text(
-                issue.categoryLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: ui(12, c: d.ink2),
-              ),
+              if (widget.onRule case final open?)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Tooltip(
+                    message: '查看这类检查的规则',
+                    child: InkWell(
+                      key: const ValueKey('issue-rule-link'),
+                      borderRadius: BorderRadius.circular(4),
+                      onTap: () =>
+                          open(chapterIssueRule(issue.category, issue.subtype)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              issue.categoryLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: ui(12, c: d.ink2),
+                            ),
+                          ),
+                          const SizedBox(width: 3),
+                          Icon(Icons.tune_rounded, size: 13, color: d.ink3),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  issue.categoryLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: ui(12, c: d.ink2),
+                ),
             ],
           ),
         ),

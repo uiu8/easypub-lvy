@@ -1,6 +1,7 @@
 // 命令面板（G-062）：Ctrl+K 或标题栏搜索框打开。每条命令带稳定功能 ID；
 // 支持中文、拼音首字母与功能 ID 检索；不可用命令显示原因且不能执行。
 // 面板只负责跳转与打开既有入口，不直接执行任何修改正文的应用动作。
+// V70（G-075/076）：未输入时最上方列出“最近使用”；书名一类命令只在输入后出现。
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -18,6 +19,7 @@ class DeskCommand {
     this.keywords = '',
     this.shortcut,
     this.disabledReason,
+    this.searchOnly = false,
   });
 
   /// 功能对照表中的稳定 ID，例如 G-005。
@@ -26,7 +28,26 @@ class DeskCommand {
   final String? shortcut, disabledReason;
   final IconData icon;
   final VoidCallback run;
+
+  /// 只在输入后出现（例如按书名切换），未输入时不占面板。
+  final bool searchOnly;
   bool get enabled => disabledReason == null;
+
+  /// “最近使用”记录用的键：同一功能 ID 下可能有几条命令（如四种格式的转换）。
+  String get key => '$id|$label';
+
+  DeskCommand inGroup(String name) => DeskCommand(
+    id: id,
+    label: label,
+    group: name,
+    initials: initials,
+    run: run,
+    icon: icon,
+    keywords: keywords,
+    shortcut: shortcut,
+    disabledReason: disabledReason,
+    searchOnly: searchOnly,
+  );
 
   bool matches(String query) {
     final q = query.trim().toLowerCase().replaceAll(' ', '');
@@ -38,21 +59,27 @@ class DeskCommand {
   }
 }
 
+/// [recent] 为最近执行命令的 [DeskCommand.key]（最近的在前）；[onRun] 在执行前调用，用于记录。
 Future<void> showDeskCommandPalette(
   BuildContext context,
-  List<DeskCommand> commands,
-) async {
+  List<DeskCommand> commands, {
+  List<String> recent = const [],
+  void Function(DeskCommand command)? onRun,
+}) async {
   final chosen = await showDialog<DeskCommand>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: .18),
-    builder: (_) => _CommandPalette(commands: commands),
+    builder: (_) => _CommandPalette(commands: commands, recent: recent),
   );
-  chosen?.run();
+  if (chosen == null) return;
+  onRun?.call(chosen);
+  chosen.run();
 }
 
 class _CommandPalette extends StatefulWidget {
-  const _CommandPalette({required this.commands});
+  const _CommandPalette({required this.commands, this.recent = const []});
   final List<DeskCommand> commands;
+  final List<String> recent;
   @override
   State<_CommandPalette> createState() => _CommandPaletteState();
 }
@@ -62,8 +89,19 @@ class _CommandPaletteState extends State<_CommandPalette> {
   final scroll = ScrollController();
   int index = 0;
 
-  List<DeskCommand> get visible =>
-      widget.commands.where((c) => c.matches(query.text)).toList();
+  List<DeskCommand> get visible {
+    if (query.text.trim().isNotEmpty) {
+      return widget.commands.where((c) => c.matches(query.text)).toList();
+    }
+    final byKey = {for (final c in widget.commands) c.key: c};
+    final recent = [for (final k in widget.recent) ?byKey[k]];
+    final keys = {for (final c in recent) c.key};
+    return [
+      for (final c in recent) c.inGroup('最近使用'),
+      for (final c in widget.commands)
+        if (!c.searchOnly && !keys.contains(c.key)) c,
+    ];
+  }
 
   @override
   void dispose() {

@@ -454,5 +454,80 @@ pub fn catalog() -> Value {
             "manual",
         );
     }
-    json!({"schema":1,"rules":rows})
+    for (id, group, label) in [
+        ("catalog_check.missing", "catalog_check", "目录缺少的章节"),
+        ("catalog_check.extra", "catalog_check", "目录多出的章节"),
+        ("catalog_check.title", "catalog_check", "目录标题不一致"),
+        ("catalog_check.order", "catalog_check", "目录顺序不同"),
+        ("preflight.title", "preflight", "书名"),
+        ("preflight.language", "preflight", "书籍语言"),
+        ("preflight.cover", "preflight", "封面与文字封面"),
+        ("preflight.converter", "preflight", "转换器"),
+        ("preflight.imported_images", "preflight", "待确认的导入图片"),
+        ("manual.invalid", "manual", "失效的手工标注与注释"),
+    ] {
+        add(
+            id,
+            group,
+            None,
+            label,
+            "按当前书稿检查；缺少检查前提时不提供计数。",
+            "report",
+            Value::Null,
+            true,
+            60,
+            if id == "manual.invalid" {
+                "manual"
+            } else {
+                "automatic"
+            },
+        );
+    }
+    for row in &mut rows {
+        let id = row["id"].as_str().unwrap().to_owned();
+        let locked = id == "chapter.recognize.chapter"
+            || row["category"] == "manual"
+            || matches!(id.as_str(), "preflight.title" | "preflight.converter");
+        row["locked"] = json!(locked);
+        row["locked_reason"] = if locked {
+            json!(if id.starts_with("preflight.") {
+                "成品生成所必需，不能关闭"
+            } else if id == "chapter.recognize.chapter" {
+                "基础章标题识别，不能关闭"
+            } else {
+                "手工记录只读统计，请在手工标注或注释中编辑"
+            })
+        } else {
+            Value::Null
+        };
+        if let Some(k) = id.strip_prefix("check.") {
+            row["toggle"] = json!({"key":"recognition_rules.disabled_checks","item":k});
+        } else if let Some(k) = id.strip_prefix("chapter.recognize.") {
+            if row["toggle"].is_null() {
+                row["toggle"] = json!({"key":"recognition_rules.disabled_recognition","item":k});
+            }
+        } else if !locked && row["toggle"].is_null() {
+            row["toggle"] = json!({"key":if id.starts_with("layout.scene.u") { "rule_options.scene_symbols" } else { "rule_options.disabled" },"item":id});
+        }
+        let on = match id.as_str() {
+            "layout.scene" => Some("keep"),
+            "layout.system" => Some("box"),
+            "layout.verse" => Some("center"),
+            "layout.note" => Some("popup"),
+            "layout.first_paragraph" => Some("no_indent"),
+            _ => None,
+        };
+        if let Some(on) = on {
+            row["off_value"] = json!(if id == "layout.first_paragraph" {
+                "normal"
+            } else {
+                "off"
+            });
+            row["on_value"] = json!(on);
+        }
+        if id.starts_with("layout.verse.") || id.starts_with("layout.note.") {
+            row["description"] = json!("可独立关闭；所属规则关闭时，此细分不生效。");
+        }
+    }
+    json!({"schema":2,"rules":rows})
 }

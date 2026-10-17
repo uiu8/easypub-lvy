@@ -8,6 +8,8 @@
   [string]$CompletionEvidence = '',
   [string]$ReleaseDescription = '',
   [string]$InstructionsPath = '',
+  # 批次号（V68 自动更新按它比较新旧）；不填时从包名里的 -vNN- 取。
+  [int]$Release = 0,
   [switch]$FrontendRewriteReview
 )
 $ErrorActionPreference = 'Stop'
@@ -77,6 +79,12 @@ $pluginSource = Join-Path $root 'plugins/kindle-preview'
 if (-not (Test-Path -LiteralPath (Join-Path $pluginSource 'plugin.json'))) { throw '缺少真机预览组件 plugins/kindle-preview' }
 New-Item -ItemType Directory -Force -Path (Join-Path $staging 'plugins') | Out-Null
 Copy-Item -LiteralPath $pluginSource -Destination (Join-Path $staging 'plugins') -Recurse
+# 自动更新程序（V68，SET-073）：随包分发，主程序退出后由它替换文件。
+& cargo build --release --locked -p easypub_updater --bin easypub_updater
+if ($LASTEXITCODE -ne 0) { throw '更新程序构建失败。' }
+$updaterSource = Join-Path $root 'target/release/easypub_updater.exe'
+Copy-Item -LiteralPath $updaterSource -Destination (Join-Path $staging 'easypub_updater.exe')
+$updaterHash = (Get-FileHash -LiteralPath (Join-Path $staging 'easypub_updater.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
 
 $instructionsSource = if ($InstructionsPath) { $InstructionsPath } elseif ($FrontendRewriteReview) { 'docs/前端重写评审版使用说明.txt' } else { 'docs/便携版使用说明.txt' }
 $instructions = Get-Content -LiteralPath (Join-Path $root $instructionsSource) -Raw -Encoding UTF8
@@ -85,11 +93,17 @@ $instructionsName = if ($InstructionsPath) { '先读我.txt' } elseif ($Frontend
 # 应用内显示的版本信息（V22，SET-066）：版本与日期取自包名，记录构建提交；
 # 打包时工作区有未提交的改动则在提交号后加“+”，界面如实注明。
 $versionMatch = [regex]::Match($PackageName, 'desk-(v\d+[a-z]?)-(\d{8})')
+if ($Release -le 0) {
+  $releaseMatch = [regex]::Match($PackageName, '-v(\d+)-')
+  if (-not $releaseMatch.Success) { throw '包名里没有批次号（-vNN-），请用 -Release 指定。' }
+  $Release = [int]$releaseMatch.Groups[1].Value
+}
 $commit = "$(& git -C $root rev-parse --short HEAD 2>$null)".Trim()
 $dirty = "$(& git -C $root status --porcelain --untracked-files=no 2>$null)".Trim()
 $versionInfo = [ordered]@{
   schema = 1
   package = $PackageName
+  release = $Release
   version = if ($versionMatch.Success) { "desk-$($versionMatch.Groups[1].Value)" } else { $PackageName }
   date = if ($versionMatch.Success) { $d = $versionMatch.Groups[2].Value; "$($d.Substring(0,4))-$($d.Substring(4,2))-$($d.Substring(6,2))" } else { Get-Date -Format 'yyyy-MM-dd' }
   commit = $commit
@@ -268,6 +282,8 @@ $report = [ordered]@{
   font_provenance_present = $fontProvenance
   epub_provenance_present = $epubProvenance
   kindle_preview_plugin_present = $kindlePreviewPlugin
+  release = $Release
+  updater_sha256 = $updaterHash
   manifest_hashes_verified = $true
   leftover_processes = $leftover.Count
   passed = $windowFound -and $leftover.Count -eq 0 -and -not $forcedExit -and $exitCode -eq 0

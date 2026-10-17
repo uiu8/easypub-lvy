@@ -14,7 +14,11 @@ use std::{
 };
 
 #[path = "rule_statistics_cleanup.rs"]
-mod cleanup;
+pub(crate) mod cleanup;
+#[path = "rule_statistics_hypothetical.rs"]
+mod hypothetical;
+#[path = "rule_statistics_interactions.rs"]
+mod interactions;
 #[path = "rule_statistics_layout.rs"]
 mod layout;
 #[path = "rule_statistics_recognition.rs"]
@@ -38,10 +42,11 @@ fn checkpoint(cancel: &AtomicBool) -> Result<(), ApiError> {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct Statistic {
     id: String,
     enabled: bool,
+    hypothetical: bool,
     count: usize,
     unit: &'static str,
     status: &'static str,
@@ -49,6 +54,7 @@ struct Statistic {
     changed_ranges: Vec<(u32, u32)>,
     candidate_ranges: Vec<(u32, u32)>,
     invalid_count: usize,
+    affects: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reason: Option<String>,
 }
@@ -95,7 +101,7 @@ impl Locations<'_> {
     }
 }
 
-fn calculate(
+pub(crate) fn calculate(
     source: &SourceSnapshot,
     request: publication_resources::Request,
     pipeline: Value,
@@ -127,6 +133,7 @@ fn calculate(
                 Statistic {
                     id,
                     enabled: r["default"].as_bool().expect("default"),
+                    hypothetical: false,
                     count: 0,
                     unit,
                     status: "complete",
@@ -134,16 +141,37 @@ fn calculate(
                     changed_ranges: vec![],
                     candidate_ranges: vec![],
                     invalid_count: 0,
+                    affects: vec![],
                     reason: None,
                 },
             )
         })
         .collect();
     recognition::collect(&view, &locations, &mut stats, cancel)?;
+    recognition::collect_checks(&view, &locations, &mut stats, cancel)?;
     checkpoint(cancel)?;
     cleanup::collect(&view, &pipeline, &locations, &mut stats, cancel)?;
     checkpoint(cancel)?;
     layout::collect(&book, &settings, &locations, &mut stats, cancel)?;
+    for row in crate::rule_catalog::catalog()["rules"].as_array().unwrap() {
+        let id = row["id"].as_str().unwrap();
+        stats.get_mut(id).unwrap().enabled = crate::rule_toggles::enabled(
+            row,
+            &book.tree.recognition_rules.clone().unwrap_or_default(),
+            &settings,
+            &pipeline,
+        );
+        if row["group"] == "catalog_check" || row["group"] == "preflight" {
+            let r = stats.get_mut(id).unwrap();
+            r.status = "unavailable";
+            r.reason = Some("缺少参考目录或输出上下文".into());
+        }
+    }
+    let invalid =
+        stats["layout.manual_block"].invalid_count + stats["layout.manual_note"].invalid_count;
+    stats.get_mut("manual.invalid").unwrap().count = invalid;
+    interactions::collect(&book, &settings, &pipeline, &locations, &mut stats, cancel)?;
+    hypothetical::collect(&book, &settings, &pipeline, &locations, &mut stats, cancel)?;
     checkpoint(cancel)?;
     Ok(
         json!({"schema":1,"read_only":true,"content_id":digest(book.text.as_bytes()),
@@ -186,10 +214,17 @@ pub(crate) fn run(service: &ImportService, value: Value) -> Result<String, ApiEr
             }
             let source = service.source(&publication.source_id, publication.revision)?;
             // serde_json objects are ordered maps: key order from Dart does not affect this hash.
+            let context = value.clone();
             let key = digest(
-                serde_json::to_string(&json!([1, value["publication"], pipeline]))
-                    .expect("cache key")
-                    .as_bytes(),
+                serde_json::to_string(&json!([
+                    2,
+                    value["publication"],
+                    pipeline,
+                    value["reference_catalog"],
+                    value["preflight"]
+                ]))
+                .expect("cache key")
+                .as_bytes(),
             );
             let mut shared = state().lock().expect("statistics state");
             let cached = shared
@@ -240,7 +275,11 @@ pub(crate) fn run(service: &ImportService, value: Value) -> Result<String, ApiEr
                 let spawn = std::thread::Builder::new()
                     .name(format!("rule-statistics-{id}"))
                     .spawn(move || {
-                        let result = calculate(&source, publication, pipeline, &cancel);
+                        let result =
+                            calculate(&source, publication, pipeline, &cancel).and_then(|mut r| {
+                                enrich(&source, &context, &mut r)?;
+                                Ok(r)
+                            });
                         let mut shared = state().lock().expect("statistics state");
                         let Some(job) = shared.jobs.get_mut(&id) else {
                             return;
@@ -316,3 +355,129 @@ pub(crate) fn run(service: &ImportService, value: Value) -> Result<String, ApiEr
 #[cfg(test)]
 #[path = "rule_statistics_tests.rs"]
 mod tests;
+
+pub(crate) fn enrich(
+    source: &SourceSnapshot,
+    context: &Value,
+    result: &mut Value,
+) -> Result<(), ApiError> {
+    let request: publication_resources::Request =
+        serde_json::from_value(context["publication"].clone())
+            .map_err(|_| error("invalid_publication_request"))?;
+    let (book, settings) = publication_resources::compose(source, request)?;
+    let rows = result["rules"].as_array_mut().unwrap();
+    if context["reference_catalog"].is_object() {
+        let catalog: crate::catalog::Catalog =
+            serde_json::from_value(context["reference_catalog"].clone())
+                .map_err(|_| error("invalid_catalog"))?;
+        crate::catalog::validate_snapshot(&catalog)?;
+        let view = SourceSnapshot::for_effective_diagnostics(&book)?;
+        let locations = Locations {
+            book: &book,
+            lines: view.decoded_line_ranges(),
+        };
+        let mut positions: BTreeMap<&str, Vec<Value>> = BTreeMap::new();
+        let local: Vec<_> = book
+            .tree
+            .nodes
+            .iter()
+            .filter(|n| {
+                n.role == easypub_core::structure::Role::Chapter
+                    || n.role == easypub_core::structure::Role::Section
+            })
+            .collect();
+        let reference: Vec<_> = catalog
+            .entries
+            .iter()
+            .filter(|e| !e.structural_volume)
+            .collect();
+        let mut used = std::collections::BTreeSet::new();
+        let (mut extra, mut titles, mut order, mut last) = (0usize, 0usize, 0usize, None);
+        for n in &local {
+            let exact: Vec<_> = reference
+                .iter()
+                .enumerate()
+                .filter(|(i, e)| !used.contains(i) && e.title.trim() == n.title.trim())
+                .map(|(i, _)| i)
+                .collect();
+            let number = easypub_core::chapter_rules::generic_number(&n.title);
+            let numbered: Vec<_> = reference
+                .iter()
+                .enumerate()
+                .filter(|(i, e)| {
+                    !used.contains(i)
+                        && number.is_some()
+                        && easypub_core::chapter_rules::generic_number(&e.title) == number
+                })
+                .map(|(i, _)| i)
+                .collect();
+            let matched = if exact.len() == 1 {
+                Some((exact[0], false))
+            } else if numbered.len() == 1 {
+                Some((numbered[0], true))
+            } else {
+                None
+            };
+            if let Some((i, different)) = matched {
+                used.insert(i);
+                titles += usize::from(different);
+                order += usize::from(last.is_some_and(|j| i < j));
+                for (id, hit) in [("title", different), ("order", last.is_some_and(|j| i < j))] {
+                    if hit && positions.entry(id).or_default().len() < 50 {
+                        positions.get_mut(id).unwrap().push(locations.byte(n.start));
+                    }
+                }
+                last = Some(i);
+            } else {
+                extra += 1;
+                if positions.entry("extra").or_default().len() < 50 {
+                    positions
+                        .get_mut("extra")
+                        .unwrap()
+                        .push(locations.byte(n.start));
+                }
+            }
+        }
+        for (id, count) in [
+            ("missing", reference.len() - used.len()),
+            ("extra", extra),
+            ("title", titles),
+            ("order", order),
+        ] {
+            let row = rows
+                .iter_mut()
+                .find(|r| r["id"] == format!("catalog_check.{id}"))
+                .unwrap();
+            row["status"] = json!("complete");
+            row["count"] = json!(count);
+            row["locations"] = json!(positions.remove(id).unwrap_or_default());
+            row["reason"] = Value::Null;
+        }
+    }
+    if let Some(preflight) = context["preflight"].as_object() {
+        for (id, count) in preflight {
+            if let Some(row) = rows
+                .iter_mut()
+                .find(|r| r["id"] == format!("preflight.{id}"))
+                && count.is_u64()
+            {
+                row["count"] = count.clone();
+                row["status"] = json!("complete");
+                row["reason"] = Value::Null;
+            }
+        }
+    }
+    for row in rows {
+        if row["status"] == "unavailable" {
+            row["count"] = Value::Null;
+        }
+        if row["id"]
+            .as_str()
+            .is_some_and(|id| id.starts_with("catalog_check.") || id.starts_with("preflight."))
+        {
+            row["enabled"] = json!(settings.rule_options.enabled(row["id"].as_str().unwrap()));
+            row["hypothetical"] = json!(row["enabled"] == false && row["status"] == "complete");
+        }
+    }
+    Ok(())
+}

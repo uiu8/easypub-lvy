@@ -138,6 +138,7 @@ class ConversionPreflightRunner {
     if (language.isEmpty || language == 'und') {
       issues.add(
         ConversionPreflightIssue(
+          ruleId: 'preflight.language',
           category: 'metadata',
           level: languageFallback == null
               ? ConversionPreflightLevel.blocking
@@ -153,6 +154,7 @@ class ConversionPreflightRunner {
     } else {
       issues.add(
         ConversionPreflightIssue(
+          ruleId: 'preflight.language',
           category: 'metadata',
           level: ConversionPreflightLevel.pass,
           title: '语言：$language',
@@ -165,6 +167,7 @@ class ConversionPreflightRunner {
     if (title.isEmpty) {
       issues.add(
         const ConversionPreflightIssue(
+          ruleId: 'preflight.title',
           category: 'metadata',
           level: ConversionPreflightLevel.blocking,
           title: '缺少书名',
@@ -179,6 +182,7 @@ class ConversionPreflightRunner {
     if (cover.isNotEmpty && !await File(cover).exists()) {
       issues.add(
         ConversionPreflightIssue(
+          ruleId: 'preflight.cover',
           category: 'resources',
           level: ConversionPreflightLevel.blocking,
           title: '封面文件不可访问',
@@ -192,6 +196,7 @@ class ConversionPreflightRunner {
     if (format != 'EPUB' && cover.isEmpty && !generateCover) {
       issues.add(
         const ConversionPreflightIssue(
+          ruleId: 'preflight.cover',
           category: 'resources',
           level: ConversionPreflightLevel.blocking,
           title: 'Kindle 成品缺少封面',
@@ -204,6 +209,7 @@ class ConversionPreflightRunner {
     } else if (cover.isEmpty && generateCover) {
       issues.add(
         const ConversionPreflightIssue(
+          ruleId: 'preflight.cover',
           category: 'resources',
           level: ConversionPreflightLevel.info,
           title: '将生成文字封面',
@@ -215,6 +221,7 @@ class ConversionPreflightRunner {
     if (format != 'EPUB' && !await File(enginePath.trim()).exists()) {
       issues.add(
         ConversionPreflightIssue(
+          ruleId: 'preflight.converter',
           category: 'converter',
           level: ConversionPreflightLevel.blocking,
           title: format == 'KFX' ? '缺少 KFX / Bokai 转换器' : '缺少 Kindle 转换器',
@@ -348,9 +355,7 @@ class ConversionPreflightRunner {
     }
 
     try {
-      final publication = state.publicationRequest(
-        book.id,
-      );
+      final publication = state.publicationRequest(book.id);
       publication['settings'] = conversionSettings(
         publication['settings'] as Map,
         publicationOverrides[book.id],
@@ -379,6 +384,7 @@ class ConversionPreflightRunner {
       } else {
         issues.add(
           ConversionPreflightIssue(
+            ruleId: 'preflight.imported_images',
             category: 'resources',
             level: ConversionPreflightLevel.warning,
             title: '有 ${pending.length} 项导入图片待确认',
@@ -444,6 +450,17 @@ class ConversionPreflightRunner {
     if (guard != state.publicationContext(book.id)) {
       throw const FormatException('书稿设置已变化，请重新检查。');
     }
+    final disabled =
+        (settings['rule_options'] as Map?)?['disabled'] as List? ?? const [];
+    issues.removeWhere(
+      (issue) =>
+          issue.ruleId != null &&
+          disabled.contains(issue.ruleId) &&
+          !const [
+            'preflight.title',
+            'preflight.converter',
+          ].contains(issue.ruleId),
+    );
     return ConversionPreflightReport(
       bookId: book.id,
       title: state.displayTitle(book),
