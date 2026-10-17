@@ -1,0 +1,67 @@
+[
+  {
+    "file": "src/import/mod.rs",
+    "before": "let normalized_path = normalized_path.to_string_lossy();",
+    "after": "let normalized_path = normalized_path.to_string_lossy().replace('\\\\', \"/\");"
+  },
+  {
+    "file": "src/validate/fidelity/metadata.rs",
+    "before": "epub.language != kfx.language",
+    "after": "crate::formats::kfx::metadata::kfx_book_language(&epub.language).to_ascii_lowercase() != crate::formats::kfx::metadata::kfx_book_language(&kfx.language).to_ascii_lowercase()"
+  },
+  {
+    "file": "src/validate/fidelity/nav.rs",
+    "before": ".filter(|p| !manifest_paths.contains(*p))",
+    "after": ".filter(|p| !manifest_paths.contains(p.split('#').next().unwrap_or(p)))"
+  },
+  {
+    "file": "src/validate/fidelity/nav.rs",
+    "before": "let path = e.href.split('#').next().unwrap_or(&e.href).to_string();",
+    "after": "let path = e.href.clone();"
+  },
+  {
+    "file": "src/export/kfx.rs",
+    "before": "    let caps = IonValue::Struct(vec![\n        (\n            KfxSymbol::Namespace as u64,\n            IonValue::String(\"yj\".to_string()),\n        ),\n        (KfxSymbol::MajorVersion as u64, IonValue::Int(1)),\n        (KfxSymbol::MinorVersion as u64, IonValue::Int(0)),\n        (KfxSymbol::Features as u64, IonValue::List(vec![])),\n    ]);",
+    "after": "    let caps = IonValue::List([(\"kfxgen.positionMaps\", 2), (\"kfxgen.textBlock\", 1)]\n        .into_iter().filter(|(name, _)| *name != \"kfxgen.textBlock\" || fragments.iter().any(|f| f.ftype == KfxSymbol::Content as u64)).map(|(name, version)| IonValue::Struct(vec![\n            (KfxSymbol::Key as u64, IonValue::String(name.into())),\n            (KfxSymbol::Version as u64, IonValue::Int(version)),\n        ])).collect());"
+  },
+  {
+    "file": "src/export/kfx.rs",
+    "before": "fn build_cover_storyline(chapter: &Chapter, ctx: &mut ExportContext) -> IonValue {\n    use crate::model::Role;\n\n    // Find the image node\n    for node_id in chapter.iter_dfs() {\n        let node = match chapter.node(node_id) {\n            Some(n) => n,\n            None => continue,\n        };\n\n        if node.role == Role::Image {\n            // Get the image source, skipping one the book holds no bytes for\n            if let Some(src) = chapter.semantics.src(node_id)\n                && let Some(resource_name) = ctx.resource_registry.get_name(src).map(str::to_string)\n            {\n                let resource_name_symbol = ctx.symbols.get_or_intern(&resource_name);\n\n                // Register style and get symbol. Cover image often has a\n                // distinctive source class like `p-cover` — passing it as a\n                // hint keeps that name in the KFX style symbol table.\n                let style_symbol = ctx.register_style_id_with_hint(\n                    node.style,\n                    &chapter.styles,\n                    chapter.semantics.class(node_id),\n                );\n\n                // Generate unique container ID\n                let container_id = ctx.fragment_ids.next_id();\n\n                // Record content ID for position_map and location_map\n                ctx.record_content_id(container_id);\n                // Record length of 1 for image (per kfx_output algorithm)\n                ctx.record_content_slot(container_id);\n\n                // The pending chapter-start anchor, skipped by the cover path\n                ctx.resolve_pending_chapter_anchor(container_id);\n                anchor_page_targets(chapter, container_id, ctx);\n\n                // Build the image struct directly (no container wrapper)\n                let image_struct = IonValue::Struct(vec![\n                    (KfxSymbol::Id as u64, IonValue::Int(container_id as i64)),\n                    (KfxSymbol::Style as u64, IonValue::Symbol(style_symbol)),\n                    (\n                        KfxSymbol::Type as u64,\n                        IonValue::Symbol(KfxSymbol::Image as u64),\n                    ),\n                    (\n                        KfxSymbol::ResourceName as u64,\n                        IonValue::Symbol(resource_name_symbol),\n                    ),\n                ]);\n\n                return IonValue::List(vec![image_struct]);\n            }\n        }\n    }\n\n    // Fallback: empty list if no image found\n    IonValue::List(vec![])\n}\n",
+    "after": "fn build_cover_storyline(chapter: &Chapter, ctx: &mut ExportContext) -> IonValue {\n    use crate::model::Role;\n\n    // Find the image node\n    for node_id in chapter.iter_dfs() {\n        let node = match chapter.node(node_id) {\n            Some(n) => n,\n            None => continue,\n        };\n\n        if node.role == Role::Image {\n            // Get the image source, skipping one the book holds no bytes for\n            if let Some(src) = chapter.semantics.src(node_id)\n                && let Some(resource_name) = ctx.resource_registry.get_name(src).map(str::to_string)\n            {\n                let resource_name_symbol = ctx.symbols.get_or_intern(&resource_name);\n\n                // Generate unique container ID\n                let container_id = ctx.fragment_ids.next_id();\n\n                // Record content ID for position_map and location_map\n                ctx.record_content_id(container_id);\n                // Record length of 1 for image (per kfx_output algorithm)\n                ctx.record_content_slot(container_id);\n\n                // The pending chapter-start anchor, skipped by the cover path\n                ctx.resolve_pending_chapter_anchor(container_id);\n                anchor_page_targets(chapter, container_id, ctx);\n\n                // Build the image struct directly (no container wrapper)\n                let image_struct = IonValue::Struct(vec![\n                    (KfxSymbol::Id as u64, IonValue::Int(container_id as i64)),\n                    (\n                        KfxSymbol::Type as u64,\n                        IonValue::Symbol(KfxSymbol::Image as u64),\n                    ),\n                    (\n                        KfxSymbol::ResourceName as u64,\n                        IonValue::Symbol(resource_name_symbol),\n                    ),\n                ]);\n\n                return IonValue::List(vec![image_struct]);\n            }\n        }\n    }\n\n    // Fallback: empty list if no image found\n    IonValue::List(vec![])\n}\n"
+  },
+  {
+    "file": "src/export/kfx.rs",
+    "before": "    fragments.extend(content_fragments);\n\n    // 2g.",
+    "after": "    fragments.extend(content_fragments);\n    split_text_blocks(&mut fragments, &mut ctx);\n\n    // 2g."
+  },
+  {
+    "file": "src/export/kfx.rs",
+    "before": "/// Build format capabilities ION.",
+    "after": "/// Bound text blocks without changing paragraph strings or reading positions.\nfn split_text_blocks(fragments: &mut Vec<KfxFragment>, ctx: &mut ExportContext) {\n    let mut refs = HashMap::new();\n    let mut result = Vec::new();\n    for fragment in fragments.drain(..) {\n        if fragment.ftype != KfxSymbol::Content as u64 { result.push(fragment); continue; }\n        let FragmentData::Ion(IonValue::Struct(fields)) = &fragment.data else { unreachable!() };\n        let old_symbol = ctx.symbols.get_or_intern(&fragment.fid);\n        let IonValue::List(strings) = get_field(fields, KfxSymbol::ContentList as u64).unwrap() else { unreachable!() };\n        let mut chunks: Vec<Vec<IonValue>> = vec![Vec::new()];\n        let mut bytes = 0;\n        for (index, value) in strings.iter().enumerate() {\n            let IonValue::String(text) = value else { unreachable!() };\n            if bytes + text.len() > 8192 && !chunks.last().unwrap().is_empty() { chunks.push(Vec::new()); bytes = 0; }\n            let chunk = chunks.len() - 1;\n            let name = if chunk == 0 { fragment.fid.clone() } else { format!(\"{}_p{}\", fragment.fid, chunk) };\n            refs.insert((old_symbol, index as i64), (ctx.symbols.get_or_intern(&name), chunks[chunk].len() as i64));\n            chunks[chunk].push(value.clone()); bytes += text.len();\n        }\n        for (index, strings) in chunks.into_iter().enumerate() {\n            let name = if index == 0 { fragment.fid.clone() } else { format!(\"{}_p{}\", fragment.fid, index) };\n            let symbol = ctx.symbols.get_or_intern(&name);\n            result.push(KfxFragment::new(KfxSymbol::Content, name, IonValue::Struct(vec![\n                (KfxSymbol::Name as u64, IonValue::Symbol(symbol)),\n                (KfxSymbol::ContentList as u64, IonValue::List(strings)),\n            ])));\n        }\n    }\n    fn rewrite(value: &mut IonValue, refs: &HashMap<(u64, i64), (u64, i64)>) {\n        match value {\n            IonValue::Struct(fields) => {\n                let key = match (get_field(fields, KfxSymbol::Name as u64), get_field(fields, KfxSymbol::Index as u64)) {\n                    (Some(IonValue::Symbol(name)), Some(IonValue::Int(index))) => Some((*name, *index)), _ => None,\n                };\n                if let Some((name, index)) = key.and_then(|key| refs.get(&key)).copied() {\n                    for (field, value) in fields.iter_mut() {\n                        if *field == KfxSymbol::Name as u64 { *value = IonValue::Symbol(name); }\n                        if *field == KfxSymbol::Index as u64 { *value = IonValue::Int(index); }\n                    }\n                }\n                for (_, value) in fields { rewrite(value, refs); }\n            }\n            IonValue::List(values) | IonValue::Sexp(values) => for value in values { rewrite(value, refs); },\n            IonValue::Annotated(_, value) => rewrite(value, refs), _ => {},\n        }\n    }\n    for fragment in &mut result { if let FragmentData::Ion(value) = &mut fragment.data { rewrite(value, &refs); } }\n    *fragments = result;\n}\n\n/// Build format capabilities ION."
+  },
+  {
+    "file": "src/export/kfx.rs",
+    "before": "let format_caps_ion = build_format_capabilities_ion();\n\n    // Serialize fragments to entities",
+    "after": "let format_caps_ion = build_format_capabilities_ion(&fragments);\n\n    // Serialize fragments to entities"
+  },
+  {
+    "file": "src/export/kfx.rs",
+    "before": "let format_caps_ion = build_format_capabilities_ion();\n    let entities = serialize_fragments(&fragments, ctx.symbols.local_symbols())?;\n    on_progress",
+    "after": "let format_caps_ion = build_format_capabilities_ion(&fragments);\n    let entities = serialize_fragments(&fragments, ctx.symbols.local_symbols())?;\n    on_progress"
+  },
+  {
+    "file": "src/export/kfx.rs",
+    "before": "let format_caps_ion = build_format_capabilities_ion();\n    let entities = serialize_fragments(&fragments, ctx.symbols.local_symbols())?;\n    Ok",
+    "after": "let format_caps_ion = build_format_capabilities_ion(&fragments);\n    let entities = serialize_fragments(&fragments, ctx.symbols.local_symbols())?;\n    Ok"
+  },
+  {
+    "file": "src/export/kfx.rs",
+    "before": "let ion = build_format_capabilities_ion();",
+    "after": "let ion = build_format_capabilities_ion(&[]);"
+  },
+  {
+    "file": "src/export/kfx.rs",
+    "before": "fn build_format_capabilities_ion() -> Vec<u8> {",
+    "after": "fn build_format_capabilities_ion(fragments: &[KfxFragment]) -> Vec<u8> {"
+  }
+]

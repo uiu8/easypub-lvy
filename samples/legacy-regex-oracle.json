@@ -1,0 +1,26 @@
+{
+  "generated_by": ".NET 10.0.12",
+  "cases": [
+    {
+      "pattern": "(?<name>甲)(乙)",
+      "expected": "乙a|甲|甲|甲乙|$|$99|$word|${absent}|$",
+      "ignore_case": false,
+      "replace": "$1a|$2|${name}|$&|$$|$99|$word|${absent}|$",
+      "input": "甲乙"
+    },
+    {
+      "pattern": "(abc)",
+      "expected": "[ABC]",
+      "ignore_case": true,
+      "replace": "[${1}]",
+      "input": "ABC"
+    },
+    {
+      "pattern": "(甲)",
+      "expected": "\\n甲",
+      "ignore_case": false,
+      "replace": "\\n$1",
+      "input": "甲"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "bokai",
+  "version": "0.2.0",
+  "repository": "https://github.com/huangziwei/sidle",
+  "commit": "e8a58bbfc897eedaca52518f73654f7702f8c883",
+  "source_url": "https://static.crates.io/crates/bokai/bokai-0.2.0.crate",
+  "source_sha256": "37bcb53a16836315871ee996acbedf2d756c537ab232c1cd5ebf0cd36a6cdf49",
+  "license": "GPL-3.0-or-later",
+  "source_modified": true,
+  "build": "cargo build --locked --release --no-default-features --features bin,svg,validate --bin bokai",
+  "scope": "EPUB to KFX only; source archive accompanies binary; no Sidle desktop dependency.",
+  "patches": "patches.json",
+  "patch_version": "easypub-windows-2"
+}

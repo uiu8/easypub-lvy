@@ -1,0 +1,19 @@
+[workspace]
+members = ["rust/crates/easypub_core", "rust/crates/easypub_app", "rust/crates/easypub_bridge"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+[workspace.dependencies]
+sha2 = "=0.10.9"
+encoding_rs = "=0.8.35"
+regex = "=1.13.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+flutter_rust_bridge = "=2.13.0"
+tokio = { version = "1", features = ["rt-multi-thread", "time", "sync"] }
+tokio-util = { version = "0.7", features = ["rt"] }

@@ -1,0 +1,22 @@
+EasyPub simplified/traditional Chinese conversion resources
+
+Runtime and dictionary compiler: ferrous-opencc 0.4.0 and ferrous-opencc-compiler 0.4.0
+Author attribution from published package metadata: apoint123 and contributors.
+Project: https://github.com/apoint123/ferrous-opencc
+Declared license: Apache-2.0 (Cargo.toml and upstream README).
+
+Dictionary data: Open Chinese Convert (OpenCC), BYVoid and contributors.
+Source: https://github.com/BYVoid/OpenCC
+Packaged dictionary headers identify Apache-2.0 and the OpenCC source.
+
+EasyPub uses the published packages without modifying the engine, compiler or
+source dictionaries. Build-time conversion to FST .ocb resources uses the
+upstream compiler. The application enables only general s2t/t2s conversion.
+Source resource hashes, published package revisions and license origin are
+recorded in provenance.json. Cargo.lock fixes package download checksums.
+The exact original OpenCC upstream revision of the repackaged dictionaries
+is not declared by ferrous-opencc 0.4.0; EasyPub identifies this data by the
+published package version and the individual source-file hashes instead.
+
+This attribution notice is supplied by EasyPub; it is not an upstream NOTICE.
+See LICENSE-APACHE-2.0.txt for the license text.

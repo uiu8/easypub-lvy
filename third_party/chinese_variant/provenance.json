@@ -1,0 +1,193 @@
+{
+  "dictionary_id": "ferrous-opencc-0.4.0",
+  "license": "Apache-2.0",
+  "license_url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+  "resource_source": "https://github.com/BYVoid/OpenCC",
+  "engine_source": "https://github.com/apoint123/ferrous-opencc",
+  "packages": [
+    {
+      "name": "ferrous-opencc",
+      "version": "0.4.0",
+      "vcs": {
+        "git": {
+          "sha1": "bd557afbf2fd07f0bc55371159d7006629dfd935"
+        },
+        "path_in_vcs": ""
+      },
+      "files": [
+        {
+          "path": "assets/dictionaries/HKVariants.txt",
+          "bytes": 840,
+          "sha256": "2ac0aac98bb73b98a061492a08d8c7a81fefa6a431d89d59a0ac6b6fdaaef4d7"
+        },
+        {
+          "path": "assets/dictionaries/HKVariantsRev.txt",
+          "bytes": 560,
+          "sha256": "1b9d1a6bae833245d547ba7299d53d99cb22ed22477241c6f5d16df1c0182404"
+        },
+        {
+          "path": "assets/dictionaries/HKVariantsRevPhrases.txt",
+          "bytes": 3141,
+          "sha256": "8402564d8b85b8473007f5fb6a46d0fb5640f9ff903f1a295d6696532d59af78"
+        },
+        {
+          "path": "assets/dictionaries/JPShinjitaiCharacters.txt",
+          "bytes": 348,
+          "sha256": "48f2e92c2261e642283ea444faa67331de9b96e4afe38cc212efaaeca4e03502"
+        },
+        {
+          "path": "assets/dictionaries/JPShinjitaiPhrases.txt",
+          "bytes": 2962,
+          "sha256": "290c8ab37d64e6ff2e1e74f8d817fbd957a56714e08a2b641ccfefc38e732e20"
+        },
+        {
+          "path": "assets/dictionaries/JPVariants.txt",
+          "bytes": 3572,
+          "sha256": "ffd3043720e671c93a404378f24a0f1e6b05667add972fa138173f6db2b2aefd"
+        },
+        {
+          "path": "assets/dictionaries/JPVariantsRev.txt",
+          "bytes": 2968,
+          "sha256": "6f79e8eb91d5263e0f115c5a7d6afcc3de58be1f90200bcd417e2023ef6cefb1"
+        },
+        {
+          "path": "assets/dictionaries/STCharacters.txt",
+          "bytes": 38602,
+          "sha256": "ab3eda5e4e7c2eec9074213d5cf7acf6da93dd0ecd2a182ef716af7c8af4f949"
+        },
+        {
+          "path": "assets/dictionaries/STPhrases.txt",
+          "bytes": 1056281,
+          "sha256": "b17bbee4442b8a7f9f2678baa93baaccca5afffba14874b8cf3d129d5a6a0add"
+        },
+        {
+          "path": "assets/dictionaries/TSCharacters.txt",
+          "bytes": 39009,
+          "sha256": "9d148f979257bdf51f2bf69bf5005a5e3876d89233a8a0f525246cb540e2f6fc"
+        },
+        {
+          "path": "assets/dictionaries/TSPhrases.txt",
+          "bytes": 5710,
+          "sha256": "3b381aa65de657de807136f00d008a00697c6723ac90002170332c7b3add8ce5"
+        },
+        {
+          "path": "assets/dictionaries/TWPhrases.txt",
+          "bytes": 11737,
+          "sha256": "eb6952063ccba433bf8da892393c6f3b41a940b4348c8a263f78db0c1870d77d"
+        },
+        {
+          "path": "assets/dictionaries/TWPhrasesRev.txt",
+          "bytes": 11818,
+          "sha256": "73e000d0dcd0243d76e82d487501eb5fad71b613c1e056f38031b1f024c8eeb3"
+        },
+        {
+          "path": "assets/dictionaries/TWVariants.txt",
+          "bytes": 608,
+          "sha256": "486b868a69f021b21dba76026097f6ade73c1d73365d216ceb9c39dbc0cc3cf4"
+        },
+        {
+          "path": "assets/dictionaries/TWVariantsRev.txt",
+          "bytes": 312,
+          "sha256": "aed256cd515db700cbd96fae5d2158d6a98c9628ee51e14ac1e1c182f6041c90"
+        },
+        {
+          "path": "assets/dictionaries/TWVariantsRevPhrases.txt",
+          "bytes": 1410,
+          "sha256": "b2d1712221ee7716a92fd539bc13bbf3c36fdbbd1ddb129d265ab3333bf139ef"
+        },
+        {
+          "path": "assets/hk2s.json",
+          "bytes": 634,
+          "sha256": "6c8a8ed9540d72facc1e886d476d528602b5a9f00ddfcdc32d207934db31f26e"
+        },
+        {
+          "path": "assets/hk2t.json",
+          "bytes": 439,
+          "sha256": "6c86b65bccece78a9a40fe8adc4f69ab51bcb2afdee912d7727d15199f7de2e0"
+        },
+        {
+          "path": "assets/jp2t.json",
+          "bytes": 529,
+          "sha256": "88b3cf0dcea532496be137b51ed11743060bcaf22db84f33e7f34e50e2d5b911"
+        },
+        {
+          "path": "assets/s2hk.json",
+          "bytes": 492,
+          "sha256": "4fc1d0d951c46b68678292e55936da294b28786e681bafa7b1b7036a39eb7638"
+        },
+        {
+          "path": "assets/s2t.json",
+          "bytes": 395,
+          "sha256": "fa5982c9fc11f8c8278c987cf6e83e7889153705a471dccb7f74df1465c09363"
+        },
+        {
+          "path": "assets/s2tw.json",
+          "bytes": 490,
+          "sha256": "acd9990447c702efc53b3dafe9261765805f83811c7eb2eeda650192710d648a"
+        },
+        {
+          "path": "assets/s2twp.json",
+          "bytes": 580,
+          "sha256": "9e5ccd4b113488037b82f130e0a653da1368fa454be040624cb742c3d6da9c02"
+        },
+        {
+          "path": "assets/t2hk.json",
+          "bytes": 287,
+          "sha256": "6801bcd667ee6df1fd86f425f6b6f452a3a1f1940771b5422a1e2f19db8e788c"
+        },
+        {
+          "path": "assets/t2jp.json",
+          "bytes": 301,
+          "sha256": "8224981e2f591329e9cbaf2e14e4377d15f0f84659ff444af6e0c4bc815c3566"
+        },
+        {
+          "path": "assets/t2s.json",
+          "bytes": 395,
+          "sha256": "00c41d4ab87acc5688614bc2290d6d6e691ae44317f958156799281357e1e403"
+        },
+        {
+          "path": "assets/t2tw.json",
+          "bytes": 285,
+          "sha256": "295a7395cfac865023a2f333ea5b8753616f9bfe6703fd2d1f181763afbd6699"
+        },
+        {
+          "path": "assets/tw2s.json",
+          "bytes": 632,
+          "sha256": "94d0c9eaf3e3eedb88157c41110b6248c6487fb70bf5305b9836329b1afedc6a"
+        },
+        {
+          "path": "assets/tw2sp.json",
+          "bytes": 718,
+          "sha256": "63f0f9e6a74a81b26b18a2f6a67b3b4ab330680fec4aacc503025807e662a557"
+        },
+        {
+          "path": "assets/tw2t.json",
+          "bytes": 437,
+          "sha256": "d9fb9d19a3150a664ed4d7198db8fe397999c3ef56e2d563f74aa1f8f9338343"
+        },
+        {
+          "path": "Cargo.toml.orig",
+          "bytes": 1999,
+          "sha256": "3b71b271442d157aa7959d5a6b309741da934ee484c381368db19f443166c3e1"
+        }
+      ]
+    },
+    {
+      "name": "ferrous-opencc-compiler",
+      "version": "0.4.0",
+      "vcs": {
+        "git": {
+          "sha1": "bd557afbf2fd07f0bc55371159d7006629dfd935"
+        },
+        "path_in_vcs": "ferrous-opencc-compiler"
+      },
+      "files": [
+        {
+          "path": "Cargo.toml.orig",
+          "bytes": 251,
+          "sha256": "1bb00d0716ed96dce6be28f4342e824360398af16b9b15e9af273a40f6378822"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+:root {
+  --paper: #EFECE6; --panel: #F6F4EF; --field: #FFFDF8; --ink: #2B2925; --ink2: #57534D;
+  --muted: #6F6A63; --line: #D8D3CA; --line2: #BDB7AC; --accent: #6F6A63; --pen: #A3483A;
+  --body: #2E2E31; --body2: #28282B; --rim-dark: #4A4A4F; --rim-metal: #9A9AA0; --eink: #DAD8D1;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink);
+  font: 13px/1.5 "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif; }
+button, select, input { font: inherit; color: inherit; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+body { display: flex; flex-direction: column; }
+.bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--panel);
+  border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.bar strong { font-weight: 600; }
+.grow { flex: 1; }
+select { border: 1px solid var(--line2); border-radius: 6px; background: var(--field); padding: 3px 6px; }
+.tag { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line2); border-radius: 4px; padding: 0 6px; }
+#status { font-size: 12px; color: var(--muted); }
+#status.error { color: var(--pen); }
+main { flex: 1; display: flex; min-height: 0; }
+#stage { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 16px; }
+/* 机身：石墨灰正面（上略亮）、一圈侧边轮廓与外缘暗线、轻微投影（V31） */
+#device-body { position: relative; flex: none; background: linear-gradient(var(--body), var(--body2));
+  box-shadow: 0 0 0 var(--rim, 1.5px) var(--rim-dark), 0 0 0 calc(var(--rim, 1.5px) + 1px) #1F1F21,
+    0 8px 22px rgba(0, 0, 0, .22); }
+#device-body.metal { box-shadow: 0 0 0 var(--rim, 1.5px) var(--rim-metal), 0 0 0 calc(var(--rim, 1.5px) + 1px) #5F5F64,
+    0 8px 22px rgba(0, 0, 0, .22); }
+#grip-buttons i, #press-marks i { position: absolute; display: block; }
+#grip-buttons i { background: #232326; border-radius: 999px; box-shadow: inset 0 0 0 1px #3C3C40; }
+#press-marks i { background: #47474C; border-radius: 999px; }
+#logo { position: absolute; left: 0; right: 0; text-align: center; transform: translateY(-50%);
+  font-family: "Segoe UI", Arial, sans-serif; letter-spacing: .02em; line-height: 1; user-select: none; }
+#logo.light { color: #77777C; }
+#logo.dark { color: #3B3B3F; }
+#screen { position: absolute; background: var(--eink); overflow: hidden; box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .28); }
+#viewport { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+#book { position: absolute; border: 0; background: transparent; }
+#page-head, #page-foot { position: absolute; left: 0; right: 0; font-size: 9px; color: #3E3C38;
+  font-family: "Microsoft YaHei UI", sans-serif; display: flex; justify-content: center; align-items: center; }
+#page-foot { justify-content: space-between; }
+.tap { position: absolute; top: 0; bottom: 0; width: 28%; background: transparent; border: 0; cursor: pointer; }
+#tap-left { left: 0; } #tap-right { right: 0; }
+#dims { font-size: 11.5px; color: var(--muted); }
+nav { display: flex; gap: 16px; align-items: center; font-size: 12.5px; color: var(--ink2); }
+nav button { border: 1px solid var(--line2); border-radius: 6px; background: var(--field); padding: 3px 10px; cursor: pointer; }
+#hint { font-size: 12px; color: var(--muted); }
+aside { width: 270px; flex: none; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line);
+  padding: 12px 14px 18px; }
+aside h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; display: flex; justify-content: space-between; align-items: baseline; }
+.muted, #dirty { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+.label { color: var(--muted); font-size: 12px; margin: 10px 0 4px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 6px; overflow: hidden; background: var(--field); }
+.seg button, .seg span { border: 0; border-right: 1px solid var(--line2); background: transparent; padding: 3px 9px;
+  font-size: 12px; cursor: pointer; }
+.seg > :last-child { border-right: 0; }
+.seg .on { background: var(--accent); color: #F6F4EF; }
+.seg[aria-disabled="true"] { opacity: .45; }
+.seg[aria-disabled="true"] button { cursor: default; }
+.seg.changed, .num.changed, select.changed { box-shadow: 0 0 0 1.5px var(--accent); }
+.num { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line2); border-radius: 6px;
+  background: var(--field); padding: 2px 6px; }
+.num input { width: 58px; border: 0; background: transparent; font-family: Consolas, monospace; outline: none; }
+.num span { font-size: 11.5px; color: var(--muted); }
+.num.invalid { box-shadow: 0 0 0 1.5px var(--pen); }
+.actions { margin-top: 14px; }
+.actions button { border: 1px solid var(--line2); border-radius: 6px; background: var(--field); padding: 4px 12px; cursor: pointer; }
+.actions .primary { background: var(--accent); border-color: var(--accent); color: #F6F4EF; }
+.actions button:disabled { opacity: .45; cursor: default; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0 10px; }
+.note { font-size: 11.5px; color: var(--muted); margin-top: 14px; }
+#gone { position: fixed; inset: 0; background: rgba(239, 236, 230, .92); display: flex; align-items: center;
+  justify-content: center; text-align: center; font-size: 14px; }
+#gone[hidden] { display: none; }
+
+/* 段落与识别（V61）：收起的分组，点标题展开。 */
+details#blocks { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+details#blocks summary { cursor: pointer; font-size: 12.5px; color: var(--ink2); }
+details#blocks .seg { flex-wrap: wrap; }
+
+/* 注释弹窗（V61）：与 Kindle 一样从屏幕下方弹出；弹出时两侧翻页区不拦截点击。 */
+#note-pop { position: absolute; left: 4%; right: 4%; bottom: 4%; max-height: 46%; overflow: auto;
+  background: #F4F2EC; color: #1E1E1E; border: 1px solid #3E3C38; border-radius: 6px;
+  padding: 0.8em 2.2em 0.8em 1em; line-height: 1.5; box-shadow: 0 2px 8px rgba(0, 0, 0, .25); }
+#note-pop[hidden] { display: none; }
+#note-body p { margin: 0 0 0.4em; text-indent: 0; }
+#note-body a { color: inherit; text-decoration: none; }
+#note-close { position: absolute; top: 0.2em; right: 0.3em; border: 0; background: transparent;
+  font-size: 1.2em; cursor: pointer; color: #3E3C38; }
+#screen.noting .tap { pointer-events: none; }

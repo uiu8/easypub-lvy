@@ -1,0 +1,607 @@
+//! Per-language dictionary build tests, driven by the committed fixture
+//! suite under `tests/fixtures/langs/`.
+//!
+//! For each supported language this builds the dictionary with kindling and
+//! asserts the language-specific structure of the orth index:
+//!
+//! * the INDX header language id and the MOBI-header locale (the neutral
+//!   primary LCID kindlegen writes, which the firmware's per-language query
+//!   normalization is keyed on);
+//! * that every entry has a real text pointer (no `(0, 0)` first-entry, the
+//!   white-page bug fixed by `is_entry_boundary` recognizing `<mbp:frameset>`);
+//! * that the headword set round-trips through the on-disk labels;
+//! * for the generated-ORDT scripts (ja/zh/ko/ar): the per-character label
+//!   encoding (kana are collation symbols, everything else is a literal code
+//!   point), kana folding and gojuon order for Japanese, and byte parity of
+//!   the ORDT table + headword labels against the committed kindlegen build
+//!   (identical for the all-literal scripts; value-equivalent for Japanese);
+//! * for the Latin fixtures (en/fr/tr): the exact-accent ORDT table (no Greek
+//!   collation blob), labels that decode back to the headword set, and
+//!   entries in its folded order with punctuation skipped;
+//! * for the Greek and Cyrillic fixtures (el/ru): UTF-16BE labels and the
+//!   static Greek collation blob, embedded for Greek and left out for Russian;
+//! * for both: entries in the order a Kindle lookup searches them, checked
+//!   with a key written out in this file (`device_key`).
+//!
+//! See issue #11 and `crate::ordt`. On-device verification status is in the
+//! README supported-languages table.
+
+mod common;
+
+use common::*;
+
+use std::collections::BTreeSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use kindling::ordt::{OrdtTables, uses_generated_ordt};
+
+struct Lang {
+    code: &'static str,
+    /// INDX header language field (offset 32 of the orth primary).
+    indx_lang: u32,
+    /// MOBI-header locale (rec0 offset 92) and input language (rec0 offset
+    /// 96): the neutral primary LCID.
+    mobi_locale: u32,
+    /// Expected `ordt_type` for generated-ORDT languages (0 = two-byte
+    /// labels because literals are present, 1 = one-byte). Unused otherwise.
+    ordt_type: u32,
+}
+
+const LANGS: &[Lang] = &[
+    Lang {
+        code: "ja",
+        indx_lang: 17,
+        mobi_locale: 0x0011,
+        ordt_type: 0,
+    },
+    Lang {
+        code: "zh",
+        indx_lang: 4,
+        mobi_locale: 0x0004,
+        ordt_type: 0,
+    },
+    Lang {
+        code: "ko",
+        indx_lang: 0x0412,
+        mobi_locale: 0x0412,
+        ordt_type: 0,
+    },
+    Lang {
+        code: "ar",
+        indx_lang: 1,
+        mobi_locale: 0x0001,
+        ordt_type: 0,
+    },
+    Lang {
+        code: "en",
+        indx_lang: 9,
+        mobi_locale: 0x0009,
+        ordt_type: 0,
+    },
+    Lang {
+        code: "el",
+        indx_lang: 8,
+        mobi_locale: 0x0008,
+        ordt_type: 0,
+    },
+    Lang {
+        code: "fr",
+        indx_lang: 12,
+        mobi_locale: 0x040C,
+        ordt_type: 0,
+    },
+    Lang {
+        code: "ru",
+        indx_lang: 25,
+        mobi_locale: 0x0019,
+        ordt_type: 0,
+    },
+    Lang {
+        code: "tr",
+        indx_lang: 31,
+        mobi_locale: 0x001F,
+        ordt_type: 0,
+    },
+];
+
+fn lang_dir(code: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/langs")
+        .join(code)
+}
+
+/// The fixture's headwords, read from its committed data file (document order).
+fn headwords(code: &str) -> Vec<String> {
+    let tsv = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/langs/data")
+        .join(format!("{code}.tsv"));
+    let text = fs::read_to_string(&tsv).unwrap_or_else(|e| panic!("read {}: {e}", tsv.display()));
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    for line in text.lines() {
+        if let Some((hw, _)) = line.split_once('\t') {
+            if seen.insert(hw.to_string()) {
+                out.push(hw.to_string());
+            }
+        }
+    }
+    out
+}
+
+fn build(code: &str, subdir: &str) -> ParsedMobi {
+    let opf = lang_dir(code).join("src/dict.opf");
+    let tmp = std::env::temp_dir().join("kindling_langtest").join(subdir);
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(&tmp).unwrap();
+    let out = tmp.join("out.mobi");
+    kindling_build(&opf, &out);
+    let raw = fs::read(&out).unwrap();
+    parse_mobi_file(&raw).unwrap_or_else(|e| panic!("parse {code}: {e}"))
+}
+
+fn load(path: &Path) -> ParsedMobi {
+    parse_mobi_file(&fs::read(path).unwrap())
+        .unwrap_or_else(|e| panic!("parse {}: {e}", path.display()))
+}
+
+fn orth_primary(parsed: &ParsedMobi) -> (usize, &[u8]) {
+    assert_ne!(parsed.kf7.header.orth_index, 0xFFFFFFFF, "no orth index");
+    let idx = parsed.kf7.header.orth_index as usize;
+    (idx, parsed.palmdb.record(&parsed.raw, idx))
+}
+
+/// Decode a per-character ORDT label back to text: each element is a symbol
+/// index (`< oentries`, value is `ORDT2[idx]`) or a literal code point.
+fn decode_percharacter(label: &[u8], cps: &[u32], two_byte: bool) -> String {
+    let units: Vec<u32> = if two_byte {
+        label
+            .chunks_exact(2)
+            .map(|c| u16::from_be_bytes([c[0], c[1]]) as u32)
+            .collect()
+    } else {
+        label.iter().map(|&b| b as u32).collect()
+    };
+    let mut s = String::new();
+    for v in units {
+        let cp = if (v as usize) < cps.len() {
+            cps[v as usize]
+        } else {
+            v
+        };
+        if let Some(c) = char::from_u32(cp) {
+            s.push(c);
+        }
+    }
+    s
+}
+
+fn decode_utf16(label: &[u8]) -> String {
+    let units: Vec<u16> = label
+        .chunks_exact(2)
+        .map(|c| u16::from_be_bytes([c[0], c[1]]))
+        .collect();
+    String::from_utf16(&units).expect("UTF-16BE label")
+}
+
+/// Header-level checks plus the no-blank-first-entry invariant, common to
+/// every language.
+fn check_common(code: &str, c: &Lang, parsed: &ParsedMobi, idx: usize, primary: &[u8]) {
+    assert_eq!(u32_be(primary, 32), c.indx_lang, "{code}: INDX language");
+    assert_eq!(u32_be(primary, 28), 0xFDEA, "{code}: INDX encoding");
+
+    let rec0 = parsed.palmdb.record(&parsed.raw, 0);
+    assert_eq!(
+        u32_be(rec0, 92),
+        c.mobi_locale,
+        "{code}: MOBI locale (neutral LCID)"
+    );
+    assert_eq!(
+        u32_be(rec0, 96),
+        c.mobi_locale,
+        "{code}: MOBI input language"
+    );
+
+    let indx = parse_indx(parsed, idx).unwrap_or_else(|e| panic!("{code}: parse INDX: {e}"));
+    // Every entry must point at a real article. The first headword used to
+    // get (0, 0) and render as a blank page (issue #11 white-page bug).
+    for e in &indx.entries {
+        let pos = e.tag_value(1, 0).unwrap_or(0);
+        let len = e.tag_value(2, 0).unwrap_or(0);
+        assert!(
+            !(pos == 0 && len == 0),
+            "{code}: entry has empty (0,0) text pointer (blank lookup page)"
+        );
+    }
+}
+
+fn check_generated_ordt(code: &str, c: &Lang, parsed: &ParsedMobi, idx: usize, primary: &[u8]) {
+    assert_eq!(u32_be(primary, 164), c.ordt_type, "{code}: ordt_type");
+    let ordt = parse_indx_ordt2(primary).unwrap_or_else(|| panic!("{code}: missing ORDT tables"));
+    let two_byte = ordt.ordt_type == 2;
+    let indx = parse_indx(parsed, idx).unwrap();
+    let hw = headwords(code); // document order
+
+    // The rebuilt tables (same headwords, same document order) are identical
+    // to the file's, so encoding a headword and decoding the result is the
+    // round-trip the firmware performs. For Japanese the prolonged sound
+    // mark ー folds onto the preceding vowel, so a label decodes to the
+    // fold-normalized headword (ケーキ → ケ + the え-marker), not the raw
+    // headword; compare against that rather than the literal headword set.
+    let refs: Vec<&str> = hw.iter().map(|s| s.as_str()).collect();
+    let tables = OrdtTables::new(&refs);
+    let decoded: BTreeSet<String> = indx
+        .entries
+        .iter()
+        .map(|e| decode_percharacter(&e.label, &ordt.codepoints, two_byte))
+        .collect();
+    let want: BTreeSet<String> = hw
+        .iter()
+        .map(|h| decode_percharacter(&tables.encode_label(h), &ordt.codepoints, two_byte))
+        .collect();
+    assert_eq!(
+        decoded, want,
+        "{code}: decoded headword set (fold-normalized)"
+    );
+
+    // Byte parity with the committed kindlegen build: identical ORDT table
+    // and identical headword-label set for the all-literal scripts; for
+    // Japanese (different kana numbering) the literal code points and the
+    // collation order match instead.
+    let reference = load(&lang_dir(code).join(format!("{code}-kindlegen.mobi")));
+    let (ridx, rprimary) = orth_primary(&reference);
+    assert_eq!(
+        u32_be(primary, 164),
+        u32_be(rprimary, 164),
+        "{code}: ordt_type vs kindlegen"
+    );
+    let rordt = parse_indx_ordt2(rprimary).unwrap();
+    if code != "ja" {
+        assert_eq!(
+            ordt.codepoints, rordt.codepoints,
+            "{code}: ORDT2 table vs kindlegen"
+        );
+        let mut kl: Vec<Vec<u8>> = indx.entries.iter().map(|e| e.label.clone()).collect();
+        let rindx = parse_indx(&reference, ridx).unwrap();
+        let mut rl: Vec<Vec<u8>> = rindx.entries.iter().map(|e| e.label.clone()).collect();
+        kl.sort();
+        rl.sort();
+        assert_eq!(kl, rl, "{code}: headword labels vs kindlegen");
+    }
+
+    // Entries are in non-decreasing collation order under the rebuilt table
+    // (built above from the same headwords in document order).
+    let keys: Vec<Vec<u32>> = indx
+        .entries
+        .iter()
+        .map(|e| tables.sort_key(&e.label))
+        .collect();
+    for i in 1..keys.len() {
+        assert!(
+            keys[i - 1] <= keys[i],
+            "{code}: entries out of collation order at {i}"
+        );
+    }
+}
+
+/// True if a code's headwords are dominantly in a script the static Greek
+/// ORDT covers (Latin/Greek). Mirrors `indx::greek_ordt_covers_script` so
+/// the test predicts whether the blob should be embedded without hardcoding
+/// a language list. Cyrillic (ru) is not covered.
+fn greek_ordt_script(code: &str) -> bool {
+    let mut total = 0usize;
+    let mut hits = 0usize;
+    for h in headwords(code) {
+        for ch in h.chars() {
+            if !ch.is_alphabetic() || (ch as u32) <= 0x7F {
+                continue;
+            }
+            total += 1;
+            let cp = ch as u32;
+            if matches!(cp,
+                0x00C0..=0x00FF | 0x0100..=0x024F | 0x0370..=0x03FF | 0x1F00..=0x1FFF)
+            {
+                hits += 1;
+            }
+        }
+    }
+    total == 0 || hits * 2 >= total
+}
+
+fn check_utf16(code: &str, _c: &Lang, parsed: &ParsedMobi, idx: usize, primary: &[u8]) {
+    // The static Greek collation blob (spl_count 2, oentries 7) is embedded
+    // only when the headwords are dominantly Latin/Greek. For Cyrillic and
+    // other scripts the blob is suppressed (OrdtMode::None) so the device
+    // collates by plain UTF-16BE, avoiding the issue #12 misroute.
+    if greek_ordt_script(code) {
+        assert_eq!(u32_be(primary, 56), 2, "{code}: Greek blob spl_count");
+        assert_eq!(u32_be(primary, 168), 7, "{code}: Greek blob oentries");
+        assert!(
+            primary.windows(4).any(|w| w == b"SPL1"),
+            "{code}: Latin/Greek dict must embed the Greek SPL collation blob"
+        );
+    } else {
+        assert_eq!(u32_be(primary, 168), 0, "{code}: non-Latin blob suppressed");
+        assert!(
+            !primary.windows(4).any(|w| w == b"SPL1"),
+            "{code}: non-Latin dict must not embed the Greek SPL collation blob"
+        );
+    }
+
+    let indx = parse_indx(parsed, idx).unwrap();
+    let decoded: BTreeSet<String> = indx
+        .entries
+        .iter()
+        .map(|e| decode_utf16(&e.label))
+        .collect();
+    // Cyrillic dictionaries also carry the generated stress-stripped and
+    // lowercased lookup aliases of every form (issue #17): Москва gets a
+    // москва label. Mirror the alias pass when building the expected set.
+    let mut want: BTreeSet<String> = headwords(code).into_iter().collect();
+    if is_cyrillic_dict(code) {
+        for h in headwords(code) {
+            let stripped: String = h
+                .chars()
+                .filter(|&c| c != '\u{0300}' && c != '\u{0301}')
+                .collect();
+            want.insert(h.to_lowercase());
+            want.insert(stripped.to_lowercase());
+            want.insert(stripped);
+        }
+    }
+    assert_eq!(decoded, want, "{code}: decoded headword set");
+    let units: Vec<Vec<u16>> = indx
+        .entries
+        .iter()
+        .map(|e| {
+            e.label
+                .chunks_exact(2)
+                .map(|c| u16::from_be_bytes([c[0], c[1]]))
+                .collect()
+        })
+        .collect();
+    check_device_order(code, &units);
+}
+
+/// Asserts that labels, given as the UTF-16 units a Kindle reads from them,
+/// are stored in the order the Kindle 4 (firmware 4.1.4) and the Paperwhite 4
+/// (firmware 5.16.5) search them, by [`device_key`]. Among equal keys it also
+/// expects the label with fewer units that weigh nothing first, which
+/// kindling's order gives these fixtures; the devices find labels with equal
+/// keys in any order.
+fn check_device_order(code: &str, labels: &[Vec<u16>]) {
+    let order: Vec<(Vec<u16>, usize)> = labels.iter().map(|u| device_key(u)).collect();
+    for (i, pair) in order.windows(2).enumerate() {
+        assert!(
+            pair[0] <= pair[1],
+            "{code}: labels out of order: {:?} before {:?}",
+            String::from_utf16_lossy(&labels[i]),
+            String::from_utf16_lossy(&labels[i + 1])
+        );
+    }
+}
+
+/// The key a Kindle lookup compares labels by, written out independently of
+/// `kindling::ordt::device_collation_key` so this test checks it, for the
+/// characters the fixtures use: each unit's weight with the units that weigh
+/// nothing left out, and how many were left out. A Latin letter below U+0300
+/// weighs as its lowercase base letter; ASCII punctuation, the Latin-1 signs,
+/// the letters the Kindle passes over and General Punctuation weigh nothing;
+/// the no-break space weighs as a space and ¹²³ as digits; Greek, Cyrillic
+/// and every other unit weigh as themselves.
+fn device_key(units: &[u16]) -> (Vec<u16>, usize) {
+    const LETTERS: &[(char, &str)] = &[
+        ('a', "AaÀÁÂÃÄÅàáâãäåĀāĂăĄąǍǎǞǟǠǡǺǻǼȀȁȂȃɐ"),
+        ('b', "BbƀƁƂƃɓʙ"),
+        ('c', "CcÇçĆćĈĉĊċČčƇƈɕʗ"),
+        ('d', "DdÐðĎďĐđƉƊƋƌɖɗ"),
+        ('e', "EeÈÉÊËèéêëĒēĔĕĖėĘęĚěƎƏƐǝȄȅȆȇɘəɚ"),
+        ('f', "FfƑƒ"),
+        ('g', "GgĜĝĞğĠġĢģƓƔǤǥǦǧǴǵɠɡɢʛ"),
+        ('h', "HhĤĥĦħɥɦɧʜ"),
+        ('i', "IiÌÍÎÏìíîïĨĩĪīĬĭĮįİıƗǏǐȈȉȊȋɨɪ"),
+        ('j', "JjĴĵǰɟʄʝ"),
+        ('k', "KkĶķĸƘƙǨǩʞ"),
+        ('l', "LlĹĺĻļĽľĿŀŁłƚɫɬɭʟ"),
+        ('m', "MmµƜɯɰɱ"),
+        ('n', "NnÑñŃńŅņŇňŉŊŋƝƞɲɳɴ"),
+        ('o', "OoÒÓÔÕÖØòóôõöøŌōŎŏŐőƆƟƠơǑǒǪǫǬǭǾǿȌȍȎȏɔɵ"),
+        ('p', "PpƤƥ"),
+        ('q', "Qqʠ"),
+        ('r', "RrŔŕŖŗŘřƦȐȑȒȓɹɺɻɼɽɾɿʀʁ"),
+        ('s', "SsŚśŜŝŞşŠšſʂ"),
+        ('t', "TtÞþŢţŤťŦŧƫƬƭƮʇʈ"),
+        ('u', "UuÙÚÛÜùúûüŨũŪūŬŭŮůŰűŲųƯưǓǔǕǖǗǘǙǚǛǜȔȕȖȗʉ"),
+        ('v', "VvƲʋʌ"),
+        ('w', "WwŴŵʍ"),
+        ('x', "Xx"),
+        ('y', "YyÝýÿŶŷŸƳƴʎʏ"),
+        ('z', "ZzŹźŻżŽžƵƶʐʑ"),
+    ];
+    let mut key = Vec::new();
+    let mut skipped = 0;
+    for &unit in units {
+        let c = char::from_u32(u32::from(unit));
+        let weight = match unit {
+            0x20 | 0xA0 => 0x20,
+            0x30..=0x39 => unit,
+            0xB9 => u16::from(b'1'),
+            0xB2 => u16::from(b'2'),
+            0xB3 => u16::from(b'3'),
+            0x00..=0x2FF => LETTERS
+                .iter()
+                .find(|(_, spelled)| c.is_some_and(|c| spelled.contains(c)))
+                .map_or(0, |&(base, _)| base as u16),
+            0x2000..=0x206F => 0,
+            0x0370..=0x052F | 0x1F00..=0x1FFF => unit,
+            _ => panic!("U+{unit:04X} is outside what this key covers; extend it"),
+        };
+        if weight == 0 {
+            skipped += 1;
+        } else {
+            key.push(weight);
+        }
+    }
+    (key, skipped)
+}
+
+/// Mirrors `mobi::headwords_are_cyrillic`: gates the stress/case lookup-alias
+/// pass (issue #17). A pure-ASCII set is not Cyrillic.
+fn is_cyrillic_dict(code: &str) -> bool {
+    let mut cyrillic = 0usize;
+    let mut other = 0usize;
+    for h in headwords(code) {
+        for ch in h.chars() {
+            let cp = ch as u32;
+            if cp <= 0x7F || !ch.is_alphabetic() {
+                continue;
+            }
+            match cp {
+                0x0400..=0x052F | 0x2DE0..=0x2DFF | 0xA640..=0xA69F => cyrillic += 1,
+                _ => other += 1,
+            }
+        }
+    }
+    cyrillic > 0 && cyrillic >= other
+}
+
+/// Mirrors `mobi::headwords_are_latin`: a dictionary whose non-ASCII headword
+/// letters are dominantly Latin (or pure ASCII) defaults to the exact
+/// (new_exact) ORDT. Greek and Cyrillic stay on the UTF-16BE path.
+fn is_latin_dict(code: &str) -> bool {
+    let mut latin = 0usize;
+    let mut other = 0usize;
+    for h in headwords(code) {
+        for ch in h.chars() {
+            let cp = ch as u32;
+            if cp <= 0x7F || !ch.is_alphabetic() {
+                continue;
+            }
+            match cp {
+                0x00C0..=0x024F | 0x1E00..=0x1EFF => latin += 1,
+                _ => other += 1,
+            }
+        }
+    }
+    other == 0 || latin >= other
+}
+
+/// Latin dictionaries default to the exact (new_exact) ORDT: single-byte
+/// symbols (ordt_type=1), accent/case variants folded for sorting but kept
+/// distinct, and no Greek SPL folding blob (issue #8). Labels round-trip
+/// losslessly and entries are in folded collation order.
+fn check_exact_ordt(code: &str, _c: &Lang, parsed: &ParsedMobi, idx: usize, primary: &[u8]) {
+    assert_eq!(
+        u32_be(primary, 164),
+        1,
+        "{code}: exact ordt_type should be 1"
+    );
+    assert!(
+        u32_be(primary, 168) > 3,
+        "{code}: exact dict should use the full per-letter ORDT, not the 3-symbol seed"
+    );
+    assert!(
+        !primary.windows(4).any(|w| w == b"SPL1"),
+        "{code}: exact dict must not embed the Greek SPL folding blob"
+    );
+    let ordt = parse_indx_ordt2(primary).unwrap_or_else(|| panic!("{code}: missing ORDT tables"));
+    let two_byte = ordt.ordt_type == 2;
+    let indx = parse_indx(parsed, idx).unwrap();
+    let hw = headwords(code);
+
+    // new_exact keeps every character a distinct symbol, so the labels decode
+    // back to the exact headword set.
+    let decoded: BTreeSet<String> = indx
+        .entries
+        .iter()
+        .map(|e| decode_percharacter(&e.label, &ordt.codepoints, two_byte))
+        .collect();
+    let want: BTreeSet<String> = hw.iter().cloned().collect();
+    assert_eq!(decoded, want, "{code}: decoded headword set (exact)");
+
+    // Entries are in non-decreasing folded collation order under the rebuilt
+    // table (same headwords, same document order, identical to the file's).
+    let refs: Vec<&str> = hw.iter().map(|s| s.as_str()).collect();
+    let tables = OrdtTables::new_exact(&refs);
+    let keys: Vec<Vec<u32>> = indx
+        .entries
+        .iter()
+        .map(|e| tables.sort_key(&e.label))
+        .collect();
+    for i in 1..keys.len() {
+        assert!(
+            keys[i - 1] <= keys[i],
+            "{code}: entries out of folded collation order at {i}"
+        );
+    }
+    let units: Vec<Vec<u16>> = indx
+        .entries
+        .iter()
+        .map(|e| {
+            let elems: Vec<usize> = if two_byte {
+                e.label
+                    .chunks_exact(2)
+                    .map(|c| usize::from(u16::from_be_bytes([c[0], c[1]])))
+                    .collect()
+            } else {
+                e.label.iter().map(|&b| usize::from(b)).collect()
+            };
+            elems
+                .into_iter()
+                .map(|v| ordt.codepoints.get(v).map_or(v as u16, |&cp| cp as u16))
+                .collect()
+        })
+        .collect();
+    check_device_order(code, &units);
+}
+
+fn check(code: &str) {
+    let c = LANGS.iter().find(|l| l.code == code).unwrap();
+    let parsed = build(code, code);
+    let (idx, primary) = orth_primary(&parsed);
+    check_common(code, c, &parsed, idx, primary);
+    if uses_generated_ordt(code) {
+        check_generated_ordt(code, c, &parsed, idx, primary);
+    } else if is_latin_dict(code) {
+        check_exact_ordt(code, c, &parsed, idx, primary);
+    } else {
+        check_utf16(code, c, &parsed, idx, primary);
+    }
+}
+
+#[test]
+fn dict_japanese() {
+    check("ja");
+}
+#[test]
+fn dict_chinese() {
+    check("zh");
+}
+#[test]
+fn dict_korean() {
+    check("ko");
+}
+#[test]
+fn dict_arabic() {
+    check("ar");
+}
+#[test]
+fn dict_english() {
+    check("en");
+}
+#[test]
+fn dict_greek() {
+    check("el");
+}
+#[test]
+fn dict_french() {
+    check("fr");
+}
+#[test]
+fn dict_russian() {
+    check("ru");
+}
+#[test]
+fn dict_turkish() {
+    check("tr");
+}

@@ -1,0 +1,39 @@
+[package]
+name = "easypub_app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+r1-faults = []
+
+[dependencies]
+easypub_core = { path = "../easypub_core" }
+tokio.workspace = true
+tokio-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "gzip", "brotli", "native-tls"] }
+scraper = "0.24"
+regex.workspace = true
+
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp", "tiff"] }
+# V24：SVG 封面与插图栅格化为 PNG（Kindle 不支持 SVG 图片资源）。
+resvg = { version = "=0.48.1", default-features = false, features = ["text", "system-fonts", "raster-images"] }
+
+ttf-parser = "=0.25.1"
+
+skera = "=0.7.0"
+write-fonts = { version = "=0.53.0", default-features = false, features = ["read"] }
+
+cssparser = "=0.35.0"
+roxmltree = "=0.21.1"
+base64 = "=0.23.1"
+flate2 = "=1.1.10"
+zip = { version = "=6.0.0", default-features = false, features = ["deflate-flate2"] }
+time = "=0.3.47"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_Security_Cryptography", "Win32_Storage_FileSystem"] }

@@ -1,0 +1,231 @@
+import 'book_information_service.dart';
+
+const layoutNumbers = <String, String>{
+  'font_size': '字号',
+  'fullwidth_indent': '段首全角空格数（0为关闭）',
+  'line_height': '行距',
+  'paragraph_indent': '首行缩进',
+  'paragraph_spacing': '段后间距',
+  'margin_top': '上边距',
+  'margin_bottom': '下边距',
+  'margin_left': '左边距',
+  'margin_right': '右边距',
+};
+const layoutFlags = <String, String>{
+  'remove_blank_lines': '导出时去除空行',
+  'include_toc': '收录成品目录',
+  'visible_toc': '书内目录页',
+  'chapter_navigation': '章节顶部导航',
+};
+
+/// 章节标题样式（V36，LAY-117）：值与 Rust `HEADING_STYLES` 一一对应。
+const headingStyles = {
+  'classic': 'EasyPub 经典',
+  'amazon': '亚马逊官方',
+  'publisher': '出版社',
+  'two_line': '精排两行',
+  'light_novel': '日系轻小说',
+};
+
+/// 场景分隔样式（V46，LAY-118）：值与 Rust `SCENE_BREAK_STYLES` 一一对应。
+const sceneBreakStyles = {
+  'off': '不识别',
+  'keep': '居中保留原符号',
+  'stars': '＊　＊　＊',
+  'diamonds': '◇　◇　◇',
+  'line': '细线',
+};
+
+/// 与 Rust `publication_documents::SCENE_SYMBOLS` 相同；“……”“——”不在其中。
+const _sceneSymbols = '*＊﹡※◇◆○●◎☆★♢♦✱✲✳✿❀❖⁂#＃=＝~～§';
+
+/// 整行（可夹空白）都是分隔符号且至少 3 个时视为场景分隔（与 Rust 规则一致）。
+bool isSceneBreak(String line) {
+  var count = 0;
+  for (final rune in line.runes) {
+    final c = String.fromCharCode(rune);
+    if (c.trim().isEmpty) continue;
+    if (!_sceneSymbols.contains(c)) return false;
+    if (++count > 40) return false;
+  }
+  return count >= 3;
+}
+
+/// 场景分隔在成品里显示的文字；细线在小预览里用横线字符近似。
+String sceneBreakText(String style, String original) => switch (style) {
+  'stars' => '＊　＊　＊',
+  'diamonds' => '◇　◇　◇',
+  'line' => '―――',
+  _ => original.trim(),
+};
+
+/// 章首段落样式（V49，LAY-119）：值与 Rust `FIRST_PARAGRAPH_STYLES` 一一对应。
+const firstParagraphStyles = {
+  'normal': '同正文',
+  'no_indent': '首段不缩进',
+  'large_initial': '首字放大',
+};
+
+/// 系统提示样式（V50，LAY-121）：值与 Rust `SYSTEM_BLOCK_STYLES` 一一对应。
+const systemBlockStyles = {'off': '不识别', 'box': '加框', 'indent': '缩进'};
+
+/// 诗词样式（V50，LAY-122）：值与 Rust `VERSE_BLOCK_STYLES` 一一对应。
+const verseBlockStyles = {'off': '不识别', 'center': '居中', 'indent': '缩进'};
+
+/// 统一章首图用于哪些标题（V54，LAY-124）：值与 Rust `CHAPTER_HEAD_SCOPES` 一一对应。
+const chapterHeadScopes = {'chapter': '每章', 'volume': '每卷', 'both': '卷和章'};
+
+/// 章首图宽度（V54，LAY-124）：值与 Rust `CHAPTER_HEAD_WIDTHS` 一一对应。
+const chapterHeadWidths = {'third': '三分之一', 'half': '一半', 'full': '满宽'};
+
+/// 弹出注释（V48 能力，V51 界面，LAY-120）：值与 Rust `NOTE_STYLES` 一一对应。
+const noteStyles = {'off': '关闭', 'popup': '弹出注释'};
+
+/// 整行由一个或多个【……】组成（之间可有空白）时视为系统提示（与 Rust 规则一致）。
+bool isSystemLine(String line) {
+  var rest = line.trim();
+  if (rest.isEmpty || rest.runes.length > 200) return false;
+  while (rest.isNotEmpty) {
+    if (!rest.startsWith('【')) return false;
+    final end = rest.indexOf('】');
+    if (end < 0) return false;
+    final inner = rest.substring(1, end);
+    if (inner.trim().isEmpty || inner.contains('【')) return false;
+    rest = rest.substring(end + 1).trimLeft();
+  }
+  return true;
+}
+
+final _han = RegExp(r'^[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+$');
+
+/// 整行是五言或七言对句、前后两句等长时视为诗句（与 Rust 规则一致）。
+bool isVerseLine(String line) {
+  var t = line.trim();
+  if (t.isNotEmpty && '。！？；!?;'.contains(t[t.length - 1])) {
+    t = t.substring(0, t.length - 1);
+  }
+  final i = t.indexOf(RegExp('[，,]'));
+  if (i < 0) return false;
+  final a = t.substring(0, i), b = t.substring(i + 1);
+  return a.length == b.length &&
+      (a.length == 5 || a.length == 7) &&
+      _han.hasMatch(a) &&
+      _han.hasMatch(b);
+}
+
+/// 紧跟诗句、以“——”开头的短行视为署名（与 Rust 规则一致）。
+bool isVerseAttribution(String line) {
+  final t = line.trim();
+  if (!t.startsWith('——')) return false;
+  final by = t.substring(2);
+  return by.trim().isNotEmpty && by.runes.length <= 40;
+}
+
+final layoutFields = Set<String>.unmodifiable({
+  ...layoutNumbers.keys,
+  ...layoutFlags.keys,
+  'text_alignment',
+  'writing_mode',
+  'vertical_digits',
+  'heading_style',
+  'scene_break_style',
+  'note_style',
+  'first_paragraph_style',
+  'chapter_head_scope',
+  'chapter_head_width',
+  'system_block_style',
+  'verse_block_style',
+  'font_size_unit',
+  'margin_top_unit',
+  'margin_bottom_unit',
+  'margin_left_unit',
+  'margin_right_unit',
+});
+
+/// Layout uses the same guarded production-change DTO as book information.
+abstract class LayoutSession {
+  Map<String, Object?> get savedCss;
+  Future<CssPreview> previewCss(String text, String base);
+  Future<void> applyCss(CssPreview preview);
+  Future<List<LayoutPreset>> readPresetFile(String path);
+  Future<void> exportPresetFile(String name, String path);
+  Future<void> importPreset(LayoutPreset preset);
+  Future<LayoutPreset> builtinPreset();
+  List<LayoutPreset> get presets;
+  Future<void> renamePreset(String name, String replacement);
+  Future<List<LayoutPreset>> readGlobalPresets();
+  Future<void> publishPreset(String name);
+  Future<void> copyGlobalPreset(String name);
+  Future<void> deleteGlobalPreset(String name);
+  Future<void> savePreset(String name, Map<String, Object?> values);
+  void deletePreset(String name);
+  Future<BookInformationPreview> previewPreset(String name);
+  Map<String, Object?> get origins;
+  Future<BookInformationPreview> restoreFields(
+    Set<String> fields, {
+    required bool global,
+  });
+  Map<String, Object?> get saved;
+  Future<BookInformationPreview> preview(Map<String, Object?> values);
+  Future<void> apply(BookInformationPreview preview);
+  void dispose();
+}
+
+class CssPreview {
+  CssPreview(this.change, List<String> issues, List<String> files, this.bytes)
+    : issues = List.unmodifiable(issues),
+      files = List.unmodifiable(files);
+  final BookInformationPreview change;
+  final List<String> issues, files;
+  final int bytes;
+}
+
+class LayoutPreset {
+  LayoutPreset(this.name, Map<String, Object?> values)
+    : values = Map.unmodifiable(values);
+  final String name;
+  final Map<String, Object?> values;
+}
+
+/// Optional because lightweight page previews and tests need no desktop shell.
+/// 排版预览机型偏好（LAY-092）：界面偏好，存于设置目录，不写入书稿。
+abstract interface class LayoutPreviewDeviceStore {
+  Future<String?> readPreviewDevice();
+  Future<void> savePreviewDevice(String value);
+}
+
+abstract interface class LayoutPublicationPreviewSession {
+  Future<LayoutPublicationPreview> renderPreview({String? entryId});
+  Future<void> openPreview(LayoutPublicationPreview preview);
+}
+
+/// 真机预览（LAY-108/110）：按还没写回的排版值生成本书内容，不保存。
+abstract interface class LayoutDraftPreviewSession {
+  Future<LayoutDraftPreview> renderDraftPreview(
+    Map<String, Object?> values, {
+    String? entryId,
+  });
+}
+
+class LayoutDraftPreview {
+  const LayoutDraftPreview({
+    required this.directory,
+    required this.content,
+    required this.title,
+    this.anchor,
+  });
+
+  /// 生成内容所在目录；[content] 为其中正文 XHTML 的相对路径（用 / 分隔）。
+  final String directory, content, title;
+  final String? anchor;
+}
+
+class LayoutPublicationPreview {
+  const LayoutPublicationPreview({
+    required this.publicationId,
+    required this.path,
+    required this.documents,
+  });
+  final String publicationId, path;
+  final List<({String path, String title})> documents;
+}

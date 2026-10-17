@@ -1,0 +1,19 @@
+# Local reference and build artifacts are never silently published.
+reference/
+work/
+outputs/
+target/
+.dart_tool/
+build/
+**/bin/
+**/obj/
+**/__pycache__/
+.env
+.env.*
+*.local.json
+*.log
+# Reproducible large synthetic inputs; keep generator and hash manifest.
+artifacts/r1-bridge-perf/sample-*.txt
+# Application lockfiles are intentionally NOT ignored.
+# Test runs, release packages and unpacked checks (~10 GB). Evidence summaries live in docs/evidence/.
+artifacts/

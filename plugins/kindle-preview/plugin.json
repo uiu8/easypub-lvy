@@ -1,0 +1,8 @@
+{
+  "id": "kindle-preview",
+  "name": "真机预览",
+  "version": "1.0.0",
+  "api": 1,
+  "entry": "index.html",
+  "description": "按 Kindle 机身尺寸复刻机身，屏幕里显示本书实际生成的内容；可在侧边栏调排版并写回本书。由 EasyPub++ 排版页启动，用系统 Edge 以应用窗口打开。"
+}
