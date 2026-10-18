@@ -354,6 +354,13 @@ pub fn catalog() -> Value {
             json!(["popup"]),
             false,
         ),
+        (
+            "rare_char",
+            "生僻字注音",
+            "rare_char_ruby",
+            json!(["chapter", "book", "every"]),
+            true,
+        ),
     ] {
         add(
             &format!("layout.{id}"),
@@ -515,6 +522,7 @@ pub fn catalog() -> Value {
             "layout.verse" => Some("center"),
             "layout.note" => Some("popup"),
             "layout.first_paragraph" => Some("no_indent"),
+            "layout.rare_char" => Some("chapter"),
             _ => None,
         };
         if let Some(on) = on {

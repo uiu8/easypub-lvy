@@ -43,6 +43,8 @@ class LayoutPage extends StatefulWidget {
     required this.pickPresetDestination,
     required this.importCss,
     this.pickImage,
+    this.pickStylePack,
+    this.pickStylePackDestination,
     this.openCssOnStart = false,
     this.initialTab = 0,
     this.kindlePreview = const SystemKindlePreviewHost(),
@@ -55,6 +57,10 @@ class LayoutPage extends StatefulWidget {
 
   /// 统一章首图的选图对话框（V54，LAY-124）；为空时不能选图。
   final Future<String?> Function()? pickImage;
+
+  /// 章节样式包文件（V74，LAY-130）：导入时选 .zip，导出时选保存位置。
+  final Future<String?> Function()? pickStylePack;
+  final Future<String?> Function(String name)? pickStylePackDestination;
   final bool openCssOnStart;
 
   /// 打开时显示的左栏分页（V63：规则中心“去设置”可直接打开“段落与识别”）。
@@ -82,8 +88,13 @@ class _LayoutPageState extends State<LayoutPage> {
   String sceneBreakStyle = 'keep';
   // 章首段落样式（V49，LAY-119）。
   String firstParagraphStyle = 'normal';
+  // 生僻字注音（V73，LAY-129）。
+  String rareCharRuby = 'off';
+  String rareCharScope = 'outside';
   // 统一章首图（V54，LAY-124）：图片路径单独保存，不进草稿；范围与宽度是排版字段。
   String? chapterHeadImage;
+  // 章节样式包（V74，LAY-130）：与章首图一样单独应用，不进草稿。
+  Map<String, dynamic>? chapterStyle;
 
   /// 小预览用的章首图像素（V54）；路径变化时重新读取。
   dui.Image? chapterHeadPixels;
@@ -142,6 +153,8 @@ class _LayoutPageState extends State<LayoutPage> {
     'heading_style': headingStyle,
     'scene_break_style': sceneBreakStyle,
     'first_paragraph_style': firstParagraphStyle,
+    'rare_char_ruby': rareCharRuby,
+    'rare_char_scope': rareCharScope,
     'chapter_head_scope': chapterHeadScope,
     'chapter_head_width': chapterHeadWidth,
     'system_block_style': systemBlockStyle,
@@ -176,6 +189,8 @@ class _LayoutPageState extends State<LayoutPage> {
     sceneBreakStyle = draft['scene_break_style'] as String? ?? sceneBreakStyle;
     firstParagraphStyle =
         draft['first_paragraph_style'] as String? ?? firstParagraphStyle;
+    rareCharRuby = draft['rare_char_ruby'] as String? ?? rareCharRuby;
+    rareCharScope = draft['rare_char_scope'] as String? ?? rareCharScope;
     chapterHeadScope =
         draft['chapter_head_scope'] as String? ?? chapterHeadScope;
     chapterHeadWidth =
@@ -202,6 +217,8 @@ class _LayoutPageState extends State<LayoutPage> {
     'heading_style': headingStyle,
     'scene_break_style': sceneBreakStyle,
     'first_paragraph_style': firstParagraphStyle,
+    'rare_char_ruby': rareCharRuby,
+    'rare_char_scope': rareCharScope,
     'chapter_head_scope': chapterHeadScope,
     'chapter_head_width': chapterHeadWidth,
     'system_block_style': systemBlockStyle,
@@ -218,6 +235,8 @@ class _LayoutPageState extends State<LayoutPage> {
     'heading_style': headingStyle,
     'scene_break_style': sceneBreakStyle,
     'first_paragraph_style': firstParagraphStyle,
+    'rare_char_ruby': rareCharRuby,
+    'rare_char_scope': rareCharScope,
     'chapter_head_scope': chapterHeadScope,
     'chapter_head_width': chapterHeadWidth,
     'system_block_style': systemBlockStyle,
@@ -274,7 +293,10 @@ class _LayoutPageState extends State<LayoutPage> {
     headingStyle = saved['heading_style'] as String? ?? 'classic';
     sceneBreakStyle = saved['scene_break_style'] as String? ?? 'keep';
     firstParagraphStyle = saved['first_paragraph_style'] as String? ?? 'normal';
+    rareCharRuby = saved['rare_char_ruby'] as String? ?? 'off';
+    rareCharScope = saved['rare_char_scope'] as String? ?? 'outside';
     chapterHeadImage = saved['chapter_head_image'] as String?;
+    chapterStyle = (saved['chapter_style'] as Map?)?.cast<String, dynamic>();
     unawaited(loadChapterHeadPixels());
     chapterHeadScope = saved['chapter_head_scope'] as String? ?? 'chapter';
     chapterHeadWidth = saved['chapter_head_width'] as String? ?? 'half';
@@ -591,6 +613,8 @@ class _LayoutPageState extends State<LayoutPage> {
           'heading_style': '章节标题样式',
           'scene_break_style': '场景分隔',
           'first_paragraph_style': '章首段落',
+          'rare_char_ruby': '生僻字注音',
+          'rare_char_scope': '生僻字范围',
           'chapter_head_scope': '章首图用于',
           'chapter_head_width': '章首图宽度',
           'system_block_style': '系统提示',
@@ -611,6 +635,8 @@ class _LayoutPageState extends State<LayoutPage> {
     if (key == 'first_paragraph_style') {
       return firstParagraphStyles[value] ?? '$value';
     }
+    if (key == 'rare_char_ruby') return rareCharRubyModes[value] ?? '$value';
+    if (key == 'rare_char_scope') return rareCharScopes[value] ?? '$value';
     if (key == 'system_block_style') {
       return systemBlockStyles[value] ?? '$value';
     }
@@ -824,6 +850,14 @@ class _LayoutPageState extends State<LayoutPage> {
           case 'first_paragraph_style':
             if (value is String && firstParagraphStyles.containsKey(value)) {
               firstParagraphStyle = value;
+            }
+          case 'rare_char_ruby':
+            if (value is String && rareCharRubyModes.containsKey(value)) {
+              rareCharRuby = value;
+            }
+          case 'rare_char_scope':
+            if (value is String && rareCharScopes.containsKey(value)) {
+              rareCharScope = value;
             }
           case 'chapter_head_scope':
             if (value is String && chapterHeadScopes.containsKey(value)) {
@@ -1346,7 +1380,8 @@ class _LayoutPageState extends State<LayoutPage> {
               ),
           ],
         ),
-        if (name != null) ...[
+        if (name != null ||
+            (chapterStyle?['head_images'] as List?)?.isNotEmpty == true) ...[
           const SizedBox(height: 8),
           Text('用于', style: ui(12, c: d.ink2)),
           const SizedBox(height: 4),
@@ -1371,6 +1406,220 @@ class _LayoutPageState extends State<LayoutPage> {
               onChanged: busy
                   ? null
                   : (value) => edit(() => chapterHeadWidth = value),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// 章节样式包（V74，LAY-130）：单独预览并应用（进变更记录），不经草稿。
+  Future<void> setChapterStyle(Map<String, dynamic>? style, String done) async {
+    if (session == null) return;
+    setState(() => busy = true);
+    try {
+      await session!.apply(await session!.preview({'chapter_style': style}));
+      if (mounted) {
+        setState(() {
+          chapterStyle = style;
+          message = done;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => message = deskErrorText(error, '章节样式包未能应用'));
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<Map<String, dynamic>?> styleRequest(
+    Map<String, Object?> request,
+    String failed,
+  ) async {
+    final store = session;
+    if (store is! ChapterStyleStore) return null;
+    setState(() => busy = true);
+    try {
+      return await (store as ChapterStyleStore).chapterStyleRequest(request);
+    } catch (error) {
+      if (mounted) setState(() => message = deskErrorText(error, failed));
+      return null;
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> useBuiltinStyle(String id) async {
+    final result = await styleRequest({
+      'action': 'builtin',
+      'id': id,
+    }, '内置样式包未能生成');
+    final style = (result?['style'] as Map?)?.cast<String, dynamic>();
+    if (style != null && mounted) {
+      await setChapterStyle(style, '已使用样式包“${style['name']}”');
+    }
+  }
+
+  Future<void> importStyle() async {
+    final path = await widget.pickStylePack?.call();
+    if (path == null || !mounted) return;
+    final result = await styleRequest({
+      'action': 'import',
+      'path': path,
+    }, '样式包未能导入：请检查文件内容');
+    final style = (result?['style'] as Map?)?.cast<String, dynamic>();
+    if (style != null && mounted) {
+      await setChapterStyle(style, '已导入并使用样式包“${style['name']}”');
+    }
+  }
+
+  Future<void> exportStyle() async {
+    final style = chapterStyle;
+    if (style == null) return;
+    final path = await widget.pickStylePackDestination?.call(
+      style['name'] as String,
+    );
+    if (path == null || !mounted) return;
+    final result = await styleRequest({
+      'action': 'export',
+      'style': style,
+      'path': path,
+    }, '样式包未能导出：请选择新的文件名');
+    if (result != null && mounted) {
+      setState(() => message = '已导出样式包');
+    }
+  }
+
+  /// 去掉样式包里的某一项（再选一次样式包可以恢复）。
+  Future<void> dropStyleItem(String key) async {
+    final style = Map<String, dynamic>.from(chapterStyle!);
+    style[key] = key == 'head_images' ? <String>[] : null;
+    await setChapterStyle(style, '已更新样式包');
+  }
+
+  static const builtinStyles = {'plain': '素雅', 'classic': '古典'};
+
+  Widget chapterStyleControls() {
+    final d = context.desk;
+    final style = chapterStyle;
+    final name = style?['name'] as String?;
+    final heads = (style?['head_images'] as List?)?.length ?? 0;
+    Widget choice(String label, bool selected, VoidCallback? onTap, Key key) =>
+        Padding(
+          padding: const EdgeInsets.only(right: 6, bottom: 6),
+          child: ChoiceChip(
+            key: key,
+            label: Text(label, style: ui(12.5, c: d.ink)),
+            selected: selected,
+            onSelected: busy || onTap == null ? null : (_) => onTap(),
+          ),
+        );
+    Widget item(String key, String label, bool present) => Row(
+      children: [
+        Icon(
+          present ? Icons.check_rounded : Icons.remove_rounded,
+          size: 15,
+          color: present ? d.ink : d.ink3,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(label, style: ui(12.5, c: present ? d.ink : d.ink3)),
+        ),
+        if (present)
+          DeskButton(
+            '去掉',
+            key: ValueKey('layout-chapter-style-drop-$key'),
+            quiet: true,
+            onPressed: busy ? null : () => dropStyleItem(key),
+          ),
+      ],
+    );
+    return Column(
+      key: const ValueKey('layout-chapter-style'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text('章节样式包', style: ui(12, w: 600, c: d.ink2)),
+            const DeskHelp(
+              '一套章节装饰：章头图（多张时按章轮换）、标题下装饰线、章末装饰、卷页边框。'
+              '内置的“素雅”“古典”是程序画的线条与几何装饰；也可以导入别人做的样式包（.zip），或把本书的样式导出分享。'
+              '已设“章首图”时以章首图为准。原文不改，EPUB、AZW3、MOBI、KFX 都生效。小预览里不显示样式包。',
+              key: ValueKey('layout-help-chapter-style'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          children: [
+            choice(
+              '不使用',
+              style == null,
+              style == null ? null : () => setChapterStyle(null, '已停用样式包'),
+              const ValueKey('layout-chapter-style-none'),
+            ),
+            for (final e in builtinStyles.entries)
+              choice(
+                e.value,
+                name == e.value &&
+                    (style?['head_images'] as List?)?.every(
+                          (p) => '$p'.contains('builtin-${e.key}-'),
+                        ) ==
+                        true,
+                () => useBuiltinStyle(e.key),
+                ValueKey('layout-chapter-style-${e.key}'),
+              ),
+            if (name != null && !builtinStyles.containsValue(name))
+              choice(
+                name,
+                true,
+                null,
+                const ValueKey('layout-chapter-style-own'),
+              ),
+          ],
+        ),
+        Row(
+          children: [
+            DeskButton(
+              '导入样式包…',
+              key: const ValueKey('layout-chapter-style-import'),
+              quiet: true,
+              onPressed: busy || widget.pickStylePack == null
+                  ? null
+                  : importStyle,
+            ),
+            if (style != null)
+              DeskButton(
+                '导出…',
+                key: const ValueKey('layout-chapter-style-export'),
+                quiet: true,
+                onPressed: busy || widget.pickStylePackDestination == null
+                    ? null
+                    : exportStyle,
+              ),
+          ],
+        ),
+        if (style != null) ...[
+          const SizedBox(height: 6),
+          item('head_images', heads > 0 ? '章头图 $heads 张' : '章头图', heads > 0),
+          item('title_rule', '标题下装饰线', style['title_rule'] != null),
+          item('chapter_end', '章末装饰', style['chapter_end'] != null),
+          const SizedBox(height: 6),
+          Text('卷页边框', style: ui(12, c: d.ink2)),
+          const SizedBox(height: 4),
+          KeyedSubtree(
+            key: const ValueKey('layout-chapter-style-volume_frame'),
+            child: DeskSegmented<String>(
+              value: style['volume_frame'] as String? ?? 'none',
+              options: volumeFrames,
+              onChanged: busy
+                  ? null
+                  : (value) => setChapterStyle({
+                      ...style,
+                      'volume_frame': value,
+                    }, '已更新卷页边框'),
             ),
           ),
         ],
@@ -1478,6 +1727,48 @@ class _LayoutPageState extends State<LayoutPage> {
     ),
   );
 
+  /// 生僻字注音（V73，LAY-129）：注音方式与范围；只标正文。
+  Widget rareCharControls() => foldRow(
+    field: 'rare_char_ruby',
+    label: '生僻字注音',
+    help: const DeskHelp(
+      '不在《通用规范汉字表》8105 字里的字（选“表外字和三级字”时也包括表中最后 1605 个三级字），'
+      '在上方标拼音。繁体字按对应简体判断；只标正文，不标标题和目录；已有注音的字不重复标。'
+      '多音字取最常用读音。原文不改；同时用于 EPUB、AZW3、MOBI、KFX。小预览里不显示注音。',
+      key: ValueKey('layout-help-rare-char'),
+    ),
+    current: rareCharRuby == 'off'
+        ? rareCharRubyModes['off']!
+        : '${rareCharRubyModes[rareCharRuby] ?? rareCharRuby} · '
+              '${rareCharScopes[rareCharScope] ?? rareCharScope}',
+    control: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        KeyedSubtree(
+          key: const ValueKey('layout-rare_char_ruby'),
+          child: DeskSegmented<String>(
+            value: rareCharRuby,
+            options: rareCharRubyModes,
+            onChanged: busy
+                ? null
+                : (value) => edit(() => rareCharRuby = value),
+          ),
+        ),
+        const SizedBox(height: 6),
+        KeyedSubtree(
+          key: const ValueKey('layout-rare_char_scope'),
+          child: DeskSegmented<String>(
+            value: rareCharScope,
+            options: rareCharScopes,
+            onChanged: busy || rareCharRuby == 'off'
+                ? null
+                : (value) => edit(() => rareCharScope = value),
+          ),
+        ),
+      ],
+    ),
+  );
+
   Widget headingTile(String value, String label) {
     final d = context.desk;
     final selected = headingStyle == value;
@@ -1546,10 +1837,12 @@ class _LayoutPageState extends State<LayoutPage> {
             headingControls(),
             const SizedBox(height: 14),
             chapterHeadControls(),
+            const SizedBox(height: 14),
+            chapterStyleControls(),
           ]),
         ],
         2 => [
-          group('段落', [firstParagraphControls()]),
+          group('段落', [firstParagraphControls(), rareCharControls()]),
           group('自动识别', [
             Padding(
               padding: const EdgeInsets.only(bottom: 4),

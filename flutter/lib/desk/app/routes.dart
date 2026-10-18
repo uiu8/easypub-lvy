@@ -245,6 +245,8 @@ extension _Routes on _RewriteAppState {
             pickPresetDestination: pickPresetDestination,
             importCss: importCssFile,
             pickImage: pickCoverImage,
+            pickStylePack: pickStylePackFile,
+            pickStylePackDestination: pickStylePackDestination,
             openCssOnStart: state.uri.queryParameters['css'] == 'true',
             initialTab:
                 int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,

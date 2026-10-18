@@ -63,6 +63,23 @@ pub const FIRST_PARAGRAPH_STYLES: [&str; 3] = ["normal", "no_indent", "large_ini
 pub fn default_first_paragraph_style() -> String {
     "normal".into()
 }
+/// 生僻字注音（V73，LAY-129）：off 不标；chapter 每章首次；book 全书首次；every 每次。
+/// 旧项目缺少字段时为 off（输出不变）；新书出厂默认 chapter，见 layout_settings::factory。
+pub const RARE_CHAR_RUBY_MODES: [&str; 4] = ["off", "chapter", "book", "every"];
+pub fn default_rare_char_ruby() -> String {
+    "off".into()
+}
+pub fn rare_char_ruby_is_off(mode: &str) -> bool {
+    mode == "off"
+}
+/// 生僻字范围：outside 只有表外字；level3 三级字和表外字。
+pub const RARE_CHAR_SCOPES: [&str; 2] = ["outside", "level3"];
+pub fn default_rare_char_scope() -> String {
+    "outside".into()
+}
+pub fn rare_char_scope_is_default(scope: &str) -> bool {
+    scope == "outside"
+}
 /// 系统提示（V50，LAY-121）：off 不识别；box 加框；indent 缩进。
 pub const SYSTEM_BLOCK_STYLES: [&str; 3] = ["off", "box", "indent"];
 pub fn default_system_block_style() -> String {
@@ -110,7 +127,10 @@ pub struct CoverDesign {
 impl CoverDesign {
     fn validate(&self) -> Result<(), ApiError> {
         if self.title.trim().is_empty()
-            || self.style != "river-classic-v1"
+            || !matches!(
+                self.style.as_str(),
+                "river-classic-v1" | "pack-background-v1"
+            )
             || ![0xff23664f, 0xff82705a, 0xff5e6d7d, 0xff694c52].contains(&self.color)
             || [&self.title, &self.author, &self.series]
                 .iter()
@@ -161,6 +181,9 @@ pub struct Settings {
     pub chapter_head_scope: String,
     #[serde(default = "crate::production::default_chapter_head_width")]
     pub chapter_head_width: String,
+    /// 章节样式包（V74，LAY-130）。与章首图一样总是序列化。
+    #[serde(default)]
+    pub chapter_style: Option<crate::style_packs::ChapterStyle>,
     pub cover_fit: String,
     #[serde(default)]
     pub cover_crop: Option<crate::assets::Crop>,
@@ -196,6 +219,12 @@ pub struct Settings {
     /// 章首段落样式（V49，LAY-119），见 [FIRST_PARAGRAPH_STYLES]。
     #[serde(default = "crate::production::default_first_paragraph_style")]
     pub first_paragraph_style: String,
+    /// 生僻字注音（V73，LAY-129），见 [RARE_CHAR_RUBY_MODES]。
+    #[serde(default = "crate::production::default_rare_char_ruby")]
+    pub rare_char_ruby: String,
+    /// 生僻字范围（V73，LAY-129），见 [RARE_CHAR_SCOPES]。
+    #[serde(default = "crate::production::default_rare_char_scope")]
+    pub rare_char_scope: String,
     /// 系统提示样式（V50，LAY-121），见 [SYSTEM_BLOCK_STYLES]。
     #[serde(default = "crate::production::default_system_block_style")]
     pub system_block_style: String,
@@ -267,6 +296,7 @@ impl From<&crate::project::ProjectBook> for Settings {
             chapter_head_image: book.chapter_head_image.clone(),
             chapter_head_scope: book.chapter_head_scope.clone(),
             chapter_head_width: book.chapter_head_width.clone(),
+            chapter_style: book.chapter_style.clone(),
             cover_fit: book.cover_fit.clone(),
             cover_crop: book.cover_crop.clone(),
             cover_design: book.cover_design.clone(),
@@ -301,6 +331,8 @@ impl From<&crate::project::ProjectBook> for Settings {
             scene_break_style: book.scene_break_style.clone(),
             note_style: book.note_style.clone(),
             first_paragraph_style: book.first_paragraph_style.clone(),
+            rare_char_ruby: book.rare_char_ruby.clone(),
+            rare_char_scope: book.rare_char_scope.clone(),
             system_block_style: book.system_block_style.clone(),
             verse_block_style: book.verse_block_style.clone(),
             rule_options: book.rule_options.clone(),
@@ -504,6 +536,8 @@ impl Settings {
             || !SCENE_BREAK_STYLES.contains(&self.scene_break_style.as_str())
             || !NOTE_STYLES.contains(&self.note_style.as_str())
             || !FIRST_PARAGRAPH_STYLES.contains(&self.first_paragraph_style.as_str())
+            || !RARE_CHAR_RUBY_MODES.contains(&self.rare_char_ruby.as_str())
+            || !RARE_CHAR_SCOPES.contains(&self.rare_char_scope.as_str())
             || !SYSTEM_BLOCK_STYLES.contains(&self.system_block_style.as_str())
             || !VERSE_BLOCK_STYLES.contains(&self.verse_block_style.as_str())
             || !matches!(self.cover_fit.as_str(), "cover" | "contain" | "fill")
@@ -536,6 +570,9 @@ impl Settings {
         if let Some(path) = &self.chapter_head_image {
             image_path(path)?;
         }
+        if let Some(style) = &self.chapter_style {
+            style.validate(image_path)?;
+        }
         let mut paths = BTreeSet::new();
         for image in &self.illustrations {
             image_path(&image.path)?;
@@ -564,6 +601,7 @@ impl Settings {
             .cover_path
             .iter()
             .chain(self.chapter_head_image.iter())
+            .chain(self.chapter_style.iter().flat_map(|s| s.paths()))
             .map(String::as_str)
             .chain(self.illustrations.iter().map(|image| image.path.as_str()))
         {
@@ -771,6 +809,7 @@ fn edited(current: &Settings, fields: &BTreeMap<String, Edit>) -> Result<Setting
                     | "additional_css_base" => json!(""),
                     "cover_path"
                     | "chapter_head_image"
+                    | "chapter_style"
                     | "cover_crop"
                     | "cover_design"
                     | "font_resource"
@@ -1280,6 +1319,13 @@ pub fn run(
     }
     if value["op"] == "supplemental_templates" && !apply {
         return crate::supplemental_pages::templates(value);
+    }
+    // V74 章节样式包：生成内置包、导入与导出样式包文件，不涉及书稿。
+    if value["op"] == "chapter_style" {
+        if apply || confirmed || !plan_id.is_empty() {
+            return Err(invalid());
+        }
+        return crate::style_packs::run(value);
     }
     // V68 自动更新：只读检查与下载，不涉及书稿，也不走制作事务。
     if value["op"] == "app_update" {

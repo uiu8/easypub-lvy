@@ -1,7 +1,7 @@
 //! Semantic XHTML pages built from the final composed book, not source guesses.
 use crate::{navigation_documents::escaped, publication_resources::Prepared};
 use easypub_core::{ApiError, ErrorCode, structure::Role};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 pub struct Documents {
     pub pages: BTreeMap<String, String>,
@@ -190,6 +190,55 @@ pub(crate) fn is_system_line(line: &str) -> bool {
     true
 }
 
+/// 生僻字注音（V73，LAY-129）：只处理标签外、已有 `<ruby>` 之外的文字。
+/// `seen` 为 None 时每次都标；否则只标集合里还没有的字，并记入集合。返回是否改动。
+pub(crate) fn rare_char_ruby(
+    html: &str,
+    scope: easypub_core::rare_chars::Scope,
+    mut seen: Option<&mut HashSet<char>>,
+) -> Option<String> {
+    let mut out = String::with_capacity(html.len());
+    let (mut in_tag, mut ruby_depth, mut changed) = (false, 0usize, false);
+    let mut tag = String::new();
+    for c in html.chars() {
+        if in_tag {
+            tag.push(c);
+            if c == '>' {
+                in_tag = false;
+                let lower = tag.to_ascii_lowercase();
+                if lower.starts_with("<ruby") {
+                    ruby_depth += 1;
+                } else if lower.starts_with("</ruby") {
+                    ruby_depth = ruby_depth.saturating_sub(1);
+                }
+                out.push_str(&tag);
+                tag.clear();
+            }
+            continue;
+        }
+        if c == '<' {
+            in_tag = true;
+            tag.push(c);
+            continue;
+        }
+        let reading = (ruby_depth == 0)
+            .then(|| easypub_core::rare_chars::reading(c, scope))
+            .flatten()
+            .filter(|_| seen.as_mut().is_none_or(|set| set.insert(c)));
+        match reading {
+            Some(py) => {
+                changed = true;
+                out.push_str(&format!(
+                    "<ruby>{c}<rp>（</rp><rt>{py}</rt><rp>）</rp></ruby>"
+                ));
+            }
+            None => out.push(c),
+        }
+    }
+    out.push_str(&tag);
+    changed.then_some(out)
+}
+
 fn is_han(c: char) -> bool {
     matches!(c, '\u{4e00}'..='\u{9fff}' | '\u{3400}'..='\u{4dbf}' | '\u{f900}'..='\u{faff}')
 }
@@ -219,6 +268,7 @@ fn chapter_head(
     prepared: &Prepared,
     role: &Role,
     own: &[&crate::publication_resources::Placement],
+    rotation: &mut usize,
 ) -> Result<String, ApiError> {
     let m = prepared.manifest();
     let width = match m.chapter_head_width.as_str() {
@@ -245,13 +295,20 @@ fn chapter_head(
         "both" => matches!(role, Role::Volume | Role::Chapter),
         _ => matches!(role, Role::Chapter),
     };
+    // 已设的章首图优先；否则用样式包的章头图，按章轮换（V74，LAY-130）。
+    let styled = m
+        .chapter_style
+        .as_ref()
+        .filter(|s| !s.head_ids.is_empty())
+        .map(|s| s.head_ids[*rotation % s.head_ids.len()].clone());
     if own.is_empty()
         && applies
-        && let Some(id) = &m.chapter_head_image_id
+        && let Some(id) = m.chapter_head_image_id.clone().or(styled)
     {
+        *rotation += 1;
         html.push_str(&format!(
             "<figure class=\"chapter-head-image {width}\">{}</figure>",
-            image(prepared, id, "")?
+            image(prepared, &id, "")?
         ));
     }
     Ok(html)
@@ -372,6 +429,31 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
     let mut placement_index = 0;
     let mut prefix = book.tree.prefix_end > 0;
     let mut section_open = false;
+    // 章节样式包（V74，LAY-130）：章头图轮换计数；当前是否在章或前置部分里（用于章末装饰）。
+    let mut head_rotation = 0usize;
+    let mut in_chapter = false;
+    let chapter_end = match m
+        .chapter_style
+        .as_ref()
+        .and_then(|s| s.chapter_end_id.as_ref())
+    {
+        Some(id) => Some(format!(
+            "<p class=\"chapter-end\">{}</p>",
+            image(prepared, id, "")?
+        )),
+        None => None,
+    };
+    let title_rule = match m
+        .chapter_style
+        .as_ref()
+        .and_then(|s| s.title_rule_id.as_ref())
+    {
+        Some(id) => Some(format!(
+            "<p class=\"title-rule\">{}</p>",
+            image(prepared, id, "")?
+        )),
+        None => None,
+    };
     // 章首插图（V54）：挂到所在章（插图之前最近的标题）；书首无标题时按随正文输出。
     let mut heads: BTreeMap<usize, Vec<&crate::publication_resources::Placement>> = BTreeMap::new();
     for p in m.placements.iter().filter(|p| p.layout == "chapter_head") {
@@ -381,6 +463,10 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
     }
     // 章首段落（V49，LAY-119）：标题或场景分隔之后、尚未遇到非空正文段。
     let mut first_pending = false;
+    // 生僻字注音（V73，LAY-129）：已标过的字；每章首次时遇到章、卷、前置部分标题清空。
+    let rare_scope = easypub_core::rare_chars::Scope::parse(&m.rare_char_scope)
+        .unwrap_or(easypub_core::rare_chars::Scope::Outside);
+    let mut rare_seen: HashSet<char> = HashSet::new();
     // 系统提示与诗词（V50，LAY-121/122）：当前打开的块。
     // 标注 ID 区分手工块与相邻自动块、相邻同类手工块。
     let mut block: Option<(&str, Option<&str>)> = None;
@@ -451,6 +537,17 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             block = None;
         }
         if let Some(node) = node {
+            if m.rare_char_ruby == "chapter"
+                && matches!(node.role, Role::Volume | Role::Chapter | Role::Front)
+            {
+                rare_seen.clear();
+            }
+            if matches!(node.role, Role::Volume | Role::Chapter | Role::Front) {
+                if in_chapter && let Some(html) = &chapter_end {
+                    body.push_str(html);
+                }
+                in_chapter = matches!(node.role, Role::Chapter | Role::Front);
+            }
             if let Some(notes) = &notes {
                 body.push_str(&notes.chapter_end(offset)?);
             }
@@ -508,6 +605,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                     .get(&node_index)
                     .map(Vec::as_slice)
                     .unwrap_or_default(),
+                &mut head_rotation,
             )?);
             let class = match node.role {
                 Role::Volume => "heading volume-heading",
@@ -648,6 +746,25 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                 }
                 _ => inner,
             };
+            // 生僻字注音：只标正文段，不标标题；原文存于 data-original。
+            let inner = match (heading, m.rare_char_ruby.as_str()) {
+                (false, mode @ ("chapter" | "book" | "every")) => {
+                    let seen = (mode != "every").then_some(&mut rare_seen);
+                    match rare_char_ruby(&inner, rare_scope, seen) {
+                        Some(marked) => {
+                            if !attrs.contains(" data-original=") {
+                                attrs.push_str(&format!(
+                                    " data-original=\"{}\"",
+                                    escaped(original)?.replace('\t', "&#9;")
+                                ));
+                            }
+                            marked
+                        }
+                        None => inner,
+                    }
+                }
+                _ => inner,
+            };
             // 注释、手工块和附页输出保留正文每行来源，包括排版替换前的文字。
             if (notes.is_some()
                 || !m.block_annotations.is_empty()
@@ -671,6 +788,11 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             ));
             if definition.is_some() {
                 body.push_str("</aside>");
+            }
+            if node.is_some_and(|n| matches!(n.role, Role::Chapter | Role::Front))
+                && let Some(html) = &title_rule
+            {
+                body.push_str(html);
             }
         }
         if heading {
@@ -706,6 +828,9 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
     }
     if block.is_some() {
         body.push_str("</div>");
+    }
+    if in_chapter && let Some(html) = &chapter_end {
+        body.push_str(html);
     }
     if let Some(notes) = &notes {
         body.push_str(&notes.chapter_end(book.text.len())?);
@@ -887,6 +1012,142 @@ mod tests {
             }
             assert_eq!(restored, text, "{style}");
         }
+    }
+
+    #[test]
+    fn chapter_style_pack_heads_rules_ends_and_volume_frame() {
+        let dir = std::env::temp_dir().join(format!(
+            "easypub-v74-render-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let built: serde_json::Value = serde_json::from_str(
+            &crate::style_packs::run(
+                json!({"action":"builtin","id":"classic","dir":dir.to_str().unwrap()}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let text = "第一章 远行\n正文甲。\n第二章 归来\n正文乙。\n第三章 雾港\n正文丙。\n";
+        let source =
+            SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let mut req = request(&source);
+        req.settings.chapter_style = serde_json::from_value(built["style"].clone()).unwrap();
+        let prepared = publication_resources::prepare(&source, req).unwrap();
+        let ids = prepared.manifest().chapter_style.clone().unwrap();
+        assert_eq!(ids.head_ids.len(), 2);
+        let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+        // 章头图按章轮换：甲、乙、甲。
+        let heads: Vec<_> = page
+            .match_indices("<figure class=\"chapter-head-image chapter-head-half\"><img src=\"")
+            .map(|(i, m)| &page[i + m.len()..i + m.len() + 64])
+            .collect();
+        assert_eq!(heads.len(), 3);
+        assert_eq!(heads[0], &ids.head_ids[0][..64]);
+        assert_eq!(heads[1], &ids.head_ids[1][..64]);
+        assert_eq!(heads[2], &ids.head_ids[0][..64]);
+        // 标题下装饰线紧跟每章标题；章末装饰在每章正文之后。
+        assert_eq!(page.matches("<p class=\"title-rule\">").count(), 3);
+        assert!(page.contains("第一章 远行</h1><p class=\"title-rule\">"));
+        assert_eq!(page.matches("<p class=\"chapter-end\">").count(), 3);
+        assert!(page.contains("正文甲。</p><p class=\"chapter-end\">"));
+        assert!(page.contains("正文丙。</p><p class=\"chapter-end\">"));
+        let css = &prepared.manifest().stylesheet.css;
+        assert!(css.contains(".volume-heading { border: 3px double;"));
+        assert!(css.contains(".title-rule img { width: 40%;"));
+        roxmltree::Document::parse(&page).unwrap();
+        // 已设的章首图优先。
+        let mut req = request(&source);
+        req.settings.chapter_style = serde_json::from_value(built["style"].clone()).unwrap();
+        let own = req
+            .settings
+            .chapter_style
+            .as_ref()
+            .unwrap()
+            .title_rule
+            .clone();
+        req.settings.chapter_head_image = own;
+        let prepared = publication_resources::prepare(&source, req).unwrap();
+        let first = prepared.manifest().chapter_head_image_id.clone().unwrap();
+        let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+        assert_eq!(
+            page.matches(&format!("chapter-head-half\"><img src=\"{first}\""))
+                .count(),
+            3
+        );
+        // 不用样式包：成品参数里没有这一项。
+        let prepared = publication_resources::prepare(&source, request(&source)).unwrap();
+        let value = serde_json::to_value(prepared.manifest()).unwrap();
+        assert!(value.get("chapter_style").is_none());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn rare_char_ruby_modes_scope_and_lossless() {
+        let text = "第一章 龘山\n城外有座龘山，叫喆。\n他望着龘山，表情囧。\n｜龘《lóng》字已有注音。\n第二章 归来\n再回到龘山。\n這裏很靜。\n";
+        let source =
+            SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let ruby =
+            |c: &str, py: &str| format!("<ruby>{c}<rp>（</rp><rt>{py}</rt><rp>）</rp></ruby>");
+        let dragon = ruby("龘", "dá");
+        for (mode, scope, count) in [
+            ("off", "outside", 0),
+            ("chapter", "outside", 2),
+            ("book", "outside", 1),
+            ("every", "outside", 3),
+            ("chapter", "level3", 2),
+        ] {
+            let mut req = request(&source);
+            req.settings.rare_char_ruby = mode.into();
+            req.settings.rare_char_scope = scope.into();
+            let prepared = publication_resources::prepare(&source, req).unwrap();
+            let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+            assert_eq!(page.matches(&dragon).count(), count, "{mode} {scope}");
+            // 标题不标；已有注音不重复标；繁体字按简体判断不标。
+            assert!(!page.contains(&format!("第一章 {dragon}")), "{mode}");
+            assert!(page.contains(&ruby("龘", "lóng")), "{mode}");
+            assert!(!page.contains("<rt>zhè</rt>") && !page.contains("<rt>lǐ</rt>"));
+            assert_eq!(page.contains(&ruby("囧", "jiǒng")), mode != "off", "{mode}");
+            // 三级字“喆”只在 level3 时标。
+            assert_eq!(
+                page.contains(&ruby("喆", "zhé")),
+                mode != "off" && scope == "level3",
+                "{mode} {scope}"
+            );
+            let body = roxmltree::Document::parse(&page).unwrap();
+            let mut restored = String::new();
+            for n in body
+                .descendants()
+                .filter(|n| n.attribute("data-source") == Some("true"))
+            {
+                match n.attribute("data-original") {
+                    Some(original) => restored.push_str(original),
+                    None => n
+                        .descendants()
+                        .filter(|d| d.is_text())
+                        .for_each(|d| restored.push_str(d.text().unwrap())),
+                }
+                restored.push('\n');
+            }
+            assert!(
+                restored.contains("城外有座龘山，叫喆。\n他望着龘山，表情囧。\n"),
+                "{mode}"
+            );
+        }
+        // 关闭时不写入成品参数，旧书输出不变。
+        let mut req = request(&source);
+        req.settings.rare_char_ruby = "off".into();
+        let off = serde_json::to_value(
+            publication_resources::prepare(&source, req)
+                .unwrap()
+                .manifest(),
+        )
+        .unwrap();
+        assert!(off.get("rare_char_ruby").is_none() && off.get("rare_char_scope").is_none());
     }
 
     #[test]

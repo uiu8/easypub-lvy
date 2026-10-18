@@ -70,6 +70,7 @@ mod publication_split;
 
 pub mod layout_preset_file;
 pub mod layout_presets;
+pub mod style_packs;
 
 pub mod layout_settings;
 

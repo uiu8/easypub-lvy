@@ -79,6 +79,12 @@ impl Preset {
                 "first_paragraph_style" => value
                     .as_str()
                     .is_some_and(|v| crate::production::FIRST_PARAGRAPH_STYLES.contains(&v)),
+                "rare_char_ruby" => value
+                    .as_str()
+                    .is_some_and(|v| crate::production::RARE_CHAR_RUBY_MODES.contains(&v)),
+                "rare_char_scope" => value
+                    .as_str()
+                    .is_some_and(|v| crate::production::RARE_CHAR_SCOPES.contains(&v)),
                 "system_block_style" => value
                     .as_str()
                     .is_some_and(|v| crate::production::SYSTEM_BLOCK_STYLES.contains(&v)),

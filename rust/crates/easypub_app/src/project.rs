@@ -117,6 +117,11 @@ pub struct ProjectBook {
     /// 章首段落样式（V49，LAY-119）。
     #[serde(default = "crate::production::default_first_paragraph_style")]
     pub first_paragraph_style: String,
+    /// 生僻字注音与范围（V73，LAY-129）。
+    #[serde(default = "crate::production::default_rare_char_ruby")]
+    pub rare_char_ruby: String,
+    #[serde(default = "crate::production::default_rare_char_scope")]
+    pub rare_char_scope: String,
     /// 系统提示样式（V50，LAY-121）。
     #[serde(default = "crate::production::default_system_block_style")]
     pub system_block_style: String,
@@ -173,6 +178,9 @@ pub struct ProjectBook {
     pub chapter_head_scope: String,
     #[serde(default = "crate::production::default_chapter_head_width")]
     pub chapter_head_width: String,
+    /// 章节样式包（V74，LAY-130）：图片路径，与章首图一样属于本书。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chapter_style: Option<crate::style_packs::ChapterStyle>,
     #[serde(default = "default_cover_fit")]
     pub cover_fit: String,
     #[serde(default)]
@@ -280,6 +288,11 @@ pub(crate) fn resource_issues_for_settings(
     }
     if let Some(path) = &settings.chapter_head_image {
         check_image("chapter_head", None, path);
+    }
+    if let Some(style) = &settings.chapter_style {
+        for path in style.paths() {
+            check_image("chapter_style", None, path);
+        }
     }
     for (index, image) in settings.illustrations.iter().enumerate() {
         check_image("illustration", Some(index), &image.path);
@@ -881,6 +894,8 @@ mod tests {
             scene_break_style: crate::production::default_scene_break_style(),
             note_style: crate::production::default_note_style(),
             first_paragraph_style: crate::production::default_first_paragraph_style(),
+            rare_char_ruby: crate::production::default_rare_char_ruby(),
+            rare_char_scope: crate::production::default_rare_char_scope(),
             system_block_style: crate::production::default_system_block_style(),
             verse_block_style: crate::production::default_verse_block_style(),
             rule_options: Default::default(),
@@ -898,6 +913,7 @@ mod tests {
             chapter_head_image: None,
             chapter_head_scope: crate::production::default_chapter_head_scope(),
             chapter_head_width: crate::production::default_chapter_head_width(),
+            chapter_style: None,
             cover_fit: "cover".into(),
             cover_crop: None,
             cover_design: None,

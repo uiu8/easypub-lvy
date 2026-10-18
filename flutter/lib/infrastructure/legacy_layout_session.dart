@@ -15,7 +15,8 @@ class LegacyLayoutSession extends LegacyBookInformationSession
         LayoutSession,
         LayoutPublicationPreviewSession,
         LayoutDraftPreviewSession,
-        LayoutPreviewDeviceStore {
+        LayoutPreviewDeviceStore,
+        ChapterStyleStore {
   LegacyLayoutSession(super.backend, super.bookId, {this.launchPreview});
   final Future<void> Function(String path)? launchPreview;
   LayoutPublicationPreview? _generatedPreview;
@@ -145,7 +146,23 @@ class LegacyLayoutSession extends LegacyBookInformationSession
 
   /// 统一章首图的图片路径与封面一样属于本书（V54，LAY-124）：可读写，但不进草稿、预设与批量。
   @override
-  Set<String> get allowedFields => {...layoutFields, 'chapter_head_image'};
+  Set<String> get allowedFields => {
+    ...layoutFields,
+    'chapter_head_image',
+    'chapter_style',
+  };
+
+  @override
+  Future<Map<String, dynamic>> chapterStyleRequest(
+    Map<String, Object?> request,
+  ) async {
+    final base = backend.settingsDirectory ?? Directory.systemTemp.path;
+    final dir = Directory('$base/style_packs')..createSync(recursive: true);
+    return backend.production.productionRequest(
+      jsonEncode({'op': 'chapter_style', 'dir': dir.absolute.path, ...request}),
+    );
+  }
+
   String? _globalToken;
   List<Map<String, dynamic>>? _globals;
   CssPreview? _cssPreview;

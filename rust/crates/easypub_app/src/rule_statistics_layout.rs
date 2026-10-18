@@ -22,6 +22,7 @@ pub(super) fn collect(
         ("system", settings.system_block_style != "off"),
         ("verse", settings.verse_block_style != "off"),
         ("note", settings.note_style == "popup"),
+        ("rare_char", settings.rare_char_ruby != "off"),
     ] {
         for (key, r) in stats.iter_mut().filter(|(key, _)| {
             **key == format!("layout.{id}") || key.starts_with(&format!("layout.{id}."))
@@ -124,6 +125,8 @@ pub(super) fn collect(
     let mut block = None;
     let mut verse_kinds = BTreeSet::new();
     let mut first_pending = false;
+    let rare_scope = easypub_core::rare_chars::Scope::parse(&settings.rare_char_scope)
+        .unwrap_or(easypub_core::rare_chars::Scope::Outside);
     for (i, &(start, content_end)) in loc.lines.iter().enumerate() {
         if i % 256 == 0 {
             checkpoint(cancel)?;
@@ -241,6 +244,18 @@ pub(super) fn collect(
         {
             stats
                 .get_mut("layout.first_paragraph")
+                .expect("rule")
+                .hit(loc.byte(start));
+        }
+        // 生僻字注音（V73，LAY-129）：含生僻字的正文行；关闭时仍统计，供“开启会命中”显示。
+        if !heading
+            && !scene
+            && line
+                .chars()
+                .any(|c| easypub_core::rare_chars::reading(c, rare_scope).is_some())
+        {
+            stats
+                .get_mut("layout.rare_char")
                 .expect("rule")
                 .hit(loc.byte(start));
         }

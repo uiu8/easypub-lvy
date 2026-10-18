@@ -124,7 +124,10 @@ class ProductionStore {
       'scene_break_style': d.sceneBreakStyle,
       'note_style': d.noteStyle,
       'first_paragraph_style': d.firstParagraphStyle,
+      'rare_char_ruby': d.rareCharRuby,
+      'rare_char_scope': d.rareCharScope,
       'chapter_head_image': d.chapterHeadImage,
+      'chapter_style': d.chapterStyle,
       'chapter_head_scope': d.chapterHeadScope,
       'chapter_head_width': d.chapterHeadWidth,
       'system_block_style': d.systemBlockStyle,
@@ -298,7 +301,10 @@ class ProductionStore {
       ..sceneBreakStyle = v['scene_break_style'] as String? ?? 'keep'
       ..noteStyle = v['note_style'] as String? ?? 'off'
       ..firstParagraphStyle = v['first_paragraph_style'] as String? ?? 'normal'
+      ..rareCharRuby = v['rare_char_ruby'] as String? ?? 'off'
+      ..rareCharScope = v['rare_char_scope'] as String? ?? 'outside'
       ..chapterHeadImage = v['chapter_head_image'] as String?
+      ..chapterStyle = (v['chapter_style'] as Map?)?.cast<String, dynamic>()
       ..chapterHeadScope = v['chapter_head_scope'] as String? ?? 'chapter'
       ..chapterHeadWidth = v['chapter_head_width'] as String? ?? 'half'
       ..systemBlockStyle = v['system_block_style'] as String? ?? 'box'

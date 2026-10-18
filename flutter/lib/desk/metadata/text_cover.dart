@@ -4,9 +4,18 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 class TextCoverPainter extends CustomPainter {
-  const TextCoverPainter(this.title, this.author, this.series, this.color);
+  const TextCoverPainter(
+    this.title,
+    this.author,
+    this.series,
+    this.color, {
+    this.background,
+  });
   final String title, author, series;
   final Color color;
+
+  /// 样式包封面背景（V74b）：有背景时文字用深色，并在文字下铺浅底。
+  final ui.Image? background;
 
   /// Measures complete text; a null result means it cannot remain readable.
   static TextPainter? fitText(
@@ -87,15 +96,37 @@ class TextCoverPainter extends CustomPainter {
     canvas.save();
     canvas.scale(size.width / 1200, size.height / 1600);
     const bounds = Rect.fromLTWH(0, 0, 1200, 1600);
-    canvas.drawRect(
-      bounds,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [color, Color.lerp(color, Colors.black, .22)!],
-        ).createShader(bounds),
-    );
+    final image = background;
+    if (image == null) {
+      canvas.drawRect(
+        bounds,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [color, Color.lerp(color, Colors.black, .22)!],
+          ).createShader(bounds),
+      );
+    } else {
+      // 等比铺满后居中裁切。
+      final src = Size(image.width.toDouble(), image.height.toDouble());
+      final scale = (1200 / src.width) > (1600 / src.height)
+          ? 1200 / src.width
+          : 1600 / src.height;
+      final crop = Size(1200 / scale, 1600 / scale);
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(
+          (src.width - crop.width) / 2,
+          (src.height - crop.height) / 2,
+          crop.width,
+          crop.height,
+        ),
+        bounds,
+        Paint()..filterQuality = FilterQuality.high,
+      );
+    }
+    const deep = Color(0xff2f2a24), soft = Color(0xff4a433a);
     for (final field in fields) {
       final layout = field.$2.runes.length <= 512
           ? fitText(
@@ -104,7 +135,9 @@ class TextCoverPainter extends CustomPainter {
               maximum: field.$4,
               minimum: field.$5,
               bold: field.$6,
-              ink: field.$6 ? Colors.white : Colors.white70,
+              ink: image == null
+                  ? (field.$6 ? Colors.white : Colors.white70)
+                  : (field.$6 ? deep : soft),
             )
           : null;
       final visible =
@@ -115,6 +148,18 @@ class TextCoverPainter extends CustomPainter {
             maximum: 36,
             minimum: 28,
           )!;
+      // 样式包背景：只在实际文字外围铺一圈浅底，保证文字在任何背景上都清楚。
+      if (image != null && field.$2.trim().isNotEmpty) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            (field.$3.topLeft & Size(visible.width, visible.height)).inflate(
+              24,
+            ),
+            const Radius.circular(14),
+          ),
+          Paint()..color = const Color(0x99ffffff),
+        );
+      }
       visible.paint(canvas, field.$3.topLeft);
       visible.dispose();
     }
@@ -139,5 +184,6 @@ class TextCoverPainter extends CustomPainter {
       old.title != title ||
       old.author != author ||
       old.series != series ||
-      old.color != color;
+      old.color != color ||
+      old.background != background;
 }

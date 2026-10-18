@@ -58,6 +58,7 @@ mod cleanup_text;
 pub mod manual_edit;
 
 pub mod publication;
+pub mod rare_chars;
 pub mod structure;
 
 pub mod review;

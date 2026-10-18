@@ -70,7 +70,7 @@ void main() {
         () => states.add(service.state.value.phase.name),
       );
       final catalog = await service.catalog();
-      expect(catalog, hasLength(104));
+      expect(catalog, hasLength(105));
       expect(catalog.map((r) => r.id).toSet(), hasLength(catalog.length));
       expect(
         catalog.singleWhere((r) => r.id == 'layout.manual_note').category,

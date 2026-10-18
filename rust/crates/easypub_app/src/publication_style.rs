@@ -178,6 +178,24 @@ pub fn prepare(settings: &Settings) -> Result<Stylesheet, ApiError> {
         css.push_str(".note-ref { font-size: 0.75em; vertical-align: super; line-height: 0; }\n.footnote { margin: 1em 0; }\n.footnote p { text-indent: 0; }\n");
     }
     css.push_str(heading_rules(&settings.heading_style));
+    // 章节样式包（V74，LAY-130）：标题下装饰线、章末装饰、卷页边框。
+    if let Some(style) = &settings.chapter_style {
+        if style.title_rule.is_some() {
+            css.push_str(".title-rule { margin: -0.4em 0 1em; text-indent: 0; text-align: center; }\n.title-rule img { width: 40%; height: auto; }\n");
+        }
+        if style.chapter_end.is_some() {
+            css.push_str(".chapter-end { margin: 1.5em 0 0; text-indent: 0; text-align: center; }\n.chapter-end img { width: 16%; height: auto; }\n");
+        }
+        match style.volume_frame.as_str() {
+            "single" => css.push_str(
+                ".volume-heading { border: 1px solid; padding: 1em 0.5em; margin: 2em 15%; }\n",
+            ),
+            "double" => css.push_str(
+                ".volume-heading { border: 3px double; padding: 1em 0.5em; margin: 2em 15%; }\n",
+            ),
+            _ => {}
+        }
+    }
     if !settings.supplemental_pages.is_empty() {
         css.push_str(concat!(
             ".supplement-title { text-align: center; text-indent: 0; font-size: 1.5em; margin: 1em 0; }\n",

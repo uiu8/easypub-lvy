@@ -32,6 +32,9 @@ abstract class BookInformationSession {
   Future<CoverImageEvidence> storeGeneratedCover(Uint8List bytes);
   Listenable get changes;
   Map<String, Object?> get saved;
+
+  /// 本书章节样式包里的封面背景图路径（V74b，LAY-130）；没有时为 null。
+  String? get styleCoverBackground => null;
   Future<BookInformationPreview> preview(Map<String, Object?> values);
   Future<void> apply(BookInformationPreview preview);
   void dispose();

@@ -66,6 +66,28 @@ const firstParagraphStyles = {
   'large_initial': '首字放大',
 };
 
+/// 章节样式包（V74，LAY-130）：卷页边框，值与 Rust `VOLUME_FRAMES` 一一对应。
+const volumeFrames = {'none': '无', 'single': '单线', 'double': '双线'};
+
+/// 章节样式包的生成、导入与导出（V74，LAY-130）。请求见 Rust `style_packs::run`；
+/// 样式包文件放在本机设置目录下，书里只记图片路径。
+abstract interface class ChapterStyleStore {
+  Future<Map<String, dynamic>> chapterStyleRequest(
+    Map<String, Object?> request,
+  );
+}
+
+/// 生僻字注音（V73，LAY-129）：值与 Rust `RARE_CHAR_RUBY_MODES` 一一对应。
+const rareCharRubyModes = {
+  'off': '不标',
+  'chapter': '每章首次',
+  'book': '全书首次',
+  'every': '每次',
+};
+
+/// 生僻字范围（V73，LAY-129）：值与 Rust `RARE_CHAR_SCOPES` 一一对应。
+const rareCharScopes = {'outside': '表外字', 'level3': '表外字和三级字'};
+
 /// 系统提示样式（V50，LAY-121）：值与 Rust `SYSTEM_BLOCK_STYLES` 一一对应。
 const systemBlockStyles = {'off': '不识别', 'box': '加框', 'indent': '缩进'};
 
@@ -131,6 +153,8 @@ final layoutFields = Set<String>.unmodifiable({
   'scene_break_style',
   'note_style',
   'first_paragraph_style',
+  'rare_char_ruby',
+  'rare_char_scope',
   'chapter_head_scope',
   'chapter_head_width',
   'system_block_style',

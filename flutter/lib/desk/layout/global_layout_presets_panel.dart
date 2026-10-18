@@ -140,6 +140,8 @@ class _GlobalLayoutPresetsPanelState extends State<GlobalLayoutPresetsPanel> {
           'heading_style': '章节标题样式',
           'scene_break_style': '场景分隔',
           'first_paragraph_style': '章首段落',
+          'rare_char_ruby': '生僻字注音',
+          'rare_char_scope': '生僻字范围',
           'chapter_head_scope': '章首图用于',
           'chapter_head_width': '章首图宽度',
           'system_block_style': '系统提示',

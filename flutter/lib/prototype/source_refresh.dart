@@ -190,10 +190,14 @@ extension SourceRefreshOperations on PrototypeState {
       }
       final metadata = (source.resourceReport?['metadata'] as Map?)
           ?.cast<String, dynamic>();
+      final named = fileNameMetadata(
+        path,
+        FileNameOptions.fromConfiguration(globalConfiguration),
+      );
       final incoming = <String, dynamic>{
         'title': (metadata?['title'] as String?)?.trim().isNotEmpty == true
             ? (metadata!['title'] as String).trim()
-            : source_paths.basenameWithoutExtension(path),
+            : named.title,
         if (metadata != null) ...{
           for (final key in [
             'author',
@@ -203,6 +207,10 @@ extension SourceRefreshOperations on PrototypeState {
             key: metadata[key] as String? ?? '',
           'cover_path': source.resourceReport?['cover_path'],
         },
+        // 来源里没有作者时用文件名里的作者（V72）；刷新只是候选，由用户勾选是否采用。
+        if ((metadata?['author'] as String?)?.trim().isNotEmpty != true &&
+            named.author.isNotEmpty)
+          'author': named.author,
       };
       final oldResources = production.drafts[id]?.epubResources;
       final imageIdentity = await _imageIdentity(source.resourceReport);

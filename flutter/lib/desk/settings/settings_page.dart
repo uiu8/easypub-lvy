@@ -8,6 +8,7 @@ import '../../application/cleanup_rule_resolution.dart';
 import 'package:flutter/material.dart';
 
 import 'automatic_rules_editor.dart';
+import 'file_name_author_settings.dart';
 
 import '../../application/settings_service.dart';
 import '../../application/chapter_rules_service.dart';
@@ -1267,6 +1268,12 @@ class _SettingsPageState extends State<SettingsPage> {
         '检查不修改正文；问题显示在章节工作台',
         'check_after_import',
         state.configuration['check_after_import'] != false,
+      ),
+      // 从文件名提取作者（V72，LIB-116）。
+      FileNameAuthorSettings(
+        configuration: state.configuration,
+        saving: saving,
+        save: save,
       ),
       DeskChoice<String>(
         key: ValueKey(

@@ -105,6 +105,11 @@ pub struct Manifest {
     pub note_style: String,
     /// 章首段落样式（V49，LAY-119）。
     pub first_paragraph_style: String,
+    /// 生僻字注音（V73，LAY-129）：关闭时不写入，旧书的成品参数不变。
+    #[serde(skip_serializing_if = "crate::production::rare_char_ruby_is_off")]
+    pub rare_char_ruby: String,
+    #[serde(skip_serializing_if = "crate::production::rare_char_scope_is_default")]
+    pub rare_char_scope: String,
     /// 系统提示样式（V50，LAY-121）。
     pub system_block_style: String,
     /// 诗词样式（V50，LAY-122）。
@@ -131,6 +136,9 @@ pub struct Manifest {
     pub chapter_head_image_id: Option<String>,
     pub chapter_head_scope: String,
     pub chapter_head_width: String,
+    /// 章节样式包（V74，LAY-130）；未使用时为空，旧书的成品参数不变。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chapter_style: Option<crate::style_packs::StyleIds>,
     /// 为 Kindle 转换过的封面与插图（V24，OUT-078）；没有转换时为空。
     pub image_conversions: Vec<crate::kindle_images::Conversion>,
 }
@@ -272,6 +280,13 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         .cover_path
         .iter()
         .chain(settings.chapter_head_image.iter())
+        .chain(settings.chapter_style.iter().flat_map(|s| {
+            // 封面背景只用于文字封面，不放进成品。
+            s.head_images
+                .iter()
+                .chain(s.title_rule.iter())
+                .chain(s.chapter_end.iter())
+        }))
         .chain(settings.illustrations.iter().map(|i| &i.path))
     {
         if paths.contains_key(path) {
@@ -369,6 +384,15 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         .chapter_head_image
         .as_ref()
         .map(|p| paths[p].clone());
+    let chapter_style = settings
+        .chapter_style
+        .as_ref()
+        .map(|s| crate::style_packs::StyleIds {
+            head_ids: s.head_images.iter().map(|p| paths[p].clone()).collect(),
+            title_rule_id: s.title_rule.as_ref().map(|p| paths[p].clone()),
+            chapter_end_id: s.chapter_end.as_ref().map(|p| paths[p].clone()),
+            volume_frame: s.volume_frame.clone(),
+        });
     let mut stylesheet = crate::publication_style::separate_additional(
         crate::publication_style::prepare(&settings)?,
     );
@@ -479,6 +503,8 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         scene_break_style: settings.scene_break_style.clone(),
         note_style: settings.note_style.clone(),
         first_paragraph_style: settings.first_paragraph_style.clone(),
+        rare_char_ruby: settings.rare_char_ruby.clone(),
+        rare_char_scope: settings.rare_char_scope.clone(),
         system_block_style: settings.system_block_style.clone(),
         verse_block_style: settings.verse_block_style.clone(),
         rule_options: settings.rule_options.clone(),
@@ -503,6 +529,7 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         chapter_head_image_id,
         chapter_head_scope: settings.chapter_head_scope.clone(),
         chapter_head_width: settings.chapter_head_width.clone(),
+        chapter_style,
         image_conversions,
     };
     let mut hash = Sha256::new();

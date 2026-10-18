@@ -18,3 +18,16 @@ Future<String?> pickPresetDestination() async => (await getSaveLocation(
   suggestedName: '排版预设.json',
   acceptedTypeGroups: [_presetType],
 ))?.path;
+
+// 章节样式包（V74，LAY-130）。
+const _stylePackType = XTypeGroup(
+  label: 'EasyPub++ 章节样式包',
+  extensions: ['zip'],
+);
+Future<String?> pickStylePackFile() async =>
+    (await openFile(acceptedTypeGroups: [_stylePackType]))?.path;
+Future<String?> pickStylePackDestination(String name) async =>
+    (await getSaveLocation(
+      suggestedName: '$name.zip',
+      acceptedTypeGroups: [_stylePackType],
+    ))?.path;

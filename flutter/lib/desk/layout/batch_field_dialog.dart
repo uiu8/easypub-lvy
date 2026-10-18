@@ -18,6 +18,8 @@ const batchFieldLabels = {
   'heading_style': '章节标题样式',
   'scene_break_style': '场景分隔',
   'first_paragraph_style': '章首段落',
+  'rare_char_ruby': '生僻字注音',
+  'rare_char_scope': '生僻字范围',
   'chapter_head_scope': '章首图用于',
   'chapter_head_width': '章首图宽度',
   'system_block_style': '系统提示',
@@ -45,6 +47,8 @@ String describeBatchValue(String field, Object? value) {
   if (field == 'first_paragraph_style') {
     return firstParagraphStyles[value] ?? '$value';
   }
+  if (field == 'rare_char_ruby') return rareCharRubyModes[value] ?? '$value';
+  if (field == 'rare_char_scope') return rareCharScopes[value] ?? '$value';
   if (field == 'system_block_style') {
     return systemBlockStyles[value] ?? '$value';
   }

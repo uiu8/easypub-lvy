@@ -75,6 +75,13 @@ pub struct Configuration {
     pub import_directory: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub import_skip_existing: Option<bool>,
+    /// V72：从文件名提取作者（auto / custom / off）、自定义格式、书名里是否去掉作者名。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filename_author_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filename_pattern: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filename_strip_author: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_format: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -831,6 +838,9 @@ mod tests {
         configuration.ui_theme = Some("night".into());
         configuration.reduced_motion = Some(true);
         configuration.import_recursive = Some(true);
+        configuration.filename_author_mode = Some("custom".into());
+        configuration.filename_pattern = Some("{书名}({作者})".into());
+        configuration.filename_strip_author = Some(false);
         configuration.import_directory = Some(r"D:\书稿\待制作".into());
         configuration.output_format = Some("AZW3".into());
         configuration.output_directory = Some(r"D:\书稿\成品".into());
@@ -845,6 +855,15 @@ mod tests {
         assert_eq!(loaded.configuration.ui_theme.as_deref(), Some("night"));
         assert_eq!(loaded.configuration.reduced_motion, Some(true));
         assert_eq!(loaded.configuration.import_recursive, Some(true));
+        assert_eq!(
+            loaded.configuration.filename_author_mode.as_deref(),
+            Some("custom")
+        );
+        assert_eq!(
+            loaded.configuration.filename_pattern.as_deref(),
+            Some("{书名}({作者})")
+        );
+        assert_eq!(loaded.configuration.filename_strip_author, Some(false));
         assert_eq!(
             loaded.configuration.import_directory.as_deref(),
             Some(r"D:\书稿\待制作")

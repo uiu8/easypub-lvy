@@ -1,4 +1,5 @@
 // 迁入 desk（V5a）：逻辑与布局沿用 V5 前的同名文件，只换面板与切换样式；见 docs/evidence/v5-meta-layout-resources-20261011.md。
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -65,6 +66,12 @@ class _TextCoverPageState extends State<TextCoverPage> {
     widget.initialDesign?['color'] as int? ?? textCoverColors.first.toARGB32(),
   );
   bool busy = false;
+  // 样式包封面背景（V74b，LAY-130）：书用了带背景的样式包时可选。
+  late final String? backgroundPath = widget.session.styleCoverBackground;
+  late bool useBackground =
+      backgroundPath != null &&
+      widget.initialDesign?['style'] == 'pack-background-v1';
+  ui.Image? backgroundImage;
   late String fit = widget.initialFit;
   String error = '';
   final _previewRevision = ValueNotifier<int>(0);
@@ -75,6 +82,7 @@ class _TextCoverPageState extends State<TextCoverPage> {
       'author': author.text,
       'series': series.text,
       'color': color.toARGB32(),
+      'style': style,
     },
     'fit': fit,
   });
@@ -86,10 +94,47 @@ class _TextCoverPageState extends State<TextCoverPage> {
     remember();
   }
 
-  TextCoverPainter get painter =>
-      TextCoverPainter(title.text, author.text, series.text, color);
+  String get style => useBackground && backgroundImage != null
+      ? 'pack-background-v1'
+      : 'river-classic-v1';
+
+  TextCoverPainter get painter => TextCoverPainter(
+    title.text,
+    author.text,
+    series.text,
+    color,
+    background: useBackground ? backgroundImage : null,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    loadBackground();
+  }
+
+  /// 读入样式包封面背景；读不了时只能用经典模板。
+  Future<void> loadBackground() async {
+    final path = backgroundPath;
+    if (path == null) return;
+    try {
+      final codec = await ui.instantiateImageCodec(
+        await File(path).readAsBytes(),
+      );
+      final image = (await codec.getNextFrame()).image;
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+      setState(() => backgroundImage = image);
+      _previewRevision.value++;
+    } catch (_) {
+      if (mounted) setState(() => useBackground = false);
+    }
+  }
+
   @override
   void dispose() {
+    backgroundImage?.dispose();
     title.dispose();
     author.dispose();
     series.dispose();
@@ -122,7 +167,7 @@ class _TextCoverPageState extends State<TextCoverPage> {
               'author': author.text,
               'series': series.text,
               'color': color.toARGB32(),
-              'style': 'river-classic-v1',
+              'style': style,
 
               'image_sha256': result.sha256,
             }, fit),
@@ -225,17 +270,40 @@ class _TextCoverPageState extends State<TextCoverPage> {
                   field('封面标题', title),
                   field('作者署名', author),
                   field('系列文字', series),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        size: 18,
-                        color: context.desk.accent,
+                  for (final (value, label) in [
+                    (false, '河岸 · 经典'),
+                    if (backgroundImage != null) (true, '样式包背景'),
+                  ])
+                    InkWell(
+                      key: ValueKey(
+                        'cover-template-${value ? 'pack' : 'river'}',
                       ),
-                      SizedBox(width: 6),
-                      Expanded(child: DeskText('河岸 · 经典（当前模板）', size: 13)),
-                    ],
-                  ),
+                      onTap: busy
+                          ? null
+                          : () {
+                              setState(() => useBackground = value);
+                              _previewRevision.value++;
+                              remember();
+                            },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          children: [
+                            Icon(
+                              useBackground == value
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked,
+                              size: 18,
+                              color: useBackground == value
+                                  ? context.desk.accent
+                                  : context.desk.ink3,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(child: DeskText(label, size: 13)),
+                          ],
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 14),
                   DeskText('配色', size: 12, color: context.desk.ink2),
                   const SizedBox(height: 8),

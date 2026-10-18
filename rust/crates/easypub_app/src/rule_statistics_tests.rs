@@ -26,7 +26,7 @@ fn catalog_covers_handoff_and_statistics_match_engines_without_mutation() {
     let rows = catalog["rules"].as_array().unwrap();
     let ids: std::collections::BTreeSet<_> =
         rows.iter().map(|r| r["id"].as_str().unwrap()).collect();
-    assert_eq!(ids.len(), 104);
+    assert_eq!(ids.len(), 105);
     assert_eq!(ids.len(), rows.len());
     for (prefix, expected) in [
         ("chapter.recognize.", 12),

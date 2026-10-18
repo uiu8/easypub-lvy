@@ -95,6 +95,13 @@ class LegacyBookInformationSession implements BookInformationSession {
   @override
   Listenable get changes => backend;
   @override
+  String? get styleCoverBackground {
+    if (disposed) return null;
+    final style = backend.production.settings(bookId)['chapter_style'];
+    return style is Map ? style['cover_background'] as String? : null;
+  }
+
+  @override
   Map<String, Object?> get saved {
     if (disposed) throw const FormatException('书籍信息已关闭。');
     _guard = guard();

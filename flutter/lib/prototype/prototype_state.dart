@@ -13,6 +13,7 @@ import '../application/book_source_errors.dart';
 import '../src/rust/api.dart' as api;
 
 import 'txt_import.dart';
+import 'file_name_metadata.dart';
 import 'project_io.dart' as projects;
 import '../state/output_store.dart';
 import '../state/shelf_store.dart';
@@ -108,8 +109,13 @@ class BookDraft {
   String noteStyle = 'off';
   // 章首段落样式（V49，LAY-119）。
   String firstParagraphStyle = 'normal';
+  // 生僻字注音（V73，LAY-129）：旧书缺少字段时不标。
+  String rareCharRuby = 'off';
+  String rareCharScope = 'outside';
   // 统一章首图（V54，LAY-124）。
   String? chapterHeadImage;
+  // 章节样式包（V74，LAY-130）：与章首图一样属于本书，不进草稿。
+  Map<String, dynamic>? chapterStyle;
   String chapterHeadScope = 'chapter';
   String chapterHeadWidth = 'half';
   // 系统提示与诗词（V50，LAY-121/122）。
@@ -753,18 +759,19 @@ class PrototypeState extends ChangeNotifier {
       final importedMetadata = (importedResources?['metadata'] as Map?)
           ?.cast<String, dynamic>();
       final id = originalPath.toLowerCase();
-      final name = originalPath.replaceAll('\\', '/').split('/').last;
+      // 来源里没有书名、作者时，从文件名里取（V72，LIB-116）。
+      final named = fileNameMetadata(
+        originalPath,
+        FileNameOptions.fromConfiguration(globalConfiguration),
+      );
       final book = SampleBook(
         id,
         (importedMetadata?['title'] as String?)?.trim().isNotEmpty == true
             ? (importedMetadata!['title'] as String).trim()
-            : name.replaceFirst(
-                RegExp(r'\.(txt|epub)$', caseSensitive: false),
-                '',
-              ),
+            : named.title,
         (importedMetadata?['author'] as String?)?.trim().isNotEmpty == true
             ? (importedMetadata!['author'] as String).trim()
-            : '',
+            : named.author,
         source.headings,
         '已识别 · 尚未检查',
         source: source,
@@ -824,7 +831,11 @@ class PrototypeState extends ChangeNotifier {
             ..noteStyle = v['note_style'] as String? ?? 'off'
             ..firstParagraphStyle =
                 v['first_paragraph_style'] as String? ?? 'normal'
+            ..rareCharRuby = v['rare_char_ruby'] as String? ?? 'off'
+            ..rareCharScope = v['rare_char_scope'] as String? ?? 'outside'
             ..chapterHeadImage = v['chapter_head_image'] as String?
+            ..chapterStyle = (v['chapter_style'] as Map?)
+                ?.cast<String, dynamic>()
             ..chapterHeadScope = v['chapter_head_scope'] as String? ?? 'chapter'
             ..chapterHeadWidth = v['chapter_head_width'] as String? ?? 'half'
             ..systemBlockStyle = v['system_block_style'] as String? ?? 'box'
@@ -1085,8 +1096,11 @@ class PrototypeState extends ChangeNotifier {
           'scene_break_style': d.sceneBreakStyle,
           'note_style': d.noteStyle,
           'first_paragraph_style': d.firstParagraphStyle,
+          'rare_char_ruby': d.rareCharRuby,
+          'rare_char_scope': d.rareCharScope,
           if (d.chapterHeadImage != null)
             'chapter_head_image': d.chapterHeadImage,
+          if (d.chapterStyle != null) 'chapter_style': d.chapterStyle,
           'chapter_head_scope': d.chapterHeadScope,
           'chapter_head_width': d.chapterHeadWidth,
           'system_block_style': d.systemBlockStyle,
@@ -1352,7 +1366,11 @@ class PrototypeState extends ChangeNotifier {
           ..noteStyle = row['note_style'] as String? ?? 'off'
           ..firstParagraphStyle =
               row['first_paragraph_style'] as String? ?? 'normal'
+          ..rareCharRuby = row['rare_char_ruby'] as String? ?? 'off'
+          ..rareCharScope = row['rare_char_scope'] as String? ?? 'outside'
           ..chapterHeadImage = row['chapter_head_image'] as String?
+          ..chapterStyle = (row['chapter_style'] as Map?)
+              ?.cast<String, dynamic>()
           ..chapterHeadScope = row['chapter_head_scope'] as String? ?? 'chapter'
           ..chapterHeadWidth = row['chapter_head_width'] as String? ?? 'half'
           ..systemBlockStyle = row['system_block_style'] as String? ?? 'box'
