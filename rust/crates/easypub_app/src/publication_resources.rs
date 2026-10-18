@@ -112,6 +112,9 @@ pub struct Manifest {
     pub rare_char_scope: String,
     /// 系统提示样式（V50，LAY-121）。
     pub system_block_style: String,
+    /// 分类样式参数（V77）：只在 styled 时写入，旧书的成品参数不变。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system_styles: Option<crate::block_styles::SystemStyles>,
     /// 诗词样式（V50，LAY-122）。
     pub verse_block_style: String,
     #[serde(default)]
@@ -506,6 +509,12 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         rare_char_ruby: settings.rare_char_ruby.clone(),
         rare_char_scope: settings.rare_char_scope.clone(),
         system_block_style: settings.system_block_style.clone(),
+        system_styles: (settings.system_block_style == "styled").then(|| {
+            settings
+                .system_styles
+                .clone()
+                .unwrap_or_else(crate::block_styles::default_styles)
+        }),
         verse_block_style: settings.verse_block_style.clone(),
         rule_options: settings.rule_options.clone(),
         block_annotations: settings.block_annotations.clone(),

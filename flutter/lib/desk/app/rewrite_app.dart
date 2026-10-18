@@ -97,7 +97,19 @@ class RewriteApp extends StatefulWidget {
   State<RewriteApp> createState() => _RewriteAppState();
 }
 
-class _RewriteAppState extends State<RewriteApp> {
+class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
+  /// 跟随系统时的深浅色（V79）：系统切换时重建主题。
+  bool systemDark =
+      WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+      Brightness.dark;
+  @override
+  void didChangePlatformBrightness() {
+    final dark =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+        Brightness.dark;
+    if (dark != systemDark && mounted) setState(() => systemDark = dark);
+  }
+
   WorkspaceLifecycleService? lifecycle;
   int workspaceGeneration = 0;
   void workspaceReplaced() {
@@ -141,7 +153,12 @@ class _RewriteAppState extends State<RewriteApp> {
         next.configuration['ui_scale'] ==
             appearance?.configuration['ui_scale'] &&
         next.configuration['ui_accent'] ==
-            appearance?.configuration['ui_accent']) {
+            appearance?.configuration['ui_accent'] &&
+        // 主题与密度（V79）：变化时重建主题。
+        next.configuration['ui_theme'] ==
+            appearance?.configuration['ui_theme'] &&
+        next.configuration['ui_density'] ==
+            appearance?.configuration['ui_density']) {
       return;
     }
     appearance = next;
@@ -153,6 +170,7 @@ class _RewriteAppState extends State<RewriteApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     restoreOutputDraft();
     restoreWorkspaceView();
     conversionDraft.addListener(saveOutputDraft);
@@ -745,6 +763,7 @@ class _RewriteAppState extends State<RewriteApp> {
   );
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     autoImportResume?.dispose();
     updates?.dispose();
     lifecycle?.workspaceGeneration.removeListener(workspaceReplaced);
@@ -770,6 +789,10 @@ class _RewriteAppState extends State<RewriteApp> {
     theme: deskTheme(
       compact: prefs?.configuration['ui_density'] == 'compact',
       accent: prefs?.configuration['ui_accent'] as String?,
+      mode: deskThemeMode(
+        prefs?.configuration['ui_theme'],
+        systemDark: systemDark,
+      ),
     ),
     scrollBehavior: const DeskScrollBehavior(),
     debugShowCheckedModeBanner: false,

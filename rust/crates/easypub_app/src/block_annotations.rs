@@ -25,6 +25,9 @@ pub struct Annotation {
     pub end: usize,
     pub kind: Kind,
     pub fingerprint: String,
+    /// 系统提示的样式（V78，LAY-134）：note 单行提示、panel 面板；不填按行数。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
 }
 fn error(reason: &'static str) -> ApiError {
     ApiError::new(ErrorCode::InvalidRule, "block_annotations", reason)
@@ -39,6 +42,11 @@ fn hash_shape(value: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 pub fn validate(annotations: &[Annotation]) -> Result<(), ApiError> {
+    if annotations.iter().any(|a| {
+        a.variant.is_some() && (a.kind != Kind::System || !variant_ok(a.variant.as_deref()))
+    }) {
+        return Err(error("block_annotation_invalid"));
+    }
     let mut ids = BTreeSet::new();
     let mut ordered: Vec<_> = annotations.iter().collect();
     ordered.sort_by_key(|a| a.start);
@@ -148,7 +156,11 @@ fn create(
     start: usize,
     end: usize,
     kind: Kind,
+    variant: Option<String>,
 ) -> Result<Annotation, ApiError> {
+    if variant.is_some() && (kind != Kind::System || !variant_ok(variant.as_deref())) {
+        return Err(error("block_annotation_invalid"));
+    }
     if let Some(reason) = range_reason(start, end, book) {
         return Err(error(reason));
     }
@@ -160,7 +172,11 @@ fn create(
         end,
         kind,
         fingerprint,
+        variant,
     })
+}
+fn variant_ok(v: Option<&str>) -> bool {
+    matches!(v, None | Some("note" | "panel"))
 }
 /// 有效标注所在的正文分节与行号（V53，与 line_range 同一编号），供章节页在行号旁画出标注。
 pub(crate) fn locate(book: &EffectiveBook, start: usize, end: usize) -> Value {
@@ -226,6 +242,8 @@ enum Action {
         end: usize,
         block_kind: Kind,
         content_id: String,
+        #[serde(default)]
+        variant: Option<String>,
     },
     Update {
         id: String,
@@ -233,6 +251,8 @@ enum Action {
         end: usize,
         block_kind: Kind,
         content_id: String,
+        #[serde(default)]
+        variant: Option<String>,
     },
     Delete {
         id: String,
@@ -297,11 +317,12 @@ pub fn run(
             end,
             block_kind,
             content_id,
+            variant,
         } => {
             if content_id != digest(book.text.as_bytes()) {
                 return Err(error("block_annotation_stale"));
             }
-            next.push(create(&book, start, end, block_kind)?);
+            next.push(create(&book, start, end, block_kind, variant)?);
             changed = true;
         }
         Action::Update {
@@ -310,6 +331,7 @@ pub fn run(
             end,
             block_kind,
             content_id,
+            variant,
         } => {
             if content_id != digest(book.text.as_bytes()) {
                 return Err(error("block_annotation_stale"));
@@ -320,7 +342,7 @@ pub fn run(
                 .ok_or_else(|| error("block_annotation_missing"))?;
             *old = Annotation {
                 id,
-                ..create(&book, start, end, block_kind)?
+                ..create(&book, start, end, block_kind, variant)?
             };
             changed = true;
         }
@@ -404,7 +426,7 @@ mod tests {
     }
     fn mark(book: &EffectiveBook, text: &str, kind: Kind) -> Annotation {
         let start = book.text.find(text).unwrap();
-        create(book, start, start + text.len(), kind).unwrap()
+        create(book, start, start + text.len(), kind, None).unwrap()
     }
     #[test]
     fn locate_inverts_line_range_for_prefix_chapters_and_line_endings() {
@@ -565,10 +587,10 @@ mod tests {
         assert_eq!(invalid_reason(&a, &changed), Some("block_text_changed"));
         let (_, shifted) = book("第一章 起\r\n新增正文\r\n正文甲。\r\n正文乙。\r尾行");
         assert!(invalid_reason(&a, &shifted).is_some());
-        assert!(create(&original, a.start + 1, a.end, Kind::None).is_err());
-        assert!(create(&original, a.start, a.end - 1, Kind::None).is_err());
+        assert!(create(&original, a.start + 1, a.end, Kind::None, None).is_err());
+        assert!(create(&original, a.start, a.end - 1, Kind::None, None).is_err());
         assert_eq!(
-            create(&original, 0, a.end, Kind::Quote)
+            create(&original, 0, a.end, Kind::Quote, None)
                 .unwrap_err()
                 .next_action,
             "block_contains_heading"

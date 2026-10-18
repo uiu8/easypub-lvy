@@ -80,8 +80,9 @@ pub fn default_rare_char_scope() -> String {
 pub fn rare_char_scope_is_default(scope: &str) -> bool {
     scope == "outside"
 }
-/// 系统提示（V50，LAY-121）：off 不识别；box 加框；indent 缩进。
-pub const SYSTEM_BLOCK_STYLES: [&str; 3] = ["off", "box", "indent"];
+/// 系统提示（V50，LAY-121）：off 不识别；box 加框；indent 缩进；
+/// styled 按单行提示 / 多行面板分别套样式（V77，LAY-132，见 [crate::block_styles]）。
+pub const SYSTEM_BLOCK_STYLES: [&str; 4] = ["off", "box", "indent", "styled"];
 pub fn default_system_block_style() -> String {
     "box".into()
 }
@@ -228,6 +229,9 @@ pub struct Settings {
     /// 系统提示样式（V50，LAY-121），见 [SYSTEM_BLOCK_STYLES]。
     #[serde(default = "crate::production::default_system_block_style")]
     pub system_block_style: String,
+    /// 分类样式的参数（V77，LAY-132）；为空时用内置默认。总是序列化。
+    #[serde(default)]
+    pub system_styles: Option<crate::block_styles::SystemStyles>,
     /// 诗词样式（V50，LAY-122），见 [VERSE_BLOCK_STYLES]。
     #[serde(default = "crate::production::default_verse_block_style")]
     pub verse_block_style: String,
@@ -334,6 +338,7 @@ impl From<&crate::project::ProjectBook> for Settings {
             rare_char_ruby: book.rare_char_ruby.clone(),
             rare_char_scope: book.rare_char_scope.clone(),
             system_block_style: book.system_block_style.clone(),
+            system_styles: book.system_styles.clone(),
             verse_block_style: book.verse_block_style.clone(),
             rule_options: book.rule_options.clone(),
             block_annotations: book.block_annotations.clone(),
@@ -573,6 +578,9 @@ impl Settings {
         if let Some(style) = &self.chapter_style {
             style.validate(image_path)?;
         }
+        if let Some(styles) = &self.system_styles {
+            styles.validate()?;
+        }
         let mut paths = BTreeSet::new();
         for image in &self.illustrations {
             image_path(&image.path)?;
@@ -810,6 +818,7 @@ fn edited(current: &Settings, fields: &BTreeMap<String, Edit>) -> Result<Setting
                     "cover_path"
                     | "chapter_head_image"
                     | "chapter_style"
+                    | "system_styles"
                     | "cover_crop"
                     | "cover_design"
                     | "font_resource"
@@ -1319,6 +1328,17 @@ pub fn run(
     }
     if value["op"] == "supplemental_templates" && !apply {
         return crate::supplemental_pages::templates(value);
+    }
+    // V77 系统提示块样式：只读列出内置预设（界面与 Rust 预设的一致性由测试核对）。
+    if value["op"] == "block_styles" {
+        if apply || confirmed || !plan_id.is_empty() {
+            return Err(invalid());
+        }
+        let presets: Vec<Value> = crate::block_styles::presets()
+            .into_iter()
+            .map(|(id, name, kind, style)| json!({"id": id, "name": name, "kind": kind, "style": style}))
+            .collect();
+        return serde_json::to_string(&json!({"presets": presets})).map_err(|_| invalid());
     }
     // V74 章节样式包：生成内置包、导入与导出样式包文件，不涉及书稿。
     if value["op"] == "chapter_style" {

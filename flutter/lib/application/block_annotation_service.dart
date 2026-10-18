@@ -37,6 +37,7 @@ class BlockAnnotationView {
       kind = BlockAnnotationKind.values.byName(
         value['annotation']['kind'] as String,
       ),
+      variant = value['annotation']['variant'] as String?,
       valid = value['valid'] as bool,
       reason = value['reason'] as String?,
       excerpt = value['excerpt'] as String,
@@ -53,6 +54,9 @@ class BlockAnnotationView {
   /// 当前有效书稿的 UTF-8 字节半开区间，含末行换行；不是 Dart UTF-16 下标。
   final int start, end;
   final BlockAnnotationKind kind;
+
+  /// 系统提示指定的样式（V78）：note 单行提示、panel 面板；null 按行数。
+  final String? variant;
   final bool valid;
   final String? reason;
   String? get reasonText =>
@@ -107,6 +111,7 @@ abstract interface class BlockAnnotationSession {
     required int start,
     required int end,
     required BlockAnnotationKind kind,
+    String? variant,
   });
   Future<BlockAnnotationPreview> previewUpdate(
     BlockAnnotationSnapshot snapshot,
@@ -114,6 +119,7 @@ abstract interface class BlockAnnotationSession {
     required int start,
     required int end,
     required BlockAnnotationKind kind,
+    String? variant,
   });
   Future<BlockAnnotationPreview> previewDelete(String id);
 

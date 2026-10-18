@@ -91,6 +91,13 @@ impl Preset {
                 "verse_block_style" => value
                     .as_str()
                     .is_some_and(|v| crate::production::VERSE_BLOCK_STYLES.contains(&v)),
+                "system_styles" => {
+                    value.is_null()
+                        || serde_json::from_value::<crate::block_styles::SystemStyles>(
+                            value.clone(),
+                        )
+                        .is_ok_and(|s| s.validate().is_ok())
+                }
                 _ => false,
             };
             if !valid {

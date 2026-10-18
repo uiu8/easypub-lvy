@@ -131,6 +131,7 @@ class ProductionStore {
       'chapter_head_scope': d.chapterHeadScope,
       'chapter_head_width': d.chapterHeadWidth,
       'system_block_style': d.systemBlockStyle,
+      'system_styles': d.systemStyles,
       'verse_block_style': d.verseBlockStyle,
       if (d.blockAnnotations.isNotEmpty)
         'block_annotations': d.blockAnnotations,
@@ -308,6 +309,7 @@ class ProductionStore {
       ..chapterHeadScope = v['chapter_head_scope'] as String? ?? 'chapter'
       ..chapterHeadWidth = v['chapter_head_width'] as String? ?? 'half'
       ..systemBlockStyle = v['system_block_style'] as String? ?? 'box'
+      ..systemStyles = (v['system_styles'] as Map?)?.cast<String, dynamic>()
       ..verseBlockStyle = v['verse_block_style'] as String? ?? 'center'
       ..blockAnnotations = (v['block_annotations'] as List? ?? [])
           .map((a) => Map<String, dynamic>.from(a as Map))

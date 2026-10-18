@@ -10,6 +10,9 @@ pub struct Options {
     pub scene_symbols: Option<String>,
     pub disabled: Vec<String>,
     pub restore_values: BTreeMap<String, Value>,
+    /// 系统提示自定义识别（V78，LAY-134）：整行匹配的正则；空时不写入，旧书不变。
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub system_patterns: Vec<String>,
 }
 impl Options {
     pub fn validate(&self) -> Result<(), easypub_core::ApiError> {
@@ -32,6 +35,19 @@ impl Options {
                 "规则细分配置无效",
             ));
         }
+        if self.system_patterns.len() > 20
+            || self
+                .system_patterns
+                .iter()
+                .any(|p| p.trim().is_empty() || p.chars().count() > 200)
+            || (!self.system_patterns.is_empty() && self.system_set().is_none())
+        {
+            return Err(easypub_core::ApiError::new(
+                easypub_core::ErrorCode::InvalidRule,
+                "rule_options",
+                "系统提示自定义识别规则无效",
+            ));
+        }
         if let Some(p) = &self.cleanup_pipeline {
             let request = serde_json::json!({"kind":"cleanup","pipeline":p});
             let r: easypub_core::cleanup::Request =
@@ -45,6 +61,16 @@ impl Options {
             r.ordered_rules()?;
         }
         Ok(())
+    }
+    /// 自定义识别规则编译成一组整行匹配；没有规则或有规则编译失败时为 None。
+    pub fn system_set(&self) -> Option<regex::RegexSet> {
+        if self.system_patterns.is_empty() {
+            return None;
+        }
+        regex::RegexSetBuilder::new(self.system_patterns.iter().map(|p| format!("^(?:{p})$")))
+            .size_limit(1 << 20)
+            .build()
+            .ok()
     }
     pub fn enabled(&self, id: &str) -> bool {
         !self.disabled.iter().any(|s| s == id)

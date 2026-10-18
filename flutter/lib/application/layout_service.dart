@@ -89,7 +89,66 @@ const rareCharRubyModes = {
 const rareCharScopes = {'outside': '表外字', 'level3': '表外字和三级字'};
 
 /// 系统提示样式（V50，LAY-121）：值与 Rust `SYSTEM_BLOCK_STYLES` 一一对应。
-const systemBlockStyles = {'off': '不识别', 'box': '加框', 'indent': '缩进'};
+const systemBlockStyles = {
+  'off': '不识别',
+  'box': '加框',
+  'indent': '缩进',
+  'styled': '分类样式',
+};
+
+/// 系统提示块样式预设（V77，LAY-132）：参数与 Rust `block_styles::presets` 一一对应，
+/// desk_v77_test 逐项核对。
+const blockStylePresets = <String, Map<String, Object>>{
+  'bar': {
+    'border': 'left', 'line': 'single', 'weight': 'thick', 'shade': 'light', //
+    'align': 'start', 'size': 90, 'bold': false, 'title': 'none',
+    'key_bold': false, 'brackets': 'keep', 'spacing': 'medium',
+  },
+  'center': {
+    'border': 'none', 'line': 'single', 'weight': 'thin', 'shade': 'none', //
+    'align': 'center', 'size': 90, 'bold': true, 'title': 'none',
+    'key_bold': false, 'brackets': 'keep', 'spacing': 'medium',
+  },
+  'titled': {
+    'border': 'full', 'line': 'single', 'weight': 'thin', 'shade': 'none', //
+    'align': 'start', 'size': 90, 'bold': false, 'title': 'shaded',
+    'key_bold': true, 'brackets': 'remove', 'spacing': 'medium',
+  },
+  'rules': {
+    'border': 'top_bottom', 'line': 'double', 'weight': 'thick', //
+    'shade': 'none', 'align': 'start', 'size': 90, 'bold': false,
+    'title': 'none', 'key_bold': false, 'brackets': 'keep',
+    'spacing': 'medium',
+  },
+};
+const notePresetNames = {'bar': '提示条', 'center': '居中强调'};
+const panelPresetNames = {'titled': '标题面板', 'rules': '上下双线'};
+
+/// 新书默认（与 Rust `default_styles` 相同）：单行提示条，面板标题面板。
+Map<String, Object> defaultSystemStyles() => {
+  'note': blockStylePresets['bar']!,
+  'panel': blockStylePresets['titled']!,
+};
+
+/// 某一类当前用的是哪个预设；参数被改过（V78 编辑器）时为 custom。
+String presetOf(Map? style, Map<String, String> names) {
+  for (final id in names.keys) {
+    final p = blockStylePresets[id]!;
+    if (style != null &&
+        style.length == p.length &&
+        p.entries.every((e) => style[e.key] == e.value)) {
+      return id;
+    }
+  }
+  return 'custom';
+}
+
+String describeSystemStyles(Object? value) {
+  if (value is! Map) return '内置默认';
+  final note = presetOf(value['note'] as Map?, notePresetNames);
+  final panel = presetOf(value['panel'] as Map?, panelPresetNames);
+  return '单行${notePresetNames[note] ?? '自定义'} · 面板${panelPresetNames[panel] ?? '自定义'}';
+}
 
 /// 诗词样式（V50，LAY-122）：值与 Rust `VERSE_BLOCK_STYLES` 一一对应。
 const verseBlockStyles = {'off': '不识别', 'center': '居中', 'indent': '缩进'};
@@ -158,6 +217,7 @@ final layoutFields = Set<String>.unmodifiable({
   'chapter_head_scope',
   'chapter_head_width',
   'system_block_style',
+  'system_styles',
   'verse_block_style',
   'font_size_unit',
   'margin_top_unit',

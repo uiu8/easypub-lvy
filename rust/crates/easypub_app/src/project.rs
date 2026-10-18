@@ -125,6 +125,9 @@ pub struct ProjectBook {
     /// 系统提示样式（V50，LAY-121）。
     #[serde(default = "crate::production::default_system_block_style")]
     pub system_block_style: String,
+    /// 分类样式参数（V77，LAY-132）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_styles: Option<crate::block_styles::SystemStyles>,
     /// 诗词样式（V50，LAY-122）。
     #[serde(default = "crate::production::default_verse_block_style")]
     pub verse_block_style: String,
@@ -897,6 +900,7 @@ mod tests {
             rare_char_ruby: crate::production::default_rare_char_ruby(),
             rare_char_scope: crate::production::default_rare_char_scope(),
             system_block_style: crate::production::default_system_block_style(),
+            system_styles: None,
             verse_block_style: crate::production::default_verse_block_style(),
             rule_options: Default::default(),
             block_annotations: Vec::new(),

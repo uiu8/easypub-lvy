@@ -125,6 +125,8 @@ pub(super) fn collect(
     let mut block = None;
     let mut verse_kinds = BTreeSet::new();
     let mut first_pending = false;
+    // 系统提示自定义识别（V78）：统计与正文生成用同一组规则。
+    let custom = settings.rule_options.system_set();
     let rare_scope = easypub_core::rare_chars::Scope::parse(&settings.rare_char_scope)
         .unwrap_or(easypub_core::rare_chars::Scope::Outside);
     for (i, &(start, content_end)) in loc.lines.iter().enumerate() {
@@ -141,14 +143,22 @@ pub(super) fn collect(
             ni += 1;
         }
         let node = book.tree.nodes.get(ni).filter(|n| n.start == start);
-        let classified = render::classify_block(
+        let next_line = loc.lines.get(i + 1).map(|&(s, e)| &book.text[s..e]);
+        let classified = render::custom_system(
+            render::classify_block(
+                line,
+                node.is_some(),
+                annotation,
+                (start, end),
+                previous,
+                next_line,
+                "box",
+                "center",
+            ),
             line,
-            node.is_some(),
-            annotation,
-            (start, end),
-            previous,
+            node.is_some() || annotation.is_some(),
             "box",
-            "center",
+            custom.as_ref(),
         );
         let classified = if annotation.is_none() {
             settings.rule_options.verse(line, classified)
@@ -195,14 +205,21 @@ pub(super) fn collect(
             }
         }
         // First-paragraph eligibility depends on the currently enabled surrounding layout rules.
-        let current = render::classify_block(
+        let current = render::custom_system(
+            render::classify_block(
+                line,
+                node.is_some(),
+                annotation,
+                (start, end),
+                current_previous,
+                next_line,
+                &settings.system_block_style,
+                &settings.verse_block_style,
+            ),
             line,
-            node.is_some(),
-            annotation,
-            (start, end),
-            current_previous,
+            node.is_some() || annotation.is_some(),
             &settings.system_block_style,
-            &settings.verse_block_style,
+            custom.as_ref(),
         );
         let current = if annotation.is_none() {
             settings.rule_options.verse(line, current)

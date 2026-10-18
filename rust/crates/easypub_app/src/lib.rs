@@ -68,6 +68,7 @@ pub mod publication_documents;
 mod publication_notes;
 mod publication_split;
 
+pub mod block_styles;
 pub mod layout_preset_file;
 pub mod layout_presets;
 pub mod style_packs;

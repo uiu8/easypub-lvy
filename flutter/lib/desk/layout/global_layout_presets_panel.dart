@@ -145,6 +145,7 @@ class _GlobalLayoutPresetsPanelState extends State<GlobalLayoutPresetsPanel> {
           'chapter_head_scope': '章首图用于',
           'chapter_head_width': '章首图宽度',
           'system_block_style': '系统提示',
+          'system_styles': '系统提示样式',
           'verse_block_style': '诗词',
           'note_style': '弹出注释',
         }[key] ??

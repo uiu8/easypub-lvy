@@ -110,11 +110,13 @@ class LegacyBlockAnnotationSession implements BlockAnnotationSession {
     required int start,
     required int end,
     required BlockAnnotationKind kind,
+    String? variant,
   }) => _preview({
     'kind': 'add',
     'start': start,
     'end': end,
     'block_kind': kind.name,
+    'variant': ?variant,
     'content_id': snapshot.contentId,
   });
   @override
@@ -124,12 +126,14 @@ class LegacyBlockAnnotationSession implements BlockAnnotationSession {
     required int start,
     required int end,
     required BlockAnnotationKind kind,
+    String? variant,
   }) => _preview({
     'kind': 'update',
     'id': id,
     'start': start,
     'end': end,
     'block_kind': kind.name,
+    'variant': ?variant,
     'content_id': snapshot.contentId,
   });
   @override

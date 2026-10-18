@@ -80,7 +80,7 @@ void main() {
     expect(isVerseAttribution('——李白《静夜思》'), true);
     expect(isVerseAttribution('——'), false);
     expect(isVerseAttribution('—李白'), false);
-    expect(systemBlockStyles.keys, ['off', 'box', 'indent']);
+    expect(systemBlockStyles.keys, ['off', 'box', 'indent', 'styled']);
     expect(verseBlockStyles.keys, ['off', 'center', 'indent']);
 
     final lines = sample.trimRight().split('\n');
@@ -145,6 +145,20 @@ void main() {
       await library.savePatch({'check_after_import': false});
       final file = File('$root/样书.txt')..writeAsStringSync(sample);
       expect((await library.importFiles([file.path])).single.succeeded, true);
+      // V77 起新书默认“分类样式”；本测试针对 V50 的“加框”，导入后显式设为加框。
+      expect(
+        await state.production.confirm(
+          await state.production.previewChanges({
+            state.currentId: {
+              'op': 'patch',
+              'fields': {
+                'system_block_style': {'op': 'set', 'value': 'box'},
+              },
+            },
+          }),
+        ),
+        true,
+      );
     });
     addTearDown(() {
       library.dispose();
@@ -242,6 +256,20 @@ void main() {
       final file = File('$root/苏醒.txt')..writeAsStringSync(sample);
       final original = file.readAsBytesSync();
       expect((await library.importFiles([file.path])).single.succeeded, true);
+      // V77 起新书默认“分类样式”；本测试针对 V50 的“加框”，导入后显式设为加框。
+      expect(
+        await state.production.confirm(
+          await state.production.previewChanges({
+            state.currentId: {
+              'op': 'patch',
+              'fields': {
+                'system_block_style': {'op': 'set', 'value': 'box'},
+              },
+            },
+          }),
+        ),
+        true,
+      );
       final id = state.currentId;
       final outputs = <String, String>{};
       for (final format in ['EPUB', 'AZW3', 'KFX']) {

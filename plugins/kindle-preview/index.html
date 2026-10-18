@@ -71,6 +71,13 @@
       <div class="label">章首图 · 宽度</div>
       <div class="seg" data-key="chapter_head_width" data-options="third:三分之一,half:一半,full:满宽"></div>
     </div>
+    <div id="chapter-style" hidden>
+      <div class="label">章节样式包 · <span id="chapter-style-name"></span></div>
+      <div class="seg" data-key="chapter_style_on" data-options="on:使用,off:不使用"></div>
+      <div class="label">卷页边框</div>
+      <div class="seg" data-key="chapter_style_volume_frame" data-options="none:无,single:单线,double:双线"></div>
+      <p class="note">换样式包、去掉单项请回排版页。</p>
+    </div>
     <details id="blocks">
       <summary>段落与识别</summary>
       <div class="label">章首段落</div>
@@ -78,9 +85,19 @@
       <div class="label">场景分隔</div>
       <div class="seg" data-key="scene_break_style" data-options="off:不识别,keep:原符号,stars:＊＊＊,diamonds:◇◇◇,line:细线"></div>
       <div class="label">系统提示</div>
-      <div class="seg" data-key="system_block_style" data-options="off:不识别,box:加框,indent:缩进"></div>
+      <div class="seg" data-key="system_block_style" data-options="off:不识别,box:加框,indent:缩进,styled:分类样式"></div>
+      <div id="system-presets" hidden>
+        <div class="label">单行提示</div>
+        <div class="seg" data-key="system_note_preset" data-options="bar:提示条,center:居中强调,custom:自定义"></div>
+        <div class="label">多行面板</div>
+        <div class="seg" data-key="system_panel_preset" data-options="titled:标题面板,rules:上下双线,custom:自定义"></div>
+      </div>
       <div class="label">诗词</div>
       <div class="seg" data-key="verse_block_style" data-options="off:不识别,center:居中,indent:缩进"></div>
+      <div class="label">生僻字注音</div>
+      <div class="seg" data-key="rare_char_ruby" data-options="off:不标,chapter:每章首次,book:全书首次,every:每次"></div>
+      <div class="label">生僻字范围</div>
+      <div class="seg" data-key="rare_char_scope" data-options="outside:表外字,level3:含三级字"></div>
       <div class="label">弹出注释（自动识别）</div>
       <div class="seg" data-key="note_style" data-options="off:关闭,popup:弹出注释"></div>
       <p class="note">手工标注与手工注释在章节页设置，始终生效。点正文里的注释标记会像 Kindle 一样弹出注释。</p>

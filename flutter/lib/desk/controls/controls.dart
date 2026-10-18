@@ -8,212 +8,222 @@ export 'choice.dart';
 export 'select_all.dart';
 
 // 编辑台表单控件（V8 由 Paper 兼容层迁入并改名）：按钮、文字、表单栅格、滚动区、可调分栏与 Material 主题。
-// 控件颜色一律取 context.desk 令牌；主题只有浅色一套，取值即 Desk.light 换上所选主题色（V69，G-072）。
+// 控件颜色一律取 context.desk 令牌；主题按“宣纸 / 夜墨 / 高对比”取对应令牌并换上所选主题色（V69、V79）。
 
 /// 编辑台 Material 主题；[compact] 为紧凑密度，[accent] 为主题色编号（见 deskAccents）。
-ThemeData deskTheme({bool compact = false, String? accent}) =>
-    _Ink.themeFor(compact: compact, accent: deskAccentOf(accent));
+ThemeData deskTheme({
+  bool compact = false,
+  String? accent,
+  String mode = 'paper',
+}) => _Ink.themeFor(
+  compact: compact,
+  d: deskTokens(mode, deskAccentOf(accent)),
+  mode: mode,
+);
 
-/// 主题内部用的浅色值（与 Desk.light 相同，常量形式供主题构造）。
+/// 主题构造（V79 起按所选主题的令牌）。
 abstract final class _Ink {
-  static const canvas = Color(0xFFF6F4EF), surface = Color(0xFFFCFBF8);
-  static const ink = Color(0xFF1F1E1B), muted = Color(0xFF5E5A53);
-  static const line = Color(0xFFE4E0D7), lineStrong = Color(0xFFD3CEC3);
-
-  /// 浮层悬停凹底与提示文字：中性色，不随主题色变化。
-  static const onAccent = Color(0xFFF7F5F0);
-  static const selected = Color(0xFFECE9E4);
-  static const pen = Color(0xFFA94434);
-  static final _controlScheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF6F6A63),
-    surface: surface,
-  );
   static ThemeData themeFor({
     bool compact = false,
-    required DeskAccent accent,
-  }) => ThemeData(
-    useMaterial3: true,
-    visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
-    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    fontFamily: sansFamily,
-    fontFamilyFallback: deskFallback,
-    extensions: [Desk.light.withAccent(accent)],
-    scaffoldBackgroundColor: canvas,
-    dividerColor: line,
-    colorScheme: ColorScheme.fromSeed(seedColor: accent.accent).copyWith(
-      primary: accent.accent,
-      onPrimary: accent.onAccent,
-      error: pen,
-      surface: surface,
-      onSurface: ink,
-      onSurfaceVariant: muted,
-      outline: line,
-      secondaryContainer: accent.soft,
-    ),
-    textTheme: const TextTheme(
-      bodyMedium: TextStyle(fontSize: 14, height: 1.45, color: ink),
-    ),
-    switchTheme: SwitchThemeData(
-      thumbColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.disabled) ||
-            states.contains(WidgetState.selected)) {
-          return null;
-        }
-        return states.any(
-              {
-                WidgetState.hovered,
-                WidgetState.focused,
-                WidgetState.pressed,
-              }.contains,
-            )
-            ? _controlScheme.onSurfaceVariant
-            : _controlScheme.outline;
-      }),
-      trackOutlineColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.disabled) ||
-            states.contains(WidgetState.selected)) {
-          return null;
-        }
-        return _controlScheme.outline;
-      }),
-    ),
-    splashFactory: NoSplash.splashFactory,
-    textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(
-        foregroundColor: ink,
-        minimumSize: Size(0, compact ? 30 : 36),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+    required Desk d,
+    required String mode,
+  }) {
+    // 浮层悬停凹底：中性色，不随主题色变化（V79 起按主题取值）。
+    final selected = switch (mode) {
+      'night' => Color(0xFF2E2C29),
+      'contrast' => Color(0xFFDDDDDD),
+      _ => Color(0xFFECE9E4),
+    };
+    final control = ColorScheme.fromSeed(
+      seedColor: d.accent,
+      brightness: d.dark ? Brightness.dark : Brightness.light,
+      surface: d.surface,
+    );
+    return ThemeData(
+      brightness: d.dark ? Brightness.dark : Brightness.light,
+      useMaterial3: true,
+      visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      fontFamily: sansFamily,
+      fontFamilyFallback: deskFallback,
+      extensions: [d],
+      scaffoldBackgroundColor: d.canvas,
+      dividerColor: d.line,
+      colorScheme:
+          ColorScheme.fromSeed(
+            seedColor: d.accent,
+            brightness: d.dark ? Brightness.dark : Brightness.light,
+          ).copyWith(
+            primary: d.accent,
+            onPrimary: d.accentInk,
+            error: d.pen,
+            surface: d.surface,
+            onSurface: d.ink,
+            onSurfaceVariant: d.ink2,
+            outline: d.line,
+            secondaryContainer: d.accentSoft,
+            // 开关关闭时的底色等：夜墨与高对比用令牌里的中性灰，避免种子色带出色偏（V79）。
+            surfaceContainerHighest: mode == 'paper' ? null : d.sunken,
+          ),
+      textTheme: TextTheme(
+        bodyMedium: TextStyle(fontSize: 14, height: 1.45, color: d.ink),
       ),
-    ),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        minimumSize: Size(0, compact ? 30 : 36),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-      ),
-    ),
-    // V7：下拉与菜单统一为编辑台浮层——表面色、10 圆角、细边与柔和阴影，悬停凹底。
-    menuButtonTheme: MenuButtonThemeData(
-      style: ButtonStyle(
-        minimumSize: WidgetStatePropertyAll(Size(0, compact ? 32 : 38)),
-        padding: const WidgetStatePropertyAll(
-          EdgeInsets.symmetric(horizontal: 12),
-        ),
-        textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 14)),
-        foregroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.disabled)
-              ? muted.withValues(alpha: .6)
-              : ink,
-        ),
-        iconColor: const WidgetStatePropertyAll(muted),
-        overlayColor: WidgetStateProperty.resolveWith(
-          (states) =>
-              states.any(
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled) ||
+              states.contains(WidgetState.selected)) {
+            return null;
+          }
+          return states.any(
                 {
                   WidgetState.hovered,
                   WidgetState.focused,
                   WidgetState.pressed,
                 }.contains,
               )
-              ? selected
-              : null,
-        ),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ? control.onSurfaceVariant
+              : control.outline;
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled) ||
+              states.contains(WidgetState.selected)) {
+            return null;
+          }
+          return control.outline;
+        }),
+      ),
+      splashFactory: NoSplash.splashFactory,
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: d.ink,
+          minimumSize: Size(0, compact ? 30 : 36),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
-    ),
-    popupMenuTheme: PopupMenuThemeData(
-      color: surface,
-      surfaceTintColor: Colors.transparent,
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: .35),
-      menuPadding: const EdgeInsets.symmetric(vertical: 4),
-      textStyle: const TextStyle(fontSize: 14, color: ink),
-      iconColor: muted,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: line),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: Size(0, compact ? 30 : 36),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
       ),
-    ),
-    menuTheme: MenuThemeData(
-      style: MenuStyle(
-        backgroundColor: const WidgetStatePropertyAll(surface),
-        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
-        elevation: const WidgetStatePropertyAll(6),
-        shadowColor: WidgetStatePropertyAll(
-          Colors.black.withValues(alpha: .35),
-        ),
-        padding: const WidgetStatePropertyAll(
-          EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-        ),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: line),
+      // V7：下拉与菜单统一为编辑台浮层——表面色、10 圆角、细边与柔和阴影，悬停凹底。
+      menuButtonTheme: MenuButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: WidgetStatePropertyAll(Size(0, compact ? 32 : 38)),
+          padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
+          textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 14)),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.disabled)
+                ? d.ink2.withValues(alpha: .6)
+                : d.ink,
+          ),
+          iconColor: WidgetStatePropertyAll(d.ink2),
+          overlayColor: WidgetStateProperty.resolveWith(
+            (states) =>
+                states.any(
+                  {
+                    WidgetState.hovered,
+                    WidgetState.focused,
+                    WidgetState.pressed,
+                  }.contains,
+                )
+                ? selected
+                : null,
+          ),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
           ),
         ),
       ),
-    ),
-    dropdownMenuTheme: const DropdownMenuThemeData(
-      menuStyle: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll(surface),
-        surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+      popupMenuTheme: PopupMenuThemeData(
+        color: d.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 6,
+        shadowColor: Colors.black.withValues(alpha: .35),
+        menuPadding: EdgeInsets.symmetric(vertical: 4),
+        textStyle: TextStyle(fontSize: 14, color: d.ink),
+        iconColor: d.ink2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: d.line),
+        ),
       ),
-    ),
-    scrollbarTheme: ScrollbarThemeData(
-      thickness: const WidgetStatePropertyAll(6),
-      radius: const Radius.circular(4),
-      thumbColor: WidgetStatePropertyAll(muted.withValues(alpha: .42)),
-      crossAxisMargin: 2,
-    ),
-    // V8：系统 AlertDialog 与编辑台弹窗同一外观（14 圆角、深阴影、标题 15.5 半粗、正文次墨）。
-    dialogTheme: DialogThemeData(
-      barrierColor: Colors.black.withValues(alpha: .22),
-      backgroundColor: surface,
-      surfaceTintColor: Colors.transparent,
-      elevation: 12,
-      shadowColor: Colors.black.withValues(alpha: .45),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      titleTextStyle: const TextStyle(
-        fontSize: 15.5,
-        fontWeight: FontWeight.w600,
-        color: ink,
-        height: 1.4,
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(d.surface),
+          surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+          elevation: WidgetStatePropertyAll(6),
+          shadowColor: WidgetStatePropertyAll(
+            Colors.black.withValues(alpha: .35),
+          ),
+          padding: WidgetStatePropertyAll(
+            EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+          ),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: d.line),
+            ),
+          ),
+        ),
       ),
-      contentTextStyle: const TextStyle(
-        fontSize: 13,
-        color: muted,
-        height: 1.55,
+      dropdownMenuTheme: DropdownMenuThemeData(
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(d.surface),
+          surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+        ),
       ),
-      actionsPadding: const EdgeInsets.fromLTRB(20, 4, 16, 14),
-    ),
-    inputDecorationTheme: InputDecorationTheme(
-      isDense: true,
-      filled: true,
-      fillColor: surface,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: lineStrong),
+      scrollbarTheme: ScrollbarThemeData(
+        thickness: WidgetStatePropertyAll(6),
+        radius: Radius.circular(4),
+        thumbColor: WidgetStatePropertyAll(d.ink2.withValues(alpha: .42)),
+        crossAxisMargin: 2,
       ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: lineStrong),
+      // V8：系统 AlertDialog 与编辑台弹窗同一外观（14 圆角、深阴影、标题 15.5 半粗、正文次墨）。
+      dialogTheme: DialogThemeData(
+        barrierColor: Colors.black.withValues(alpha: .22),
+        backgroundColor: d.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 12,
+        shadowColor: Colors.black.withValues(alpha: .45),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        titleTextStyle: TextStyle(
+          fontSize: 15.5,
+          fontWeight: FontWeight.w600,
+          color: d.ink,
+          height: 1.4,
+        ),
+        contentTextStyle: TextStyle(fontSize: 13, color: d.ink2, height: 1.55),
+        actionsPadding: EdgeInsets.fromLTRB(20, 4, 16, 14),
       ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
-        borderSide: BorderSide(color: accent.accent, width: 1.4),
+      inputDecorationTheme: InputDecorationTheme(
+        isDense: true,
+        filled: true,
+        fillColor: d.surface,
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: d.lineStrong),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: d.lineStrong),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: d.accent, width: 1.4),
+        ),
       ),
-    ),
-    tooltipTheme: TooltipThemeData(
-      decoration: BoxDecoration(
-        color: ink.withValues(alpha: .92),
-        borderRadius: BorderRadius.circular(6),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: d.ink.withValues(alpha: .92),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        textStyle: TextStyle(fontSize: 12, color: d.canvas, height: 1.4),
+        waitDuration: Duration(milliseconds: 400),
       ),
-      textStyle: const TextStyle(fontSize: 12, color: onAccent, height: 1.4),
-      waitDuration: const Duration(milliseconds: 400),
-    ),
-  );
+    );
+  }
 }
 
 class DeskScrollBehavior extends MaterialScrollBehavior {

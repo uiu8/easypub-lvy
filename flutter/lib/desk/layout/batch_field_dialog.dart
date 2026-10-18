@@ -23,6 +23,7 @@ const batchFieldLabels = {
   'chapter_head_scope': '章首图用于',
   'chapter_head_width': '章首图宽度',
   'system_block_style': '系统提示',
+  'system_styles': '系统提示样式',
   'verse_block_style': '诗词',
   'note_style': '弹出注释',
   'margin_top_unit': '上边距单位',
@@ -52,6 +53,7 @@ String describeBatchValue(String field, Object? value) {
   if (field == 'system_block_style') {
     return systemBlockStyles[value] ?? '$value';
   }
+  if (field == 'system_styles') return describeSystemStyles(value);
   if (field == 'verse_block_style') return verseBlockStyles[value] ?? '$value';
   if (field == 'note_style') return noteStyles[value] ?? '$value';
   if (field == 'chapter_head_scope') {

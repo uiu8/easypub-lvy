@@ -98,12 +98,14 @@ pub(crate) fn chapter_label_end(text: &str) -> Option<usize> {
     (!text[end..].trim().is_empty()).then_some(end)
 }
 /// Shared by the renderer and the read-only rule statistics. Manual blocks take precedence.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn classify_block(
     line: &str,
     has_node: bool,
     annotation: Option<&crate::block_annotations::Annotation>,
     range: (usize, usize),
     previous_line: Option<&str>,
+    next_line: Option<&str>,
     system_style: &str,
     verse_style: &str,
 ) -> Option<(&'static str, &'static str)> {
@@ -137,7 +139,12 @@ pub(crate) fn classify_block(
         }
     } else if has_node {
         None
-    } else if system_style != "off" && is_system_line(line) {
+    } else if system_style != "off"
+        && (is_system_line(line)
+            || (system_style == "styled"
+                && crate::block_styles::is_ding_line(line)
+                && next_line.is_some_and(is_system_line)))
+    {
         Some(("system", "system-line"))
     } else if verse_style != "off" && is_verse_line(line) {
         Some(("verse", "verse-line"))
@@ -145,6 +152,105 @@ pub(crate) fn classify_block(
         Some(("verse", "verse-by"))
     } else {
         None
+    }
+}
+
+/// 分类样式（V77，LAY-132）：每段连续系统提示的行数，按段首行的字节偏移记录。
+/// 与正文生成用同一个 [classify_block]；手工标注与自动识别各自成段。
+fn system_runs(
+    text: &str,
+    nodes: &[easypub_core::structure::Node],
+    annotations: &[crate::block_annotations::Annotation],
+    system_style: &str,
+    verse_style: &str,
+    custom: Option<&regex::RegexSet>,
+) -> BTreeMap<usize, (usize, Option<bool>)> {
+    let mut runs = BTreeMap::new();
+    let (mut offset, mut ni, mut ai) = (0usize, 0usize, 0usize);
+    // (段首偏移, 标注 ID, 行数, 标注指定的样式：Some(true) 面板)
+    let mut current: Option<(usize, Option<&str>, usize, Option<bool>)> = None;
+    while offset < text.len() {
+        let rest = &text[offset..];
+        let length = rest.find(['\r', '\n']).unwrap_or(rest.len());
+        let content_end = offset + length;
+        let tail = &text[content_end..];
+        let eol = if tail.starts_with("\r\n") {
+            2
+        } else if tail.starts_with(['\r', '\n']) {
+            1
+        } else {
+            0
+        };
+        let end = content_end + eol;
+        while nodes.get(ni).is_some_and(|n| n.start < offset) {
+            ni += 1;
+        }
+        let node = nodes.get(ni).is_some_and(|n| n.start == offset);
+        while annotations.get(ai).is_some_and(|a| a.end <= offset) {
+            ai += 1;
+        }
+        let annotation = annotations.get(ai).filter(|a| a.start <= offset);
+        let next = (end < text.len()).then(|| {
+            let after = &text[end..];
+            &after[..after.find(['\r', '\n']).unwrap_or(after.len())]
+        });
+        let line = &text[offset..content_end];
+        let kind = custom_system(
+            classify_block(
+                line,
+                node,
+                annotation,
+                (offset, end),
+                None,
+                next,
+                system_style,
+                verse_style,
+            ),
+            line,
+            node || annotation.is_some(),
+            system_style,
+            custom,
+        );
+        let key = annotation.map(|a| a.id.as_str());
+        let forced = annotation
+            .and_then(|a| a.variant.as_deref())
+            .map(|v| v == "panel");
+        match (kind, &mut current) {
+            (Some(("system", _)), Some((_, k, n, _))) if *k == key && !node => *n += 1,
+            (Some(("system", _)), _) => {
+                if let Some((start, _, n, f)) = current.take() {
+                    runs.insert(start, (n, f));
+                }
+                current = Some((offset, key, 1, forced));
+            }
+            _ => {
+                if let Some((start, _, n, f)) = current.take() {
+                    runs.insert(start, (n, f));
+                }
+            }
+        }
+        offset = end.max(offset + 1);
+    }
+    if let Some((start, _, n, f)) = current {
+        runs.insert(start, (n, f));
+    }
+    runs
+}
+
+/// 系统提示自定义识别（V78，LAY-134）：自动识别没有归类、没有标题与手工标注的行，
+/// 整行匹配自定义规则时算系统提示。
+pub(crate) fn custom_system(
+    kind: Option<(&'static str, &'static str)>,
+    line: &str,
+    excluded: bool,
+    system_style: &str,
+    custom: Option<&regex::RegexSet>,
+) -> Option<(&'static str, &'static str)> {
+    match (kind, custom) {
+        (None, Some(set)) if !excluded && system_style != "off" && set.is_match(line.trim()) => {
+            Some(("system", "system-line"))
+        }
+        _ => kind,
     }
 }
 
@@ -472,6 +578,24 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
     let mut block: Option<(&str, Option<&str>)> = None;
     let mut annotation_index = 0;
     let mut previous_line: Option<&str> = None;
+    // 系统提示分类样式（V77，LAY-132）：每段行数；当前段是否面板、段内第几行、有无标题。
+    let styled = m
+        .system_styles
+        .as_ref()
+        .filter(|_| m.system_block_style == "styled");
+    let custom = m.rule_options.system_set();
+    let runs = match styled {
+        Some(_) => system_runs(
+            &book.text,
+            &book.tree.nodes,
+            &m.block_annotations,
+            &m.system_block_style,
+            &m.verse_block_style,
+            custom.as_ref(),
+        ),
+        None => BTreeMap::new(),
+    };
+    let mut styled_block: Option<(bool, usize, bool)> = None;
     if prefix {
         body.push_str("<section class=\"front-matter\">");
     }
@@ -510,14 +634,26 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             .block_annotations
             .get(annotation_index)
             .filter(|a| a.start <= offset);
-        let line_block = classify_block(
+        let next_line = {
+            let after = &book.text[end..];
+            (end < book.text.len())
+                .then(|| &after[..after.find(['\r', '\n']).unwrap_or(after.len())])
+        };
+        let line_block = custom_system(
+            classify_block(
+                line,
+                node.is_some(),
+                annotation,
+                (offset, end),
+                previous_line,
+                next_line,
+                &m.system_block_style,
+                &m.verse_block_style,
+            ),
             line,
-            node.is_some(),
-            annotation,
-            (offset, end),
-            previous_line,
+            node.is_some() || annotation.is_some(),
             &m.system_block_style,
-            &m.verse_block_style,
+            custom.as_ref(),
         );
         let line_block = if annotation.is_none() {
             m.rule_options.verse(line, line_block)
@@ -626,6 +762,20 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
         if block != next_block {
             block = next_block;
             match block.map(|(kind, _)| kind) {
+                Some("system") if styled.is_some() => {
+                    let styles = styled.expect("styled");
+                    let (count, forced) = runs.get(&offset).copied().unwrap_or((1, None));
+                    let panel = forced.unwrap_or(count > 1);
+                    let title = panel
+                        && styles.panel.title != "none"
+                        && crate::block_styles::is_title(line);
+                    styled_block = Some((panel, 0, title));
+                    body.push_str(&format!(
+                        "<div class=\"blk blk-{}{}\">",
+                        if panel { "panel" } else { "note" },
+                        if title { " blk-has-title" } else { "" }
+                    ));
+                }
                 Some("system") => body.push_str(if m.system_block_style == "indent" {
                     "<div class=\"system-block system-block-indent\">"
                 } else {
@@ -743,6 +893,31 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                         "<span class=\"first-char\">{c}</span>{}",
                         &inner[c.len_utf8()..]
                     )
+                }
+                _ => inner,
+            };
+            // 系统提示分类样式（V77）：按单行提示 / 面板的参数去括号、标标题、键名加粗；原文存于 data-original。
+            let inner = match (styled, styled_block.as_mut(), line_block) {
+                (Some(styles), Some((panel, index, title)), Some(("system", _))) => {
+                    let params = if *panel { &styles.panel } else { &styles.note };
+                    let mut next = if params.brackets == "remove" {
+                        crate::block_styles::strip_brackets(&inner)
+                    } else {
+                        inner.clone()
+                    };
+                    if *index == 0 && *title {
+                        attrs = attrs.replace("system-line", "system-line blk-panel-title");
+                    } else if params.key_bold {
+                        next = crate::block_styles::mark_key(&next);
+                    }
+                    *index += 1;
+                    if next != inner && !attrs.contains(" data-original=") {
+                        attrs.push_str(&format!(
+                            " data-original=\"{}\"",
+                            escaped(original)?.replace('\t', "&#9;")
+                        ));
+                    }
+                    next
                 }
                 _ => inner,
             };
@@ -1012,6 +1187,120 @@ mod tests {
             }
             assert_eq!(restored, text, "{style}");
         }
+    }
+
+    #[test]
+    fn system_styles_note_panel_ding_title_keys_and_lossless() {
+        let text = "第一章 开始\n妖兽倒地。\n【叮！击杀成功，经验+120】\n他收剑入鞘。\n叮！\n【苍白的正义】\n【攻击力：20-25】\n【终极圣炎：附带30点伤害】\n正文。\n【力量：10】 【敏捷：8】\n【体质：12】\n结尾。\n";
+        let source =
+            SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let mut req = request(&source);
+        req.settings.system_block_style = "styled".into();
+        let prepared = publication_resources::prepare(&source, req).unwrap();
+        let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+        // 单行：提示条，保留括号。
+        assert!(page.contains("<div class=\"blk blk-note\"><p class=\"text-line system-line\""));
+        assert!(page.contains(">【叮！击杀成功，经验+120】</p></div>"));
+        // “叮！”并入面板并作标题；其余去括号、键名加粗。
+        assert!(page.contains("<div class=\"blk blk-panel blk-has-title\"><p class=\"text-line system-line blk-panel-title\""));
+        assert!(page.contains(">叮！</p>"));
+        assert!(
+            page.contains(">苍白的正义</p>"),
+            "第二行不是标题，但去掉括号"
+        );
+        assert!(page.contains("><span class=\"blk-key\">攻击力</span>：20-25</p>"));
+        // 首行带冒号：不作标题；多段【】换成全角空格。
+        assert!(page.contains("<div class=\"blk blk-panel\"><p class=\"text-line system-line\""));
+        assert!(page.contains("><span class=\"blk-key\">力量</span>：10　敏捷：8</p>"));
+        assert_eq!(page.matches("class=\"blk ").count(), 3);
+        let css = &prepared.manifest().stylesheet.css;
+        assert!(css.contains(".blk-note {") && css.contains(".blk-panel .blk-panel-title {"));
+        // 原文可还原。
+        let doc = roxmltree::Document::parse(&page).unwrap();
+        let mut restored = String::new();
+        for n in doc
+            .descendants()
+            .filter(|n| n.attribute("data-source") == Some("true"))
+        {
+            match n.attribute("data-original") {
+                Some(original) => restored.push_str(original),
+                None => n
+                    .descendants()
+                    .filter(|d| d.is_text())
+                    .for_each(|d| restored.push_str(d.text().unwrap())),
+            }
+            restored.push('\n');
+        }
+        assert!(restored.contains("叮！\n【苍白的正义】\n【攻击力：20-25】\n"));
+        assert!(restored.contains("【力量：10】 【敏捷：8】\n【体质：12】\n"));
+        // 旧书的“加框”：输出不变，“叮！”不并入，成品参数里没有分类样式。
+        let mut req = request(&source);
+        req.settings.system_block_style = "box".into();
+        let prepared = publication_resources::prepare(&source, req).unwrap();
+        let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+        assert!(!page.contains("blk"));
+        assert_eq!(page.matches("<div class=\"system-block\">").count(), 3);
+        assert!(page.contains(">叮！</p>") && !page.contains("<div class=\"system-block\"><p class=\"text-line system-line\" data-source=\"true\" data-eol=\"lf\">叮！"));
+        let value = serde_json::to_value(prepared.manifest()).unwrap();
+        assert!(value.get("system_styles").is_none());
+    }
+
+    #[test]
+    fn system_custom_patterns_and_manual_variants() {
+        use sha2::{Digest, Sha256};
+        let text = "第一章 开始\n≮任务：清剿妖兽≯\n≮奖励：100灵币≯\n正文。\n【单行却要面板】\n正文二。\n【甲：一】\n【乙：二】\n结尾。\n";
+        let source =
+            SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let mark = |piece: &str, variant: &str| {
+            let start = text.find(piece).unwrap();
+            let end = start + piece.len();
+            json!({"id": format!("{:x}", Sha256::digest(piece.as_bytes())), "start": start, "end": end,
+                   "kind": "system", "variant": variant,
+                   "fingerprint": format!("{:x}", Sha256::digest(&text.as_bytes()[start..end]))})
+        };
+        let mut req = request(&source);
+        req.settings.system_block_style = "styled".into();
+        req.settings.rule_options.system_patterns = vec!["≮.+≯".into()];
+        req.settings.block_annotations = serde_json::from_value(json!([
+            mark("【单行却要面板】\n", "panel"),
+            mark("【甲：一】\n【乙：二】\n", "note"),
+        ]))
+        .unwrap();
+        let prepared = publication_resources::prepare(&source, req).unwrap();
+        let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+        // 自定义规则：两行 ≮≯ 合成面板。
+        assert!(page.contains("<div class=\"blk blk-panel\"><p class=\"text-line system-line\""));
+        assert!(page.contains("≮任务：清剿妖兽≯"));
+        // 手工指定：单行也成面板（有标题），两行也按单行提示。
+        assert!(page.contains("<div class=\"blk blk-panel blk-has-title\"><p class=\"text-line system-line blk-panel-title\""));
+        assert!(page.contains(">单行却要面板</p>"));
+        assert!(page.contains("<div class=\"blk blk-note\"><p class=\"text-line system-line\""));
+        assert!(page.contains(">【甲：一】</p>"), "单行提示保留括号");
+        assert_eq!(page.matches("class=\"blk ").count(), 3);
+        // 没有自定义规则时 ≮≯ 是普通正文。
+        let mut req = request(&source);
+        req.settings.system_block_style = "styled".into();
+        let page = publication_resources::prepare(&source, req)
+            .unwrap()
+            .documents()
+            .unwrap()
+            .pages["body.xhtml"]
+            .clone();
+        assert!(!page.contains("blk") || !page.contains("≮任务：清剿妖兽≯</p></div>"));
+        assert!(page.contains("class=\"text-line\" data-source=\"true\" data-eol=\"lf\">≮任务"));
+        // 规则校验：非法正则、空规则、手工标注的非法样式。
+        let mut options = crate::rule_options::Options {
+            system_patterns: vec!["(".into()],
+            ..Default::default()
+        };
+        assert!(options.validate().is_err());
+        options.system_patterns = vec![" ".into()];
+        assert!(options.validate().is_err());
+        options.system_patterns = vec!["≮.+≯".into()];
+        options.validate().unwrap();
+        let bad: Vec<crate::block_annotations::Annotation> =
+            serde_json::from_value(json!([{"id":"1","start":0,"end":1,"kind":"letter","fingerprint":"x","variant":"panel"}])).unwrap();
+        assert!(crate::block_annotations::validate(&bad).is_err());
     }
 
     #[test]

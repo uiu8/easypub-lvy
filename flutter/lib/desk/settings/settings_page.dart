@@ -1031,14 +1031,39 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget body(SettingsSnapshot state) => switch (tab) {
     0 => section('外观与交互', [
-      valueField('主题', '宣纸'),
+      // 界面主题（V79，SET-074）：立即生效并保存；跟随系统时随 Windows 深浅色切换。
+      Row(
+        children: [
+          Text('主题', style: ui(13, c: context.desk.ink)),
+          const DeskHelp(
+            '宣纸：浅色（默认）。夜墨：深色，夜里用不刺眼。高对比：白底纯黑字、线条加深，给看不清浅灰的人用，固定用黑色强调。'
+            '跟随系统：按 Windows 的深浅色自动在宣纸与夜墨之间切换。只影响软件界面，不影响生成的书。',
+          ),
+          const SizedBox(width: 16),
+          KeyedSubtree(
+            key: const ValueKey('settings-theme'),
+            child: DeskSegmented<String>(
+              value: deskThemes.containsKey(state.configuration['ui_theme'])
+                  ? state.configuration['ui_theme'] as String
+                  : 'paper',
+              options: deskThemes,
+              onChanged: saving ? null : (v) => save({'ui_theme': v}),
+            ),
+          ),
+        ],
+      ),
       const SizedBox(height: 12),
       // 主题色（V69，G-072）：点色块立即生效并保存。
       Row(
         key: const ValueKey('settings-accent'),
         children: [
           Expanded(
-            child: Text('主题色', style: ui(13, c: context.desk.ink)),
+            child: Text(
+              state.configuration['ui_theme'] == 'contrast'
+                  ? '主题色（高对比固定黑色）'
+                  : '主题色',
+              style: ui(13, c: context.desk.ink),
+            ),
           ),
           for (final a in deskAccents)
             Padding(

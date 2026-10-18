@@ -178,6 +178,16 @@ pub fn prepare(settings: &Settings) -> Result<Stylesheet, ApiError> {
         css.push_str(".note-ref { font-size: 0.75em; vertical-align: super; line-height: 0; }\n.footnote { margin: 1em 0; }\n.footnote p { text-indent: 0; }\n");
     }
     css.push_str(heading_rules(&settings.heading_style));
+    // 系统提示分类样式（V77，LAY-132）。
+    if settings.system_block_style == "styled" {
+        css.push_str(
+            &settings
+                .system_styles
+                .clone()
+                .unwrap_or_else(crate::block_styles::default_styles)
+                .css(),
+        );
+    }
     // 章节样式包（V74，LAY-130）：标题下装饰线、章末装饰、卷页边框。
     if let Some(style) = &settings.chapter_style {
         if style.title_rule.is_some() {

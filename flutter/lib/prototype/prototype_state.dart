@@ -120,6 +120,8 @@ class BookDraft {
   String chapterHeadWidth = 'half';
   // 系统提示与诗词（V50，LAY-121/122）。
   String systemBlockStyle = 'box';
+  // 系统提示分类样式参数（V77）：旧书为空。
+  Map<String, dynamic>? systemStyles;
   String verseBlockStyle = 'center';
   List<Map<String, dynamic>> blockAnnotations = [];
   List<Map<String, dynamic>> manualNotes = [];
@@ -352,7 +354,12 @@ class PrototypeState extends ChangeNotifier {
           );
         final configuredTheme = globalConfiguration['ui_theme'];
         if (configuredTheme is String &&
-            {'paper', 'night', 'contrast'}.contains(configuredTheme)) {
+            {
+              'paper',
+              'night',
+              'contrast',
+              'system',
+            }.contains(configuredTheme)) {
           theme = configuredTheme;
         }
         final configuredMotion = globalConfiguration['reduced_motion'];
@@ -417,7 +424,7 @@ class PrototypeState extends ChangeNotifier {
       final nextMotion = patch['reduced_motion'];
       change(() {
         if (nextTheme is String &&
-            {'paper', 'night', 'contrast'}.contains(nextTheme)) {
+            {'paper', 'night', 'contrast', 'system'}.contains(nextTheme)) {
           theme = nextTheme;
         }
         if (nextMotion is bool) reducedMotion = nextMotion;
@@ -839,6 +846,8 @@ class PrototypeState extends ChangeNotifier {
             ..chapterHeadScope = v['chapter_head_scope'] as String? ?? 'chapter'
             ..chapterHeadWidth = v['chapter_head_width'] as String? ?? 'half'
             ..systemBlockStyle = v['system_block_style'] as String? ?? 'box'
+            ..systemStyles = (v['system_styles'] as Map?)
+                ?.cast<String, dynamic>()
             ..verseBlockStyle = v['verse_block_style'] as String? ?? 'center'
             ..blockAnnotations = (v['block_annotations'] as List? ?? [])
                 .map((a) => Map<String, dynamic>.from(a as Map))
@@ -1104,6 +1113,7 @@ class PrototypeState extends ChangeNotifier {
           'chapter_head_scope': d.chapterHeadScope,
           'chapter_head_width': d.chapterHeadWidth,
           'system_block_style': d.systemBlockStyle,
+          if (d.systemStyles != null) 'system_styles': d.systemStyles,
           'verse_block_style': d.verseBlockStyle,
           if (d.blockAnnotations.isNotEmpty)
             'block_annotations': d.blockAnnotations,
@@ -1374,6 +1384,8 @@ class PrototypeState extends ChangeNotifier {
           ..chapterHeadScope = row['chapter_head_scope'] as String? ?? 'chapter'
           ..chapterHeadWidth = row['chapter_head_width'] as String? ?? 'half'
           ..systemBlockStyle = row['system_block_style'] as String? ?? 'box'
+          ..systemStyles = (row['system_styles'] as Map?)
+              ?.cast<String, dynamic>()
           ..verseBlockStyle = row['verse_block_style'] as String? ?? 'center'
           ..blockAnnotations = (row['block_annotations'] as List? ?? [])
               .map((a) => Map<String, dynamic>.from(a as Map))

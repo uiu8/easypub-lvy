@@ -27,6 +27,8 @@ import 'css_dialog.dart';
 import 'device_preview.dart';
 import 'layout_origins_dialog.dart';
 import 'layout_presets_dialog.dart';
+import 'block_style_editor.dart';
+import '../../application/settings_service.dart';
 
 class LayoutNavigationGuard {
   Future<bool> Function()? check;
@@ -95,6 +97,8 @@ class _LayoutPageState extends State<LayoutPage> {
   String? chapterHeadImage;
   // 章节样式包（V74，LAY-130）：与章首图一样单独应用，不进草稿。
   Map<String, dynamic>? chapterStyle;
+  // 系统提示自定义识别规则（V78，LAY-134）：在 rule_options 里，单独应用。
+  List<String> systemPatterns = const [];
 
   /// 小预览用的章首图像素（V54）；路径变化时重新读取。
   dui.Image? chapterHeadPixels;
@@ -103,6 +107,8 @@ class _LayoutPageState extends State<LayoutPage> {
   String chapterHeadWidth = 'half';
   // 系统提示与诗词（V50，LAY-121/122）。
   String systemBlockStyle = 'box';
+  // 系统提示分类样式参数（V77，LAY-132）。
+  Map<String, dynamic>? systemStyles;
   String verseBlockStyle = 'center';
   // 弹出注释（V51，LAY-120）。
   String noteStyle = 'off';
@@ -158,6 +164,7 @@ class _LayoutPageState extends State<LayoutPage> {
     'chapter_head_scope': chapterHeadScope,
     'chapter_head_width': chapterHeadWidth,
     'system_block_style': systemBlockStyle,
+    'system_styles': systemStyles,
     'verse_block_style': verseBlockStyle,
     'note_style': noteStyle,
   };
@@ -197,6 +204,9 @@ class _LayoutPageState extends State<LayoutPage> {
         draft['chapter_head_width'] as String? ?? chapterHeadWidth;
     systemBlockStyle =
         draft['system_block_style'] as String? ?? systemBlockStyle;
+    if (draft.containsKey('system_styles')) {
+      systemStyles = (draft['system_styles'] as Map?)?.cast<String, dynamic>();
+    }
     verseBlockStyle = draft['verse_block_style'] as String? ?? verseBlockStyle;
     noteStyle = draft['note_style'] as String? ?? noteStyle;
     _identityCache = _computeIdentity();
@@ -222,6 +232,7 @@ class _LayoutPageState extends State<LayoutPage> {
     'chapter_head_scope': chapterHeadScope,
     'chapter_head_width': chapterHeadWidth,
     'system_block_style': systemBlockStyle,
+    'system_styles': systemStyles,
     'verse_block_style': verseBlockStyle,
     'note_style': noteStyle,
   };
@@ -240,6 +251,7 @@ class _LayoutPageState extends State<LayoutPage> {
     'chapter_head_scope': chapterHeadScope,
     'chapter_head_width': chapterHeadWidth,
     'system_block_style': systemBlockStyle,
+    'system_styles': systemStyles,
     'verse_block_style': verseBlockStyle,
     'note_style': noteStyle,
   });
@@ -297,10 +309,17 @@ class _LayoutPageState extends State<LayoutPage> {
     rareCharScope = saved['rare_char_scope'] as String? ?? 'outside';
     chapterHeadImage = saved['chapter_head_image'] as String?;
     chapterStyle = (saved['chapter_style'] as Map?)?.cast<String, dynamic>();
+    systemPatterns = [
+      for (final p
+          in ((saved['rule_options'] as Map?)?['system_patterns'] as List?) ??
+              const [])
+        '$p',
+    ];
     unawaited(loadChapterHeadPixels());
     chapterHeadScope = saved['chapter_head_scope'] as String? ?? 'chapter';
     chapterHeadWidth = saved['chapter_head_width'] as String? ?? 'half';
     systemBlockStyle = saved['system_block_style'] as String? ?? 'box';
+    systemStyles = (saved['system_styles'] as Map?)?.cast<String, dynamic>();
     verseBlockStyle = saved['verse_block_style'] as String? ?? 'center';
     noteStyle = saved['note_style'] as String? ?? 'off';
     _identityCache = _computeIdentity();
@@ -618,6 +637,7 @@ class _LayoutPageState extends State<LayoutPage> {
           'chapter_head_scope': '章首图用于',
           'chapter_head_width': '章首图宽度',
           'system_block_style': '系统提示',
+          'system_styles': '系统提示样式',
           'verse_block_style': '诗词',
           'note_style': '弹出注释',
           'layout_origins': '设置来源',
@@ -640,6 +660,7 @@ class _LayoutPageState extends State<LayoutPage> {
     if (key == 'system_block_style') {
       return systemBlockStyles[value] ?? '$value';
     }
+    if (key == 'system_styles') return describeSystemStyles(value);
     if (key == 'verse_block_style') return verseBlockStyles[value] ?? '$value';
     if (key == 'note_style') return noteStyles[value] ?? '$value';
     if (key == 'chapter_head_scope') {
@@ -760,12 +781,67 @@ class _LayoutPageState extends State<LayoutPage> {
     'values': {
       for (final e in values.entries)
         if (e.value != null) e.key: e.value,
+      // 章节样式包（V76）：预览里可开关、改卷页边框；写回时按样式包单独应用。
+      // 系统提示分类样式（V77）：预览里按预设切换，参数被改过时为 custom。
+      'system_note_preset': presetOf(
+        (systemStyles ?? defaultSystemStyles())['note'] as Map?,
+        notePresetNames,
+      ),
+      'system_panel_preset': presetOf(
+        (systemStyles ?? defaultSystemStyles())['panel'] as Map?,
+        panelPresetNames,
+      ),
+      if (chapterStyle != null) ...{
+        'chapter_style_on': 'on',
+        'chapter_style_volume_frame':
+            chapterStyle!['volume_frame'] as String? ?? 'none',
+      },
     },
     'font_size_unit': units['font_size_unit'],
     'entry': selectedChapter,
-    // 设了章首图时，真机预览才显示章首图的范围与宽度（V61）。
-    'chapter_head': chapterHeadImage != null,
+    // 设了章首图或样式包带章头图时，真机预览才显示章首图的范围与宽度（V61、V76）。
+    'chapter_head':
+        chapterHeadImage != null ||
+        (chapterStyle?['head_images'] as List?)?.isNotEmpty == true,
+    'chapter_style_name': chapterStyle?['name'],
   };
+
+  /// 真机预览送来的样式包设置（V76）：返回去掉这两个键后的排版值，以及对应的样式包（null 为停用）。
+  (Map<String, Object?>, Map<String, dynamic>?) _kindleStyle(
+    Map<String, Object?> draft,
+  ) {
+    final rest = Map<String, Object?>.from(draft);
+    // 系统提示预设（V77）：换成对应参数；custom 表示不改。
+    final note = rest.remove('system_note_preset');
+    final panel = rest.remove('system_panel_preset');
+    if (blockStylePresets.containsKey(note) ||
+        blockStylePresets.containsKey(panel)) {
+      final base = Map<String, dynamic>.from(
+        (rest['system_styles'] as Map?) ??
+            systemStyles ??
+            defaultSystemStyles(),
+      );
+      if (notePresetNames.containsKey(note)) {
+        base['note'] = blockStylePresets[note]!;
+      }
+      if (panelPresetNames.containsKey(panel)) {
+        base['panel'] = blockStylePresets[panel]!;
+      }
+      rest['system_styles'] = base;
+    }
+    final on = rest.remove('chapter_style_on');
+    final frame = rest.remove('chapter_style_volume_frame');
+    final style = chapterStyle;
+    if (style == null || on == 'off') return (rest, null);
+    return (
+      rest,
+      {
+        ...style,
+        if (frame is String && volumeFrames.containsKey(frame))
+          'volume_frame': frame,
+      },
+    );
+  }
 
   Future<LayoutDraftPreview> _kindleRender(
     Map<String, Object?> draft,
@@ -775,10 +851,12 @@ class _LayoutPageState extends State<LayoutPage> {
     if (!mounted || current is! LayoutDraftPreviewSession) {
       throw const FormatException('排版页已关闭。');
     }
+    final (rest, style) = _kindleStyle(draft);
     return (current as LayoutDraftPreviewSession).renderDraftPreview({
       for (final e in values.entries)
         if (e.value != null) e.key: e.value,
-      ...draft,
+      ...rest,
+      if (chapterStyle != null) 'chapter_style': style,
     }, entryId: entry ?? selectedChapter);
   }
 
@@ -823,11 +901,23 @@ class _LayoutPageState extends State<LayoutPage> {
     };
   }
 
-  Future<String?> _kindleApply(Map<String, Object?> draft) async {
+  Future<String?> _kindleApply(Map<String, Object?> request) async {
     if (!mounted || session == null) return '排版页已关闭。';
     if (busy) return '排版页正在处理，请稍后再试。';
+    final styled =
+        request.containsKey('chapter_style_on') ||
+        request.containsKey('chapter_style_volume_frame');
+    final (draft, style) = _kindleStyle(request);
     if (draft.keys.any((key) => !layoutFields.contains(key))) {
       return '只能写回排版字段。';
+    }
+    // 样式包（V76）：与排版页“章节样式包”同一条应用路径，进变更记录。
+    if (styled && chapterStyle != null) {
+      final before = chapterStyle;
+      await setChapterStyle(style, style == null ? '已停用样式包' : '已更新样式包');
+      if (!mounted) return '排版页已关闭。';
+      if (chapterStyle == before) return '样式包未能写回，请在排版页查看原因。';
+      if (draft.isEmpty) return null;
     }
     edit(() {
       for (final e in draft.entries) {
@@ -870,6 +960,10 @@ class _LayoutPageState extends State<LayoutPage> {
           case 'system_block_style':
             if (value is String && systemBlockStyles.containsKey(value)) {
               systemBlockStyle = value;
+            }
+          case 'system_styles':
+            if (value == null || value is Map) {
+              systemStyles = (value as Map?)?.cast<String, dynamic>();
             }
           case 'verse_block_style':
             if (value is String && verseBlockStyles.containsKey(value)) {
@@ -1459,7 +1553,107 @@ class _LayoutPageState extends State<LayoutPage> {
     final style = (result?['style'] as Map?)?.cast<String, dynamic>();
     if (style != null && mounted) {
       await setChapterStyle(style, '已使用样式包“${style['name']}”');
+      applyPackBlocks(result?['blocks']);
     }
+  }
+
+  /// 系统提示自定义识别规则（V78）：写进本书 rule_options，进变更记录。
+  Future<void> setSystemPatterns(List<String> next, String done) async {
+    final current = session;
+    if (current == null) return;
+    setState(() => busy = true);
+    try {
+      final options = Map<String, dynamic>.from(
+        (current.saved['rule_options'] as Map?) ?? const {},
+      );
+      if (next.isEmpty) {
+        options.remove('system_patterns');
+      } else {
+        options['system_patterns'] = next;
+      }
+      await current.apply(await current.preview({'rule_options': options}));
+      if (mounted) {
+        setState(() {
+          systemPatterns = next;
+          message = done;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => message = deskErrorText(error, '识别规则未能保存'));
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Widget systemPatternControls() {
+    final d = context.desk;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: SizedBox(
+              width: 64,
+              child: Text('自定义识别', style: ui(12, c: d.ink2)),
+            ),
+          ),
+          Expanded(
+            child: Wrap(
+              key: const ValueKey('layout-system-patterns'),
+              children: [
+                for (final p in systemPatterns)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6, bottom: 4),
+                    child: InputChip(
+                      key: ValueKey(('layout-system-pattern', p)),
+                      label: Text(
+                        systemPatternLabel(p),
+                        style: ui(12, c: d.ink),
+                      ),
+                      onDeleted: busy
+                          ? null
+                          : () => setSystemPatterns(
+                              [...systemPatterns]..remove(p),
+                              '已删除识别规则',
+                            ),
+                      deleteButtonTooltipMessage: '删除这条规则',
+                    ),
+                  ),
+                DeskButton(
+                  '添加规则…',
+                  key: const ValueKey('layout-system-pattern-add'),
+                  quiet: true,
+                  onPressed: busy || systemPatterns.length >= 20
+                      ? null
+                      : () async {
+                          final p = await showSystemPatternDialog(context);
+                          if (p == null || !mounted) return;
+                          if (systemPatterns.contains(p)) return;
+                          await setSystemPatterns([
+                            ...systemPatterns,
+                            p,
+                          ], '已添加识别规则');
+                        },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 样式包带的系统提示块样式（V78）：一并切到分类样式并套用。
+  void applyPackBlocks(Object? blocks) {
+    if (blocks is! Map || !mounted) return;
+    edit(() {
+      systemBlockStyle = 'styled';
+      systemStyles = Map<String, dynamic>.from(blocks);
+    });
   }
 
   Future<void> importStyle() async {
@@ -1472,6 +1666,7 @@ class _LayoutPageState extends State<LayoutPage> {
     final style = (result?['style'] as Map?)?.cast<String, dynamic>();
     if (style != null && mounted) {
       await setChapterStyle(style, '已导入并使用样式包“${style['name']}”');
+      applyPackBlocks(result?['blocks']);
     }
   }
 
@@ -1485,6 +1680,9 @@ class _LayoutPageState extends State<LayoutPage> {
     final result = await styleRequest({
       'action': 'export',
       'style': style,
+      'blocks': systemBlockStyle == 'styled'
+          ? (systemStyles ?? defaultSystemStyles())
+          : null,
       'path': path,
     }, '样式包未能导出：请选择新的文件名');
     if (result != null && mounted) {
@@ -1705,6 +1903,190 @@ class _LayoutPageState extends State<LayoutPage> {
     ),
   );
 
+  /// 系统提示（V50、V77，LAY-121/132）：识别方式；“分类样式”下单行提示与多行面板各选一种样式。
+  Widget systemControls() {
+    final d = context.desk;
+    final styles = systemStyles ?? defaultSystemStyles();
+    final note = presetOf(styles['note'] as Map?, notePresetNames);
+    final panel = presetOf(styles['panel'] as Map?, panelPresetNames);
+    void choose(String kind, Map<String, Object> style) => edit(() {
+      systemStyles = {...Map<String, dynamic>.from(styles), kind: style};
+    });
+    Widget presets(
+      String kind,
+      String label,
+      String value,
+      Map<String, String> names,
+    ) {
+      final current = styles[kind] as Map?;
+      final settings = widget.library is SettingsService
+          ? widget.library as SettingsService
+          : null;
+      Widget chips(Object? library) {
+        final saved = savedStylesOf(library, kind);
+        final matched =
+            value != 'custom' || saved.values.any((s) => sameStyle(s, current));
+        Widget chip(
+          String text,
+          bool selected,
+          VoidCallback onTap,
+          Key key, {
+          VoidCallback? onDelete,
+        }) => Padding(
+          padding: const EdgeInsets.only(right: 6, bottom: 4),
+          child: InputChip(
+            key: key,
+            label: Text(text, style: ui(12, c: d.ink)),
+            selected: selected,
+            showCheckmark: false,
+            onPressed: busy ? null : onTap,
+            onDeleted: busy ? null : onDelete,
+            deleteButtonTooltipMessage: '从我的样式中删除',
+          ),
+        );
+        return Wrap(
+          children: [
+            for (final e in names.entries)
+              chip(
+                e.value,
+                value == e.key,
+                () => choose(
+                  kind,
+                  Map<String, Object>.from(blockStylePresets[e.key]!),
+                ),
+                ValueKey('layout-system-$kind-${e.key}'),
+              ),
+            for (final e in saved.entries)
+              chip(
+                e.key,
+                sameStyle(e.value, current),
+                () => choose(kind, e.value),
+                ValueKey(('layout-system-saved', kind, e.key)),
+                onDelete: settings == null
+                    ? null
+                    : () => settings.savePatch({
+                        'block_style_library': [
+                          for (final item in (library as List? ?? const []))
+                            if (!(item is Map &&
+                                item['kind'] == kind &&
+                                item['name'] == e.key))
+                              item,
+                        ],
+                      }),
+              ),
+            if (!matched)
+              chip('自定义', true, () {}, ValueKey('layout-system-$kind-custom')),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: DeskButton(
+                '编辑…',
+                key: ValueKey('layout-system-edit-$kind'),
+                quiet: true,
+                onPressed: busy
+                    ? null
+                    : () async {
+                        final result = await showBlockStyleEditor(
+                          context,
+                          kind: kind,
+                          initial: styleOrPreset(
+                            current,
+                            kind == 'note' ? 'bar' : 'titled',
+                          ),
+                          takenNames: saved.keys.toSet(),
+                        );
+                        if (result == null || !mounted) return;
+                        choose(kind, result.style);
+                        if (result.name != null && settings != null) {
+                          await settings.savePatch({
+                            'block_style_library': [
+                              ...(library as List? ?? const []),
+                              {
+                                'name': result.name,
+                                'kind': kind,
+                                'style': result.style,
+                              },
+                            ],
+                          });
+                        }
+                      },
+              ),
+            ),
+          ],
+        );
+      }
+
+      return Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: SizedBox(
+                width: 64,
+                child: Text(label, style: ui(12, c: d.ink2)),
+              ),
+            ),
+            Expanded(
+              child: KeyedSubtree(
+                key: ValueKey('layout-system-$kind'),
+                child: settings == null
+                    ? chips(null)
+                    : ValueListenableBuilder<SettingsSnapshot>(
+                        valueListenable: settings.snapshot,
+                        builder: (_, snap, _) =>
+                            chips(snap.configuration['block_style_library']),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return foldRow(
+      field: 'system_block_style',
+      label: '系统提示',
+      help: const DeskHelp(
+        '整行由【……】组成的行（如“【叮！新手礼包已发放。】”）。行中间夹着【】的句子不算。'
+        '“分类样式”：只有一行的按“单行提示”排，连续两行以上合成“面板”；紧挨在前面单独一行的“叮！”并入面板；'
+        '面板首行短且没有冒号时作标题，“键：值”的键名可加粗，成品里可去掉【】。'
+        '“编辑…”可逐项调整并另存为“我的样式”（所有书可用）；更自由的写法是在附加 CSS 里用公开类名 '
+        '.blk-note、.blk-panel、.blk-panel-title、.blk-key、.system-line。'
+        '原文不改；同时用于 EPUB、AZW3、MOBI、KFX。小预览里分类样式按加框近似显示，以真机预览为准。',
+        key: ValueKey('layout-help-system_block_style'),
+      ),
+      current: systemBlockStyle == 'styled'
+          ? describeSystemStyles(styles)
+          : systemBlockStyles[systemBlockStyle] ?? systemBlockStyle,
+      control: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          KeyedSubtree(
+            key: const ValueKey('layout-system_block_style'),
+            child: DeskSegmented<String>(
+              value: systemBlockStyle,
+              options: systemBlockStyles,
+              onChanged: busy
+                  ? null
+                  : (value) => edit(() {
+                      systemBlockStyle = value;
+                      if (value == 'styled') {
+                        systemStyles ??= defaultSystemStyles();
+                      }
+                    }),
+            ),
+          ),
+          if (systemBlockStyle == 'styled') ...[
+            presets('note', '单行提示', note, notePresetNames),
+            presets('panel', '多行面板', panel, panelPresetNames),
+          ],
+          if (systemBlockStyle != 'off') systemPatternControls(),
+        ],
+      ),
+    );
+  }
+
   /// 章首段落（V49，LAY-119）：标题后与场景分隔后的第一段。
   Widget firstParagraphControls() => foldRow(
     field: 'first_paragraph_style',
@@ -1852,15 +2234,7 @@ class _LayoutPageState extends State<LayoutPage> {
               ),
             ),
             sceneBreakControls(),
-            blockControls(
-              '系统提示',
-              '整行由【……】组成的行（如“【叮！新手礼包已发放。】”），相邻几行合成一个块。'
-                  '行中间夹着【】的句子不算。原文不改；样式同时用于 EPUB、AZW3、MOBI、KFX。',
-              'system_block_style',
-              systemBlockStyle,
-              systemBlockStyles,
-              (value) => systemBlockStyle = value,
-            ),
+            systemControls(),
             blockControls(
               '诗词',
               '整行是五言或七言对句（如“床前明月光，疑是地上霜。”），相邻几行合成一组；'
@@ -1970,6 +2344,8 @@ class _LayoutPageState extends State<LayoutPage> {
 
   Widget reading() {
     final d = context.desk;
+    // 书页模拟 Kindle 白纸，不随软件主题变（V79）：纸色与字色固定取宣纸令牌。
+    const page = Desk.light;
     if (loading) return const Center(child: CircularProgressIndicator());
     // 字号与行高按机型和阅读器设置换算（LAY-096）：书内字号以 110% 为基准缩放。
     final metrics = readerMetrics(
@@ -1983,8 +2359,8 @@ class _LayoutPageState extends State<LayoutPage> {
     );
     final size = metrics.fontPx.clamp(6.0, 96.0);
     TextStyle face(double s, {FontWeight? w}) => device.serif
-        ? serif(s, w: w == null ? 400 : 650, c: d.ink, h: metrics.lineRatio)
-        : ui(s, w: w == null ? 400 : 650, c: d.ink, h: metrics.lineRatio);
+        ? serif(s, w: w == null ? 400 : 650, c: page.ink, h: metrics.lineRatio)
+        : ui(s, w: w == null ? 400 : 650, c: page.ink, h: metrics.lineRatio);
     double margin(String side) =>
         (number('margin_$side', 0) *
                 (units['margin_${side}_unit'] == 'em' ? size : 1))
@@ -2196,7 +2572,7 @@ class _LayoutPageState extends State<LayoutPage> {
                           ? ui(
                               size * look.scale,
                               w: 700,
-                              c: d.ink,
+                              c: page.ink,
                               h: metrics.lineRatio,
                             )
                           : face(size * look.scale, w: FontWeight.w700);
@@ -2304,7 +2680,7 @@ class _LayoutPageState extends State<LayoutPage> {
                                   child: Container(
                                     key: const ValueKey('layout-preview-page'),
                                     decoration: BoxDecoration(
-                                      color: d.paper,
+                                      color: page.paper,
                                       boxShadow: d.shadow2,
                                       border: Border.all(color: d.line),
                                     ),
@@ -2312,7 +2688,7 @@ class _LayoutPageState extends State<LayoutPage> {
                                       pieces: _pages[index],
                                       style: style,
                                       size: pageSize,
-                                      paper: d.paper,
+                                      paper: page.paper,
                                       locale: Localizations.maybeLocaleOf(
                                         context,
                                       ),

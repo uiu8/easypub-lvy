@@ -75,6 +75,9 @@ pub struct Configuration {
     pub import_directory: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub import_skip_existing: Option<bool>,
+    /// V78：我的系统提示样式（所有书可用）。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub block_style_library: Vec<crate::block_styles::SavedStyle>,
     /// V72：从文件名提取作者（auto / custom / off）、自定义格式、书名里是否去掉作者名。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filename_author_mode: Option<String>,
@@ -156,6 +159,7 @@ impl Configuration {
             return Err(invalid());
         }
         crate::supplemental_pages::validate_templates(&self.supplemental_templates)?;
+        crate::block_styles::validate_library(&self.block_style_library)?;
         if let Some(defaults) = &self.rule_defaults {
             crate::rule_toggles::validate_defaults(defaults)?;
         }
@@ -229,7 +233,8 @@ impl Configuration {
         if self
             .ui_theme
             .as_deref()
-            .is_some_and(|theme| !matches!(theme, "paper" | "night" | "contrast"))
+            // 跟随系统（V79，SET-074）。
+            .is_some_and(|theme| !matches!(theme, "paper" | "night" | "contrast" | "system"))
         {
             return Err(error(ErrorCode::InvalidRule, "check_ui_theme"));
         }

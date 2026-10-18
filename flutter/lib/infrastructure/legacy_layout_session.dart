@@ -60,7 +60,10 @@ class LegacyLayoutSession extends LegacyBookInformationSession
     Map<String, Object?> values, {
     String? entryId,
   }) async {
-    if (values.keys.any((key) => !layoutFields.contains(key))) {
+    // 章节样式包（V76）：真机预览可临时停用或改卷页边框，只用于这一次生成。
+    if (values.keys.any(
+      (key) => !layoutFields.contains(key) && key != 'chapter_style',
+    )) {
       throw const FormatException('预览只接受排版字段。');
     }
     final data = await _render(entryId: entryId, draft: values);
@@ -150,6 +153,8 @@ class LegacyLayoutSession extends LegacyBookInformationSession
     ...layoutFields,
     'chapter_head_image',
     'chapter_style',
+    // 系统提示自定义识别规则在 rule_options.system_patterns（V78），单独应用。
+    'rule_options',
   };
 
   @override

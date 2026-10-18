@@ -186,6 +186,7 @@ class LegacyChangeHistoryService
     'chapter_head_scope': '章首图用于',
     'chapter_head_width': '章首图宽度',
     'system_block_style': '系统提示',
+    'system_styles': '系统提示样式',
     'verse_block_style': '诗词',
     'block_annotations': '手工标注块',
     'manual_notes': '手工注释',

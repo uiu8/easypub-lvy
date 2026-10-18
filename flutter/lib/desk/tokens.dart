@@ -101,6 +101,35 @@ class Desk extends ThemeExtension<Desk> {
     grain: .02,
   );
 
+  /// 高对比（V79，SET-074）：白底纯黑字、深灰线、黑色强调，给看不清浅灰的人用；不随主题色。
+  static const contrast = Desk(
+    dark: false,
+    canvas: Color(0xFFFFFFFF),
+    rail: Color(0xFFF2F2F2),
+    surface: Color(0xFFFFFFFF),
+    sunken: Color(0xFFEDEDED),
+    paper: Color(0xFFFFFFFF),
+    line: Color(0xFF6B6B6B),
+    lineStrong: Color(0xFF000000),
+    ink: Color(0xFF000000),
+    ink2: Color(0xFF1F1F1F),
+    ink3: Color(0xFF474747),
+    accent: Color(0xFF000000),
+    accentInk: Color(0xFFFFFFFF),
+    accentSoft: Color(0xFFE3E3E3),
+    pen: Color(0xFF9E1C10),
+    penSoft: Color(0xFFFBE9E7),
+    warn: Color(0xFF6B4A00),
+    warnSoft: Color(0xFFFFF3D6),
+    info: Color(0xFF1F1F1F),
+    infoSoft: Color(0xFFEDEDED),
+    add: Color(0xFF1F5F2E),
+    addSoft: Color(0xFFE3F1E6),
+    del: Color(0xFF9E1C10),
+    delSoft: Color(0xFFFBE9E7),
+    grain: 0,
+  );
+
   List<BoxShadow> get shadow1 => dark
       ? [const BoxShadow(color: Color(0x14FFFFFF), spreadRadius: .5)]
       : [
@@ -184,7 +213,40 @@ class DeskAccent {
   const DeskAccent(this.id, this.label, this.accent, this.onAccent, this.soft);
   final String id, label;
   final Color accent, onAccent, soft;
+
+  /// 夜墨主题下的同一种主题色（V79）：调亮强调色，文字改深色，浅底换成深底。
+  DeskAccent forDark() => DeskAccent(
+    id,
+    label,
+    Color.lerp(accent, const Color(0xFFFFFFFF), .45)!,
+    const Color(0xFF1A1917),
+    Color.lerp(accent, const Color(0xFF201F1C), .72)!,
+  );
 }
+
+/// 界面主题（V79，SET-074）：设置值 `ui_theme`。
+const deskThemes = {
+  'paper': '宣纸',
+  'night': '夜墨',
+  'contrast': '高对比',
+  'system': '跟随系统',
+};
+
+/// 把设置值落到实际主题：跟随系统时按系统深浅色；未知值为宣纸。
+String deskThemeMode(Object? value, {required bool systemDark}) =>
+    switch (value) {
+      'night' => 'night',
+      'contrast' => 'contrast',
+      'system' => systemDark ? 'night' : 'paper',
+      _ => 'paper',
+    };
+
+/// 某个主题与主题色的令牌；高对比固定黑色强调。
+Desk deskTokens(String mode, DeskAccent accent) => switch (mode) {
+  'night' => Desk.darkTheme.withAccent(accent.forDark()),
+  'contrast' => Desk.contrast,
+  _ => Desk.light.withAccent(accent),
+};
 
 const deskAccents = [
   DeskAccent(

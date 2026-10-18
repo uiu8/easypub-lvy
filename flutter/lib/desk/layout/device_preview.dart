@@ -1117,7 +1117,10 @@ class _PagePainter extends CustomPainter {
         y += style.headHeight(width);
       }
       if (piece.title) y += style.titleBefore;
-      final boxed = piece.kind == 'system' && style.systemBlock == 'box';
+      // 分类样式（V77）在小预览里按加框近似。
+      final boxed =
+          piece.kind == 'system' &&
+          (style.systemBlock == 'box' || style.systemBlock == 'styled');
       if (boxed) boxTop ??= y;
       painter.paint(canvas, Offset(style.padding.left, y));
       y += painter.height;

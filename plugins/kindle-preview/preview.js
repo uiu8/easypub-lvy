@@ -6,7 +6,11 @@
 'use strict';
 
 const BOOK_KEYS = ['writing_mode', 'vertical_digits', 'font_size', 'line_height',
-  'fullwidth_indent', 'paragraph_spacing', 'text_alignment', 'heading_style', 'scene_break_style', 'first_paragraph_style', 'chapter_head_scope', 'chapter_head_width', 'system_block_style', 'verse_block_style', 'note_style'];
+  'fullwidth_indent', 'paragraph_spacing', 'text_alignment', 'heading_style', 'scene_break_style', 'first_paragraph_style', 'chapter_head_scope', 'chapter_head_width', 'system_block_style', 'verse_block_style', 'note_style',
+  // V76：生僻字注音；章节样式包的开关与卷页边框（只在本书用了样式包时出现）。
+  'rare_char_ruby', 'rare_char_scope', 'chapter_style_on', 'chapter_style_volume_frame',
+  // V77：系统提示分类样式的两个预设（参数改过时为 custom）。
+  'system_note_preset', 'system_panel_preset'];
 const NUMBER_KEYS = { font_size: 'float', line_height: 'float', fullwidth_indent: 'int', paragraph_spacing: 'float' };
 const FONTS = {
   publisher: '',
@@ -630,8 +634,20 @@ function syncControls() {
   $('revert').disabled = dirty.size === 0;
 }
 
+// 章节样式包（V76）：显示包名；没用样式包时整组隐藏。
+function showStyle(state) {
+  $('chapter-style').hidden = !state.chapter_style_name;
+  $('chapter-style-name').textContent = state.chapter_style_name || '';
+}
+
+// 分类样式时才显示两个预设（V77）。
+function showSystem() {
+  $('system-presets').hidden = S.draft.system_block_style !== 'styled';
+}
+
 function setDraft(key, value) {
   S.draft[key] = value;
+  showSystem();
   syncControls();
   scheduleRender();
 }
@@ -731,6 +747,7 @@ function setupControls() {
     try {
       const state = await api('state');
       $('chapter-head').hidden = !state.chapter_head;
+      showStyle(state);
       const values = pick(state.values);
       if (BOOK_KEYS.some((k) => String(values[k]) !== String(S.saved[k]))) {
         S.saved = values;
@@ -766,6 +783,8 @@ async function start() {
   $('font-unit').textContent = state.font_size_unit || '';
   // 章首图的范围与宽度只在本书设了章首图时显示（图片本身在排版页选择）。
   $('chapter-head').hidden = !state.chapter_head;
+  showStyle(state);
+  showSystem();
   const select = $('device');
   for (const d of S.devices) {
     const option = document.createElement('option');

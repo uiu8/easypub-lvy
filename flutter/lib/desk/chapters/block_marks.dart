@@ -11,17 +11,24 @@ import '../dialogs.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 
-/// 工具条与菜单里可选的五类（`none` 显示为“取消识别”：此范围不参与自动识别）。
-const blockMarkChoices = [
-  (BlockAnnotationKind.letter, '书信'),
-  (BlockAnnotationKind.quote, '引文'),
-  (BlockAnnotationKind.verse, '诗词'),
-  (BlockAnnotationKind.system, '系统提示'),
-  (BlockAnnotationKind.none, '取消识别'),
+/// 工具条与菜单里可选的类别（`none` 显示为“取消识别”：此范围不参与自动识别）。
+/// 系统提示可指定样式（V78，LAY-134）：按行数（一行单行提示、多行面板）、单行提示、面板。
+const blockMarkChoices = <(BlockAnnotationKind, String?, String)>[
+  (BlockAnnotationKind.letter, null, '书信'),
+  (BlockAnnotationKind.quote, null, '引文'),
+  (BlockAnnotationKind.verse, null, '诗词'),
+  (BlockAnnotationKind.system, null, '系统提示'),
+  (BlockAnnotationKind.system, 'note', '系统提示 · 单行'),
+  (BlockAnnotationKind.system, 'panel', '系统提示 · 面板'),
+  (BlockAnnotationKind.none, null, '取消识别'),
 ];
 
-String blockMarkLabel(BlockAnnotationKind kind) =>
-    blockMarkChoices.firstWhere((c) => c.$1 == kind).$2;
+String blockMarkLabel(BlockAnnotationKind kind, [String? variant]) =>
+    blockMarkChoices.firstWhere((c) => c.$1 == kind && c.$2 == variant).$3;
+
+/// 按钮与菜单项的标识：没有样式时沿用类别名。
+String blockMarkKey(BlockAnnotationKind kind, String? variant) =>
+    variant == null ? kind.name : '${kind.name}-$variant';
 
 /// 一行在某条标注中的位置。
 typedef BlockMarkLine = ({BlockAnnotationView view, bool first, bool last});
@@ -42,6 +49,7 @@ class BlockMarkController extends ChangeNotifier {
   /// 工具条进入确认步骤时的预览与类型。
   BlockAnnotationPreview? pending;
   BlockAnnotationKind? pendingKind;
+  String? pendingVariant;
   bool busy = false;
   String error = '';
   Timer? _debounce;
@@ -95,6 +103,7 @@ class BlockMarkController extends ChangeNotifier {
     if (busy) return;
     pending = null;
     pendingKind = null;
+    pendingVariant = null;
     error = '';
     if (extend && entryId == entry && anchor != null) {
       first = line < anchor! ? line : anchor;
@@ -138,22 +147,25 @@ class BlockMarkController extends ChangeNotifier {
   }
 
   /// 工具条第一步：解析选区并预览新增，进入确认步骤。
-  Future<void> choose(BlockAnnotationKind kind) => _run(() async {
-    final snap = snapshot ?? await session.list();
-    final range = await session.resolveLines(
-      snap,
-      entryId: entryId!,
-      firstLine: first!,
-      lastLine: last!,
-    );
-    pending = await session.previewAdd(
-      snap,
-      start: range.start,
-      end: range.end,
-      kind: kind,
-    );
-    pendingKind = kind;
-  });
+  Future<void> choose(BlockAnnotationKind kind, [String? variant]) =>
+      _run(() async {
+        final snap = snapshot ?? await session.list();
+        final range = await session.resolveLines(
+          snap,
+          entryId: entryId!,
+          firstLine: first!,
+          lastLine: last!,
+        );
+        pending = await session.previewAdd(
+          snap,
+          start: range.start,
+          end: range.end,
+          kind: kind,
+          variant: variant,
+        );
+        pendingKind = kind;
+        pendingVariant = variant;
+      });
 
   /// 工具条第二步：确认写入，完成后清除选区。
   Future<void> confirmPending() => _run(() async {
@@ -171,14 +183,16 @@ class BlockMarkController extends ChangeNotifier {
     if (busy) return;
     pending = null;
     pendingKind = null;
+    pendingVariant = null;
     error = '';
     notifyListeners();
   }
 
   Future<BlockAnnotationPreview> previewChange(
     BlockAnnotationView view,
-    BlockAnnotationKind kind,
-  ) async {
+    BlockAnnotationKind kind, [
+    String? variant,
+  ]) async {
     final snap = snapshot ?? await session.list();
     return session.previewUpdate(
       snap,
@@ -186,6 +200,7 @@ class BlockMarkController extends ChangeNotifier {
       start: view.start,
       end: view.end,
       kind: kind,
+      variant: variant,
     );
   }
 
@@ -249,19 +264,23 @@ class BlockTag extends StatelessWidget {
   /// 显示用的绝对行号范围，例如“第 13–15 行”。
   final String lines;
 
-  Future<void> _act(BuildContext context, BlockAnnotationKind? kind) async {
+  Future<void> _act(
+    BuildContext context,
+    BlockAnnotationKind? kind, [
+    String? variant,
+  ]) async {
     final title = kind == null ? '删除手工标注' : '修改手工标注';
-    final from = blockMarkLabel(view.kind);
+    final from = blockMarkLabel(view.kind, view.variant);
     final text = kind == null
         ? (view.kind == BlockAnnotationKind.none
               ? '删除$lines的“取消识别”后，这几行恢复自动识别。'
               : '删除$lines的“$from”标注后，这几行按普通正文输出（仍参与自动识别）。')
-        : '把$lines的标注从“$from”改为“${blockMarkLabel(kind)}”。';
+        : '把$lines的标注从“$from”改为“${blockMarkLabel(kind, variant)}”。';
     BlockAnnotationPreview preview;
     try {
       preview = kind == null
           ? await controller.session.previewDelete(view.id)
-          : await controller.previewChange(view, kind);
+          : await controller.previewChange(view, kind, variant);
     } on BlockAnnotationException catch (e) {
       if (!context.mounted) return;
       await _message(context, title, e.message);
@@ -319,11 +338,15 @@ class BlockTag extends StatelessWidget {
     return SelectionContainer.disabled(
       child: MenuAnchor(
         menuChildren: [
-          for (final (kind, label) in blockMarkChoices)
-            if (kind != view.kind)
+          for (final (kind, variant, label) in blockMarkChoices)
+            if (kind != view.kind || variant != view.variant)
               MenuItemButton(
-                key: ValueKey(('block-tag-change', view.id, kind.name)),
-                onPressed: () => _act(context, kind),
+                key: ValueKey((
+                  'block-tag-change',
+                  view.id,
+                  blockMarkKey(kind, variant),
+                )),
+                onPressed: () => _act(context, kind, variant),
                 child: Text('改为$label'),
               ),
           MenuItemButton(
@@ -340,7 +363,10 @@ class BlockTag extends StatelessWidget {
               key: ValueKey(('block-tag', view.id)),
               borderRadius: BorderRadius.circular(5),
               onTap: () => menu.isOpen ? menu.close() : menu.open(),
-              child: DeskTag('${blockMarkLabel(view.kind)} · 手工', Tone.neutral),
+              child: DeskTag(
+                '${blockMarkLabel(view.kind, view.variant)} · 手工',
+                Tone.neutral,
+              ),
             ),
           ),
         ),
@@ -367,6 +393,7 @@ class BlockMarkBar extends StatelessWidget {
     final d = context.desk;
     final c = controller;
     final kind = c.pendingKind;
+    final variant = c.pendingVariant;
     return SelectionContainer.disabled(
       child: Container(
         key: const ValueKey('block-mark-bar'),
@@ -388,13 +415,13 @@ class BlockMarkBar extends StatelessWidget {
               children: [
                 if (kind == null) ...[
                   Text('$lines标为', style: ui(12.5, c: d.ink2)),
-                  for (final (k, label) in blockMarkChoices)
+                  for (final (k, v, label) in blockMarkChoices)
                     DeskButton(
                       label,
-                      key: ValueKey(('block-mark-choose', k.name)),
+                      key: ValueKey(('block-mark-choose', blockMarkKey(k, v))),
                       quiet: true,
                       busy: c.busy,
-                      onPressed: c.busy ? null : () => c.choose(k),
+                      onPressed: c.busy ? null : () => c.choose(k, v),
                     ),
                   if (onNote != null)
                     DeskButton(
@@ -413,7 +440,7 @@ class BlockMarkBar extends StatelessWidget {
                   Text(
                     kind == BlockAnnotationKind.none
                         ? '确认让$lines不参与自动识别？'
-                        : '确认将$lines标为${blockMarkLabel(kind)}？',
+                        : '确认将$lines标为${blockMarkLabel(kind, variant)}？',
                     style: ui(12.5, c: d.ink, w: 600),
                   ),
                   DeskButton(
@@ -484,7 +511,10 @@ class BlockInvalidBanner extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
                           children: [
-                            DeskTag(blockMarkLabel(view.kind), Tone.warn),
+                            DeskTag(
+                              blockMarkLabel(view.kind, view.variant),
+                              Tone.warn,
+                            ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(

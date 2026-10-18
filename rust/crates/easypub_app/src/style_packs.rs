@@ -107,6 +107,9 @@ struct PackFile {
     volume_frame: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cover_background: Option<String>,
+    /// 系统提示块样式（V78，LAY-133）：应用样式包时一并套用。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    blocks: Option<crate::block_styles::SystemStyles>,
 }
 
 /// 包内图片文件名：只允许一层的字母数字文件名与常见图片扩展名。
@@ -197,6 +200,19 @@ fn path_string(path: PathBuf) -> Result<String, ApiError> {
     path.into_os_string().into_string().map_err(|_| io())
 }
 
+/// 内置样式包配套的块样式：素雅配提示条与标题面板，古典配居中强调与上下双线。
+fn builtin_blocks(id: &str) -> crate::block_styles::SystemStyles {
+    let (note, panel) = if id == "classic" {
+        ("center", "rules")
+    } else {
+        ("bar", "titled")
+    };
+    crate::block_styles::SystemStyles {
+        note: crate::block_styles::preset(note).expect("note"),
+        panel: crate::block_styles::preset(panel).expect("panel"),
+    }
+}
+
 fn builtin(id: &str, dir: &Path) -> Result<ChapterStyle, ApiError> {
     let svgs = builtin_svgs(id).ok_or_else(invalid)?;
     let name = BUILTIN
@@ -229,7 +245,10 @@ fn builtin(id: &str, dir: &Path) -> Result<ChapterStyle, ApiError> {
     Ok(style)
 }
 
-fn import(zip_path: &Path, dir: &Path) -> Result<ChapterStyle, ApiError> {
+fn import(
+    zip_path: &Path,
+    dir: &Path,
+) -> Result<(ChapterStyle, Option<crate::block_styles::SystemStyles>), ApiError> {
     let bytes = {
         let file = fs::File::open(zip_path).map_err(|_| invalid())?;
         let mut data = Vec::new();
@@ -263,6 +282,10 @@ fn import(zip_path: &Path, dir: &Path) -> Result<ChapterStyle, ApiError> {
     if pack.schema_version != 1 || pack.head_images.len() > MAX_HEAD_IMAGES {
         return Err(invalid());
     }
+    if let Some(blocks) = &pack.blocks {
+        blocks.validate()?;
+    }
+    let blocks = pack.blocks.clone();
     let target = dir.join(format!("pack-{}", &digest[..16]));
     fs::create_dir_all(&target).map_err(|_| io())?;
     let mut extract = |name: &str| -> Result<String, ApiError> {
@@ -291,10 +314,17 @@ fn import(zip_path: &Path, dir: &Path) -> Result<ChapterStyle, ApiError> {
             .transpose()?,
     };
     style.validate(|_| Ok(()))?;
-    Ok(style)
+    Ok((style, blocks))
 }
 
-fn export(style: &ChapterStyle, zip_path: &Path) -> Result<(), ApiError> {
+fn export(
+    style: &ChapterStyle,
+    blocks: Option<&crate::block_styles::SystemStyles>,
+    zip_path: &Path,
+) -> Result<(), ApiError> {
+    if let Some(b) = blocks {
+        b.validate()?;
+    }
     style.validate(|_| Ok(()))?;
     let mut names = std::collections::BTreeMap::<String, String>::new();
     let mut name_for = |path: &str, base: &str| -> Result<String, ApiError> {
@@ -337,6 +367,7 @@ fn export(style: &ChapterStyle, zip_path: &Path) -> Result<(), ApiError> {
             .as_deref()
             .map(|p| name_for(p, "cover-background"))
             .transpose()?,
+        blocks: blocks.cloned(),
     };
     let file = fs::OpenOptions::new()
         .write(true)
@@ -378,12 +409,20 @@ pub fn run(value: Value) -> Result<String, ApiError> {
         Some("list") => {
             json!({"builtin": BUILTIN.iter().map(|(id, name)| json!({"id": id, "name": name})).collect::<Vec<_>>()})
         }
-        Some("builtin") => json!({"style": builtin(text("id")?, &absolute("dir")?)?}),
-        Some("import") => json!({"style": import(&absolute("path")?, &absolute("dir")?)?}),
+        Some("builtin") => {
+            let id = text("id")?;
+            json!({"style": builtin(id, &absolute("dir")?)?, "blocks": builtin_blocks(id)})
+        }
+        Some("import") => {
+            let (style, blocks) = import(&absolute("path")?, &absolute("dir")?)?;
+            json!({"style": style, "blocks": blocks})
+        }
         Some("export") => {
             let style: ChapterStyle =
                 serde_json::from_value(value["style"].clone()).map_err(|_| invalid())?;
-            export(&style, &absolute("path")?)?;
+            let blocks: Option<crate::block_styles::SystemStyles> =
+                serde_json::from_value(value["blocks"].clone()).map_err(|_| invalid())?;
+            export(&style, blocks.as_ref(), &absolute("path")?)?;
             json!({"exported": true})
         }
         _ => return Err(invalid()),
@@ -428,9 +467,12 @@ mod tests {
         // 再次生成复用同样的文件。
         assert_eq!(builtin("classic", &dir).unwrap(), classic);
         let zip_path = dir.join("古典.zip");
-        export(&classic, &zip_path).unwrap();
-        assert!(export(&classic, &zip_path).is_err(), "不覆盖已有文件");
-        let imported = import(&zip_path, &dir.join("installed")).unwrap();
+        let blocks = builtin_blocks("classic");
+        export(&classic, Some(&blocks), &zip_path).unwrap();
+        assert!(export(&classic, None, &zip_path).is_err(), "不覆盖已有文件");
+        let (imported, imported_blocks) = import(&zip_path, &dir.join("installed")).unwrap();
+        assert_eq!(imported_blocks.as_ref(), Some(&blocks), "块样式随包往返");
+        assert_eq!(blocks.panel, crate::block_styles::preset("rules").unwrap());
         assert_eq!(imported.name, "古典");
         assert_eq!(imported.head_images.len(), 2);
         assert_eq!(imported.volume_frame, "double");
@@ -445,7 +487,10 @@ mod tests {
             assert_eq!(fs::read(a).unwrap(), fs::read(b).unwrap());
         }
         // 再次导入同一个包：复用。
-        assert_eq!(import(&zip_path, &dir.join("installed")).unwrap(), imported);
+        assert_eq!(
+            import(&zip_path, &dir.join("installed")).unwrap().0,
+            imported
+        );
         assert!(builtin("nope", &dir).is_err());
         // 不安全的包内文件名、坏图片、错误版本。
         for (json, files) in [
@@ -463,6 +508,10 @@ mod tests {
                 vec![],
             ),
             (r#"{"schema_version":1,"name":"坏","extra":1}"#, vec![]),
+            (
+                r#"{"schema_version":1,"name":"坏","blocks":{"note":{"border":"wavy"}}}"#,
+                vec![],
+            ),
         ] {
             let bad = dir.join(format!("bad-{}.zip", json.len()));
             let mut zip = zip::ZipWriter::new(fs::File::create(&bad).unwrap());
