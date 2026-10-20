@@ -1,9 +1,14 @@
 // 文件夹与收藏（D4-D，V8 按设计重写视图）：扫描、勾选、导入与收藏逻辑沿用原实现。
+// V84（FOLD-083–087）：全选 / 取消全选 / 反选按钮、拖动连选与框选、点列名排序与类型筛选、
+// 修改时间列；可选“导入后加入收藏夹”。
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../application/folder_auto_import.dart';
 import '../../application/library_service.dart';
+import '../../application/book_collection_service.dart';
+import '../collections/collection_flow.dart';
+import '../controls/drag_select.dart';
 import '../dialogs.dart';
 import '../page_parts.dart';
 import '../controls/controls.dart';
@@ -11,6 +16,7 @@ import '../tokens.dart';
 import '../widgets.dart';
 import 'folder_controller.dart';
 import 'favorites_dialog.dart';
+import 'folder_book_tools.dart';
 import 'folder_scan_failures.dart';
 
 class FoldersPage extends StatefulWidget {
@@ -32,6 +38,26 @@ class _FoldersPageState extends State<FoldersPage> {
   String favoriteError = '';
   bool favoriteBusy = false;
   final range = RangeSelection();
+  final view = FolderListView();
+  final scroll = ScrollController();
+  String? collection;
+  BookCollectionService? get collections =>
+      widget.library is BookCollectionService
+      ? widget.library as BookCollectionService
+      : null;
+
+  /// 导入所选，成功后按需加入收藏夹（V84，FOLD-087）。
+  Future<void> importSelected() async {
+    await model.importSelected();
+    final target = collection, service = collections;
+    if (target == null || service == null || !mounted) return;
+    final ids = [
+      for (final r in model.outcomes)
+        if (r.succeeded) ?service.bookIdForPath(r.path),
+    ];
+    if (ids.isNotEmpty) await joinCollection(context, service, target, ids);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +85,7 @@ class _FoldersPageState extends State<FoldersPage> {
   @override
   void dispose() {
     model.dispose();
+    scroll.dispose();
     super.dispose();
   }
 
@@ -290,6 +317,7 @@ class _FoldersPageState extends State<FoldersPage> {
   Widget importColumn(BuildContext context) {
     final d = context.desk;
     final books = model.listing?.books ?? const <FolderBook>[];
+    final shown = view.apply(books);
     final found = books.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -386,6 +414,18 @@ class _FoldersPageState extends State<FoldersPage> {
           const LinearProgressIndicator(minHeight: 2),
         ],
         const SizedBox(height: 8),
+        if (books.isNotEmpty) ...[
+          FolderListToolbar(
+            books: books,
+            shown: shown,
+            selected: model.selected,
+            view: view,
+            enabled: !model.busy,
+            onViewChanged: () => setState(range.reset),
+            onSet: model.setMany,
+          ),
+          const SizedBox(height: 6),
+        ],
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
           child: SelectAllHeader(
@@ -394,14 +434,39 @@ class _FoldersPageState extends State<FoldersPage> {
             padding: EdgeInsets.zero,
             onChanged: model.busy || books.isEmpty
                 ? null
-                : (v) => model.setMany(books.map((b) => b.path), v),
-            body: const Row(
+                : (v) => model.setMany(shown.map((b) => b.path), v),
+            body: Row(
               children: [
-                SizedBox(width: 4),
-                Expanded(child: DeskColumnLabel('选择 / 文件名')),
-                SizedBox(width: 64, child: DeskColumnLabel('格式')),
-                SizedBox(width: 84, child: DeskColumnLabel('大小')),
-                SizedBox(width: 96, child: DeskColumnLabel('导入状态')),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FolderSortHeader(
+                      '选择 / 文件名',
+                      FolderSort.name,
+                      view: view,
+                      onViewChanged: () => setState(range.reset),
+                    ),
+                  ),
+                ),
+                for (final (label, sort, width) in const [
+                  ('格式', FolderSort.type, 64.0),
+                  ('大小', FolderSort.size, 84.0),
+                  ('修改时间', FolderSort.modified, 128.0),
+                ])
+                  SizedBox(
+                    width: width,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FolderSortHeader(
+                        label,
+                        sort,
+                        view: view,
+                        onViewChanged: () => setState(range.reset),
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 96, child: DeskColumnLabel('导入状态')),
               ],
             ),
           ),
@@ -409,8 +474,8 @@ class _FoldersPageState extends State<FoldersPage> {
         Expanded(
           child: SelectionKeys(
             hasSelection: model.selected.isNotEmpty,
-            onSelectAll: () => model.setMany(books.map((b) => b.path), true),
-            onClear: () => model.setMany(books.map((b) => b.path), false),
+            onSelectAll: () => model.setMany(shown.map((b) => b.path), true),
+            onClear: () => model.setMany(shown.map((b) => b.path), false),
             child: DeskCard(
               child: books.isEmpty && !model.scanning
                   ? Center(
@@ -438,9 +503,23 @@ class _FoldersPageState extends State<FoldersPage> {
                         ],
                       ),
                     )
-                  : ListView.builder(
-                      itemCount: books.length,
-                      itemBuilder: (_, i) => bookRow(context, books, i),
+                  : DragSelectRegion(
+                      key: const ValueKey('folder-drag-select'),
+                      scroll: scroll,
+                      itemExtent: 44,
+                      checkColumnWidth: 52,
+                      ids: [for (final b in shown) b.path],
+                      isChecked: model.selected.contains,
+                      apply: (check, uncheck) {
+                        if (check.isNotEmpty) model.setMany(check, true);
+                        if (uncheck.isNotEmpty) model.setMany(uncheck, false);
+                      },
+                      child: ListView.builder(
+                        controller: scroll,
+                        itemExtent: 44,
+                        itemCount: shown.length,
+                        itemBuilder: (_, i) => bookRow(context, shown, i),
+                      ),
                     ),
             ),
           ),
@@ -462,13 +541,38 @@ class _FoldersPageState extends State<FoldersPage> {
               DeskButton('取消操作', quiet: true, onPressed: model.cancel),
               const SizedBox(width: 6),
             ],
+            if (collections != null &&
+                collections!.collections.value.isNotEmpty) ...[
+              Tooltip(
+                message: '导入成功的书（以及书库已有的书）加入这个收藏夹',
+                child: DeskFilter<String>(
+                  key: const ValueKey('folder-import-collection'),
+                  value: collection ?? '',
+                  label: '加入收藏夹',
+                  onChanged: model.busy
+                      ? null
+                      : (v) => setState(
+                          () => collection = v == null || v.isEmpty ? null : v,
+                        ),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('不加入收藏夹')),
+                    for (final c in collections!.collections.value)
+                      DropdownMenuItem(
+                        value: c.id,
+                        child: Text('加入“${c.name}”'),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
             DeskButton(
               '导入所选 ${model.selected.length} 本',
               primary: true,
               icon: Icons.file_download_outlined,
               busy: model.importing,
               disabledReason: model.selected.isEmpty ? '先勾选要导入的书籍' : '等待当前操作完成',
-              onPressed: model.canImport ? model.importSelected : null,
+              onPressed: model.canImport ? importSelected : null,
             ),
           ],
         ),
@@ -524,14 +628,21 @@ class _FoldersPageState extends State<FoldersPage> {
             ),
             SizedBox(
               width: 64,
-              child: Text(
-                book.name.split('.').last.toUpperCase(),
-                style: ui(12, c: d.ink2),
-              ),
+              child: Text(book.type, style: ui(12, c: d.ink2)),
             ),
             SizedBox(
               width: 84,
-              child: Text(_bytes(book.bytes), style: mono(11, c: d.ink3)),
+              child: Text(
+                folderBookSize(book.bytes),
+                style: mono(11, c: d.ink3),
+              ),
+            ),
+            SizedBox(
+              width: 128,
+              child: Text(
+                folderBookTime(book.modified),
+                style: mono(11, c: d.ink3),
+              ),
             ),
             SizedBox(
               width: 96,
@@ -548,10 +659,4 @@ class _FoldersPageState extends State<FoldersPage> {
       ),
     );
   }
-
-  String _bytes(int bytes) => bytes >= 1024 * 1024
-      ? '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'
-      : bytes >= 1024
-      ? '${(bytes / 1024).toStringAsFixed(1)} KB'
-      : '$bytes B';
 }

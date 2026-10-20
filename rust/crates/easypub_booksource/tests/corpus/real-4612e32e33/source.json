@@ -1,0 +1,100 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "笔趣阁7",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://www.biquge7.xyz/",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 1398,
+  "easypub": {
+    "check": {
+      "at": 1792476085,
+      "chapters": 1010,
+      "chars": 2172,
+      "error": "",
+      "kind": "check",
+      "ms": 4189,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 30,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476085,
+      "ms": [
+        4189
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://www.biquge7.xyz/",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": false,
+  "enabledExplore": true,
+  "exploreUrl": "[\n{\"title\":\"玄幻奇幻\",\"url\":\"/xh?page={{page}}\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"修真武侠\",\"url\":\"/xz?page={{page}}\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"都市言情\",\"url\":\"/ds?page={{page}}\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"穿越历史\",\"url\":\"/cy?page={{page}}\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"网游竞技\",\"url\":\"/wy?page={{page}}\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"科幻灵异\",\"url\":\"/kh?page={{page}}\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"完结小说\",\"url\":\"/wj?page={{page}}\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"排行榜单\",\"url\":\"/ph?page={{page}}\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"——\",\"url\":\"\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}}\n]",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1693363123185,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 4045,
+  "ruleBookInfo": {
+    "author": "[property=\"og:novel:author\"]@content",
+    "coverUrl": "[property=\"og:image\"]@content",
+    "intro": "🔔 更新时间：{{@@[property=\"og:novel:update_time\"]@content##\\s##🔸}}\n📂 内容简介：{{@@[property=\"og:description\"]@content}}##(^|[。！？]+[”」）】]?)##$1<br>",
+    "kind": "[property~=category|status|update_time]@content##\\s.*",
+    "lastChapter": "[property=\"og:novel:latest_chapter_name\"]@content",
+    "name": "[property=\"og:novel:book_name\"]@content"
+  },
+  "ruleContent": {
+    "content": ".text@html",
+    "nextContentUrl": "text.下一页@href"
+  },
+  "ruleExplore": {},
+  "ruleSearch": {
+    "author": ".author@text",
+    "bookList": ".tui_1_item",
+    "bookUrl": "a@href",
+    "coverUrl": "img@src",
+    "intro": "p@text",
+    "name": ".title a@text"
+  },
+  "ruleToc": {
+    "chapterList": ".list ul li a",
+    "chapterName": "text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "/search?keyword={{key}}&page={{page}}",
+  "variableComment": "",
+  "weight": 0
+}

@@ -158,7 +158,7 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(find.byTooltip('筛选书稿'));
       await t.pumpAndSettle();
-      await t.tap(find.text('全部书稿').last);
+      await t.tap(find.text('全部状态').last);
       await t.pumpAndSettle();
       scroll().jumpTo(8.25 * 76);
       await t.pumpAndSettle();
@@ -209,11 +209,13 @@ void main() {
       router.go('/');
       await t.pumpAndSettle();
       expect(t.widget<TextField>(search()).controller!.text, 'BoOk');
-      // V8：书目行也显示格式列，这里只核对筛选器恢复的值。
+      // 1.3 倍字号下书架变窄（V84b 有左栏），格式等筛选收进“筛选”菜单；核对菜单记着的值。
       expect(
-        find.descendant(
-          of: find.byType(DeskFilter<String>).first,
-          matching: find.text('TXT'),
+        find.byWidgetPredicate(
+          (w) =>
+              w is DeskCommandMenu<String> &&
+              (w.tooltip ?? '').startsWith('筛选：') &&
+              w.tooltip!.contains('TXT'),
         ),
         findsOneWidget,
       );

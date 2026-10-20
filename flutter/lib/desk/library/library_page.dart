@@ -24,6 +24,9 @@ import '../../application/source_refresh_service.dart';
 import '../../application/library_check_batch.dart';
 
 import '../../application/folder_auto_import.dart';
+import '../../application/book_collection_service.dart';
+import '../collections/collection_flow.dart';
+import '../collections/collection_rail.dart';
 import '../../application/library_service.dart';
 import '../../application/output_history_service.dart';
 import '../../application/folder_import_batch.dart';
@@ -132,6 +135,16 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   String query = '', filter = '全部书稿', format = '全部格式';
+
+  /// 显示范围与排序（V84，LIB-118/125/127）。
+  String scope = '', sort = 'default';
+  bool descending = false;
+  final collectionKeys = <String, GlobalKey>{};
+  String? fileHoverCollection;
+  BookCollectionService? get collectionService =>
+      widget.library is BookCollectionService
+      ? widget.library as BookCollectionService
+      : null;
   bool compact = false, onlySelected = false;
   String? rangeAnchor;
   final scroll = ScrollController(keepScrollOffset: false);
@@ -153,6 +166,11 @@ class _LibraryPageState extends State<LibraryPage> {
     view.filter = filter;
     view.format = format;
     view.onlySelected = onlySelected;
+    view.scope = scope;
+    view.railCollapsed = railCollapsed;
+    view.railWidth = railWidthValue;
+    view.sort = sort;
+    view.descending = descending;
     view.compact = compact;
     view.rangeAnchor = rangeAnchor;
     if (!_restore && scroll.hasClients && _visible.isNotEmpty) {
@@ -187,8 +205,10 @@ class _LibraryPageState extends State<LibraryPage> {
     String? category,
     String? sourceFormat,
     bool? checkedOnly,
+    String? libraryScope,
   }) {
     setState(() {
+      if (libraryScope != null) scope = libraryScope;
       if (search != null) query = search.trim().toLowerCase();
       if (category != null) filter = category;
       if (sourceFormat != null) format = sourceFormat;
@@ -267,6 +287,11 @@ class _LibraryPageState extends State<LibraryPage> {
     filter = view?.filter ?? '全部书稿';
     format = view?.format ?? '全部格式';
     onlySelected = view?.onlySelected ?? false;
+    scope = view?.scope ?? '';
+    railCollapsed = view?.railCollapsed ?? false;
+    railWidthValue = view?.railWidth ?? 184;
+    sort = view?.sort ?? 'default';
+    descending = view?.descending ?? false;
     if (filter == 'TXT' || filter == 'EPUB') {
       format = filter;
       filter = '全部书稿';
@@ -283,6 +308,7 @@ class _LibraryPageState extends State<LibraryPage> {
     widget.outputs?.load();
     removals?.removedBatchCount.addListener(selectionChanged);
     batchChecks?.checkBatch.addListener(selectionChanged);
+    collectionService?.collections.addListener(selectionChanged);
   }
 
   @override
@@ -293,6 +319,7 @@ class _LibraryPageState extends State<LibraryPage> {
     widget.library.selection.removeListener(selectionChanged);
     removals?.removedBatchCount.removeListener(selectionChanged);
     batchChecks?.checkBatch.removeListener(selectionChanged);
+    collectionService?.collections.removeListener(selectionChanged);
     scroll.dispose();
     super.dispose();
   }
@@ -305,7 +332,7 @@ class _LibraryPageState extends State<LibraryPage> {
     widget.library.cancelImport();
   }
 
-  Future<void> importFolder({bool favorite = false}) async {
+  Future<void> importFolder({bool favorite = false, String? collection}) async {
     if (picking || fileImporting || widget.library.importing.value) return;
     String? path;
     if (favorite) {
@@ -328,8 +355,27 @@ class _LibraryPageState extends State<LibraryPage> {
         library: widget.library,
         picker: widget.picker,
         initialPath: path,
+        initialCollection: collection ?? currentCollection,
       ),
     );
+  }
+
+  /// 当前显示范围是收藏夹时为其 id（导入时默认加入它）。
+  String? get currentCollection =>
+      scope.startsWith('c:') ? scope.substring(2) : null;
+
+  /// 导入完成后把成功的书加入收藏夹（V84，LIB-122）。
+  Future<void> joinImported(
+    String collection,
+    Iterable<ImportOutcome> results,
+  ) async {
+    final service = collectionService;
+    if (service == null || !mounted) return;
+    final ids = [
+      for (final r in results)
+        if (r.succeeded) ?service.bookIdForPath(r.path),
+    ];
+    if (ids.isNotEmpty) await joinCollection(context, service, collection, ids);
   }
 
   void remove(Set<String> ids, {bool undo = false, int? batchId}) {
@@ -470,6 +516,10 @@ class _LibraryPageState extends State<LibraryPage> {
       remove({book.id});
       return;
     }
+    if (action == 'collect') {
+      await collect([book.id]);
+      return;
+    }
     if (action == 'source') {
       try {
         await widget.onRevealSource!(book.path);
@@ -535,13 +585,31 @@ class _LibraryPageState extends State<LibraryPage> {
           value: 'restore_source',
           child: Text('打开刷新前的书稿…'),
         ),
+      if (collectionService != null)
+        const PopupMenuItem(
+          height: 36,
+          value: 'collect',
+          child: Text('加入收藏夹…'),
+        ),
       if (removals != null)
         const PopupMenuItem(height: 36, value: 'remove', child: Text('从书库移除')),
     ],
     icon: const Icon(Icons.more_horiz),
   );
 
-  Future<void> importBooks({List<String>? providedPaths}) async {
+  /// 把这些书加入用户选的收藏夹（V84，LIB-120）。
+  Future<void> collect(List<String> ids) async {
+    final service = collectionService;
+    if (service == null || ids.isEmpty) return;
+    final id = await pickCollection(context, service, count: ids.length);
+    if (id == null || !mounted) return;
+    await joinCollection(context, service, id, ids);
+  }
+
+  Future<void> importBooks({
+    List<String>? providedPaths,
+    String? collection,
+  }) async {
     if (picking || fileImporting || widget.library.importing.value) return;
     setState(() => picking = true);
     try {
@@ -575,6 +643,7 @@ class _LibraryPageState extends State<LibraryPage> {
           ),
         ),
       );
+      if (collection != null) await joinImported(collection, results);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -591,8 +660,25 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   bool dragging = false;
+
+  /// 外部文件拖到了哪个收藏夹行上（按行的屏幕位置判断）。
+  String? collectionAt(Offset global) {
+    for (final entry in collectionKeys.entries) {
+      final box = entry.value.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached) continue;
+      final local = box.globalToLocal(global);
+      if (box.paintBounds.contains(local)) return entry.key;
+    }
+    return null;
+  }
+
   Future<void> importDrop(DropDoneDetails details) async {
-    setState(() => dragging = false);
+    final collection =
+        collectionAt(details.globalPosition) ?? currentCollection;
+    setState(() {
+      dragging = false;
+      fileHoverCollection = null;
+    });
     if (picking || fileImporting || widget.library.importing.value) return;
     final files = <String>[];
     for (final file in details.files) {
@@ -604,13 +690,16 @@ class _LibraryPageState extends State<LibraryPage> {
             library: widget.library,
             picker: widget.picker,
             initialPath: file.path,
+            initialCollection: collection,
           ),
         );
       } else {
         files.add(file.path);
       }
     }
-    if (mounted && files.isNotEmpty) await importBooks(providedPaths: files);
+    if (mounted && files.isNotEmpty) {
+      await importBooks(providedPaths: files, collection: collection);
+    }
   }
 
   // ---------------------------------------------------------------- 视图（V6 起，设计 D4-A）
@@ -624,7 +713,16 @@ class _LibraryPageState extends State<LibraryPage> {
           setState(() => dragging = true);
         }
       },
-      onDragExited: (_) => setState(() => dragging = false),
+      onDragUpdated: (details) {
+        final hover = collectionAt(details.globalPosition);
+        if (hover != fileHoverCollection) {
+          setState(() => fileHoverCollection = hover);
+        }
+      },
+      onDragExited: (_) => setState(() {
+        dragging = false;
+        fileHoverCollection = null;
+      }),
       onDragDone: importDrop,
       child: Stack(
         fit: StackFit.expand,
@@ -653,11 +751,27 @@ class _LibraryPageState extends State<LibraryPage> {
                             color: d.ink2,
                           ),
                           const SizedBox(height: 10),
-                          Text('松开以导入书籍或文件夹', style: ui(18, w: 650, c: d.ink)),
+                          Text(
+                            switch (collectionService?.collections.value
+                                .where(
+                                  (c) =>
+                                      c.id ==
+                                      (fileHoverCollection ??
+                                          currentCollection),
+                                )
+                                .firstOrNull) {
+                              final c? => '松开以导入并加入“${c.name}”',
+                              null => '松开以导入书籍或文件夹',
+                            },
+                            key: const ValueKey('library-drop-message'),
+                            style: ui(18, w: 650, c: d.ink),
+                          ),
                           const SizedBox(height: 4),
                           Text(
-                            '文件直接导入；文件夹先扫描确认。原文件始终保留。',
-                            style: ui(12.5, c: d.ink2),
+                            '文件直接导入；文件夹先扫描确认。原文件始终保留。'
+                            '${collectionService == null ? '' : '\n拖到左侧某个收藏夹上松开，导入后加入该收藏夹。'}',
+                            textAlign: TextAlign.center,
+                            style: ui(12.5, c: d.ink2, h: 1.6),
                           ),
                         ],
                       ),
@@ -824,7 +938,7 @@ class _LibraryPageState extends State<LibraryPage> {
               PopupMenuItem(
                 height: 36,
                 value: 'favorites',
-                child: Text('从收藏夹导入'),
+                child: Text('从收藏文件夹导入'),
               ),
             ],
             icon: Icon(Icons.expand_more_rounded, color: d.ink2),
@@ -846,22 +960,97 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   /// 当前搜索与筛选下可见的书。
-  List<BookSummary> filtered(List<BookSummary> books) => books
-      .where((b) => format == '全部格式' || b.format == format)
-      .where(
-        (b) => switch (filter) {
-          '待处理' => b.status != '检查通过',
-          '检查通过' => b.status == '检查通过',
-          _ => true,
-        },
-      )
-      .where((b) => !onlySelected || selected.contains(b.id))
-      .where(
-        (b) =>
-            query.isEmpty ||
-            '${b.title}\n${b.author}\n${b.path}'.toLowerCase().contains(query),
-      )
-      .toList();
+  List<BookSummary> filtered(List<BookSummary> books) => sortBooks(
+    books
+        .where(
+          (b) => inLibraryScope(
+            b,
+            scope,
+            collectionService?.collections.value ?? const [],
+          ),
+        )
+        .where((b) => format == '全部格式' || b.format == format)
+        .where(
+          (b) => switch (filter) {
+            '待处理' => b.status != '检查通过',
+            '检查通过' => b.status == '检查通过',
+            _ => true,
+          },
+        )
+        .where((b) => !onlySelected || selected.contains(b.id))
+        .where(
+          (b) =>
+              query.isEmpty ||
+              '${b.title}\n${b.author}\n${b.path}\n${b.category}\n${b.series}'
+                  .toLowerCase()
+                  .contains(query),
+        )
+        .toList(),
+  );
+
+  /// 排序方式（V84，LIB-127）；“默认顺序”为导入顺序（新导入的在前）。
+  static const sortLabels = <String, String>{
+    'default': '默认顺序（最近导入在前）',
+    'title': '书名',
+    'author': '作者',
+    'category': '类别',
+    'series': '系列',
+    'format': '格式',
+    'size': '大小',
+    'status': '待处理多少',
+  };
+
+  List<BookSummary> sortBooks(List<BookSummary> books) {
+    if (sort == 'default') return descending ? books.reversed.toList() : books;
+    int text(String a, String b) {
+      // 空值排在最后，不论升降序。
+      if (a.isEmpty != b.isEmpty) return a.isEmpty ? 1 : -1;
+      return a.toLowerCase().compareTo(b.toLowerCase());
+    }
+
+    final order = {for (var i = 0; i < books.length; i++) books[i].id: i};
+    int compare(BookSummary a, BookSummary b) => switch (sort) {
+      'title' => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+      'author' => a.author.toLowerCase().compareTo(b.author.toLowerCase()),
+      'category' => a.category.toLowerCase().compareTo(
+        b.category.toLowerCase(),
+      ),
+      'series' => a.series.toLowerCase().compareTo(b.series.toLowerCase()),
+      'format' => a.format.compareTo(b.format),
+      'size' => (a.bytes ?? -1).compareTo(b.bytes ?? -1),
+      'status' => chapterIssueCount(a).compareTo(chapterIssueCount(b)),
+      _ => 0,
+    };
+    final emptyLast = switch (sort) {
+      'author' || 'category' || 'series' => true,
+      _ => false,
+    };
+    String field(BookSummary b) => switch (sort) {
+      'author' => b.author,
+      'category' => b.category,
+      _ => b.series,
+    };
+    return List.of(books)..sort((a, b) {
+      if (emptyLast) {
+        final blank = text(field(a), field(b));
+        if (field(a).isEmpty != field(b).isEmpty) return blank;
+      }
+      final value = descending ? compare(b, a) : compare(a, b);
+      return value != 0 ? value : order[a.id]!.compareTo(order[b.id]!);
+    });
+  }
+
+  void changeSort(String value) {
+    setState(() {
+      if (value == sort) {
+        descending = !descending;
+      } else {
+        sort = value;
+        descending = value == 'size' || value == 'status';
+      }
+    });
+    rememberView();
+  }
 
   /// 筛选行高度：与详情栏顶部“当前书”一行相同，两栏封面顶端因此对齐（LIB-105）。
   double filterRowHeight(BuildContext context) =>
@@ -876,10 +1065,17 @@ class _LibraryPageState extends State<LibraryPage> {
     final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.4);
     final allVisible =
         visible.isNotEmpty && visible.every((b) => selected.contains(b.id));
-    // 搜索框在放得下时为 300 宽；书库与详情并排、左栏较窄时先缩短搜索框，
-    // 让筛选、全选与视图切换留在同一行（其余控件约 418 宽）。
+    // 搜索框在放得下时为 300 宽；放不下时先缩短搜索框，让控件留在同一行（LIB-105 两栏封面对齐）。
+    // 完整一行约需：搜索 200 + 格式、状态、仅看已勾选 + 全选、排序、视图（+ 左栏开关）。
+    // 再窄时（V84b）格式、状态、仅看已勾选与显示范围收进一个“筛选”菜单。
+    final railToggle = railAvailable ? 46 : 0;
+    final full = 464 + railToggle + (scopeChoice ? 150 : 0);
+    final compactFilters = width - 46 < (200 + full) * scale;
+    filtersCompact = compactFilters;
     final search = SizedBox(
-      width: (width - 40 - 6 - 418 * scale).clamp(200.0, 300.0),
+      width:
+          (width - 40 - 6 - (compactFilters ? 184 + railToggle : full) * scale)
+              .clamp(compactFilters ? 140.0 : 200.0, 300.0),
       height: filterRowHeight(context),
       child: TextField(
         controller: searchInput,
@@ -900,39 +1096,47 @@ class _LibraryPageState extends State<LibraryPage> {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           search,
-          Tooltip(
-            message: '筛选文件格式',
-            child: DeskFilter<String>(
-              value: format,
-              onChanged: (value) => changeFilter(sourceFormat: value),
-              onClear: format == '全部格式'
-                  ? null
-                  : () => changeFilter(sourceFormat: '全部格式'),
-              items: [
-                for (final value in ['全部格式', 'TXT', 'EPUB'])
-                  DropdownMenuItem(value: value, child: Text(value)),
-              ],
+          if (compactFilters) filterMenu(),
+          if (!compactFilters)
+            Tooltip(
+              message: '筛选文件格式',
+              child: DeskFilter<String>(
+                value: format,
+                onChanged: (value) => changeFilter(sourceFormat: value),
+                onClear: format == '全部格式'
+                    ? null
+                    : () => changeFilter(sourceFormat: '全部格式'),
+                items: [
+                  for (final value in ['全部格式', 'TXT', 'EPUB'])
+                    DropdownMenuItem(value: value, child: Text(value)),
+                ],
+              ),
             ),
-          ),
-          Tooltip(
-            message: '筛选书稿',
-            child: DeskFilter<String>(
-              value: filter,
-              onChanged: (value) => changeFilter(category: value),
-              onClear: filter == '全部书稿'
-                  ? null
-                  : () => changeFilter(category: '全部书稿'),
-              items: [
-                for (final value in ['全部书稿', '待处理', '检查通过'])
-                  DropdownMenuItem(value: value, child: Text(value)),
-              ],
+          if (!compactFilters)
+            Tooltip(
+              message: '筛选书稿',
+              child: DeskFilter<String>(
+                value: filter,
+                onChanged: (value) => changeFilter(category: value),
+                onClear: filter == '全部书稿'
+                    ? null
+                    : () => changeFilter(category: '全部书稿'),
+                items: [
+                  // 值沿用“全部书稿”（视图状态里存的是它），显示为“全部状态”，与左栏的“全部书稿”区分。
+                  for (final value in ['全部书稿', '待处理', '检查通过'])
+                    DropdownMenuItem(
+                      value: value,
+                      child: Text(value == '全部书稿' ? '全部状态' : value),
+                    ),
+                ],
+              ),
             ),
-          ),
-          FilterChip(
-            label: const Text('仅看已勾选'),
-            selected: onlySelected,
-            onSelected: (value) => changeFilter(checkedOnly: value),
-          ),
+          if (!compactFilters)
+            FilterChip(
+              label: const Text('仅看已勾选'),
+              selected: onlySelected,
+              onSelected: (value) => changeFilter(checkedOnly: value),
+            ),
           // 全选当前筛选结果（原在书架上方单独一行，移到这里后两栏封面顶端对齐）。
           IconButton(
             key: const ValueKey('library-select-visible'),
@@ -945,6 +1149,70 @@ class _LibraryPageState extends State<LibraryPage> {
               color: d.ink2,
             ),
           ),
+          if (scopeChoice && !compactFilters)
+            Tooltip(
+              message: '显示范围：全部、收藏夹或类别',
+              child: DeskFilter<String>(
+                key: const ValueKey('library-scope-filter'),
+                value: scope,
+                onChanged: (value) => changeFilter(libraryScope: value ?? ''),
+                onClear: scope.isEmpty
+                    ? null
+                    : () => changeFilter(libraryScope: ''),
+                items: [
+                  const DropdownMenuItem(value: '', child: Text('全部书稿')),
+                  for (final c in collectionService!.collections.value)
+                    DropdownMenuItem(
+                      value: collectionScope(c.id),
+                      child: Text('收藏夹 · ${c.name}'),
+                    ),
+                  for (final (name, _) in libraryCategories(
+                    widget.library.books.value,
+                  ))
+                    DropdownMenuItem(
+                      value: categoryScope(name),
+                      child: Text(name.isEmpty ? '未分类' : '类别 · $name'),
+                    ),
+                ],
+              ),
+            ),
+          DeskCommandMenu<String>(
+            key: const ValueKey('library-sort'),
+            tooltip:
+                '排序：${sortLabels[sort]}${sort == 'default' && !descending
+                    ? ''
+                    : descending
+                    ? '，降序'
+                    : '，升序'}',
+            onSelected: changeSort,
+            itemBuilder: (_) => [
+              for (final e in sortLabels.entries)
+                PopupMenuItem(
+                  height: 36,
+                  value: e.key,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 22,
+                        child: e.key == sort
+                            ? Icon(
+                                descending
+                                    ? Icons.arrow_downward_rounded
+                                    : Icons.arrow_upward_rounded,
+                                size: 15,
+                              )
+                            : null,
+                      ),
+                      Text(e.value),
+                    ],
+                  ),
+                ),
+            ],
+            icon: Icon(
+              Icons.sort_rounded,
+              color: sort == 'default' && !descending ? d.ink2 : d.ink,
+            ),
+          ),
           IconButton(
             key: const ValueKey('library-view-toggle'),
             tooltip: compact ? '切换书架视图' : '切换列表视图',
@@ -954,7 +1222,107 @@ class _LibraryPageState extends State<LibraryPage> {
               color: d.ink2,
             ),
           ),
+          if (railAvailable)
+            IconButton(
+              key: const ValueKey('library-rail-toggle'),
+              tooltip: !railCanExpand
+                  ? '窗口较窄，收藏夹栏只显示图标'
+                  : railCollapsedNow
+                  ? '展开收藏夹与类别栏（也可拖动左栏边缘）'
+                  : '收成图标条（也可拖动左栏边缘）',
+              isSelected: !railCollapsedNow,
+              onPressed: railCanExpand
+                  ? () => setRail(collapsed: !railCollapsed)
+                  : null,
+              icon: Icon(
+                railCollapsedNow
+                    ? Icons.view_sidebar_outlined
+                    : Icons.view_sidebar_rounded,
+                color: d.ink2,
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  /// 窄时的“筛选”菜单（V84b）：格式、状态、仅看已勾选；没有左栏时还有显示范围。
+  Widget filterMenu() {
+    final d = context.desk;
+    final active = [
+      if (format != '全部格式') format,
+      if (filter != '全部书稿') filter,
+      if (onlySelected) '仅看已勾选',
+      if (scope.isNotEmpty && !railListsScope)
+        scopeLabel(scope, collectionService?.collections.value ?? const []),
+    ];
+    PopupMenuEntry<String> heading(String text) => PopupMenuItem<String>(
+      enabled: false,
+      height: 28,
+      child: Text(text, style: ui(11.5, w: 650, c: d.ink3)),
+    );
+    PopupMenuEntry<String> option(String value, String label, bool on) =>
+        CheckedPopupMenuItem<String>(
+          height: 36,
+          value: value,
+          checked: on,
+          child: Text(label),
+        );
+    return DeskCommandMenu<String>(
+      key: const ValueKey('library-filter-menu'),
+      tooltip: active.isEmpty ? '筛选' : '筛选：${active.join('、')}',
+      onSelected: (value) {
+        final (kind, rest) = (
+          value.substring(0, value.indexOf(':')),
+          value.substring(value.indexOf(':') + 1),
+        );
+        switch (kind) {
+          case 'format':
+            changeFilter(sourceFormat: rest);
+          case 'status':
+            changeFilter(category: rest);
+          case 'checked':
+            changeFilter(checkedOnly: !onlySelected);
+          case 'scope':
+            changeFilter(libraryScope: rest);
+        }
+      },
+      itemBuilder: (_) => [
+        heading('格式'),
+        for (final v in ['全部格式', 'TXT', 'EPUB'])
+          option('format:$v', v, format == v),
+        const PopupMenuDivider(),
+        heading('状态'),
+        for (final v in ['全部书稿', '待处理', '检查通过'])
+          option('status:$v', v == '全部书稿' ? '全部状态' : v, filter == v),
+        const PopupMenuDivider(),
+        option('checked:', '仅看已勾选', onlySelected),
+        if (collectionService != null && !railListsScope) ...[
+          const PopupMenuDivider(),
+          heading('显示范围'),
+          option('scope:', '全部书稿', scope.isEmpty),
+          for (final c in collectionService!.collections.value)
+            option(
+              'scope:${collectionScope(c.id)}',
+              '收藏夹 · ${c.name}',
+              scope == collectionScope(c.id),
+            ),
+          for (final (name, _) in libraryCategories(widget.library.books.value))
+            option(
+              'scope:${categoryScope(name)}',
+              name.isEmpty ? '未分类' : '类别 · $name',
+              scope == categoryScope(name),
+            ),
+        ],
+      ],
+      icon: Badge(
+        isLabelVisible: active.isNotEmpty,
+        smallSize: 7,
+        backgroundColor: d.ink,
+        child: Icon(
+          Icons.filter_list_rounded,
+          color: active.isEmpty ? d.ink2 : d.ink,
+        ),
       ),
     );
   }
@@ -1052,6 +1420,48 @@ class _LibraryPageState extends State<LibraryPage> {
                       ),
                     ),
             ),
+          if (collectionService != null && selected.isNotEmpty) ...[
+            DeskButton(
+              '加入收藏夹…',
+              key: const ValueKey('library-collect-selected'),
+              icon: Icons.bookmark_add_outlined,
+              quiet: true,
+              tooltip: '也可以把勾选的书直接拖到左侧收藏夹',
+              onPressed: importing ? null : () => collect(selected.toList()),
+            ),
+            DeskButton(
+              '设类别…',
+              key: const ValueKey('library-set-category'),
+              icon: Icons.label_outline_rounded,
+              quiet: true,
+              onPressed: importing
+                  ? null
+                  : () => setCategory(
+                      context,
+                      collectionService!,
+                      selected.toList(),
+                    ),
+            ),
+            if (currentCollection != null)
+              DeskButton(
+                '移出此收藏夹',
+                key: const ValueKey('library-uncollect-selected'),
+                icon: Icons.bookmark_remove_outlined,
+                quiet: true,
+                onPressed: () {
+                  try {
+                    collectionService!.removeFromCollection(
+                      currentCollection!,
+                      selected,
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(deskErrorText(e, '未能移出。'))),
+                    );
+                  }
+                },
+              ),
+          ],
           if (removals != null && selected.isNotEmpty)
             DeskButton(
               '移除所选',
@@ -1071,6 +1481,74 @@ class _LibraryPageState extends State<LibraryPage> {
       : bytes >= 1024 * 1024
       ? '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'
       : '${(bytes / 1024).toStringAsFixed(1)} KB';
+
+  /// 左栏（收藏夹与类别，V84b）：书库区域宽 ≥520 就有；可拖右边缘伸缩（150–320），
+  /// 拖到最窄或点开关收成 48 宽的图标条；书库区域不足 700 时只显示图标条。
+  bool railShown = false, railAvailable = false;
+  bool railCollapsed = false, railCanExpand = true;
+  double railWidthValue = 184;
+  bool get railCollapsedNow => railCollapsed || !railCanExpand;
+
+  /// 左栏是否列出了类别与收藏夹（展开时）；图标条只有收藏夹，类别要用显示范围。
+  bool get railListsScope => railShown && !railCollapsedNow;
+
+  void setRail({bool? collapsed, double? width}) {
+    setState(() {
+      if (collapsed != null) railCollapsed = collapsed;
+      if (width != null) railWidthValue = width;
+    });
+    rememberView();
+  }
+
+  /// 筛选行是否收成“筛选”菜单（由筛选行按宽度决定）。
+  bool filtersCompact = false;
+
+  /// 左栏不展开且有收藏夹或类别时，筛选行显示“显示范围”下拉（筛选收成菜单时放进菜单）。
+  bool get scopeChoice =>
+      collectionService != null &&
+      !railListsScope &&
+      (collectionService!.collections.value.isNotEmpty ||
+          scope.isNotEmpty ||
+          widget.library.books.value.any((b) => b.category.isNotEmpty));
+
+  /// 拖动已勾选的书（V84，LIB-121）：按在已勾选的书上拖动时带上全部勾选的书。
+  Widget bookDrag(BookSummary b, bool checked, Widget child) {
+    if (collectionService == null) return child;
+    final d = context.desk;
+    final ids = checked ? selected.toList() : [b.id];
+    return Draggable<LibraryBookDrag>(
+      data: LibraryBookDrag(ids),
+      maxSimultaneousDrags: checked ? 1 : 0,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: Material(
+        color: d.surface,
+        elevation: 0,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: d.lineStrong),
+            boxShadow: d.shadow2,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.bookmark_add_outlined, size: 16, color: d.ink2),
+              const SizedBox(width: 8),
+              Text(
+                ids.length == 1 ? b.title : '${ids.length} 本书',
+                style: ui(12.5, w: 600, c: d.ink),
+              ),
+              const SizedBox(width: 8),
+              Text('拖到左侧收藏夹', style: ui(11.5, c: d.ink3)),
+            ],
+          ),
+        ),
+      ),
+      child: child,
+    );
+  }
 
   /// 列宽与表头共用（LIB-098）。
   static const _checkWidth = 40.0, _formatWidth = 56.0, _sizeWidth = 76.0;
@@ -1170,6 +1648,16 @@ class _LibraryPageState extends State<LibraryPage> {
           for (var i = 0; i < visible.length; i++)
             if (rectOf(i).overlaps(rect)) i,
         },
+        passThrough: collectionService == null
+            ? null
+            : (at, _) {
+                for (var i = 0; i < visible.length; i++) {
+                  if (rectOf(i).contains(at)) {
+                    return selected.contains(visible[i].id);
+                  }
+                }
+                return false;
+              },
         apply: (check, uncheck) {
           if (check.isNotEmpty) checkMany(check, true);
           if (uncheck.isNotEmpty) checkMany(uncheck, false);
@@ -1215,133 +1703,137 @@ class _LibraryPageState extends State<LibraryPage> {
       key: ValueKey('library-row-${b.id}'),
       type: MaterialType.transparency,
       child: _Hover(
-        builder: (hovering) => InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () {
-            final keys = HardwareKeyboard.instance;
-            if (keys.isControlPressed) {
-              checkRow(visible, b.id, !checked);
-            } else if (keys.isShiftPressed && rangeAnchor != null) {
-              checkRow(visible, b.id, true);
-            } else {
-              widget.library.selectBook(b.id);
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: checked
-                  ? d.accentSoft
-                  : on
-                  ? d.surface
-                  : null,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(5),
-                        boxShadow: hovering || on ? d.shadow2 : d.shadow1,
-                        border: on
-                            ? Border.all(color: d.accent, width: 2)
-                            : null,
+        builder: (hovering) => bookDrag(
+          b,
+          checked,
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () {
+              final keys = HardwareKeyboard.instance;
+              if (keys.isControlPressed) {
+                checkRow(visible, b.id, !checked);
+              } else if (keys.isShiftPressed && rangeAnchor != null) {
+                checkRow(visible, b.id, true);
+              } else {
+                widget.library.selectBook(b.id);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: checked
+                    ? d.accentSoft
+                    : on
+                    ? d.surface
+                    : null,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(5),
+                          boxShadow: hovering || on ? d.shadow2 : d.shadow1,
+                          border: on
+                              ? Border.all(color: d.accent, width: 2)
+                              : null,
+                        ),
+                        child: LibraryCover(b, width: coverWidth),
                       ),
-                      child: LibraryCover(b, width: coverWidth),
-                    ),
-                    if (bookNeedsAttention(b))
-                      Positioned(
-                        top: 6,
-                        right: 6,
-                        child: Tooltip(
-                          message: [
-                            b.status,
-                            if (b.pending != null && b.pending!.total > 0)
-                              b.pending!.breakdown,
-                          ].join('\n'),
-                          child: Container(
-                            key: ValueKey('library-badge-${b.id}'),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: d.surface,
-                              borderRadius: BorderRadius.circular(99),
-                              border: Border.all(color: d.line),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Dot(d.warn, size: 6),
-                                if (pending > 0) ...[
-                                  const SizedBox(width: 4),
-                                  Text('$pending', style: mono(11, c: d.ink)),
+                      if (bookNeedsAttention(b))
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: Tooltip(
+                            message: [
+                              b.status,
+                              if (b.pending != null && b.pending!.total > 0)
+                                b.pending!.breakdown,
+                            ].join('\n'),
+                            child: Container(
+                              key: ValueKey('library-badge-${b.id}'),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: d.surface,
+                                borderRadius: BorderRadius.circular(99),
+                                border: Border.all(color: d.line),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Dot(d.warn, size: 6),
+                                  if (pending > 0) ...[
+                                    const SizedBox(width: 4),
+                                    Text('$pending', style: mono(11, c: d.ink)),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    if (hovering || checked || selected.isNotEmpty)
-                      Positioned(
-                        top: 2,
-                        left: 2,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: d.surface.withValues(alpha: .92),
-                            borderRadius: BorderRadius.circular(6),
+                      if (hovering || checked || selected.isNotEmpty)
+                        Positioned(
+                          top: 2,
+                          left: 2,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: d.surface.withValues(alpha: .92),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Checkbox(
+                              key: ValueKey('library-check-${b.id}'),
+                              value: checked,
+                              visualDensity: VisualDensity.compact,
+                              onChanged: (v) =>
+                                  checkRow(visible, b.id, v == true),
+                            ),
                           ),
-                          child: Checkbox(
-                            key: ValueKey('library-check-${b.id}'),
-                            value: checked,
-                            visualDensity: VisualDensity.compact,
-                            onChanged: (v) =>
-                                checkRow(visible, b.id, v == true),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Tooltip(
+                          message: b.title,
+                          child: Text(
+                            b.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: ui(13, w: on ? 650 : 600, c: d.ink),
                           ),
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Tooltip(
-                        message: b.title,
-                        child: Text(
-                          b.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: ui(13, w: on ? 650 : 600, c: d.ink),
+                      // “…”与列表行同一菜单；悬停、选中或勾选时显示。
+                      SizedBox(
+                        width: 30,
+                        height: 28,
+                        child: AnimatedOpacity(
+                          duration: DeskMotion.of(context, DeskMotion.fast),
+                          curve: DeskMotion.easeOut,
+                          opacity: hovering || on || checked ? 1 : 0,
+                          child: FittedBox(child: bookMenu(b)),
                         ),
                       ),
-                    ),
-                    // “…”与列表行同一菜单；悬停、选中或勾选时显示。
-                    SizedBox(
-                      width: 30,
-                      height: 28,
-                      child: AnimatedOpacity(
-                        duration: DeskMotion.of(context, DeskMotion.fast),
-                        curve: DeskMotion.easeOut,
-                        opacity: hovering || on || checked ? 1 : 0,
-                        child: FittedBox(child: bookMenu(b)),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                BookStructureCounts(
-                  library: widget.library,
-                  book: b,
-                  compact: true,
-                  prefix: b.author.isEmpty ? '' : '${b.author} · ',
-                ),
-              ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  BookStructureCounts(
+                    library: widget.library,
+                    book: b,
+                    compact: true,
+                    prefix: b.author.isEmpty ? '' : '${b.author} · ',
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1405,40 +1897,52 @@ class _LibraryPageState extends State<LibraryPage> {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    LibraryCover(b, width: 48),
-                    const SizedBox(width: 12),
                     Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Tooltip(
-                                  message: b.title,
-                                  child: Text(
-                                    b.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: ui(13.5, w: 600, c: d.ink),
+                      child: bookDrag(
+                        b,
+                        checked,
+                        Row(
+                          children: [
+                            LibraryCover(b, width: 48),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Tooltip(
+                                          message: b.title,
+                                          child: Text(
+                                            b.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: ui(13.5, w: 600, c: d.ink),
+                                          ),
+                                        ),
+                                      ),
+                                      if (on) ...[
+                                        const SizedBox(width: 6),
+                                        const DeskTag('当前', Tone.accent),
+                                      ],
+                                    ],
                                   ),
-                                ),
+                                  const SizedBox(height: 2),
+                                  BookStructureCounts(
+                                    library: widget.library,
+                                    book: b,
+                                    compact: true,
+                                    prefix: b.author.isEmpty
+                                        ? ''
+                                        : '${b.author} · ',
+                                  ),
+                                ],
                               ),
-                              if (on) ...[
-                                const SizedBox(width: 6),
-                                const DeskTag('当前', Tone.accent),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          BookStructureCounts(
-                            library: widget.library,
-                            book: b,
-                            compact: true,
-                            prefix: b.author.isEmpty ? '' : '${b.author} · ',
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     // 宽行显示格式与原文件大小列（大小来自原文件属性，读不到显示“—”）。
@@ -1523,7 +2027,32 @@ class _LibraryPageState extends State<LibraryPage> {
           builder: (context, frame) {
             // 够宽时右侧有当前书详情栏（LIB-105）：标题行横跨整页，标题分隔线以下
             // 分成书架与详情两栏，详情从分隔线贯通到底。
-            final wide = frame.maxWidth >= 900;
+            // 左栏优先于详情栏（V84b）：书库区域宽 ≥700 就有左栏（可收起）；
+            // 扣掉左栏后仍 ≥820 才放详情栏，书架至少留约 530，筛选放不下一行时收成菜单。
+            // 书库为空时只有导入引导，不出左栏和开关。
+            railAvailable =
+                collectionService != null &&
+                frame.maxWidth >= 520 &&
+                widget.library.books.value.isNotEmpty;
+            railShown = railAvailable;
+            railCanExpand = frame.maxWidth >= 700;
+            // 展开时书架至少留约 420。
+            final railMax = (frame.maxWidth - 420).clamp(
+              ResizableRail.minWidth,
+              ResizableRail.maxRailWidth,
+            );
+            final railSpace = !railShown
+                ? 0.0
+                : (railCollapsedNow
+                          ? ResizableRail.stripWidth
+                          : railWidthValue.clamp(
+                              ResizableRail.minWidth,
+                              railMax,
+                            )) +
+                      ResizableRail.handleWidth;
+            final rest = frame.maxWidth - railSpace;
+            final wide = rest >= 820;
+            final detailWidth = rest >= 1060 ? 320.0 : 290.0;
             Widget withFilters(
               Widget body, [
               List<BookSummary> visible = const [],
@@ -1608,6 +2137,18 @@ class _LibraryPageState extends State<LibraryPage> {
                                           isChecked: selected.contains,
                                           checkColumnWidth:
                                               16 + 10 + _checkWidth + 6,
+                                          passThrough: collectionService == null
+                                              ? null
+                                              : (at, i) =>
+                                                    at.dx >
+                                                        16 +
+                                                            10 +
+                                                            _checkWidth +
+                                                            6 &&
+                                                    i < visible.length &&
+                                                    selected.contains(
+                                                      visible[i].id,
+                                                    ),
                                           apply: (check, uncheck) {
                                             if (check.isNotEmpty) {
                                               checkMany(check, true);
@@ -1661,6 +2202,32 @@ class _LibraryPageState extends State<LibraryPage> {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          if (railShown)
+                            ResizableRail(
+                              key: const ValueKey('library-rail'),
+                              width: railWidthValue,
+                              collapsed: railCollapsedNow,
+                              maxWidth: railMax,
+                              onCommit: (width, collapsed) {
+                                // 窄窗口只能是图标条，不记成用户收起。
+                                setRail(
+                                  width: width,
+                                  collapsed: railCanExpand
+                                      ? collapsed
+                                      : railCollapsed,
+                                );
+                              },
+                              builder: (collapsed) => CollectionRail(
+                                service: collectionService!,
+                                books: books,
+                                scope: scope,
+                                rowKeys: collectionKeys,
+                                fileHover: fileHoverCollection,
+                                collapsed: collapsed,
+                                onScope: (value) =>
+                                    changeFilter(libraryScope: value),
+                              ),
+                            ),
                           // 列表滚动条与右侧详情边框留出间隙。
                           Expanded(
                             child: Padding(
@@ -1671,7 +2238,7 @@ class _LibraryPageState extends State<LibraryPage> {
                           if (wide)
                             Container(
                               key: const ValueKey('library-detail-column'),
-                              width: frame.maxWidth >= 1150 ? 320 : 290,
+                              width: detailWidth,
                               decoration: BoxDecoration(
                                 border: Border(left: BorderSide(color: d.line)),
                               ),

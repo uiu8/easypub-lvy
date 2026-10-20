@@ -473,7 +473,9 @@ impl CompiledRules {
         } else if recognition::is_default_heading(text)
             && (!self.rules.enabled("author_note") || !recognition::is_author_note_heading(text))
         {
-            let number = crate::source::numbered_heading(text);
+            // 卷名和章名在同一行时按其中的章编号。
+            let number =
+                recognition::inner_chapter(text).or_else(|| crate::source::numbered_heading(text));
             let role = if self.rules.hierarchy {
                 match number.map(|v| v.1) {
                     Some('卷' | '部' | '篇' | '集') => Role::Volume,

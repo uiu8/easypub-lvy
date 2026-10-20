@@ -113,30 +113,35 @@ pub fn validate_rules(rules: &[Rule]) -> Result<(), ApiError> {
         {
             return Err(invalid());
         }
-        for (key, edit) in &rule.fields {
-            let limit = match key.as_str() {
-                "title" | "author" | "translator" | "isbn" | "publication_date" | "publisher"
-                | "category" | "language" | "series" | "series_index" | "subjects" => 4096,
-                "description" => 65536,
-                "cover_path" => 32768,
-                "cover_fit" => 16,
-                _ => return Err(invalid()),
-            };
-            match edit {
-                Edit::Keep {} => {}
-                Edit::Clear {} if key != "cover_fit" => {}
-                Edit::Clear {} => return Err(invalid()),
-                Edit::Set { value } | Edit::FillEmpty { value } => {
-                    let text = value.as_str().ok_or_else(invalid)?;
-                    if text.len() > limit || text.contains('\0') {
-                        return Err(invalid());
-                    }
-                    if key == "cover_path" && !Path::new(text).is_absolute() {
-                        return Err(invalid());
-                    }
-                    if key == "cover_fit" && !matches!(text, "cover" | "contain" | "fill") {
-                        return Err(invalid());
-                    }
+        validate_fields(&rule.fields)?;
+    }
+    Ok(())
+}
+/// Metadata field edits shared by directory rules and book collections.
+pub fn validate_fields(fields: &BTreeMap<String, Edit>) -> Result<(), ApiError> {
+    for (key, edit) in fields {
+        let limit = match key.as_str() {
+            "title" | "author" | "translator" | "isbn" | "publication_date" | "publisher"
+            | "category" | "language" | "series" | "series_index" | "subjects" => 4096,
+            "description" => 65536,
+            "cover_path" => 32768,
+            "cover_fit" => 16,
+            _ => return Err(invalid()),
+        };
+        match edit {
+            Edit::Keep {} => {}
+            Edit::Clear {} if key != "cover_fit" => {}
+            Edit::Clear {} => return Err(invalid()),
+            Edit::Set { value } | Edit::FillEmpty { value } => {
+                let text = value.as_str().ok_or_else(invalid)?;
+                if text.len() > limit || text.contains('\0') {
+                    return Err(invalid());
+                }
+                if key == "cover_path" && !Path::new(text).is_absolute() {
+                    return Err(invalid());
+                }
+                if key == "cover_fit" && !matches!(text, "cover" | "contain" | "fill") {
+                    return Err(invalid());
                 }
             }
         }

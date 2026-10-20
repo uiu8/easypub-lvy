@@ -127,6 +127,7 @@ class LegacyBlockAnnotationSession implements BlockAnnotationSession {
     required int end,
     required BlockAnnotationKind kind,
     String? variant,
+    Map<int, String>? roles,
   }) => _preview({
     'kind': 'update',
     'id': id,
@@ -134,6 +135,8 @@ class LegacyBlockAnnotationSession implements BlockAnnotationSession {
     'end': end,
     'block_kind': kind.name,
     'variant': ?variant,
+    if (roles != null && roles.isNotEmpty)
+      'roles': {for (final e in roles.entries) '${e.key}': e.value},
     'content_id': snapshot.contentId,
   });
   @override

@@ -1,0 +1,101 @@
+{
+  "bookSourceComment": "其他源的小说内容错误，然后自己手写",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "ryw笔趣阁78",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://www.biquge78.cc",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 158,
+  "easypub": {
+    "check": {
+      "at": 1792476017,
+      "chapters": 114,
+      "chars": 3708,
+      "error": "",
+      "kind": "check",
+      "ms": 2110,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 100,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476017,
+      "ms": [
+        2110
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://www.biquge78.cc::d3f1e9eef40f",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1764643635178,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 4143,
+  "ruleBookInfo": {
+    "author": "p.booktag@a@text",
+    "intro": "p.bookintro@text",
+    "kind": "ol.breadcrumb@li.1@text",
+    "lastChapter": "a.bookchapter@text",
+    "name": "h1.booktitle@text",
+    "tocUrl": "div.list-chapterAll@dd@a@href",
+    "wordCount": "p.booktag@span.0@text"
+  },
+  "ruleContent": {
+    "content": "class.readcontent@tag.p@html",
+    "nextContentUrl": "id.linkNext@href"
+  },
+  "ruleExplore": {},
+  "ruleSearch": {
+    "author": "div.author.0@text",
+    "bookList": "div.bookbox",
+    "bookUrl": "a.del_but@href",
+    "intro": "div.update@text",
+    "lastChapter": "div.cat@text",
+    "name": "h4.bookname@text"
+  },
+  "ruleToc": {
+    "chapterList": "#list-chapterAll@dd",
+    "chapterName": "tag.a@text",
+    "chapterUrl": "tag.a@href"
+  },
+  "searchUrl": "{{cookie.removeCookie(source.getKey())}}/search/,{\n\"method\": \"POST\",\n  \"body\": \"searchkey={{key}}\"\n}",
+  "variableComment": "",
+  "weight": 1
+}

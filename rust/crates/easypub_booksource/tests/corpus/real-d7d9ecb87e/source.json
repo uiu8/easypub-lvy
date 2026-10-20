@@ -1,0 +1,112 @@
+{
+  "bookSourceComment": "同站：https://m.hongxiu.com/",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "潇湘书院",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://m.xxsy.net",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 1474,
+  "easypub": {
+    "check": {
+      "at": 1792476085,
+      "chapters": 382,
+      "chars": 2390,
+      "error": "",
+      "kind": "check",
+      "ms": 1361,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 20,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476085,
+      "ms": [
+        1361
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://m.xxsy.net::36352ae626f2",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": false,
+  "exploreUrl": "                                 排行                                \n潇湘票榜::/rank/xxyuepiao\n新书榜::/rank/new\n畅销榜::/rank/bestsales\n完结榜::/rank/finish\n阅读榜::/rank/reading\n收藏榜::/rank/collections",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1723426985427,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 31107,
+  "ruleBookInfo": {
+    "author": "class.book-author@text",
+    "coverUrl": "img@src",
+    "intro": "class.book-summary@text",
+    "kind": "class.book-tatus@text##/",
+    "lastChapter": "class.chapterlist-item.0@text##[App限免]*",
+    "name": "class.book-title.0@text",
+    "tocUrl": "class.chapterlist-box@class.chapter-icon@href",
+    "wordCount": "class.book-metas@text"
+  },
+  "ruleContent": {
+    "content": "id.content@p@text",
+    "nextContentUrl": "text.下一章@href"
+  },
+  "ruleExplore": {
+    "author": "class.book-module@ownText",
+    "bookList": "a",
+    "bookUrl": "a@href",
+    "coverUrl": "img@src",
+    "intro": "class.book-profile@text",
+    "kind": "class.book-module@span.0@text",
+    "name": "class.book-title@text",
+    "wordCount": "class.book-module@span.1@text"
+  },
+  "ruleSearch": {
+    "author": "class.book-module@text##[·].*",
+    "bookList": "class.common-list common-list-one@a",
+    "bookUrl": "a@href",
+    "checkKeyWord": "簪星",
+    "coverUrl": "img@src",
+    "intro": "class.book-profile@text",
+    "name": "class.book-title@text"
+  },
+  "ruleToc": {
+    "chapterList": "ul@li",
+    "chapterName": "li@a@text",
+    "chapterUrl": "li@a@href"
+  },
+  "searchUrl": "https://m.xxsy.net/search/{{key}}",
+  "variableComment": "",
+  "weight": 0
+}

@@ -1,5 +1,6 @@
 // 章节工作区分栏（CH-041–044）：按工作区可用宽度在三栏 / 两栏 / 单栏间切换。
 // 侧栏改为浮层时保持挂载（Offstage），搜索词与输入不丢失。
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -35,6 +36,11 @@ class DeskChapterLayoutState extends State<DeskChapterLayout> {
       _readerKey = GlobalKey();
   double outlineWidth = 272, inspectorWidth = 304;
   String? drawer;
+
+  /// 拖动开始时的栏宽：宽度 = 起始栏宽 + 指针总位移（V83）。
+  /// 以前每个移动事件都从上一帧的宽度加增量，一帧内多个事件只算最后一个，
+  /// 分隔条跟不上鼠标。
+  double dragWidth = 0;
 
   void toggleOutline() =>
       setState(() => drawer = drawer == 'outline' ? null : 'outline');
@@ -115,7 +121,12 @@ class DeskChapterLayoutState extends State<DeskChapterLayout> {
                 _Divider(
                   key: const ValueKey('chapter-tree-divider'),
                   label: '调整章节列表宽度',
-                  onDrag: (delta) => setState(
+                  onDragStart: () => dragWidth = lw,
+                  onDragTo: (offset) => setState(
+                    () =>
+                        outlineWidth = (dragWidth + offset).clamp(240.0, 420.0),
+                  ),
+                  onStep: (delta) => setState(
                     () => outlineWidth = (lw + delta).clamp(240.0, 420.0),
                   ),
                 ),
@@ -125,7 +136,14 @@ class DeskChapterLayoutState extends State<DeskChapterLayout> {
                 _Divider(
                   key: const ValueKey('chapter-property-divider'),
                   label: '调整章节设置宽度',
-                  onDrag: (delta) => setState(
+                  onDragStart: () => dragWidth = rw,
+                  onDragTo: (offset) => setState(
+                    () => inspectorWidth = (dragWidth - offset).clamp(
+                      260.0,
+                      340.0,
+                    ),
+                  ),
+                  onStep: (delta) => setState(
                     () => inspectorWidth = (rw - delta).clamp(260.0, 340.0),
                   ),
                 ),
@@ -176,15 +194,28 @@ class DeskChapterLayoutState extends State<DeskChapterLayout> {
 
 /// 可拖动、可聚焦的分隔条：拖动或聚焦后左右方向键每次 16 逻辑像素。
 class _Divider extends StatefulWidget {
-  const _Divider({super.key, required this.label, required this.onDrag});
+  const _Divider({
+    super.key,
+    required this.label,
+    required this.onDragStart,
+    required this.onDragTo,
+    required this.onStep,
+  });
   final String label;
-  final ValueChanged<double> onDrag;
+  final VoidCallback onDragStart;
+
+  /// 相对拖动起点的指针总位移。
+  final ValueChanged<double> onDragTo;
+
+  /// 方向键每次的增量。
+  final ValueChanged<double> onStep;
   @override
   State<_Divider> createState() => _DividerState();
 }
 
 class _DividerState extends State<_Divider> {
   bool focused = false, hover = false;
+  double origin = 0;
   @override
   Widget build(BuildContext context) {
     final d = context.desk;
@@ -200,11 +231,11 @@ class _DividerState extends State<_Divider> {
             return KeyEventResult.ignored;
           }
           if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-            widget.onDrag(-16);
+            widget.onStep(-16);
             return KeyEventResult.handled;
           }
           if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-            widget.onDrag(16);
+            widget.onStep(16);
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;
@@ -213,8 +244,13 @@ class _DividerState extends State<_Divider> {
           label: widget.label,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
+            dragStartBehavior: DragStartBehavior.down,
+            onHorizontalDragStart: (details) {
+              origin = details.globalPosition.dx;
+              widget.onDragStart();
+            },
             onHorizontalDragUpdate: (details) =>
-                widget.onDrag(details.delta.dx),
+                widget.onDragTo(details.globalPosition.dx - origin),
             child: SizedBox(
               width: 12,
               child: Center(

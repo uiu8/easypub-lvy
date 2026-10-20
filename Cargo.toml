@@ -1,5 +1,5 @@
 [workspace]
-members = ["rust/crates/easypub_core", "rust/crates/easypub_app", "rust/crates/easypub_bridge", "rust/crates/easypub_updater"]
+members = ["rust/crates/easypub_core", "rust/crates/easypub_app", "rust/crates/easypub_bridge", "rust/crates/easypub_updater", "rust/crates/easypub_booksource"]
 resolver = "2"
 
 [workspace.package]

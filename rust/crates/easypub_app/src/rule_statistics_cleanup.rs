@@ -95,7 +95,15 @@ pub(super) fn collect(
         .filter(|k| k.starts_with("cleanup."))
         .cloned()
         .collect();
-    for id in ids {
+    // 每条清理规则各自在整本书上试一次，彼此独立，分给多个线程（V83）；结果按原顺序写回。
+    let rows: Vec<(String, Statistic)> = ids
+        .into_iter()
+        .map(|id| {
+            let row = stats[&id].clone();
+            (id, row)
+        })
+        .collect();
+    let results = super::par_map(&rows, |(id, row)| -> Result<Statistic, ApiError> {
         checkpoint(cancel)?;
         let suffix = &id[8..];
         let (kind, option) = suffix
@@ -134,7 +142,8 @@ pub(super) fn collect(
                 _ => true,
             }
         };
-        let target = stats.get_mut(&id).expect("rule");
+        let mut row = row.clone();
+        let target = &mut row;
         target.enabled = current.iter().any(rule_enabled);
         let to_evaluate = if current.is_empty() {
             fallback(kind).into_iter().collect::<Vec<_>>()
@@ -145,7 +154,7 @@ pub(super) fn collect(
         };
         if to_evaluate.is_empty() {
             target.status = "unconfigured";
-            continue;
+            return Ok(row);
         }
         let notices = matches!(kind, "site_notices" | "repeated_headers");
         if notices {
@@ -221,7 +230,7 @@ pub(super) fn collect(
             }
         }
         if target.status == "failed" {
-            continue;
+            return Ok(row);
         }
         target.changed_ranges = ranges(changes);
         target.candidate_ranges = ranges(selectable.into_iter().map(|l| (l, l)).collect());
@@ -243,6 +252,10 @@ pub(super) fn collect(
                 .map(|l| loc.line(l))
                 .collect();
         }
+        Ok(row)
+    });
+    for ((id, _), result) in rows.iter().zip(results) {
+        *stats.get_mut(id).expect("rule") = result?;
     }
     Ok(())
 }

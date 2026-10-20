@@ -1,0 +1,104 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "快速书源 ⚡,通常书源 📂",
+  "bookSourceName": "⚡📂久久小说网",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://www.aijjxs.com",
+  "bookUrlPattern": "https://www\\.aijjxs\\.com/txt/\\d+\\.html",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 158,
+  "easypub": {
+    "check": {
+      "at": 1792475821,
+      "chapters": 108,
+      "chars": 348,
+      "error": "",
+      "kind": "check",
+      "ms": 3862,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 10,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1315-20261020-133713.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792475821,
+      "ms": [
+        3862
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://www.aijjxs.com",
+    "importWarnings": [],
+    "importedAt": 1792475778,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "[{\"title\":\"穿越\",\"url\":\"https://www.aijjxs.com/txt/chuanyue/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"重生\",\"url\":\"https://www.aijjxs.com/txt/chongshengxiaoshuo/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"古代架空\",\"url\":\"https://www.aijjxs.com/txt/lsjs/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"现代言情\",\"url\":\"https://www.aijjxs.com/txt/young/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"总裁豪门\",\"url\":\"https://www.aijjxs.com/txt/qinggan/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"仙侠幻想\",\"url\":\"https://www.aijjxs.com/txt/wuxia/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"同人衍生\",\"url\":\"https://www.aijjxs.com/txt/tongrenxiaoshuo/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"无限流\",\"url\":\"https://www.aijjxs.com/txt/wuxianliu/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"耽于纯美\",\"url\":\"https://www.aijjxs.com/txt/dmtr/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"玄幻魔法\",\"url\":\"https://www.aijjxs.com/txt/xuanhuan/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"都市异能\",\"url\":\"https://www.aijjxs.com/txt/dushi/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"历史军事\",\"url\":\"https://www.aijjxs.com/txt/tiexue/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"网游小说\",\"url\":\"https://www.aijjxs.com/txt/juben/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"惊悚悬疑\",\"url\":\"https://www.aijjxs.com/txt/kongbu/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"文学名著\",\"url\":\"https://www.aijjxs.com/txt/gdmz/index_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}}]",
+  "header": "{\"User-Agent\":\"Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36\"}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1789964647324,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 4071,
+  "ruleBookInfo": {
+    "author": ".kv a@text",
+    "coverUrl": ".pic img@src",
+    "intro": ".intro-panel .desc@text",
+    "kind": ".kv p:contains(分类)@text##.*：",
+    "name": "article.panel h3@text##《|》",
+    "tocUrl": "a:contains(在线阅读)@href"
+  },
+  "ruleContent": {
+    "content": "#view_content_txt@html"
+  },
+  "ruleExplore": {
+    "author": "span.mainGreen a@text",
+    "bookList": "div.listbg",
+    "bookUrl": "span.title a@href",
+    "coverUrl": "a.img img@src",
+    "intro": "div[style]:eq(0)@text",
+    "name": "span.title a@text"
+  },
+  "ruleSearch": {
+    "author": "@text##.*作者：",
+    "bookList": "div.searchTopic",
+    "bookUrl": "a.searchtitle@href",
+    "name": "a.searchtitle@text"
+  },
+  "ruleToc": {
+    "chapterList": "ul.chapter-list li a",
+    "chapterName": "@text",
+    "chapterUrl": "@href"
+  },
+  "searchUrl": "https://www.aijjxs.com/e/search/index.php,{\"method\":\"POST\",\"body\":\"keyboard={{key}}&show=title,writer\"}",
+  "variableComment": "",
+  "weight": 0
+}

@@ -91,6 +91,25 @@ impl Preset {
                 "verse_block_style" => value
                     .as_str()
                     .is_some_and(|v| crate::production::VERSE_BLOCK_STYLES.contains(&v)),
+                "chat_block_style" => value
+                    .as_str()
+                    .is_some_and(|v| crate::insets::CHAT_BLOCK_STYLES.contains(&v)),
+                "letter_block_style" => value
+                    .as_str()
+                    .is_some_and(|v| crate::insets::LETTER_BLOCK_STYLES.contains(&v)),
+                "inset_detect" => value
+                    .as_str()
+                    .is_some_and(|v| crate::insets::INSET_DETECT.contains(&v)),
+                "inset_font" => value
+                    .as_str()
+                    .is_some_and(|v| crate::insets::INSET_FONTS.contains(&v)),
+                "inset_styles" => {
+                    value.is_null()
+                        || serde_json::from_value::<
+                            std::collections::BTreeMap<String, crate::inset_styles::InsetStyle>,
+                        >(value.clone())
+                        .is_ok_and(|s| crate::inset_styles::validate_book(&s).is_ok())
+                }
                 "system_styles" => {
                     value.is_null()
                         || serde_json::from_value::<crate::block_styles::SystemStyles>(

@@ -10,7 +10,11 @@ const BOOK_KEYS = ['writing_mode', 'vertical_digits', 'font_size', 'line_height'
   // V76：生僻字注音；章节样式包的开关与卷页边框（只在本书用了样式包时出现）。
   'rare_char_ruby', 'rare_char_scope', 'chapter_style_on', 'chapter_style_volume_frame',
   // V77：系统提示分类样式的两个预设（参数改过时为 custom）。
-  'system_note_preset', 'system_panel_preset'];
+  'system_note_preset', 'system_panel_preset',
+  // V81：场景样式（聊天记录自动识别与样式、书信样式、场景字体）。
+  'chat_block_style', 'letter_block_style', 'inset_font',
+  // V82：场景识别（诏书、论坛楼层与自定义规则）。
+  'inset_detect'];
 const NUMBER_KEYS = { font_size: 'float', line_height: 'float', fullwidth_indent: 'int', paragraph_spacing: 'float' };
 const FONTS = {
   publisher: '',

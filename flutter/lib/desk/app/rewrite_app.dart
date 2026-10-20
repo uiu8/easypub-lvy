@@ -3,6 +3,7 @@ import '../../application/folder_auto_import.dart';
 import '../shell/workspace_leave.dart';
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_selector/file_selector.dart' as files;
 
@@ -49,6 +50,9 @@ import '../library/library_view_state.dart';
 import '../library/book_overview_page.dart';
 import '../library/project_menu.dart';
 import '../folders/folders_page.dart';
+import '../plugins/booksource_page.dart';
+import '../plugins/plugins_page.dart';
+import '../../application/plugin_host.dart';
 import '../folders/metadata_mapping_page.dart';
 import '../chapters/chapter_workspace.dart';
 import '../chapters/chapter_view_state.dart';

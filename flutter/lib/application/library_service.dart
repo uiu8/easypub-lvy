@@ -43,7 +43,12 @@ class BookSummary {
     this.contentVersion = '',
     this.bytes,
     this.pending,
+    this.category = '',
+    this.series = '',
   });
+
+  /// 书籍信息里的类别与系列（V84，书库按类别筛选、排序用）。
+  final String category, series;
   final String id, title, author, path, format, status;
 
   /// 最近一次检查（当前稿）的待处理数量；没有当前稿的检查报告时为 null。
@@ -94,11 +99,25 @@ class ImportOutcome {
 
 @immutable
 class FolderBook {
-  const FolderBook(this.path, this.bytes, this.alreadyImported);
+  const FolderBook(
+    this.path,
+    this.bytes,
+    this.alreadyImported, {
+    this.modified,
+  });
   final String path;
   final int bytes;
   final bool alreadyImported;
+
+  /// 文件修改时间；读不到时为 null（V84 排序用）。
+  final DateTime? modified;
   String get name => path.replaceAll('\\', '/').split('/').last;
+
+  /// 扩展名大写（TXT / EPUB），没有扩展名时为空。
+  String get type {
+    final dot = name.lastIndexOf('.');
+    return dot < 0 ? '' : name.substring(dot + 1).toUpperCase();
+  }
 }
 
 @immutable

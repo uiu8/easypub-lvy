@@ -135,6 +135,7 @@ pub(crate) fn classify_block(
                 },
             )),
             Kind::System => Some(("system", "system-line")),
+            Kind::Inset => Some(("inset", "inset-line")),
             Kind::None => None,
         }
     } else if has_node {
@@ -146,7 +147,13 @@ pub(crate) fn classify_block(
                 && next_line.is_some_and(is_system_line)))
     {
         Some(("system", "system-line"))
-    } else if verse_style != "off" && is_verse_line(line) {
+    } else if verse_style != "off"
+        && is_verse_line(line)
+        // V92：只认成组的诗句——上一行已是诗句，或下一行仍是诗句 / 署名。
+        // 夹在正文里的单句（“我点开图片一看，整个人不由一怔！”）按正文。
+        && (previous_line == Some("verse-line")
+            || next_line.is_some_and(|n| is_verse_line(n) || is_verse_attribution(n)))
+    {
         Some(("verse", "verse-line"))
     } else if previous_line == Some("verse-line") && is_verse_attribution(line) {
         Some(("verse", "verse-by"))
@@ -164,6 +171,7 @@ fn system_runs(
     system_style: &str,
     verse_style: &str,
     custom: Option<&regex::RegexSet>,
+    insets: &BTreeMap<usize, crate::insets::Line>,
 ) -> BTreeMap<usize, (usize, Option<bool>)> {
     let mut runs = BTreeMap::new();
     let (mut offset, mut ni, mut ai) = (0usize, 0usize, 0usize);
@@ -211,6 +219,12 @@ fn system_runs(
             system_style,
             custom,
         );
+        // 场景块（V81）里的行不算系统提示：自动识别的聊天记录优先于系统提示。
+        let kind = if insets.contains_key(&offset) {
+            None
+        } else {
+            kind
+        };
         let key = annotation.map(|a| a.id.as_str());
         let forced = annotation
             .and_then(|a| a.variant.as_deref())
@@ -359,8 +373,18 @@ pub(crate) fn is_verse_line(line: &str) -> bool {
         return false;
     };
     let (na, nb) = (a.chars().count(), b.chars().count());
-    na == nb && (na == 5 || na == 7) && a.chars().chain(b.chars()).all(is_han)
+    na == nb
+        && (na == 5 || na == 7)
+        && a.chars().chain(b.chars()).all(is_han)
+        // V92：网文里“这份潜在的商机，是我不能忽视的！”这类 7+7 的白话句子很常见，
+        // 含现代白话虚词、代词的不算诗句（古诗里几乎不用这些字）。
+        && !a.chars().chain(b.chars()).any(|c| MODERN_PROSE.contains(&c))
 }
+
+const MODERN_PROSE: [char; 17] = [
+    '的', '了', '们', '吗', '呢', '吧', '啊', '呀', '么', '很', '这', '那', '没', '她', '它', '您',
+    '咱',
+];
 
 /// 诗词署名（V50，LAY-122）：紧跟诗句、以“——”开头的短行。
 pub(crate) fn is_verse_attribution(line: &str) -> bool {
@@ -584,6 +608,45 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
         .as_ref()
         .filter(|_| m.system_block_style == "styled");
     let custom = m.rule_options.system_set();
+    // 场景样式（V81，LAY-135）：手工标注的场景与自动识别的聊天记录，逐行角色。
+    let inset_plan = crate::insets::plan(
+        &book.text,
+        &book.tree.nodes,
+        &m.block_annotations,
+        m.chat_block_style != "off",
+        &crate::insets::Rules::from_settings(&m.inset_detect, &m.rule_options),
+    );
+    // 各场景实际使用的样式参数（V82，LAY-136）：饰纹、首字放大、卷轴杆、聊天名字位置。
+    let inset_styles: BTreeMap<&str, crate::inset_styles::InsetStyle> = crate::insets::TYPES
+        .iter()
+        .map(|(scene, _)| {
+            (
+                *scene,
+                crate::inset_styles::effective(m.inset_styles.as_ref(), scene, &m.chat_block_style),
+            )
+        })
+        .collect();
+    let rod = match m.inset_images.as_ref().and_then(|i| i.rod.as_ref()) {
+        Some(id) => Some(format!(
+            "<p class=\"inset-rod\">{}</p>",
+            image(prepared, id, "")?
+        )),
+        None => None,
+    };
+    // 当前打开的场景块（场景编号），以及块里是否已遇到第一行正文（首字放大）。
+    let mut open_inset: Option<&str> = None;
+    let mut inset_dropped = false;
+    let close_block = |body: &mut String, open: &mut Option<&str>| match open.take() {
+        Some(kind) => {
+            body.push_str("</div></div>");
+            if inset_styles[kind].rods
+                && let Some(html) = &rod
+            {
+                body.push_str(html);
+            }
+        }
+        None => body.push_str("</div>"),
+    };
     let runs = match styled {
         Some(_) => system_runs(
             &book.text,
@@ -592,6 +655,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             &m.system_block_style,
             &m.verse_block_style,
             custom.as_ref(),
+            &inset_plan,
         ),
         None => BTreeMap::new(),
     };
@@ -660,15 +724,24 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
         } else {
             line_block
         };
+        let inset = inset_plan.get(&offset).copied();
+        // 自动识别的块：聊天按 chat 统计，规则识别的按 inset（V82）；手工标注沿用 classify_block。
+        let line_block = match inset {
+            Some(l) if l.source == "chat" => Some(("chat", "inset-line")),
+            Some(l) if l.automatic() => Some(("inset", "inset-line")),
+            _ => line_block,
+        };
         previous_line = if annotation.is_none() {
             line_block.map(|(_, class)| class)
         } else {
             None
         };
         let next_block = line_block.map(|(kind, _)| (kind, annotation.map(|a| a.id.as_str())));
-        if block != next_block || node.is_some() {
+        // 相邻的两段场景（例如两份诏书）各自成块。
+        let inset_start = inset.is_some_and(|l| l.block == offset);
+        if block != next_block || node.is_some() || inset_start {
             if block.is_some() {
-                body.push_str("</div>");
+                close_block(&mut body, &mut open_inset);
             }
             block = None;
         }
@@ -786,7 +859,29 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                 } else {
                     "<div class=\"verse-block\">"
                 }),
-                Some("letter") => body.push_str("<div class=\"letter-block\">"),
+                Some("letter") => body.push_str(if m.letter_block_style == "ruled" {
+                    "<div class=\"letter-block letter-ruled\">"
+                } else {
+                    "<div class=\"letter-block\">"
+                }),
+                Some("inset" | "chat") => {
+                    let kind = inset.map_or("chat", |l| l.kind);
+                    if inset_styles[kind].rods
+                        && let Some(html) = &rod
+                    {
+                        body.push_str(html);
+                    }
+                    body.push_str(&format!(
+                        "<div class=\"inset inset-{kind}{}\"><div class=\"inset-inner\">",
+                        if kind == "chat" {
+                            format!(" inset-names-{}", inset_styles[kind].names)
+                        } else {
+                            String::new()
+                        }
+                    ));
+                    open_inset = Some(kind);
+                    inset_dropped = false;
+                }
                 Some("quote") => body.push_str("<div class=\"quote-block\">"),
                 _ => {}
             }
@@ -848,6 +943,9 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                     attrs.push_str(&format!(" data-original=\"{}\"", escaped(original)?));
                 }
             }
+            if let Some(l) = inset {
+                attrs = attrs.replace("inset-line", &format!("inset-line inset-{}", l.role));
+            }
             let content = if notes
                 .as_ref()
                 .is_some_and(|n| n.preserve_indent(offset, original))
@@ -896,6 +994,53 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                 }
                 _ => inner,
             };
+            // 场景样式（V81）：聊天行拆出名字；古籍、羊皮纸标题加饰纹；羊皮纸首段首字放大。原文存于 data-original。
+            let mut who = None;
+            let inner = match inset {
+                Some(l) if l.role == "say" && !has_note => {
+                    match crate::insets::chat_line(&content) {
+                        Some(((ns, ne), (ss, se))) => {
+                            let name = escaped(&content[ns..ne])?;
+                            let say = crate::inline_markup::render(&content[ss..se], digits)?;
+                            if inset_styles[l.kind].names == "inline" {
+                                format!("<span class=\"inset-who\">{name}</span> ▷ {say}")
+                            } else {
+                                who = Some(format!("<p class=\"inset-line inset-who\">{name}</p>"));
+                                say
+                            }
+                        }
+                        None => inner,
+                    }
+                }
+                Some(l)
+                    if l.role == "head"
+                        && let (Some(open), Some(close)) = (
+                            inset_styles[l.kind].ornament_char(),
+                            inset_styles[l.kind].ornament_close(),
+                        ) =>
+                {
+                    format!(
+                        "<span class=\"inset-orn\">{open}</span> {inner} <span class=\"inset-orn\">{close}</span>"
+                    )
+                }
+                Some(l) if l.role == "body" && inset_styles[l.kind].drop && !inset_dropped => {
+                    inset_dropped = true;
+                    match inner.chars().next() {
+                        Some(c) if c.is_alphanumeric() => format!(
+                            "<span class=\"inset-drop\">{c}</span>{}",
+                            &inner[c.len_utf8()..]
+                        ),
+                        _ => inner,
+                    }
+                }
+                _ => inner,
+            };
+            if inset.is_some() && !attrs.contains(" data-original=") {
+                attrs.push_str(&format!(
+                    " data-original=\"{}\"",
+                    escaped(original)?.replace('\t', "&#9;")
+                ));
+            }
             // 系统提示分类样式（V77）：按单行提示 / 面板的参数去括号、标标题、键名加粗；原文存于 data-original。
             let inner = match (styled, styled_block.as_mut(), line_block) {
                 (Some(styles), Some((panel, index, title)), Some(("system", _))) => {
@@ -952,6 +1097,9 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                 ));
             }
             let definition = notes.as_ref().and_then(|notes| notes.definition(offset));
+            if let Some(html) = who {
+                body.push_str(&html);
+            }
             if let Some(id) = definition {
                 body.push_str(&format!(
                     "<aside epub:type=\"footnote\" id=\"note-{id}\" class=\"footnote\">"
@@ -1002,7 +1150,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
         }
     }
     if block.is_some() {
-        body.push_str("</div>");
+        close_block(&mut body, &mut open_inset);
     }
     if in_chapter && let Some(html) = &chapter_end {
         body.push_str(html);
@@ -1246,6 +1394,323 @@ mod tests {
     }
 
     #[test]
+    fn insets_chat_detection_manual_scenes_letter_ruled_and_lossless() {
+        use sha2::{Digest, Sha256};
+        let text = "第一章 开始\n正文。\n九州一号群\n— 22:01 —\n【四：以雕像作为封印阵法。】\n\n【一：眉心开裂？】\n【四：有可能。】\n后文。\n奉天承运 皇帝诏曰\n着即晋封国公。\n钦此\n契约\n立约人以血为誓。\n——灰塔之印\n吾儿见字如面：\n勿念家中。\n母字\n九州一号群\n四：甲\n一：乙\n结尾。\n";
+        let source =
+            SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let mark = |piece: &str, kind: &str, variant: Option<&str>| {
+            let start = text.find(piece).unwrap();
+            let end = start + piece.len();
+            let mut v = json!({"id": format!("{:x}", Sha256::digest(piece.as_bytes())), "start": start, "end": end,
+                   "kind": kind,
+                   "fingerprint": format!("{:x}", Sha256::digest(&text.as_bytes()[start..end]))});
+            if let Some(variant) = variant {
+                v["variant"] = json!(variant);
+            }
+            v
+        };
+        let restore = |page: &str| {
+            let body = roxmltree::Document::parse(page).unwrap();
+            let mut restored = String::new();
+            for n in body
+                .descendants()
+                .filter(|n| n.attribute("data-source") == Some("true"))
+            {
+                match n.attribute("data-original") {
+                    Some(original) => restored.push_str(original),
+                    None => n
+                        .descendants()
+                        .filter(|d| d.is_text())
+                        .for_each(|d| restored.push_str(d.text().unwrap())),
+                }
+                restored.push('\n');
+            }
+            restored
+        };
+        let annotations = json!([
+            mark(
+                "奉天承运 皇帝诏曰\n着即晋封国公。\n钦此\n",
+                "inset",
+                Some("edict")
+            ),
+            mark(
+                "契约\n立约人以血为誓。\n——灰塔之印\n",
+                "inset",
+                Some("scroll")
+            ),
+            mark("吾儿见字如面：\n勿念家中。\n母字\n", "letter", None),
+            mark("九州一号群\n四：甲\n一：乙\n", "inset", Some("chat")),
+        ]);
+        for look in ["window", "script", "channel"] {
+            let mut req = request(&source);
+            req.settings.system_block_style = "styled".into();
+            req.settings.chat_block_style = look.into();
+            req.settings.letter_block_style = "ruled".into();
+            req.settings.block_annotations = serde_json::from_value(annotations.clone()).unwrap();
+            let prepared = publication_resources::prepare(&source, req).unwrap();
+            let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+            // 自动识别：【】聊天行优先于系统提示，空行与时间行留在块里；前一行群名不在自动块里。
+            assert!(
+                page.contains(&format!(
+                    "<div class=\"inset inset-chat inset-names-{}\"><div class=\"inset-inner\">",
+                    match look {
+                        "window" => "block",
+                        "script" => "center",
+                        _ => "inline",
+                    }
+                )),
+                "{look}"
+            );
+            assert_eq!(page.matches("inset-chat").count(), 2, "{look}");
+            assert!(!page.contains("blk blk-"), "聊天行不再算系统提示");
+            assert!(page.contains("inset-line inset-time"));
+            if look == "channel" {
+                assert!(
+                    page.contains("<span class=\"inset-who\">四</span> ▷ 以雕像作为封印阵法。</p>")
+                );
+                assert!(!page.contains("<p class=\"inset-line inset-who\">"));
+            } else {
+                assert!(page.contains("<p class=\"inset-line inset-who\">四</p><p class=\"text-line inset-line inset-say\""));
+                assert!(page.contains(">以雕像作为封印阵法。</p>"));
+            }
+            // 手工聊天：首行群名为标题。
+            assert!(page.contains("inset-line inset-head\" data-original=\"九州一号群\""));
+            // 诏书：标题、落款；羊皮纸：卷轴杆、饰纹、首字放大、落款。
+            assert!(page.contains("<div class=\"inset inset-edict\"><div class=\"inset-inner\">"));
+            assert!(page.contains("inset-line inset-end\" data-original=\"钦此\""));
+            let images = prepared.manifest().inset_images.clone().unwrap();
+            let (rod, paper) = (images.rod.unwrap(), images.paper.unwrap());
+            assert!(page.contains(&format!("<p class=\"inset-rod\"><img src=\"{}\" alt=\"\"/></p><div class=\"inset inset-scroll\">", rod)));
+            assert!(page.contains(&format!(
+                "灰塔之印</p></div></div><p class=\"inset-rod\"><img src=\"{}\"",
+                rod
+            )));
+            assert!(page.contains(
+                "<span class=\"inset-orn\">※</span> 契约 <span class=\"inset-orn\">※</span>"
+            ));
+            assert!(page.contains("<span class=\"inset-drop\">立</span>约人以血为誓。"));
+            assert!(prepared.image_bytes(&paper).is_some());
+            assert!(prepared.image_bytes(&rod).is_some());
+            // 书信格线。
+            assert!(page.contains("<div class=\"letter-block letter-ruled\">"));
+            let css = &prepared.manifest().stylesheet.css;
+            assert!(css.contains(&format!(
+                ".inset-scroll .inset-inner {{ padding: 0.4em 0.9em; background-image: url(\"{}\"); }}",
+                paper
+            )));
+            assert!(css.contains("\"STKai\", \"楷体\""));
+            assert_eq!(restore(&page), text, "{look}");
+            let value = serde_json::to_value(prepared.manifest()).unwrap();
+            assert_eq!(value["chat_block_style"], look);
+            assert_eq!(value["letter_block_style"], "ruled");
+            assert!(value.get("inset_font").is_none(), "默认楷体不写入");
+            // 通用与 Bokai 输入 EPUB 都能写出（含程序生成的图片资源）；Kindling 输入需要封面，由 Flutter 端真实转换覆盖。
+            for (name, result) in [
+                (
+                    "epub",
+                    crate::epub::write(&prepared, std::io::Cursor::new(Vec::new())).map(|_| ()),
+                ),
+                (
+                    "bokai",
+                    crate::epub::write_bokai_input(&prepared, std::io::Cursor::new(Vec::new()))
+                        .map(|_| ()),
+                ),
+            ] {
+                if let Err(e) = result {
+                    panic!("{look} {name}: {e:?}");
+                }
+            }
+        }
+        // V82a：本书改过的样式——古籍换〖〗饰纹并首字放大，羊皮纸去掉卷轴杆与纸纹、改浅灰底。
+        let mut req = request(&source);
+        req.settings.chat_block_style = "window".into();
+        req.settings.block_annotations = serde_json::from_value(annotations.clone()).unwrap();
+        let mut styles = std::collections::BTreeMap::new();
+        let mut classic = crate::inset_styles::default_for("edict", "off");
+        classic.ornament = "lenticular".into();
+        classic.drop = true;
+        classic.names = "inline".into();
+        styles.insert("edict".to_owned(), classic);
+        let mut scroll = crate::inset_styles::default_for("scroll", "off");
+        scroll.rods = false;
+        scroll.shade = "light".into();
+        styles.insert("scroll".to_owned(), scroll);
+        let mut chat = crate::inset_styles::default_for("chat", "window");
+        chat.names = "inline".into();
+        styles.insert("chat".to_owned(), chat);
+        req.settings.inset_styles = Some(styles);
+        let prepared = publication_resources::prepare(&source, req).unwrap();
+        let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+        assert!(page.contains("<span class=\"inset-orn\">〖</span> 奉天承运 皇帝诏曰 <span class=\"inset-orn\">〗</span>"));
+        assert!(page.contains("<span class=\"inset-drop\">着</span>即晋封国公。"));
+        assert!(!page.contains("inset-rod"), "去掉卷轴杆");
+        assert!(prepared.manifest().inset_images.is_none(), "不再生成图片");
+        assert!(page.contains("inset-names-inline"));
+        assert!(page.contains("<span class=\"inset-who\">四</span> ▷ "));
+        let css = &prepared.manifest().stylesheet.css;
+        assert!(css.contains(
+            ".inset-scroll .inset-inner { padding: 0.4em 0.9em; background-color: #ececec; }"
+        ));
+        assert!(!css.contains("background-image"));
+        assert_eq!(restore(&page), text);
+        let value = serde_json::to_value(prepared.manifest()).unwrap();
+        assert_eq!(value["inset_styles"]["scroll"]["shade"], "light");
+        // 非法参数被拒绝。
+        let mut req = request(&source);
+        let mut bad = crate::inset_styles::default_for("news", "off");
+        bad.border = "wavy".into();
+        req.settings.inset_styles = Some([("news".to_owned(), bad)].into());
+        assert!(publication_resources::prepare(&source, req).is_err());
+        // 旧书（默认值、无场景标注）：成品参数与样式表不含场景样式。
+        let mut req = request(&source);
+        req.settings.system_block_style = "styled".into();
+        let prepared = publication_resources::prepare(&source, req).unwrap();
+        let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+        assert!(!page.contains("inset"));
+        assert!(
+            page.contains("blk blk-panel"),
+            "不识别聊天时【】行仍是系统提示"
+        );
+        assert!(!prepared.manifest().stylesheet.css.contains("inset"));
+        let value = serde_json::to_value(prepared.manifest()).unwrap();
+        for key in [
+            "chat_block_style",
+            "letter_block_style",
+            "inset_font",
+            "inset_images",
+        ] {
+            assert!(value.get(key).is_none(), "{key}");
+        }
+        assert_eq!(restore(&page), text);
+        // 场景标注必须带合法场景；其他类不带。
+        for bad in [
+            json!({"kind":"inset"}),
+            json!({"kind":"inset","variant":"panel"}),
+            json!({"kind":"letter","variant":"chat"}),
+        ] {
+            let mut a = mark("正文。\n", "x", None);
+            for (k, v) in bad.as_object().unwrap() {
+                a[k] = v.clone();
+            }
+            let list: Vec<crate::block_annotations::Annotation> =
+                serde_json::from_value(json!([a])).unwrap();
+            assert!(crate::block_annotations::validate(&list).is_err(), "{bad}");
+        }
+        // 非法设置值被拒绝。
+        let mut req = request(&source);
+        req.settings.chat_block_style = "bubble".into();
+        assert!(publication_resources::prepare(&source, req).is_err());
+    }
+
+    #[test]
+    fn inset_rules_detect_adjacent_blocks_and_stay_off_for_old_books() {
+        let text = "第一章 开始\n正文。\n奉天承运 皇帝诏曰\n着即晋封国公。\n钦此\n圣旨\n赏银百两。\n钦此\n1楼 楼主\n有人吗？\n2楼 路过\n元婴渡劫。\n结尾。\n";
+        let source =
+            SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let mut req = request(&source);
+        req.settings.inset_detect = "on".into();
+        let prepared = publication_resources::prepare(&source, req).unwrap();
+        let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+        assert_eq!(
+            page.matches("<div class=\"inset inset-edict\">").count(),
+            2,
+            "两份诏书各成一块"
+        );
+        assert_eq!(page.matches("<div class=\"inset inset-forum\">").count(), 1);
+        assert!(page.contains("inset-line inset-floor"));
+        let css = &prepared.manifest().stylesheet.css;
+        assert!(css.contains(".inset-edict {"));
+        let body = roxmltree::Document::parse(&page).unwrap();
+        let mut restored = String::new();
+        for n in body
+            .descendants()
+            .filter(|n| n.attribute("data-source") == Some("true"))
+        {
+            restored.push_str(
+                n.attribute("data-original")
+                    .or_else(|| n.text())
+                    .unwrap_or(""),
+            );
+            restored.push('\n');
+        }
+        assert_eq!(restored, text);
+        assert_eq!(
+            serde_json::to_value(prepared.manifest()).unwrap()["inset_detect"],
+            "on"
+        );
+        // 旧书（不识别）：成品不变，参数不写入。
+        let prepared = publication_resources::prepare(&source, request(&source)).unwrap();
+        let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+        assert!(!page.contains("inset"));
+        assert!(
+            serde_json::to_value(prepared.manifest())
+                .unwrap()
+                .get("inset_detect")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn inset_manual_roles_override_and_are_validated() {
+        use sha2::{Digest, Sha256};
+        let text = "第一章 开始\n林小满 @xiaoman\n今天的江面。\n沈舟：拍得真好\n转发 12 评论 34 赞 560\n\n结尾。\n";
+        let source =
+            SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let piece = "林小满 @xiaoman\n今天的江面。\n沈舟：拍得真好\n转发 12 评论 34 赞 560\n\n";
+        let start = text.find(piece).unwrap();
+        let mark = |roles: serde_json::Value| {
+            json!([{"id": format!("{:x}", Sha256::digest(piece.as_bytes())), "start": start, "end": start + piece.len(),
+                    "kind": "inset", "variant": "post", "roles": roles,
+                    "fingerprint": format!("{:x}", Sha256::digest(piece.as_bytes()))}])
+        };
+        // 自动：第三行“沈舟：……”在转评赞之前，不算回复；指定为回复，空行指定无效。
+        let mut req = request(&source);
+        req.settings.block_annotations =
+            serde_json::from_value(mark(json!({"2": "reply", "4": "head"}))).unwrap();
+        let prepared = publication_resources::prepare(&source, req).unwrap();
+        let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
+        assert!(page.contains("inset-line inset-reply\" data-original=\"沈舟：拍得真好\""));
+        assert!(page.contains("inset-line inset-count"));
+        assert!(page.contains("inset-line inset-blank"), "空行保持空行");
+        let mut req = request(&source);
+        req.settings.block_annotations = serde_json::from_value(mark(json!({}))).unwrap();
+        let page = publication_resources::prepare(&source, req)
+            .unwrap()
+            .documents()
+            .unwrap()
+            .pages["body.xhtml"]
+            .clone();
+        assert!(page.contains("inset-line inset-body\" data-original=\"沈舟：拍得真好\""));
+        // 角色必须是该场景能用的；只有场景能带；行号上限。
+        for roles in [json!({"0": "floor"}), json!({"300": "head"})] {
+            let list: Vec<crate::block_annotations::Annotation> =
+                serde_json::from_value(mark(roles.clone())).unwrap();
+            assert!(
+                crate::block_annotations::validate(&list).is_err(),
+                "{roles}"
+            );
+        }
+        let mut letter = mark(json!({"0": "head"}));
+        letter[0]["kind"] = json!("letter");
+        letter[0].as_object_mut().unwrap().remove("variant");
+        let list: Vec<crate::block_annotations::Annotation> =
+            serde_json::from_value(letter).unwrap();
+        assert!(crate::block_annotations::validate(&list).is_err());
+        // 列表带上各行文字与自动判断的角色。
+        let list: Vec<crate::block_annotations::Annotation> =
+            serde_json::from_value(mark(json!({}))).unwrap();
+        let (book, _) = publication_resources::compose(&source, request(&source)).unwrap();
+        let report = crate::block_annotations::report(&list, &book);
+        let a = &report["annotations"][0];
+        assert_eq!(a["lines"][0], "林小满 @xiaoman");
+        assert_eq!(
+            a["auto_roles"],
+            json!(["head", "body", "body", "count", "blank"])
+        );
+    }
+
+    #[test]
     fn system_custom_patterns_and_manual_variants() {
         use sha2::{Digest, Sha256};
         let text = "第一章 开始\n≮任务：清剿妖兽≯\n≮奖励：100灵币≯\n正文。\n【单行却要面板】\n正文二。\n【甲：一】\n【乙：二】\n结尾。\n";
@@ -1463,8 +1928,20 @@ mod tests {
             "床前明月光，疑是地上霜。",
             "　春风得意马蹄疾，一日看尽长安花",
             "白日依山尽，黄河入海流！",
+            "独在异乡为异客，每逢佳节倍思亲。",
+            "白发三千丈，缘愁似个长。",
+            "春眠不觉晓，处处闻啼鸟。",
         ] {
             assert!(verse(yes), "{yes}");
+        }
+        // V92：Kindle 上被误当诗句居中的网文句子（7+7 白话）。
+        for no in [
+            "这份潜在的商机，是我不能忽视的！",
+            "察觉到我的迟疑，倪妮并没有勉强。",
+            "我心里咯噔一下，这可真是个难题。",
+            "她笑着摇摇头，没有再说什么。",
+        ] {
+            assert!(!verse(no), "{no}");
         }
         for no in [
             "他推门而出，雾散了。",

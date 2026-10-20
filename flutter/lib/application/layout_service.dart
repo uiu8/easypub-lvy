@@ -88,6 +88,180 @@ const rareCharRubyModes = {
 /// 生僻字范围（V73，LAY-129）：值与 Rust `RARE_CHAR_SCOPES` 一一对应。
 const rareCharScopes = {'outside': '表外字', 'level3': '表外字和三级字'};
 
+/// 场景样式（V81，LAY-135）：值与 Rust `insets` 模块的常量一一对应。
+const chatBlockStyles = {
+  'off': '不识别',
+  'window': '群聊窗口',
+  'script': '剧本对白',
+  'channel': '通讯频道',
+};
+const letterBlockStyles = {'plain': '普通', 'ruled': '信笺格线'};
+const insetFonts = {'kai': '楷体', 'body': '正文字体'};
+
+/// 场景识别（V82，LAY-137）：值与 Rust `insets::INSET_DETECT` 一一对应。
+const insetDetectModes = {'off': '不识别', 'on': '识别'};
+
+const _insetBase = <String, Object>{
+  'border': 'none',
+  'line': 'solid',
+  'weight': 'thin',
+  'corner': 'square',
+  'shade': 'none',
+  'head': 'plain',
+  'ornament': 'none',
+  'align': 'start',
+  'size': 100,
+  'indent': true,
+  'drop': false,
+  'font': 'body',
+  'rods': false,
+  'names': 'block',
+};
+
+/// 场景样式的内置预设（V82，LAY-136）：与 Rust `inset_styles::presets` 一一对应（测试核对）。
+/// 每种场景第一个是默认；聊天的三种对应“聊天记录”设置的三种样式。
+final insetStylePresets =
+    <String, (String scene, String name, Map<String, Object>)>{
+      'window': (
+        'chat',
+        '群聊窗口',
+        {..._insetBase, 'border': 'full', 'head': 'spaced', 'indent': false},
+      ),
+      'script': (
+        'chat',
+        '剧本对白',
+        {..._insetBase, 'head': 'bold', 'indent': false, 'names': 'center'},
+      ),
+      'channel': (
+        'chat',
+        '通讯频道',
+        {
+          ..._insetBase,
+          'border': 'top_bottom',
+          'line': 'dashed',
+          'size': 85,
+          'indent': false,
+          'font': 'mono',
+          'names': 'inline',
+        },
+      ),
+      'card': (
+        'post',
+        '动态卡片',
+        {
+          ..._insetBase,
+          'border': 'full',
+          'corner': 'round',
+          'head': 'bold',
+          'indent': false,
+        },
+      ),
+      'floors': ('forum', '楼层', {..._insetBase, 'indent': false}),
+      'notebook': (
+        'diary',
+        '日记本',
+        {..._insetBase, 'border': 'left', 'line': 'double'},
+      ),
+      'frame': (
+        'classic',
+        '文武边栏',
+        {
+          ..._insetBase,
+          'border': 'frame',
+          'weight': 'thick',
+          'head': 'underline',
+          'ornament': 'diamond',
+          'font': 'kai',
+        },
+      ),
+      'bars': (
+        'edict',
+        '上下粗杆',
+        {
+          ..._insetBase,
+          'border': 'top_bottom',
+          'weight': 'heavy',
+          'head': 'spaced',
+          'font': 'kai',
+        },
+      ),
+      'parchment': (
+        'scroll',
+        '羊皮纸卷',
+        {
+          ..._insetBase,
+          'border': 'full',
+          'line': 'double',
+          'shade': 'paper',
+          'head': 'spaced',
+          'ornament': 'mark',
+          'drop': true,
+          'rods': true,
+        },
+      ),
+      'poster': (
+        'notice',
+        '告示',
+        {
+          ..._insetBase,
+          'border': 'full',
+          'weight': 'thick',
+          'head': 'big',
+          'align': 'center',
+          'indent': false,
+        },
+      ),
+      'clipping': ('news', '剪报', {..._insetBase, 'border': 'full'}),
+    };
+
+/// 场景的默认样式：聊天按“聊天记录”设置（不识别时为群聊窗口），其余取该场景第一个预设。
+Map<String, Object> defaultInsetStyle(String scene, String chatLook) {
+  if (scene == 'chat') {
+    return Map.of(
+      insetStylePresets[chatLook == 'off' ? 'window' : chatLook]!.$3,
+    );
+  }
+  return Map.of(insetStylePresets.values.firstWhere((p) => p.$1 == scene).$3);
+}
+
+/// 与某个预设参数完全相同时返回预设编号，否则为 custom。
+String insetPresetOf(String scene, Map? style) {
+  for (final e in insetStylePresets.entries) {
+    if (e.value.$1 == scene && _sameMap(e.value.$3, style)) return e.key;
+  }
+  return 'custom';
+}
+
+bool _sameMap(Map a, Map? b) =>
+    b != null &&
+    a.length == b.length &&
+    a.entries.every((e) => b[e.key] == e.value);
+
+/// “我的场景样式”里某场景的条目：名称 → 参数。
+Map<String, Map<String, Object>> savedInsetsOf(
+  Object? library,
+  String scene,
+) => {
+  for (final item in (library is List ? library : const []))
+    if (item is Map && item['scene'] == scene && item['style'] is Map)
+      item['name'] as String: Map<String, Object>.from(item['style'] as Map),
+};
+
+bool sameInsetStyle(Map a, Map? b) => _sameMap(a, b);
+
+/// 手工标注的场景（V81）：与 Rust `insets::TYPES` 顺序相同。
+const insetTypes = {
+  'chat': '聊天记录',
+  'post': '动态',
+  'forum': '论坛楼层',
+  'diary': '日记',
+  'classic': '古籍',
+  'edict': '诏书',
+  'scroll': '羊皮纸',
+  'notice': '告示',
+  'news': '剪报',
+};
+
 /// 系统提示样式（V50，LAY-121）：值与 Rust `SYSTEM_BLOCK_STYLES` 一一对应。
 const systemBlockStyles = {
   'off': '不识别',
@@ -214,6 +388,11 @@ final layoutFields = Set<String>.unmodifiable({
   'first_paragraph_style',
   'rare_char_ruby',
   'rare_char_scope',
+  'chat_block_style',
+  'letter_block_style',
+  'inset_font',
+  'inset_styles',
+  'inset_detect',
   'chapter_head_scope',
   'chapter_head_width',
   'system_block_style',

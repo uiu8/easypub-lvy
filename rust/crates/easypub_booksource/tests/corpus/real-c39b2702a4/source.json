@@ -1,0 +1,94 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "第一版主网",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://m.diyibanzhu2.online/",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 193,
+  "easypub": {
+    "check": {
+      "at": 1792476022,
+      "chapters": 14,
+      "chars": 7507,
+      "error": "",
+      "kind": "check",
+      "ms": 4404,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 20,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476022,
+      "ms": [
+        4404
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://m.diyibanzhu2.online/",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "[\n  {\n    \"title\": \"最近更新\",\n    \"url\": \"book/15672_{{page}}.html\",\n    \"style\": {\n      \"layout_flexGrow\": 0,\n      \"layout_flexShrink\": 1,\n      \"layout_alignSelf\": \"auto\",\n      \"layout_flexBasisPercent\": -1,\n      \"layout_wrapBefore\": false\n    }\n  }\n]",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1761464200364,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 6908,
+  "ruleBookInfo": {},
+  "ruleContent": {
+    "content": "id.nr1@html",
+    "nextContentUrl": "class.chapterPages@tag.a@href"
+  },
+  "ruleExplore": {},
+  "ruleSearch": {
+    "author": "class.author@text||class.info@ownText##作者：",
+    "bookList": "class.mod block book-all-list@class.bd@tag.li@class.right",
+    "bookUrl": "class.name@href",
+    "intro": "tag.span.0@text",
+    "lastChapter": "class.update@text",
+    "name": "class.name@text"
+  },
+  "ruleToc": {
+    "chapterList": "class.mod block update chapter-list@class.bd@class.list@tag.li",
+    "chapterName": "tag.a@text",
+    "chapterUrl": "tag.a@href",
+    "nextTocUrl": "class.pagelistbox@class.nextPage@href"
+  },
+  "searchUrl": "search_top_{{key}}_691_{{page}}.html",
+  "variableComment": "",
+  "weight": 0
+}

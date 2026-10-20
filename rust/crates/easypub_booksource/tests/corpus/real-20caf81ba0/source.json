@@ -1,0 +1,105 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "快速书源 ⚡,通常书源 📂",
+  "bookSourceName": "⚡📂998读书网",
+  "bookSourceType": 0,
+  "bookSourceUrl": "http://www.998ds.net/",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 12,
+  "easypub": {
+    "check": {
+      "at": 1792475784,
+      "chapters": 526,
+      "chars": 3992,
+      "error": "",
+      "kind": "check",
+      "ms": 4297,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 40,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1315-20261020-133713.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792475784,
+      "ms": [
+        4297
+      ],
+      "retryAfter": 0
+    },
+    "id": "http://www.998ds.net/",
+    "importWarnings": [],
+    "importedAt": 1792475778,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": false,
+  "enabledExplore": true,
+  "exploreUrl": "[{\"title\":\"总收藏\",\"url\":\"http://www.998ds.net/top11-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"总字数\",\"url\":\"http://www.998ds.net/top12-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"日排行\",\"url\":\"http://www.998ds.net/top0-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"周排行\",\"url\":\"http://www.998ds.net/top1-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"月排行\",\"url\":\"http://www.998ds.net/top2-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"总排行\",\"url\":\"http://www.998ds.net/top3-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"日推荐\",\"url\":\"http://www.998ds.net/top4-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"周推荐\",\"url\":\"http://www.998ds.net/top5-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"月推荐\",\"url\":\"http://www.998ds.net/top6-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"总推荐\",\"url\":\"http://www.998ds.net/top7-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"日收藏\",\"url\":\"http://www.998ds.net/top8-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"周收藏\",\"url\":\"http://www.998ds.net/top9-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"月收藏\",\"url\":\"http://www.998ds.net/top10-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"更新排行\",\"url\":\"http://www.998ds.net/top13-15-{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}}]",
+  "header": "{\n\t\"Referer\":\"http://www.998ds.net/\"\n\t}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1791140121929,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 7688,
+  "ruleBookInfo": {
+    "author": "class.info@a.4@text",
+    "coverUrl": "img.1@src",
+    "intro": "class.r_cons.0@text##.*简介：",
+    "lastChapter": "class.list-item@a.-1@text",
+    "name": "class.info@a.0@text",
+    "wordCount": ".txt_nav@a.1@text"
+  },
+  "ruleContent": {
+    "content": "class.content@textNodes"
+  },
+  "ruleExplore": {
+    "bookList": "id.articlelist@ul!0",
+    "bookUrl": "a.1@href",
+    "kind": "span.0@text&&span.4@text##\\n",
+    "name": "span.1@text",
+    "wordCount": "span.6@text"
+  },
+  "ruleSearch": {
+    "bookList": ".list@table",
+    "bookUrl": "h3@a@href",
+    "coverUrl": ".cover@img@src",
+    "intro": ".intro@text",
+    "kind": ".intro@text&&.size@text##赞\\（.*|.*更新\\:",
+    "name": "h3@text"
+  },
+  "ruleToc": {
+    "chapterList": "ol.1@li",
+    "chapterName": "a@text",
+    "chapterUrl": "a@href"
+  },
+  "searchUrl": "http://www.998ds.net/search.php?keyword={{key}},{\n  \"charset\": \"GBK\",\n  \"method\": \"GET\"\n}",
+  "variableComment": "",
+  "weight": 0
+}

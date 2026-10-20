@@ -4,6 +4,8 @@
 // · 拖到列表上下边缘自动滚动；Ctrl+A 全选当前列表，Esc 清空勾选。
 // 只处理鼠标与触控笔的主键拖动；点击（未超过拖动阈值）仍交给行内控件。
 // 网格（书架视图，LIB-101）：给出 hitTiles 时只用选框，框住的格子加入勾选。
+// 拖书进收藏夹（V84，LIB-121）：passThrough 对按下位置返回 true 时（例如按在已勾选的书上），
+// 本区域不处理这次拖动，交给书本身的拖放。
 import 'dart:async';
 
 import 'package:flutter/gestures.dart';
@@ -26,6 +28,7 @@ class DragSelectRegion extends StatefulWidget {
     this.onSelectAll,
     this.onClear,
     this.hitTiles,
+    this.passThrough,
   });
 
   final ScrollController scroll;
@@ -45,6 +48,9 @@ class DragSelectRegion extends StatefulWidget {
 
   /// 网格模式：返回与选框（内容坐标）相交的格子序号。
   final Set<int> Function(Rect contentRect)? hitTiles;
+
+  /// 按下位置（内容坐标）与该处的行序号；返回 true 时不开始连选或框选。
+  final bool Function(Offset contentPosition, int index)? passThrough;
 
   @override
   State<DragSelectRegion> createState() => _DragSelectRegionState();
@@ -84,9 +90,11 @@ class _DragSelectRegionState extends State<DragSelectRegion> {
         e.buttons != kPrimaryMouseButton) {
       return;
     }
+    final at = e.localPosition.translate(0, offset);
+    if (widget.passThrough?.call(at, indexAt(at.dy)) ?? false) return;
     focus.requestFocus();
     pointer = e.pointer;
-    down = e.localPosition.translate(0, offset);
+    down = at;
     current = e.localPosition;
     active = false;
     mode =

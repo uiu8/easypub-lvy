@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../application/block_annotation_service.dart';
+import '../../application/layout_service.dart' show insetTypes;
 import '../controls/controls.dart';
 import '../dialogs.dart';
 import '../tokens.dart';
@@ -23,12 +24,168 @@ const blockMarkChoices = <(BlockAnnotationKind, String?, String)>[
   (BlockAnnotationKind.none, null, '取消识别'),
 ];
 
-String blockMarkLabel(BlockAnnotationKind kind, [String? variant]) =>
-    blockMarkChoices.firstWhere((c) => c.$1 == kind && c.$2 == variant).$3;
+/// 场景（V81，LAY-135）：工具条与菜单里收在“场景”下面，九种场景各一项。
+final insetMarkChoices = <(BlockAnnotationKind, String?, String)>[
+  for (final e in insetTypes.entries)
+    (BlockAnnotationKind.inset, e.key, '场景 · ${e.value}'),
+];
+
+String blockMarkLabel(BlockAnnotationKind kind, [String? variant]) => [
+  ...blockMarkChoices,
+  ...insetMarkChoices,
+].firstWhere((c) => c.$1 == kind && c.$2 == variant).$3;
 
 /// 按钮与菜单项的标识：没有样式时沿用类别名。
 String blockMarkKey(BlockAnnotationKind kind, String? variant) =>
     variant == null ? kind.name : '${kind.name}-$variant';
+
+/// 场景各角色的名称（V82，LAY-138）。
+const insetRoleLabels = {
+  'head': '标题',
+  'body': '正文',
+  'end': '落款',
+  'say': '发言',
+  'time': '时间',
+  'date': '日期',
+  'floor': '楼层',
+  'count': '转评赞',
+  'reply': '回复',
+  'mast': '报头',
+  'headline': '大标题',
+  'by': '署名',
+};
+
+/// 每种场景能用的角色：与 Rust `insets::allowed_roles` 一致。
+const insetAllowedRoles = {
+  'chat': ['head', 'time', 'say', 'body'],
+  'post': ['head', 'body', 'count', 'reply'],
+  'forum': ['floor', 'body'],
+  'diary': ['date', 'body'],
+  'classic': ['head', 'body', 'end'],
+  'edict': ['head', 'body', 'end'],
+  'scroll': ['head', 'body', 'end'],
+  'notice': ['head', 'body', 'end'],
+  'news': ['mast', 'headline', 'by', 'body'],
+};
+
+/// 逐行设置对话框：每个非空行选“自动”或一个角色；返回新的逐行角色，取消为 null。
+Future<Map<int, String>?> showInsetRolesDialog(
+  BuildContext context,
+  BlockAnnotationView view,
+) => showDialog<Map<int, String>>(
+  context: context,
+  builder: (_) => _RolesDialog(view: view),
+);
+
+class _RolesDialog extends StatefulWidget {
+  const _RolesDialog({required this.view});
+  final BlockAnnotationView view;
+  @override
+  State<_RolesDialog> createState() => _RolesDialogState();
+}
+
+class _RolesDialogState extends State<_RolesDialog> {
+  late final roles = Map<int, String>.of(widget.view.roles);
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desk;
+    final view = widget.view;
+    final lines = view.lines ?? const <String>[];
+    final auto = view.autoRoles ?? const <String>[];
+    final allowed = insetAllowedRoles[view.variant] ?? const <String>[];
+    return DeskDialog(
+      title: '逐行设置：${blockMarkLabel(view.kind, view.variant)}',
+      closeTooltip: '取消',
+      width: 720,
+      actions: [
+        DeskButton(
+          '全部改回自动',
+          key: const ValueKey('inset-roles-reset'),
+          quiet: true,
+          onPressed: roles.isEmpty ? null : () => setState(roles.clear),
+        ),
+        DeskButton('取消', onPressed: () => Navigator.pop(context)),
+        DeskButton(
+          '应用',
+          key: const ValueKey('inset-roles-apply'),
+          primary: true,
+          onPressed: () => Navigator.pop(context, Map.of(roles)),
+        ),
+      ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 460),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final (i, text) in lines.indexed)
+                if (text.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 28,
+                          child: Text('${i + 1}', style: ui(12, c: d.ink3)),
+                        ),
+                        Expanded(
+                          child: Text(
+                            text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: ui(
+                              13,
+                              c: d.ink,
+                              w: roles.containsKey(i) ? 600 : 400,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        DropdownButton<String?>(
+                          key: ValueKey(('inset-role', i)),
+                          value: roles[i],
+                          isDense: true,
+                          items: [
+                            DropdownMenuItem(
+                              value: null,
+                              child: Text(
+                                '自动（${insetRoleLabels[i < auto.length ? auto[i] : 'body'] ?? '正文'}）',
+                                style: ui(12.5, c: d.ink2),
+                              ),
+                            ),
+                            for (final r in allowed)
+                              DropdownMenuItem(
+                                value: r,
+                                child: Text(
+                                  insetRoleLabels[r]!,
+                                  style: ui(12.5, c: d.ink),
+                                ),
+                              ),
+                          ],
+                          onChanged: (v) => setState(() {
+                            if (v == null) {
+                              roles.remove(i);
+                            } else {
+                              roles[i] = v;
+                            }
+                          }),
+                        ),
+                      ],
+                    ),
+                  ),
+              const SizedBox(height: 6),
+              Text(
+                '改过的行显示为粗体；空行不能指定。改场景类型时逐行设置会清空。',
+                style: ui(11.5, c: d.ink3),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /// 一行在某条标注中的位置。
 typedef BlockMarkLine = ({BlockAnnotationView view, bool first, bool last});
@@ -192,6 +349,7 @@ class BlockMarkController extends ChangeNotifier {
     BlockAnnotationView view,
     BlockAnnotationKind kind, [
     String? variant,
+    Map<int, String>? roles,
   ]) async {
     final snap = snapshot ?? await session.list();
     return session.previewUpdate(
@@ -201,6 +359,7 @@ class BlockMarkController extends ChangeNotifier {
       end: view.end,
       kind: kind,
       variant: variant,
+      roles: roles,
     );
   }
 
@@ -315,6 +474,19 @@ class BlockTag extends StatelessWidget {
     }
   }
 
+  /// 场景逐行设置（V82，LAY-138）：对话框本身就是确认，应用后记入变更记录。
+  Future<void> _roles(BuildContext context) async {
+    final roles = await showInsetRolesDialog(context, view);
+    if (roles == null || !context.mounted) return;
+    try {
+      await controller.confirm(
+        await controller.previewChange(view, view.kind, view.variant, roles),
+      );
+    } on BlockAnnotationException catch (e) {
+      if (context.mounted) await _message(context, '逐行设置', e.message);
+    }
+  }
+
   Future<void> _message(BuildContext context, String title, String text) =>
       showDialog<void>(
         context: context,
@@ -349,6 +521,29 @@ class BlockTag extends StatelessWidget {
                 onPressed: () => _act(context, kind, variant),
                 child: Text('改为$label'),
               ),
+          if (view.kind == BlockAnnotationKind.inset && view.lines != null)
+            MenuItemButton(
+              key: ValueKey(('block-tag-roles', view.id)),
+              onPressed: () => _roles(context),
+              child: const Text('逐行设置…'),
+            ),
+          SubmenuButton(
+            key: ValueKey(('block-tag-change-inset', view.id)),
+            menuChildren: [
+              for (final (kind, variant, label) in insetMarkChoices)
+                if (kind != view.kind || variant != view.variant)
+                  MenuItemButton(
+                    key: ValueKey((
+                      'block-tag-change',
+                      view.id,
+                      blockMarkKey(kind, variant),
+                    )),
+                    onPressed: () => _act(context, kind, variant),
+                    child: Text(label.substring(5)),
+                  ),
+            ],
+            child: const Text('改为场景'),
+          ),
           MenuItemButton(
             key: ValueKey(('block-tag-delete', view.id)),
             onPressed: () => _act(context, null),
@@ -364,7 +559,8 @@ class BlockTag extends StatelessWidget {
               borderRadius: BorderRadius.circular(5),
               onTap: () => menu.isOpen ? menu.close() : menu.open(),
               child: DeskTag(
-                '${blockMarkLabel(view.kind, view.variant)} · 手工',
+                '${blockMarkLabel(view.kind, view.variant)} · 手工'
+                '${view.roles.isEmpty ? '' : ' · 逐行 ${view.roles.length}'}',
                 Tone.neutral,
               ),
             ),
@@ -423,6 +619,29 @@ class BlockMarkBar extends StatelessWidget {
                       busy: c.busy,
                       onPressed: c.busy ? null : () => c.choose(k, v),
                     ),
+                  // 场景（V81）：九种收在一个菜单里。
+                  MenuAnchor(
+                    menuChildren: [
+                      for (final (k, v, label) in insetMarkChoices)
+                        MenuItemButton(
+                          key: ValueKey((
+                            'block-mark-choose',
+                            blockMarkKey(k, v),
+                          )),
+                          onPressed: c.busy ? null : () => c.choose(k, v),
+                          child: Text(label.substring(5)),
+                        ),
+                    ],
+                    builder: (context, menu, _) => DeskButton(
+                      '场景…',
+                      key: const ValueKey('block-mark-inset'),
+                      quiet: true,
+                      busy: c.busy,
+                      onPressed: c.busy
+                          ? null
+                          : () => menu.isOpen ? menu.close() : menu.open(),
+                    ),
+                  ),
                   if (onNote != null)
                     DeskButton(
                       '注释…',

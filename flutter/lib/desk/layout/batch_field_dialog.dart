@@ -20,6 +20,11 @@ const batchFieldLabels = {
   'first_paragraph_style': '章首段落',
   'rare_char_ruby': '生僻字注音',
   'rare_char_scope': '生僻字范围',
+  'chat_block_style': '聊天记录',
+  'letter_block_style': '书信样式',
+  'inset_font': '场景字体',
+  'inset_styles': '场景样式参数',
+  'inset_detect': '场景识别',
   'chapter_head_scope': '章首图用于',
   'chapter_head_width': '章首图宽度',
   'system_block_style': '系统提示',
@@ -50,6 +55,12 @@ String describeBatchValue(String field, Object? value) {
   }
   if (field == 'rare_char_ruby') return rareCharRubyModes[value] ?? '$value';
   if (field == 'rare_char_scope') return rareCharScopes[value] ?? '$value';
+  if (field == 'chat_block_style') return chatBlockStyles[value] ?? '$value';
+  if (field == 'letter_block_style') {
+    return letterBlockStyles[value] ?? '$value';
+  }
+  if (field == 'inset_font') return insetFonts[value] ?? '$value';
+  if (field == 'inset_detect') return insetDetectModes[value] ?? '$value';
   if (field == 'system_block_style') {
     return systemBlockStyles[value] ?? '$value';
   }

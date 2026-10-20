@@ -4,7 +4,17 @@ use crate::{
     publication_notes::Notes,
 };
 use easypub_core::structure::Role;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+
+fn render_insets(
+    book: &EffectiveBook,
+    annotations: &[&block_annotations::Annotation],
+    chat: bool,
+    rules: &crate::insets::Rules,
+) -> BTreeMap<usize, crate::insets::Line> {
+    let owned: Vec<_> = annotations.iter().map(|a| (*a).clone()).collect();
+    crate::insets::plan(&book.text, &book.tree.nodes, &owned, chat, rules)
+}
 
 pub(super) fn collect(
     book: &EffectiveBook,
@@ -21,6 +31,8 @@ pub(super) fn collect(
         ),
         ("system", settings.system_block_style != "off"),
         ("verse", settings.verse_block_style != "off"),
+        ("chat", settings.chat_block_style != "off"),
+        ("inset", settings.inset_detect == "on"),
         ("note", settings.note_style == "popup"),
         ("rare_char", settings.rare_char_ruby != "off"),
     ] {
@@ -127,6 +139,22 @@ pub(super) fn collect(
     let mut first_pending = false;
     // 系统提示自定义识别（V78）：统计与正文生成用同一组规则。
     let custom = settings.rule_options.system_set();
+    // 场景样式（V81）：自动识别的聊天记录按开启时统计（与系统提示用 box 统计相同），并优先于系统提示。
+    // 规则识别（V82）按开启时统计：内置项与自定义规则都计入，便于在规则页看到“开启会命中”。
+    let mut all_on = settings.rule_options.clone();
+    all_on
+        .disabled
+        .retain(|id| !id.starts_with("layout.inset."));
+    let rules = crate::insets::Rules::from_settings("on", &all_on);
+    let current_rules =
+        crate::insets::Rules::from_settings(&settings.inset_detect, &settings.rule_options);
+    let insets = render_insets(book, &annotations, true, &rules);
+    let current_insets = render_insets(
+        book,
+        &annotations,
+        settings.chat_block_style != "off",
+        &current_rules,
+    );
     let rare_scope = easypub_core::rare_chars::Scope::parse(&settings.rare_char_scope)
         .unwrap_or(easypub_core::rare_chars::Scope::Outside);
     for (i, &(start, content_end)) in loc.lines.iter().enumerate() {
@@ -165,6 +193,22 @@ pub(super) fn collect(
         } else {
             classified
         };
+        let classified = match insets.get(&start) {
+            Some(l) if l.source == "chat" => Some(("chat", "inset-line")),
+            Some(l) if l.automatic() => Some(("inset", "inset-line")),
+            _ => classified,
+        };
+        // 规则识别的块：每块计一次所属细分（诏书、论坛楼层、自定义）。
+        if let Some(l) = insets.get(&start)
+            && l.automatic()
+            && l.source != "chat"
+            && l.block == start
+        {
+            stats
+                .get_mut(&format!("layout.inset.{}", l.source))
+                .expect("inset rule")
+                .hit(loc.byte(start));
+        }
         previous = if annotation.is_none() {
             classified.map(|(_, c)| c)
         } else {
@@ -225,6 +269,11 @@ pub(super) fn collect(
             settings.rule_options.verse(line, current)
         } else {
             current
+        };
+        let current = match current_insets.get(&start) {
+            Some(l) if l.source == "chat" => Some(("chat", "inset-line")),
+            Some(l) if l.automatic() => Some(("inset", "inset-line")),
+            _ => current,
         };
         current_previous = if annotation.is_none() {
             current.map(|(_, c)| c)

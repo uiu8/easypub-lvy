@@ -30,6 +30,46 @@ fn error(reason: &'static str) -> ApiError {
 fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
+/// 把彼此独立的整本书遍历分给多个线程（V83）：最多 8 个工作线程，结果按输入顺序返回，
+/// 与逐个计算完全相同；只有一项或单核时直接按顺序计算。
+fn par_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let workers = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .clamp(1, 8)
+        .min(items.len());
+    if workers <= 1 {
+        return items.iter().map(&f).collect();
+    }
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let (f, next) = (&f, &next);
+    let parts: Vec<Vec<(usize, R)>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(move || {
+                    let mut out = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        if i >= items.len() {
+                            break;
+                        }
+                        out.push((i, f(&items[i])));
+                    }
+                    out
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("statistics worker"))
+            .collect()
+    });
+    let mut slots: Vec<Option<R>> = (0..items.len()).map(|_| None).collect();
+    for (i, r) in parts.into_iter().flatten() {
+        slots[i] = Some(r);
+    }
+    slots.into_iter().map(|r| r.expect("every item")).collect()
+}
+
 fn checkpoint(cancel: &AtomicBool) -> Result<(), ApiError> {
     if cancel.load(Ordering::Relaxed) {
         Err(ApiError::new(
@@ -147,12 +187,27 @@ pub(crate) fn calculate(
             )
         })
         .collect();
-    recognition::collect(&view, &locations, &mut stats, cancel)?;
-    recognition::collect_checks(&view, &locations, &mut stats, cancel)?;
+    // 清理统计只改 cleanup.* 行，识别与排版统计只改各自的行：两组同时算，再按前缀合并（V83）。
+    let mut cleanup_stats = stats.clone();
+    let (cleaned, others) = std::thread::scope(|scope| {
+        let cleaned = scope
+            .spawn(|| cleanup::collect(&view, &pipeline, &locations, &mut cleanup_stats, cancel));
+        let others = (|| {
+            recognition::collect(&view, &locations, &mut stats, cancel)?;
+            recognition::collect_checks(&view, &locations, &mut stats, cancel)?;
+            checkpoint(cancel)?;
+            layout::collect(&book, &settings, &locations, &mut stats, cancel)
+        })();
+        (cleaned.join().expect("cleanup statistics"), others)
+    });
+    cleaned?;
+    others?;
     checkpoint(cancel)?;
-    cleanup::collect(&view, &pipeline, &locations, &mut stats, cancel)?;
-    checkpoint(cancel)?;
-    layout::collect(&book, &settings, &locations, &mut stats, cancel)?;
+    for (id, row) in cleanup_stats {
+        if id.starts_with("cleanup.") {
+            stats.insert(id, row);
+        }
+    }
     for row in crate::rule_catalog::catalog()["rules"].as_array().unwrap() {
         let id = row["id"].as_str().unwrap();
         stats.get_mut(id).unwrap().enabled = crate::rule_toggles::enabled(
@@ -170,8 +225,28 @@ pub(crate) fn calculate(
     let invalid =
         stats["layout.manual_block"].invalid_count + stats["layout.manual_note"].invalid_count;
     stats.get_mut("manual.invalid").unwrap().count = invalid;
-    interactions::collect(&book, &settings, &pipeline, &locations, &mut stats, cancel)?;
-    hypothetical::collect(&book, &settings, &pipeline, &locations, &mut stats, cancel)?;
+    // 规则交互只追加 affects，假设统计只改关闭规则的计数：读同一份统计，同时算后合并（V83）。
+    let mut interaction_stats = stats.clone();
+    let (interacted, supposed) = std::thread::scope(|scope| {
+        let interacted = scope.spawn(|| {
+            interactions::collect(
+                &book,
+                &settings,
+                &pipeline,
+                &locations,
+                &mut interaction_stats,
+                cancel,
+            )
+        });
+        let supposed =
+            hypothetical::collect(&book, &settings, &pipeline, &locations, &mut stats, cancel);
+        (interacted.join().expect("interaction statistics"), supposed)
+    });
+    interacted?;
+    supposed?;
+    for (id, row) in interaction_stats {
+        stats.get_mut(&id).expect("rule").affects = row.affects;
+    }
     checkpoint(cancel)?;
     Ok(
         json!({"schema":1,"read_only":true,"content_id":digest(book.text.as_bytes()),

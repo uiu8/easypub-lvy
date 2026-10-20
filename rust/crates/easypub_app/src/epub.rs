@@ -36,7 +36,14 @@ pub fn write_controlled<W: Write + Seek>(
     writer: W,
     checkpoint: &dyn Fn() -> Result<(), ApiError>,
 ) -> Result<W, ApiError> {
-    write_profile(prepared, writer, false, false, checkpoint)
+    write_profile(prepared, writer, false, false, false, checkpoint)
+}
+/// 真机预览用（V83）：内容与 [write] 相同，但只打包不压缩——随后马上解开，压缩只是白费时间。
+pub fn write_unpacked_preview<W: Write + Seek>(
+    prepared: &Prepared,
+    writer: W,
+) -> Result<W, ApiError> {
+    write_profile(prepared, writer, false, false, true, &|| Ok(()))
 }
 /// Engine-specific input only; does not run Kindling or change generic EPUB output.
 pub fn write_kindling_input<W: Write + Seek>(
@@ -50,17 +57,19 @@ pub fn write_kindling_input<W: Write + Seek>(
             "choose_cover_before_kindling_export",
         ));
     }
-    write_profile(prepared, writer, true, false, &|| Ok(()))
+    // 转换器的输入只在本机临时目录里读一次（V83）：只打包不压缩。
+    write_profile(prepared, writer, true, false, true, &|| Ok(()))
 }
 /// KFX renders its cover as a native image; preserve its aspect ratio.
 pub fn write_bokai_input<W: Write + Seek>(prepared: &Prepared, writer: W) -> Result<W, ApiError> {
-    write_profile(prepared, writer, false, true, &|| Ok(()))
+    write_profile(prepared, writer, false, true, true, &|| Ok(()))
 }
 fn write_profile<W: Write + Seek>(
     prepared: &Prepared,
     writer: W,
     kindling: bool,
     bokai: bool,
+    stored: bool,
     checkpoint: &dyn Fn() -> Result<(), ApiError>,
 ) -> Result<W, ApiError> {
     checkpoint()?;
@@ -287,7 +296,11 @@ fn write_profile<W: Write + Seek>(
     }
     opf.push_str("</package>");
     let mut zip = ZipWriter::new(writer);
-    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    let options = SimpleFileOptions::default().compression_method(if stored {
+        CompressionMethod::Stored
+    } else {
+        CompressionMethod::Deflated
+    });
     zip.start_file(
         "mimetype",
         SimpleFileOptions::default().compression_method(CompressionMethod::Stored),
@@ -359,12 +372,16 @@ mod tests {
                     "include_toc":true, "fullwidth_indent":2, "note_style":style, "illustrations":[]}})).unwrap();
             let prepared = crate::publication_resources::prepare(&source, request).unwrap();
             for (kindling, bokai) in [(false, false), (true, false), (false, true)] {
-                let bytes =
-                    write_profile(&prepared, Cursor::new(Vec::new()), kindling, bokai, &|| {
-                        Ok(())
-                    })
-                    .unwrap()
-                    .into_inner();
+                let bytes = write_profile(
+                    &prepared,
+                    Cursor::new(Vec::new()),
+                    kindling,
+                    bokai,
+                    kindling || bokai,
+                    &|| Ok(()),
+                )
+                .unwrap()
+                .into_inner();
                 let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
                 let mut restored = String::new();
                 let mut notes = 0;

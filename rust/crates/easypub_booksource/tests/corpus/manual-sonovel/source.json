@@ -1,0 +1,85 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "",
+  "bookSourceName": "手写 so-novel 格式",
+  "bookSourceType": 0,
+  "bookSourceUrl": "http://127.0.0.1:14056",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 0,
+  "easypub": {
+    "check": null,
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "downloads": [],
+    "file": "",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 0,
+      "ms": [],
+      "retryAfter": 0
+    },
+    "id": "",
+    "importWarnings": [],
+    "importedAt": 0,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": false,
+  "enabledExplore": false,
+  "exploreUrl": "",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 0,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 0,
+  "ruleBookInfo": {},
+  "ruleContent": {
+    "content": "#content@html"
+  },
+  "ruleExplore": {},
+  "ruleSearch": {
+    "bookList": ".book a",
+    "bookUrl": "@href",
+    "name": "@text"
+  },
+  "ruleToc": {
+    "chapterList": "li a",
+    "chapterName": "@text",
+    "chapterUrl": "@href",
+    "nextTocUrl": "a.next@href"
+  },
+  "searchUrl": "/search?q={{key}}",
+  "variableComment": "",
+  "weight": 0
+}

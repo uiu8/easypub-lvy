@@ -214,7 +214,8 @@ fn render_preview(service: &ImportService, request: &str) -> Result<String, ApiE
     let req: Preview = serde_json::from_str(request).map_err(|_| invalid(ErrorCode::InvalidRule,"review_preview"))?;
     let source = service.source(&req.publication.source_id,req.publication.revision)?;
     let prepared = publication_resources::prepare(&source,req.publication)?;
-    let bytes = crate::epub::write(&prepared,Cursor::new(Vec::new()))?.into_inner();
+    // 只打包不压缩：随后马上解开（V83）。
+    let bytes = crate::epub::write_unpacked_preview(&prepared,Cursor::new(Vec::new()))?.into_inner();
     let root = std::env::temp_dir().join("EasyPub-content-preview");
     let directory = root.join(format!("{}-{}",std::process::id(),time::OffsetDateTime::now_utc().unix_timestamp_nanos()));
     fs::create_dir_all(&directory).map_err(|_| invalid(ErrorCode::Io,"retry_preview"))?;

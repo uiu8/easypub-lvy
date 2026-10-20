@@ -126,6 +126,11 @@ class ProductionStore {
       'first_paragraph_style': d.firstParagraphStyle,
       'rare_char_ruby': d.rareCharRuby,
       'rare_char_scope': d.rareCharScope,
+      'chat_block_style': d.chatBlockStyle,
+      'letter_block_style': d.letterBlockStyle,
+      'inset_font': d.insetFont,
+      'inset_detect': d.insetDetect,
+      'inset_styles': d.insetStyles,
       'chapter_head_image': d.chapterHeadImage,
       'chapter_style': d.chapterStyle,
       'chapter_head_scope': d.chapterHeadScope,
@@ -304,6 +309,11 @@ class ProductionStore {
       ..firstParagraphStyle = v['first_paragraph_style'] as String? ?? 'normal'
       ..rareCharRuby = v['rare_char_ruby'] as String? ?? 'off'
       ..rareCharScope = v['rare_char_scope'] as String? ?? 'outside'
+      ..chatBlockStyle = v['chat_block_style'] as String? ?? 'off'
+      ..letterBlockStyle = v['letter_block_style'] as String? ?? 'plain'
+      ..insetFont = v['inset_font'] as String? ?? 'kai'
+      ..insetDetect = v['inset_detect'] as String? ?? 'off'
+      ..insetStyles = (v['inset_styles'] as Map?)?.cast<String, dynamic>()
       ..chapterHeadImage = v['chapter_head_image'] as String?
       ..chapterStyle = (v['chapter_style'] as Map?)?.cast<String, dynamic>()
       ..chapterHeadScope = v['chapter_head_scope'] as String? ?? 'chapter'

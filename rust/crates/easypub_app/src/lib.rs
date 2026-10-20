@@ -4,6 +4,7 @@ pub mod sessions;
 pub mod transaction;
 
 pub mod catalog;
+pub mod collections;
 mod catalog_repair;
 pub mod cleanup_batch;
 pub mod cleanup_draft;
@@ -55,6 +56,8 @@ pub mod epub_import;
 pub mod epub_passthrough;
 #[cfg(windows)]
 pub mod inline_markup;
+pub mod inset_styles;
+pub mod insets;
 pub mod kindle_images;
 mod kindle_metadata;
 pub mod kindling_export;
@@ -97,4 +100,6 @@ mod source_project;
 
 pub mod kfx_package;
 
+#[cfg(test)]
+mod perf_samples_tests;
 mod repair_copy;

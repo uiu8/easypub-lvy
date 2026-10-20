@@ -5,6 +5,8 @@ import '../application/workspace_autosave_service.dart';
 import '../application/check_cache_service.dart';
 import '../application/crash_log_service.dart';
 import '../application/folder_auto_import.dart';
+import '../application/book_collection_service.dart';
+import 'legacy_collections.dart';
 import 'crash_log.dart';
 import 'check_report_cache.dart';
 import '../application/source_refresh_service.dart';
@@ -95,7 +97,54 @@ class LegacyLibraryAdapter
         SettingsBackupService,
         CheckCacheService,
         CrashLogService,
+        BookCollectionService,
         FolderAutoImportService {
+  // ---------------------------------------------------------------- 书库收藏夹（V84，LIB-118–126）
+  // 第一次用到时才建（订阅后端通知）；dispose 只释放已建的，不在释放时新建。
+  LegacyCollections? _collections;
+  LegacyCollections get _collectionStore =>
+      _collections ??= LegacyCollections(_backend);
+  @override
+  ValueListenable<List<BookCollection>> get collections =>
+      _collectionStore.collections;
+  @override
+  BookCollection createCollection(
+    String name, {
+    Map<String, Map<String, String>> template = const {},
+    bool autoApply = false,
+  }) => _collectionStore.createCollection(
+    name,
+    template: template,
+    autoApply: autoApply,
+  );
+  @override
+  void updateCollection(BookCollection collection) =>
+      _collectionStore.updateCollection(collection);
+  @override
+  void deleteCollection(String id) => _collectionStore.deleteCollection(id);
+  @override
+  List<String> addToCollection(String id, Iterable<String> bookIds) =>
+      _collectionStore.addToCollection(id, bookIds);
+  @override
+  void removeFromCollection(String id, Iterable<String> bookIds) =>
+      _collectionStore.removeFromCollection(id, bookIds);
+  @override
+  String? bookIdForPath(String path) => _collectionStore.bookIdForPath(path);
+  @override
+  List<String> knownCategories() => _collectionStore.knownCategories();
+  @override
+  Future<BookFieldPreview> previewFields(
+    Map<String, Map<String, String>> fields,
+    List<String> bookIds, {
+    String label = '',
+  }) => _collectionStore.previewFields(fields, bookIds, label: label);
+  @override
+  Future<BookFieldApplied> applyFields(BookFieldPreview preview) =>
+      _collectionStore.applyFields(preview);
+  @override
+  Future<String> undoFields(BookFieldApplied applied) =>
+      _collectionStore.undoFields(applied);
+
   // ---------------------------------------------------------------- 文件夹自动入库（V26，FOLD-080–082）
   List<String> _configList(String key) => [
     for (final v in (_backend.globalConfiguration[key] as List? ?? const []))
@@ -883,6 +932,8 @@ class LegacyLibraryAdapter
       status: checking ? '检查中…' : check?.status ?? b.status,
       pending: check?.pending,
       coverPath: _backend.production.coverPathFor(b),
+      category: '${settings['category'] ?? ''}'.trim(),
+      series: '${settings['series'] ?? ''}'.trim(),
       coverFit: settings['cover_fit'] as String? ?? 'contain',
       coverCrop: snapshot('cover_crop'),
       coverDesign: snapshot('cover_design'),
@@ -929,6 +980,8 @@ class LegacyLibraryAdapter
               !mapEquals(a.coverCrop, b.coverCrop) ||
               !mapEquals(a.coverDesign, b.coverDesign) ||
               a.path != b.path ||
+              a.category != b.category ||
+              a.series != b.series ||
               a.format != b.format;
         })) {
       _books.value = List.unmodifiable(next);
@@ -1054,6 +1107,7 @@ class LegacyLibraryAdapter
               e.path,
               e.bytes,
               known.contains(folderImportPathKey(e.path)),
+              modified: e.modified,
             ),
           ),
         ),
@@ -1136,6 +1190,7 @@ class LegacyLibraryAdapter
     _disposed = true;
     _autoImport.dispose();
     _autoFolders.dispose();
+    _collections?.dispose();
     checkBatch.dispose();
     _cancelled = true;
     _backend.removeListener(_refresh);

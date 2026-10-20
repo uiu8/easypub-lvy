@@ -79,6 +79,10 @@ $pluginSource = Join-Path $root 'plugins/kindle-preview'
 if (-not (Test-Path -LiteralPath (Join-Path $pluginSource 'plugin.json'))) { throw '缺少真机预览组件 plugins/kindle-preview' }
 New-Item -ItemType Directory -Force -Path (Join-Path $staging 'plugins') | Out-Null
 Copy-Item -LiteralPath $pluginSource -Destination (Join-Path $staging 'plugins') -Recurse
+# V87：书源下载插件（独立进程，随包附带、默认停用；由 tools/build_booksource_plugin.ps1 生成）。
+$bookSourcePlugin = Join-Path $root 'artifacts/plugins/booksource'
+if (-not (Test-Path -LiteralPath (Join-Path $bookSourcePlugin 'plugin.json'))) { throw '缺少书源下载插件：先运行 tools/build_booksource_plugin.ps1' }
+Copy-Item -LiteralPath $bookSourcePlugin -Destination (Join-Path $staging 'plugins') -Recurse
 # 自动更新程序（V68，SET-073）：随包分发，主程序退出后由它替换文件。
 & cargo build --release --locked -p easypub_updater --bin easypub_updater
 if ($LASTEXITCODE -ne 0) { throw '更新程序构建失败。' }

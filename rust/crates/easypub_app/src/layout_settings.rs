@@ -85,7 +85,7 @@ pub fn factory() -> BTreeMap<String, Value> {
         "margin_top_unit":"px","margin_right_unit":"px","margin_bottom_unit":"px","margin_left_unit":"px",
         "include_toc":true,"visible_toc":false,"chapter_navigation":false,
         "writing_mode":"horizontal","vertical_digits":2,"heading_style":"classic",
-        "scene_break_style":"keep","first_paragraph_style":"normal","rare_char_ruby":"chapter","rare_char_scope":"outside","chapter_head_scope":"chapter","chapter_head_width":"half","system_block_style":"styled","verse_block_style":"center","note_style":"off"
+        "scene_break_style":"keep","first_paragraph_style":"normal","rare_char_ruby":"chapter","rare_char_scope":"outside","chapter_head_scope":"chapter","chapter_head_width":"half","system_block_style":"styled","verse_block_style":"center","chat_block_style":"window","letter_block_style":"ruled","inset_font":"kai","inset_detect":"on","note_style":"off"
     }))
     .map(|mut values: BTreeMap<String, Value>| {
         // 新书的系统提示用分类样式（V77，LAY-132）。

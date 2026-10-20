@@ -1,12 +1,13 @@
 import 'package:flutter/foundation.dart';
 
-enum BlockAnnotationKind { letter, quote, verse, system, none }
+enum BlockAnnotationKind { letter, quote, verse, system, inset, none }
 
 const blockAnnotationLabels = {
   BlockAnnotationKind.letter: '书信',
   BlockAnnotationKind.quote: '引文',
   BlockAnnotationKind.verse: '诗词',
   BlockAnnotationKind.system: '系统提示',
+  BlockAnnotationKind.inset: '场景',
   BlockAnnotationKind.none: '取消标注',
 };
 const blockAnnotationReasons = {
@@ -38,6 +39,13 @@ class BlockAnnotationView {
         value['annotation']['kind'] as String,
       ),
       variant = value['annotation']['variant'] as String?,
+      roles = {
+        for (final e
+            in ((value['annotation']['roles'] as Map?) ?? const {}).entries)
+          int.parse(e.key as String): e.value as String,
+      },
+      lines = (value['lines'] as List?)?.cast<String>(),
+      autoRoles = (value['auto_roles'] as List?)?.cast<String>(),
       valid = value['valid'] as bool,
       reason = value['reason'] as String?,
       excerpt = value['excerpt'] as String,
@@ -56,7 +64,14 @@ class BlockAnnotationView {
   final BlockAnnotationKind kind;
 
   /// 系统提示指定的样式（V78）：note 单行提示、panel 面板；null 按行数。
+  /// 场景（V81）：场景编号。
   final String? variant;
+
+  /// 场景逐行指定的角色（V82，LAY-138）：标注内第几行（从 0 起）→ 角色。
+  final Map<int, String> roles;
+
+  /// 有效场景标注的各行文字与自动判断的角色；其他类为空。
+  final List<String>? lines, autoRoles;
   final bool valid;
   final String? reason;
   String? get reasonText =>
@@ -113,6 +128,8 @@ abstract interface class BlockAnnotationSession {
     required BlockAnnotationKind kind,
     String? variant,
   });
+
+  /// [roles] 只用于场景（V82）：不给时清空逐行角色。
   Future<BlockAnnotationPreview> previewUpdate(
     BlockAnnotationSnapshot snapshot,
     String id, {
@@ -120,6 +137,7 @@ abstract interface class BlockAnnotationSession {
     required int end,
     required BlockAnnotationKind kind,
     String? variant,
+    Map<int, String>? roles,
   });
   Future<BlockAnnotationPreview> previewDelete(String id);
 

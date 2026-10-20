@@ -130,36 +130,56 @@ pub(super) fn collect(
             _ => unreachable!(),
         }
     }
-    for (_, (candidate, ids)) in layouts {
-        checkpoint(cancel)?;
-        let mut simulated = empty(stats);
-        layout::collect(book, &candidate, loc, &mut simulated, cancel)?;
-        install(stats, &simulated, &ids);
+    // 每批模拟彼此独立，分给多个线程（V83）；结果按原顺序写回。
+    #[allow(clippy::large_enum_variant)] // 只有几十个批次，装箱不划算。
+    enum Batch {
+        Layout(Settings),
+        Recognition(RuleSet, bool),
     }
-    for (is_check, batches) in [(false, recognitions), (true, checks)] {
-        for (_, (rules, ids)) in batches {
-            checkpoint(cancel)?;
-            let mut candidate = book.clone();
-            candidate.tree.recognition_rules = Some(rules);
-            let view = SourceSnapshot::for_effective_diagnostics(&candidate)?;
-            let positions = Locations {
-                book: &candidate,
-                lines: loc.lines,
-            };
-            let mut simulated = empty(stats);
-            if is_check {
-                recognition::collect_checks(&view, &positions, &mut simulated, cancel)?;
-            } else {
-                recognition::collect(&view, &positions, &mut simulated, cancel)?;
-                if ids
-                    .iter()
-                    .any(|id| id == "chapter.recognize.number_corrections")
-                {
+    let mut batches: Vec<(Batch, Vec<String>)> = layouts
+        .into_values()
+        .map(|(candidate, ids)| (Batch::Layout(candidate), ids))
+        .collect();
+    for (is_check, group) in [(false, recognitions), (true, checks)] {
+        batches.extend(
+            group
+                .into_values()
+                .map(|(rules, ids)| (Batch::Recognition(rules, is_check), ids)),
+        );
+    }
+    let template: &Statistics = stats;
+    let results = super::par_map(&batches, |(batch, ids)| -> Result<Statistics, ApiError> {
+        checkpoint(cancel)?;
+        let mut simulated = empty(template);
+        match batch {
+            Batch::Layout(candidate) => {
+                layout::collect(book, candidate, loc, &mut simulated, cancel)?;
+            }
+            Batch::Recognition(rules, is_check) => {
+                let mut candidate = book.clone();
+                candidate.tree.recognition_rules = Some(rules.clone());
+                let view = SourceSnapshot::for_effective_diagnostics(&candidate)?;
+                let positions = Locations {
+                    book: &candidate,
+                    lines: loc.lines,
+                };
+                if *is_check {
                     recognition::collect_checks(&view, &positions, &mut simulated, cancel)?;
+                } else {
+                    recognition::collect(&view, &positions, &mut simulated, cancel)?;
+                    if ids
+                        .iter()
+                        .any(|id| id == "chapter.recognize.number_corrections")
+                    {
+                        recognition::collect_checks(&view, &positions, &mut simulated, cancel)?;
+                    }
                 }
             }
-            install(stats, &simulated, &ids);
         }
+        Ok(simulated)
+    });
+    for ((_, ids), simulated) in batches.iter().zip(results) {
+        install(stats, &simulated?, ids);
     }
     Ok(())
 }

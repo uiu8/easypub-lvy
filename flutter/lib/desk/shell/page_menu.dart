@@ -79,6 +79,8 @@ class WorkspacePageMenu extends StatelessWidget {
           route('/', '书库', Icons.library_books_outlined),
           route('/folders', '文件夹与收藏', Icons.folder_outlined),
           route('/folders/mapping', '文件夹元数据映射', Icons.account_tree_outlined),
+          route('/plugins', '插件', Icons.extension_outlined),
+          route('/plugins/booksource', '书源下载', Icons.travel_explore_outlined),
         ]),
         DeskActionGroup('章节与检查', [
           book('checks', '检查与修复', Icons.fact_check_outlined),

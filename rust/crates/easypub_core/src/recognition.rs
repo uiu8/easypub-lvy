@@ -32,9 +32,10 @@ pub fn builtin_description() -> serde_json::Value {
                 "“回头、回来、回到、回去、回事、回答、回忆”等以“回”开头的正文不算标题",
                 "作者说明不算标题，例如“两章合一章”“第X章更新完毕”“今天更新X字”，以及括号里写“求票、求月票、加更、万字”等",
                 "全书以“章”为主时，紧接正文、带句号或引号的长句式“第X回/节/卷…”视为正文",
+                "导入时还会把这些当作正文：括号里的更新说明（如“（第二章大概十一点左右。）”）、“两章合一已更”“526章更新延迟些”这类更新说明、“（第三卷终）”“【第二卷·终】”这类卷末标记、“第一回合”",
                 "每行最多 256 字"
             ],
-            "hierarchy": "开启层级时：卷、部、篇、集为卷级；节为节级；章、回为章级。卷、章、节的自定义表达式优先于内置规则。",
+            "hierarchy": "开启层级时：卷、部、篇、集为卷级；节为节级；章、回为章级；卷名和章名写在同一行（如“第四卷 天下 第十章 风起”）时按这一卷下的章。卷、章、节的自定义表达式优先于内置规则。",
             "reference_regex": BUILTIN_CHAPTER_REFERENCE,
             "reference_note": "参考正则只对应上面的“识别形式”，不含排除项。填写常规标题正则后，内置识别和正文排除都不再使用。"
         },
@@ -44,7 +45,8 @@ pub fn builtin_description() -> serde_json::Value {
             "notes": [
                 "编号 1–9999；编号后接空格、点号、顿号、冒号、下划线或横线",
                 "点号后紧跟数字的（如 1.5）不算",
-                "标题中至少要有一个文字；候选标题后还需满足“至少几行正文”"
+                "标题中至少要有一个文字；候选标题后还需满足“至少几行正文”",
+                "导入时如果全书主要用纯数字标题（至少 10 个，且是常规标题的 3 倍以上），会自动打开这项"
             ],
             "edit_note": r"原样保留时使用内置执行；修改后按自定义正则执行，而识别器不支持其中的 (?!\d) 环视，需要改写。"
         }
@@ -149,9 +151,10 @@ pub fn is_default_heading(line: &str) -> bool {
         "番外篇",
     ] {
         if let Some(rest) = text.strip_prefix(special)
-            && (rest.is_empty() || rest.chars().next().is_some_and(is_heading_separator)) {
-                return true;
-            }
+            && (rest.is_empty() || rest.chars().next().is_some_and(is_heading_separator))
+        {
+            return true;
+        }
     }
 
     let had_di = text.starts_with('第');
@@ -183,9 +186,117 @@ pub fn is_default_heading(line: &str) -> bool {
     }
 }
 
+/// 编号标题拆成（是否带“第”、单位、单位之后的文字）；开头的括号已去掉。
+fn split_numbered(title: &str) -> Option<(bool, char, &str)> {
+    let text = title
+        .trim()
+        .trim_start_matches(['【', '[', '（', '('])
+        .trim_start();
+    let had_di = text.starts_with('第');
+    let text = text.strip_prefix('第').unwrap_or(text).trim_start();
+    let (end, marker) = text
+        .char_indices()
+        .find(|(_, c)| matches!(c, '章' | '回' | '节' | '卷' | '部' | '篇' | '集'))?;
+    crate::source::parse_number(text[..end].trim())?;
+    Some((had_di, marker, &text[end + marker.len_utf8()..]))
+}
+
+const SENTENCE_MARKS: [char; 10] = ['，', ',', '。', '！', '!', '？', '?', '…', '～', '~'];
+
+/// V91：正文里作者写的更新说明和卷末标记，不是标题。
+/// 例：“（第二章大概十一点左右。）”“第一章完毕，继续努力”“两章合一已更，求月票”
+/// “526章更新延迟些”“（第三卷摸鱼儿终）”“【第二卷·终】”“九章玉璧除却……，……”。
+/// 带标题的括号行（“（第二章 月光）”）、标题与正文粘在一行的真标题
+/// （“第一四七章主谋宗族大会散了之后，……”）不受影响。
+fn is_update_or_end_note(title: &str) -> bool {
+    let text = title.trim();
+    let Some((had_di, marker, rest)) = split_numbered(text) else {
+        return false;
+    };
+    let bracketed = text.starts_with(['（', '(', '【', '[']);
+    let rest = rest.trim_end_matches(['）', ')', '】', ']']);
+    let attached = rest.chars().next().is_some_and(|c| !c.is_whitespace());
+    let body = rest.trim();
+    // 卷末标记：卷 / 部 / 集 / 篇之后以“终 / 完 / 结束”收尾。
+    if matches!(marker, '卷' | '部' | '集' | '篇') {
+        const ENDS: [&str; 7] = ["终", "終", "完", "结束", "結束", "完结", "完結"];
+        // “最终 / 始终”等是卷名里的词，不是收尾。
+        let word = [
+            "最终", "最終", "始终", "始終", "临终", "臨終", "善终", "善終",
+        ]
+        .iter()
+        .any(|w| body.ends_with(w));
+        let ends = !word && ENDS.iter().any(|end| body.ends_with(end));
+        let only = ENDS.contains(&body.trim_start_matches(['·', '：', ':', '*', ' ', '正', '文']));
+        return ends && (bracketed || only);
+    }
+    if !matches!(marker, '章' | '回') {
+        return false;
+    }
+    let sentence = body.contains(SENTENCE_MARKS);
+    // 括号里的作者说明：编号后紧跟标点，或含句子标点。
+    if bracketed && text.starts_with(['（', '(']) && (body.starts_with(SENTENCE_MARKS) || sentence)
+    {
+        return true;
+    }
+    if !attached {
+        return false;
+    }
+    // 编号后直接是更新用语。
+    const STRONG: [&str; 18] = [
+        "更新", "已更", "已发", "已發", "完毕", "完畢", "写完", "寫完", "奉上", "送上", "争取",
+        "爭取", "延迟", "延遲", "多等", "合一", "结束", "結束",
+    ];
+    if marker == '章' && STRONG.iter().any(|w| body.starts_with(w)) {
+        return true;
+    }
+    // 编号后是叙述用语，并且后面是 20 字以上的长句（真标题“第六十章我杀这边，你杀那边”
+    // “第四十四章是你吗？陛下”都短得多）。
+    const WEAK: [&str; 18] = [
+        "是", "这是", "這是", "我", "大家", "今天", "还有", "還有", "只有", "加了", "会", "會",
+        "早就", "到了", "到", "已经", "有误", "在写",
+    ];
+    if marker == '章'
+        && sentence
+        && body.chars().count() > 20
+        && WEAK.iter().any(|w| body.starts_with(w))
+    {
+        return true;
+    }
+    // 编号后紧跟逗号等再接长句：“第二章，晚间十二点更新，冲榜……”
+    if body.starts_with(SENTENCE_MARKS) && body.chars().count() > 10 {
+        return true;
+    }
+    // 不带“第”的编号紧接成句的长句：“九章玉璧除却……，……”“一章大概需要……，……”
+    !had_di && marker == '章' && sentence && body.chars().count() > 12
+}
+
+/// V91：卷名和章名写在同一行（“第四卷垂幕之年 第十章 佛至人间”），按其中的章处理，
+/// 返回章的（编号, 单位）。括号开头的作者说明不算。
+pub fn inner_chapter(title: &str) -> Option<(u32, char)> {
+    let text = title.trim();
+    if text.starts_with(['（', '(']) {
+        return None;
+    }
+    let (_, marker, rest) = split_numbered(text)?;
+    if !matches!(marker, '卷' | '部' | '篇' | '集') {
+        return None;
+    }
+    rest.match_indices('第').find_map(|(i, _)| {
+        // 卷名部分不能是句子（“第四卷是我很满意的一卷，第七章……”）。
+        if rest[..i].contains(['，', ',', '。', '！', '？']) {
+            return None;
+        }
+        crate::source::numbered_heading(&rest[i..]).filter(|(_, m)| matches!(m, '章' | '回'))
+    })
+}
+
 /// Keep the v1 source index stable for saved edit recipes. New imports and
 /// repair proposals use book context to distinguish ordinal prose from headings.
 pub fn is_author_note_heading(title: &str) -> bool {
+    if is_update_or_end_note(title) {
+        return true;
+    }
     let text = title.trim();
     let bracketed = (text.starts_with('（') && text.ends_with('）'))
         || (text.starts_with('(') && text.ends_with(')'));
@@ -267,17 +378,24 @@ pub fn is_prose_heading(title: &str, dominant: Option<char>) -> bool {
     if is_author_note_heading(title) {
         return true;
     }
+    if inner_chapter(title).is_some() {
+        return false;
+    }
     let Some((_, marker @ ('回' | '节' | '卷' | '部' | '篇' | '集'))) =
         crate::source::numbered_heading(title)
     else {
         return false;
     };
+    let rest = title.split_once(marker).map(|(_, rest)| rest).unwrap_or("");
+    // “第一回合，格雷胜！”：“回合”是词，不是回目。
+    if marker == '回' && rest.starts_with('合') {
+        return true;
+    }
     if dominant == Some(marker) {
         return false;
     }
-    let rest = title.split_once(marker).map(|(_, rest)| rest).unwrap_or("");
     let attached = !rest.is_empty() && !rest.starts_with(char::is_whitespace);
-    let sentence = rest.contains(['。', '；', '“', '”'])
+    let sentence = rest.contains(['。', '；', '“', '”', '！', '!', '？', '?'])
         || (rest.contains(['，', ',']) && rest.chars().count() > 16);
     attached && sentence && dominant.is_some()
 }
@@ -387,7 +505,8 @@ mod tests {
 
     #[test]
     fn builtin_reference_regex_covers_the_matching_part() {
-        let reference = Regex::new(&normalize_dotnet_named_groups(BUILTIN_CHAPTER_REFERENCE)).unwrap();
+        let reference =
+            Regex::new(&normalize_dotnet_named_groups(BUILTIN_CHAPTER_REFERENCE)).unwrap();
         reject_unsupported_regex(BUILTIN_CHAPTER_REFERENCE).unwrap();
         for line in [
             "第十二章 开始",
@@ -410,7 +529,10 @@ mod tests {
         }
         let description = builtin_description();
         assert_eq!(description["numeric"]["regex"], DEFAULT_NUMERIC_PATTERN);
-        assert_eq!(description["chapter"]["reference_regex"], BUILTIN_CHAPTER_REFERENCE);
+        assert_eq!(
+            description["chapter"]["reference_regex"],
+            BUILTIN_CHAPTER_REFERENCE
+        );
     }
 
     #[test]
@@ -425,6 +547,90 @@ mod tests {
         assert!(!is_prose_heading("第三卷 新的开始", Some('章')));
         assert!(!is_prose_heading("第三卷新的开始", Some('章')));
         assert!(!is_prose_heading("第三回人生如梦。", Some('回')));
+    }
+
+    /// V91：用 51 本网文实测得到的作者说明、卷末标记和正文句子（标题文字为自拟或截短）。
+    #[test]
+    fn update_notes_end_markers_and_prose_are_not_headings() {
+        for note in [
+            "（第二章大概十一点左右。）",
+            "（第三章送上，第四章争取在十一点前后出来。）（未完待续）",
+            "（第二章。）",
+            "(第二章争取十二点前写出来。",
+            "（第802章，还有两章。）",
+            "第一章完毕，继续努力，去写第二章。",
+            "第二章，晚间十二点更新，冲榜，请各位帮忙",
+            "两章合一已更，求月票",
+            "526章更新延迟些",
+            "三章已发，作者成为白金作家了",
+            "865章只有几百字，今天是出不来了。",
+            "第383章是蓄谋已久、铺垫已久的章节，是让角色升格的关键，也是问道的一环",
+            "第二章到了，台式机挂了，用笔记本感觉更慢了。俺去努力写第三章，明天看",
+            "一章大概需要两个小时写初稿，修改两个小时成型",
+            "九章玉璧除却城里失踪的那一块，其余都在楚人手中。",
+            "（第三卷摸鱼儿终）",
+            "【第二卷·终】",
+            "[第二卷完]",
+            "（第一卷 正文完）",
+            "（第六集*胡马度阴山*完）",
+            "第五卷 终",
+        ] {
+            assert!(is_author_note_heading(note), "{note}");
+            assert!(is_prose_heading(note, Some('章')), "{note}");
+        }
+        for prose in [
+            "第二回合，格雷胜！",
+            "第一回碰到没钱的时候，应该怎么办？",
+            "第一部分强援，就此敲定！",
+        ] {
+            assert!(is_prose_heading(prose, Some('章')), "{prose}");
+        }
+        for heading in [
+            "第一章 开始",
+            "（第二章 月光）",
+            "（第二章 系统更新）",
+            "（第３章 续）",
+            "（第二章）",
+            "【第一卷：冒险初程】",
+            "第一四七章主谋宗族大会散了之后，混乱的声音朝着四面八方散开",
+            "第130章：麻烦上门",
+            "第四十九章藤子京又带了封信过来，信中显得有些忧心忡忡",
+            "六百五十八章 回归",
+            "419章 亘古匆匆",
+            "第九十一章 法无二门（为盟主加更！）",
+            "第三卷 最终",
+            "第八卷 始终",
+            "第一卷 完美世界",
+            "第二章 更新的世界",
+            "第一章，初见",
+            // 以叙述用语开头的短标题（实测误伤后补入）
+            "第六十章我杀这边，你杀那边",
+            "第四十四章是你吗？陛下",
+            "第六十三章到底谁有秘密？",
+            "第一百三十八章是，师叔",
+            "第十一章我们的灵魂要去何处安放？",
+        ] {
+            assert!(!is_author_note_heading(heading), "{heading}");
+            assert!(!is_prose_heading(heading, Some('章')), "{heading}");
+        }
+        // 卷名和章名同一行：按其中的章处理，不当正文。
+        for (line, number) in [
+            ("第四卷垂幕之年 第十章 佛至人间，我正在与人间战", 10),
+            ("第四卷垂幕之年第一百六十五章我以长安战无敌（上）", 165),
+            ("第二卷 风起 第3回 初见", 3),
+        ] {
+            assert_eq!(inner_chapter(line).map(|v| v.0), Some(number), "{line}");
+            assert!(!is_prose_heading(line, Some('章')), "{line}");
+        }
+        for line in [
+            "（第四卷东方欲晓里的第七章叫做《她》，今天这章是那一章的续篇",
+            "第四卷是我个人非常满意的一卷，第七章尤其如此",
+            "第二卷 风起",
+        ] {
+            assert_eq!(inner_chapter(line), None, "{line}");
+        }
+        assert!(!is_prose_heading("第三回人生如梦。", Some('回')));
+        assert!(!is_prose_heading("第一章 开始", Some('章')));
     }
 
     #[test]

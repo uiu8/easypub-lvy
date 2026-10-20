@@ -13,6 +13,8 @@ pub enum Kind {
     Quote,
     Verse,
     System,
+    /// 场景（V81，LAY-135）：variant 为场景编号，见 [crate::insets::TYPES]。
+    Inset,
     None,
 }
 
@@ -28,6 +30,9 @@ pub struct Annotation {
     /// 系统提示的样式（V78，LAY-134）：note 单行提示、panel 面板；不填按行数。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variant: Option<String>,
+    /// 场景逐行指定的角色（V82，LAY-138）：标注内第几行（从 0 起）→ 角色；不指定的行自动判断。
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub roles: BTreeMap<usize, String>,
 }
 fn error(reason: &'static str) -> ApiError {
     ApiError::new(ErrorCode::InvalidRule, "block_annotations", reason)
@@ -43,7 +48,8 @@ fn hash_shape(value: &str) -> bool {
 }
 pub fn validate(annotations: &[Annotation]) -> Result<(), ApiError> {
     if annotations.iter().any(|a| {
-        a.variant.is_some() && (a.kind != Kind::System || !variant_ok(a.variant.as_deref()))
+        !variant_ok(a.kind, a.variant.as_deref())
+            || !roles_ok(a.kind, a.variant.as_deref(), &a.roles)
     }) {
         return Err(error("block_annotation_invalid"));
     }
@@ -157,8 +163,9 @@ fn create(
     end: usize,
     kind: Kind,
     variant: Option<String>,
+    roles: BTreeMap<usize, String>,
 ) -> Result<Annotation, ApiError> {
-    if variant.is_some() && (kind != Kind::System || !variant_ok(variant.as_deref())) {
+    if !variant_ok(kind, variant.as_deref()) || !roles_ok(kind, variant.as_deref(), &roles) {
         return Err(error("block_annotation_invalid"));
     }
     if let Some(reason) = range_reason(start, end, book) {
@@ -173,10 +180,37 @@ fn create(
         kind,
         fingerprint,
         variant,
+        roles,
     })
 }
-fn variant_ok(v: Option<&str>) -> bool {
-    matches!(v, None | Some("note" | "panel"))
+fn line_roles(roles: BTreeMap<String, String>) -> Result<BTreeMap<usize, String>, ApiError> {
+    roles
+        .into_iter()
+        .map(|(k, v)| {
+            k.parse::<usize>()
+                .map(|i| (i, v))
+                .map_err(|_| error("block_annotation_invalid"))
+        })
+        .collect()
+}
+/// 逐行角色只给场景，行号不超过 200，角色必须是该场景能用的。
+fn roles_ok(kind: Kind, variant: Option<&str>, roles: &BTreeMap<usize, String>) -> bool {
+    roles.is_empty()
+        || (kind == Kind::Inset
+            && variant.is_some_and(|scene| {
+                let allowed = crate::insets::allowed_roles(scene);
+                roles
+                    .iter()
+                    .all(|(i, r)| *i < 200 && allowed.contains(&r.as_str()))
+            }))
+}
+/// 系统提示可带 note / panel（不填按行数）；场景必须带场景编号；其他类不带。
+fn variant_ok(kind: Kind, v: Option<&str>) -> bool {
+    match kind {
+        Kind::System => matches!(v, None | Some("note" | "panel")),
+        Kind::Inset => v.is_some_and(crate::insets::is_type),
+        _ => v.is_none(),
+    }
 }
 /// 有效标注所在的正文分节与行号（V53，与 line_range 同一编号），供章节页在行号旁画出标注。
 pub(crate) fn locate(book: &EffectiveBook, start: usize, end: usize) -> Value {
@@ -217,13 +251,41 @@ pub(crate) fn locate(book: &EffectiveBook, start: usize, end: usize) -> Value {
     }
     Value::Null
 }
+/// 有效场景标注的各行文字（每行最多 200 字，最多 200 行）与自动判断的角色（V82，LAY-138）。
+fn inset_lines(a: &Annotation, book: &EffectiveBook, valid: bool) -> (Value, Value) {
+    let Some(scene) = a
+        .variant
+        .as_deref()
+        .filter(|_| valid && a.kind == Kind::Inset)
+    else {
+        return (Value::Null, Value::Null);
+    };
+    let text = &book.text[a.start..a.end];
+    let lines: Vec<&str> = text
+        .split_inclusive('\n')
+        .map(|l| l.trim_end_matches(['\r', '\n']))
+        .take(200)
+        .collect();
+    let roles = crate::insets::roles(scene, &lines);
+    (
+        json!(
+            lines
+                .iter()
+                .map(|l| l.chars().take(200).collect::<String>())
+                .collect::<Vec<_>>()
+        ),
+        json!(roles),
+    )
+}
 pub(crate) fn report(annotations: &[Annotation], book: &EffectiveBook) -> Value {
     json!({"content_id": digest(book.text.as_bytes()), "byte_length": book.text.len(),
         "annotations": annotations.iter().map(|a| {
             let reason = invalid_reason(a, book);
             json!({"annotation": a, "valid": reason.is_none(), "reason": reason,
                 "excerpt": if reason.is_none() { book.text[a.start..a.end].chars().take(160).collect::<String>() } else { String::new() },
-                "location": if reason.is_none() { locate(book, a.start, a.end) } else { Value::Null }})
+                "location": if reason.is_none() { locate(book, a.start, a.end) } else { Value::Null },
+                "lines": inset_lines(a, book, reason.is_none()).0,
+                "auto_roles": inset_lines(a, book, reason.is_none()).1})
         }).collect::<Vec<_>>()})
 }
 
@@ -244,6 +306,9 @@ enum Action {
         content_id: String,
         #[serde(default)]
         variant: Option<String>,
+        // 内部标签枚举里的映射键只能按字符串读，进入时再换成行号。
+        #[serde(default)]
+        roles: BTreeMap<String, String>,
     },
     Update {
         id: String,
@@ -253,6 +318,9 @@ enum Action {
         content_id: String,
         #[serde(default)]
         variant: Option<String>,
+        // 内部标签枚举里的映射键只能按字符串读，进入时再换成行号。
+        #[serde(default)]
+        roles: BTreeMap<String, String>,
     },
     Delete {
         id: String,
@@ -318,11 +386,19 @@ pub fn run(
             block_kind,
             content_id,
             variant,
+            roles,
         } => {
             if content_id != digest(book.text.as_bytes()) {
                 return Err(error("block_annotation_stale"));
             }
-            next.push(create(&book, start, end, block_kind, variant)?);
+            next.push(create(
+                &book,
+                start,
+                end,
+                block_kind,
+                variant,
+                line_roles(roles)?,
+            )?);
             changed = true;
         }
         Action::Update {
@@ -332,6 +408,7 @@ pub fn run(
             block_kind,
             content_id,
             variant,
+            roles,
         } => {
             if content_id != digest(book.text.as_bytes()) {
                 return Err(error("block_annotation_stale"));
@@ -342,7 +419,7 @@ pub fn run(
                 .ok_or_else(|| error("block_annotation_missing"))?;
             *old = Annotation {
                 id,
-                ..create(&book, start, end, block_kind, variant)?
+                ..create(&book, start, end, block_kind, variant, line_roles(roles)?)?
             };
             changed = true;
         }
@@ -426,7 +503,7 @@ mod tests {
     }
     fn mark(book: &EffectiveBook, text: &str, kind: Kind) -> Annotation {
         let start = book.text.find(text).unwrap();
-        create(book, start, start + text.len(), kind, None).unwrap()
+        create(book, start, start + text.len(), kind, None, BTreeMap::new()).unwrap()
     }
     #[test]
     fn locate_inverts_line_range_for_prefix_chapters_and_line_endings() {
@@ -587,10 +664,30 @@ mod tests {
         assert_eq!(invalid_reason(&a, &changed), Some("block_text_changed"));
         let (_, shifted) = book("第一章 起\r\n新增正文\r\n正文甲。\r\n正文乙。\r尾行");
         assert!(invalid_reason(&a, &shifted).is_some());
-        assert!(create(&original, a.start + 1, a.end, Kind::None, None).is_err());
-        assert!(create(&original, a.start, a.end - 1, Kind::None, None).is_err());
+        assert!(
+            create(
+                &original,
+                a.start + 1,
+                a.end,
+                Kind::None,
+                None,
+                BTreeMap::new()
+            )
+            .is_err()
+        );
+        assert!(
+            create(
+                &original,
+                a.start,
+                a.end - 1,
+                Kind::None,
+                None,
+                BTreeMap::new()
+            )
+            .is_err()
+        );
         assert_eq!(
-            create(&original, 0, a.end, Kind::Quote, None)
+            create(&original, 0, a.end, Kind::Quote, None, BTreeMap::new())
                 .unwrap_err()
                 .next_action,
             "block_contains_heading"
@@ -618,7 +715,7 @@ mod tests {
     }
     #[test]
     fn manual_kinds_override_auto_and_combine_with_notes_initials_and_splitting() {
-        let text = "第一章 起\n\t　首段①。\n\t　亲爱的朋友：\n愿你归来。\n故人\n【引文不是系统提示】\n自由的诗\n——作者\n自拟提示\n【自动提示】\n【取消自动】\n床前明月光，疑是地上霜。\n＊＊＊\n另一首段。\n①注释。\n";
+        let text = "第一章 起\n\t　首段①。\n\t　亲爱的朋友：\n愿你归来。\n故人\n【引文不是系统提示】\n自由的诗\n——作者\n自拟提示\n【自动提示】\n【取消自动】\n床前明月光，疑是地上霜。\n举头望明月，低头思故乡。\n＊＊＊\n另一首段。\n①注释。\n";
         let (source, book) = book(text);
         let annotations = vec![
             mark(&book, "\t　亲爱的朋友：\n愿你归来。\n故人\n", Kind::Letter),

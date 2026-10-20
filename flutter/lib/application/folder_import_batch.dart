@@ -15,6 +15,7 @@ FolderListing markFolderBooksHandled(
           book.path,
           book.bytes,
           book.alreadyImported || handled.contains(book.path),
+          modified: book.modified,
         ),
       ),
     ),

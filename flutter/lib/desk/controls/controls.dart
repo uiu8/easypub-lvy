@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -528,6 +529,10 @@ class _DeskSplitViewState extends State<DeskSplitView> {
   late int selected = widget.initialIndex;
   double? adjustedLeadingWidth;
   bool dividerFocused = false;
+
+  /// 拖动开始时的左栏宽度与指针横坐标：宽度 = 起始宽度 + 指针总位移，
+  /// 一帧内来多个移动事件也不会丢位移（V83）。
+  double? dragWidth, dragOrigin;
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, bounds) {
@@ -560,10 +565,11 @@ class _DeskSplitViewState extends State<DeskSplitView> {
         180.0,
         available - 180,
       );
+      double fit(double width) => width.clamp(180.0, available - 180);
+      // 键盘连按同样从最新宽度累加，而不是上一帧排出来的宽度。
       void resize(double delta) => setState(
-        () => adjustedLeadingWidth = (leading + delta).clamp(
-          180.0,
-          available - 180,
+        () => adjustedLeadingWidth = fit(
+          fit(adjustedLeadingWidth ?? initial) + delta,
         ),
       );
       return Row(
@@ -601,8 +607,20 @@ class _DeskSplitViewState extends State<DeskSplitView> {
                   cursor: SystemMouseCursors.resizeColumn,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onHorizontalDragUpdate: (details) =>
-                        resize(details.delta.dx),
+                    dragStartBehavior: DragStartBehavior.down,
+                    onHorizontalDragStart: (details) {
+                      dragWidth = leading;
+                      dragOrigin = details.globalPosition.dx;
+                    },
+                    onHorizontalDragUpdate: (details) => setState(
+                      () => adjustedLeadingWidth = fit(
+                        (dragWidth ?? leading) +
+                            details.globalPosition.dx -
+                            (dragOrigin ?? details.globalPosition.dx),
+                      ),
+                    ),
+                    onHorizontalDragEnd: (_) => dragWidth = dragOrigin = null,
+                    onHorizontalDragCancel: () => dragWidth = dragOrigin = null,
                     child: SizedBox(
                       width: 18,
                       child: Center(

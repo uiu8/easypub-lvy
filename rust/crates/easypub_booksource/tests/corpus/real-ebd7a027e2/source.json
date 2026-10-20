@@ -1,0 +1,105 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "飞卢小说🎃#3",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://wap.faloo.com#🎃",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 1782,
+  "easypub": {
+    "check": {
+      "at": 1792476090,
+      "chapters": 4246,
+      "chars": 701,
+      "error": "",
+      "kind": "check",
+      "ms": 642,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 30,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476090,
+      "ms": [
+        642
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://wap.faloo.com#🎃",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 0,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "https://u.faloo.com/regist/login.aspx?backUrl=https://wap.faloo.com/",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 7576,
+  "ruleBookInfo": {
+    "author": ".color999@tag.a.0@text",
+    "coverUrl": "class.cover_box@tag.img@src",
+    "intro": "id.novel_intro@tag.p@text",
+    "kind": ".color999@tag.a.1@text&&class.tagList clearfix@tag.a.0@text&&class.tagList clearfix@tag.a.1@text&&class.tagList clearfix@tag.a.2@text",
+    "lastChapter": ".newNode@text",
+    "name": ".name@text",
+    "tocUrl": "class.display_flex_between@tag.a.1@href",
+    "wordCount": "class.textHide.3@textNodes##\\d+万人"
+  },
+  "ruleContent": {
+    "content": ".nodeContent@p@html",
+    "imageStyle": "FULL",
+    "replaceRegex": "##本书来自.*|本书由飞卢.*|用飞卢.*"
+  },
+  "ruleExplore": {},
+  "ruleSearch": {
+    "author": "class.nl_r1_author@tag.a.0@text",
+    "bookList": "class.novelList@li",
+    "bookUrl": "class.bl_r1_tit@tag.a@href",
+    "coverUrl": "class.nl_r1@tag.a@tag.img@src",
+    "intro": "class.bl_r1_into@tag.a@text",
+    "kind": "class.nl_r1_author@tag.a.1@text&&class.nl_tags fr@tag.a.0@text&&class.nl_tags fr@tag.a.1@text",
+    "name": "class.bl_r1_tit@tag.a@text",
+    "wordCount": "class.nl_r2 clearfix@tag.i@text"
+  },
+  "ruleToc": {
+    "chapterList": ".v_nodeList li",
+    "chapterName": "i@html&&a@text##[\\(（【].*?[求更谢乐发订合补].*?[】）\\)]\n<js>result.replace(/\\<i class\\=\\\"icon_close\\\"\\>\\<\\/i\\>/,'✿·')</js>",
+    "chapterUrl": "a@href"
+  },
+  "searchUrl": "https://wap.faloo.com/search_1_{{page}}.html?k={{key}},{\n  \"charset\": \"GB2312\"\n}",
+  "variableComment": "",
+  "weight": 0
+}

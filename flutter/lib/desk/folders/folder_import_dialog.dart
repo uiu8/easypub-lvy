@@ -1,4 +1,6 @@
 // 导入文件夹弹窗（D4-D，V8 按设计重写视图）：扫描、续扫、勾选与导入逻辑沿用原实现。
+// V84（FOLD-083–087）：全选 / 取消全选 / 反选按钮、拖动连选与框选、按名称 / 类型 / 大小 / 修改时间
+// 排序与类型筛选；可选“导入后加入收藏夹”。
 import 'package:flutter/material.dart';
 
 import '../dialogs.dart';
@@ -8,7 +10,11 @@ import '../../application/chapter_rules_service.dart';
 import '../../application/library_service.dart';
 import '../../application/folder_import_batch.dart';
 import '../../application/settings_service.dart';
+import '../../application/book_collection_service.dart';
+import '../collections/collection_flow.dart';
 import '../controls/controls.dart';
+import '../controls/drag_select.dart';
+import 'folder_book_tools.dart';
 import '../rules/rules_sheet.dart' show showChapterRulesDialog;
 import 'folder_scan_failures.dart';
 
@@ -18,10 +24,14 @@ class FolderImportDialog extends StatefulWidget {
     required this.library,
     required this.picker,
     this.initialPath,
+    this.initialCollection,
   });
   final LibraryService library;
   final BookFilePicker picker;
   final String? initialPath;
+
+  /// 默认加入的收藏夹（从书库某个收藏夹里导入、或把文件夹拖到收藏夹上时）。
+  final String? initialCollection;
   @override
   State<FolderImportDialog> createState() => _FolderImportDialogState();
 }
@@ -35,13 +45,32 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
   FolderListing? listing;
   final selected = <String>{};
   final range = RangeSelection();
+  final view = FolderListView();
+  final scroll = ScrollController();
+  late String? collection = widget.initialCollection;
   List<ImportOutcome>? outcomes;
+  BookCollectionService? get collections =>
+      widget.library is BookCollectionService
+      ? widget.library as BookCollectionService
+      : null;
 
   /// 表头全选 / 清空（G-067）：书库已有的书不可勾选。
-  void setAll(List<FolderBook> books, bool value) => setState(() {
-    final paths = books.where((b) => !b.alreadyImported).map((b) => b.path);
-    value ? selected.addAll(paths) : selected.removeAll(paths);
-  });
+  void setAll(List<FolderBook> books, bool value) =>
+      setMany(books.map((b) => b.path), value);
+
+  /// 一次勾选或取消多本（按钮、拖动、Shift 选一段共用）；书库已有的跳过。
+  void setMany(Iterable<String> paths, bool value) {
+    if (importing) return;
+    final allowed = {
+      for (final b in listing?.books ?? const <FolderBook>[])
+        if (!b.alreadyImported) b.path,
+    };
+    final targets = paths.where(allowed.contains).toList();
+    setState(
+      () => value ? selected.addAll(targets) : selected.removeAll(targets),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +95,7 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
   void dispose() {
     generation++;
     listing?.close?.call();
+    scroll.dispose();
     super.dispose();
   }
 
@@ -161,6 +191,15 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
           results.where((r) => r.succeeded).map((r) => r.path),
         );
       });
+      // 导入后加入收藏夹（V84，FOLD-087）：成功的与书库已有的都加入。
+      final target = collection, service = collections;
+      if (target != null && service != null && mounted) {
+        final ids = [
+          for (final r in results)
+            if (r.succeeded) ?service.bookIdForPath(r.path),
+        ];
+        if (ids.isNotEmpty) await joinCollection(context, service, target, ids);
+      }
     } catch (error) {
       if (mounted) setState(() => message = '导入未完成：$error');
     } finally {
@@ -168,16 +207,11 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
     }
   }
 
-  String _size(int bytes) => bytes >= 1024 * 1024
-      ? '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'
-      : bytes >= 1024
-      ? '${(bytes / 1024).toStringAsFixed(1)} KB'
-      : '$bytes B';
-
   @override
   Widget build(BuildContext context) {
     final d = context.desk;
     final books = listing?.books ?? const <FolderBook>[];
+    final shown = view.apply(books);
     final results = outcomes ?? const <ImportOutcome>[];
     final added = results.where((r) => r.succeeded && !r.skipped).length;
     final summary = listing == null
@@ -296,11 +330,23 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
             const LinearProgressIndicator(minHeight: 2),
             const SizedBox(height: 8),
           ],
+          if (listing != null && books.isNotEmpty) ...[
+            FolderListToolbar(
+              books: books,
+              shown: shown,
+              selected: selected,
+              view: view,
+              enabled: !importing,
+              onViewChanged: () => setState(range.reset),
+              onSet: setMany,
+            ),
+            const SizedBox(height: 6),
+          ],
           if (listing != null)
             SelectionKeys(
               hasSelection: selected.isNotEmpty,
-              onSelectAll: importing ? null : () => setAll(books, true),
-              onClear: importing ? null : () => setAll(books, false),
+              onSelectAll: importing ? null : () => setAll(shown, true),
+              onClear: importing ? null : () => setAll(shown, false),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -315,7 +361,7 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
                         note: books.any((b) => b.alreadyImported)
                             ? '书库已有 ${books.where((b) => b.alreadyImported).length} 本不可勾选'
                             : null,
-                        onChanged: importing ? null : (v) => setAll(books, v),
+                        onChanged: importing ? null : (v) => setAll(shown, v),
                       ),
                     ),
                   SizedBox(
@@ -327,15 +373,53 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
                               style: ui(12.5, c: d.ink3),
                             ),
                           )
-                        : ListView.builder(
-                            itemCount: books.length,
-                            itemBuilder: (context, index) =>
-                                bookRow(context, books, index),
+                        : DragSelectRegion(
+                            key: const ValueKey('folder-import-drag-select'),
+                            scroll: scroll,
+                            itemExtent: 42,
+                            checkColumnWidth: 44,
+                            ids: [for (final b in shown) b.path],
+                            isChecked: selected.contains,
+                            apply: (check, uncheck) {
+                              if (check.isNotEmpty) setMany(check, true);
+                              if (uncheck.isNotEmpty) setMany(uncheck, false);
+                            },
+                            child: ListView.builder(
+                              controller: scroll,
+                              itemExtent: 42,
+                              itemCount: shown.length,
+                              itemBuilder: (context, index) =>
+                                  bookRow(context, shown, index),
+                            ),
                           ),
                   ),
                 ],
               ),
             ),
+          if (collections != null &&
+              collections!.collections.value.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text('导入后加入收藏夹', style: ui(12.5, c: d.ink)),
+                const SizedBox(width: 8),
+                DeskFilter<String>(
+                  key: const ValueKey('folder-import-collection'),
+                  value: collection ?? '',
+                  onChanged: importing
+                      ? null
+                      : (v) => setState(
+                          () => collection = v == null || v.isEmpty ? null : v,
+                        ),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('不加入')),
+                    for (final c in collections!.collections.value)
+                      DropdownMenuItem(value: c.id, child: Text(c.name)),
+                  ],
+                ),
+              ],
+            ),
+          ],
           if (message.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(message, style: ui(12, c: d.ink2, h: 1.5)),
@@ -379,13 +463,8 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
         : ('新增', Tone.ok);
     final enabled = !importing && !book.alreadyImported;
     final checked = selected.contains(book.path);
-    void toggle(bool value) => setState(() {
-      for (final i in range.span(index)) {
-        final b = books[i];
-        if (b.alreadyImported) continue;
-        value ? selected.add(b.path) : selected.remove(b.path);
-      }
-    });
+    void toggle(bool value) =>
+        setMany([for (final i in range.span(index)) books[i].path], value);
     return InkWell(
       onTap: enabled ? () => toggle(!checked) : null,
       child: Container(
@@ -409,7 +488,16 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
                 style: ui(12.5, c: d.ink),
               ),
             ),
-            Text(_size(book.bytes), style: mono(10.5, c: d.ink3)),
+            Text(folderBookTime(book.modified), style: mono(10.5, c: d.ink3)),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 64,
+              child: Text(
+                folderBookSize(book.bytes),
+                textAlign: TextAlign.right,
+                style: mono(10.5, c: d.ink3),
+              ),
+            ),
             const SizedBox(width: 10),
             Tooltip(
               message: result?.message ?? '',

@@ -112,6 +112,14 @@ class BookDraft {
   // 生僻字注音（V73，LAY-129）：旧书缺少字段时不标。
   String rareCharRuby = 'off';
   String rareCharScope = 'outside';
+  // 场景样式（V81，LAY-135）：旧书缺少字段时聊天记录不识别、书信原样。
+  String chatBlockStyle = 'off';
+  String letterBlockStyle = 'plain';
+  String insetFont = 'kai';
+  // 场景识别（V82，LAY-137）：旧书缺少字段时不识别。
+  String insetDetect = 'off';
+  // 本书改过的场景样式参数（V82，LAY-136）：场景编号 → 参数。
+  Map<String, dynamic>? insetStyles;
   // 统一章首图（V54，LAY-124）。
   String? chapterHeadImage;
   // 章节样式包（V74，LAY-130）：与章首图一样属于本书，不进草稿。
@@ -663,6 +671,9 @@ class PrototypeState extends ChangeNotifier {
   }
 
   List<Map<String, dynamic>> folderRules = [];
+
+  /// 书库收藏夹（V84，LIB-118）：随项目保存；成员为书 id。
+  List<Map<String, dynamic>> collections = [];
   bool projectFolderRulesEnabled = false;
   List<Map<String, dynamic>> get effectiveFolderRules => [
     for (final rule in globalFolderRules) {...rule, 'priority': 0},
@@ -840,6 +851,11 @@ class PrototypeState extends ChangeNotifier {
                 v['first_paragraph_style'] as String? ?? 'normal'
             ..rareCharRuby = v['rare_char_ruby'] as String? ?? 'off'
             ..rareCharScope = v['rare_char_scope'] as String? ?? 'outside'
+            ..chatBlockStyle = v['chat_block_style'] as String? ?? 'off'
+            ..letterBlockStyle = v['letter_block_style'] as String? ?? 'plain'
+            ..insetFont = v['inset_font'] as String? ?? 'kai'
+            ..insetDetect = v['inset_detect'] as String? ?? 'off'
+            ..insetStyles = (v['inset_styles'] as Map?)?.cast<String, dynamic>()
             ..chapterHeadImage = v['chapter_head_image'] as String?
             ..chapterStyle = (v['chapter_style'] as Map?)
                 ?.cast<String, dynamic>()
@@ -1062,6 +1078,18 @@ class PrototypeState extends ChangeNotifier {
       'rule_id': 'builtin-heading-v1',
       'folder_rules': jsonDecode(jsonEncode(folderRules)),
       'project_folder_rules_enabled': projectFolderRulesEnabled,
+      // 只保存仍在书库里的成员；移除后撤销前的成员仍留在内存里。
+      if (collections.isNotEmpty)
+        'collections': [
+          for (final c in collections)
+            {
+              ...jsonDecode(jsonEncode(c)) as Map<String, dynamic>,
+              'books': [
+                for (final id in (c['books'] as List? ?? const []))
+                  if (books.any((b) => b.id == id)) id,
+              ],
+            },
+        ],
       'layout_presets': jsonDecode(jsonEncode(layoutPresets)),
       'cleanup_presets': jsonDecode(jsonEncode(cleanupPresets)),
       'recognition_presets': jsonDecode(
@@ -1107,6 +1135,11 @@ class PrototypeState extends ChangeNotifier {
           'first_paragraph_style': d.firstParagraphStyle,
           'rare_char_ruby': d.rareCharRuby,
           'rare_char_scope': d.rareCharScope,
+          'chat_block_style': d.chatBlockStyle,
+          'letter_block_style': d.letterBlockStyle,
+          'inset_font': d.insetFont,
+          'inset_detect': d.insetDetect,
+          if (d.insetStyles != null) 'inset_styles': d.insetStyles,
           if (d.chapterHeadImage != null)
             'chapter_head_image': d.chapterHeadImage,
           if (d.chapterStyle != null) 'chapter_style': d.chapterStyle,
@@ -1262,6 +1295,11 @@ class PrototypeState extends ChangeNotifier {
       final restoredFolderRules = (doc['folder_rules'] as List? ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
+      final restoredCollections = (doc['collections'] as List? ?? [])
+          .map(
+            (e) => (jsonDecode(jsonEncode(e)) as Map).cast<String, dynamic>(),
+          )
+          .toList();
       final rows = (doc['books'] as List).cast<Map<String, dynamic>>();
       final summaries = (result['summaries'] as List)
           .cast<Map<String, dynamic>>();
@@ -1378,6 +1416,11 @@ class PrototypeState extends ChangeNotifier {
               row['first_paragraph_style'] as String? ?? 'normal'
           ..rareCharRuby = row['rare_char_ruby'] as String? ?? 'off'
           ..rareCharScope = row['rare_char_scope'] as String? ?? 'outside'
+          ..chatBlockStyle = row['chat_block_style'] as String? ?? 'off'
+          ..letterBlockStyle = row['letter_block_style'] as String? ?? 'plain'
+          ..insetFont = row['inset_font'] as String? ?? 'kai'
+          ..insetDetect = row['inset_detect'] as String? ?? 'off'
+          ..insetStyles = (row['inset_styles'] as Map?)?.cast<String, dynamic>()
           ..chapterHeadImage = row['chapter_head_image'] as String?
           ..chapterStyle = (row['chapter_style'] as Map?)
               ?.cast<String, dynamic>()
@@ -1487,6 +1530,7 @@ class PrototypeState extends ChangeNotifier {
               .add(issue.cast<String, dynamic>());
         }
         folderRules = restoredFolderRules;
+        collections = restoredCollections;
         projectFolderRulesEnabled = doc['project_folder_rules_enabled'] == true;
         layoutPresets = restoredLayoutPresets;
         cleanupPresets = restoredCleanupPresets;

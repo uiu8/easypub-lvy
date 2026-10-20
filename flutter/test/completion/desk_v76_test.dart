@@ -212,7 +212,7 @@ void main() {
       expect(body, contains('chapter-head-image'));
       expect(body, contains('class="title-rule"'));
       expect(body, contains('class="chapter-end"'));
-      expect(css, contains('3px double'));
+      expect(css, contains('.volume-heading { border: 3px double;'));
       final image = RegExp(r'class="title-rule"><img src="([^"]+)"')
           .firstMatch(body)!
           .group(1)!;
@@ -229,7 +229,8 @@ void main() {
       expect(plain, isNot(contains('<ruby>')));
       expect(plain, isNot(contains('title-rule')));
       expect(plain, isNot(contains('chapter-head-image')));
-      expect(plainCss, isNot(contains('3px double')));
+      // 新书默认开着场景样式（V81），样式表里别处也有双线，只看卷页边框。
+      expect(plainCss, isNot(contains('.volume-heading { border:')));
       // 卷页边框改单线。
       final (_, _, single) = await render({
         'chapter_style_volume_frame': 'single',

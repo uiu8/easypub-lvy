@@ -27,6 +27,9 @@ try {
     }
     & cargo build --locked -p easypub_bridge --release *> (Join-Path $run 'build.log')
     if ($LASTEXITCODE -ne 0) { throw "Native bridge build failed. See $run/build.log" }
+    # V86：书源插件进程（插件测试要用 target/release 里的程序）。
+    & cargo build --locked -p easypub_booksource --bin easypub_plugin_booksource --release *>> (Join-Path $run 'build.log')
+    if ($LASTEXITCODE -ne 0) { throw "Book source plugin build failed. See $run/build.log" }
     # A test run owns its exact DLL so subsequent builds cannot change its
     # native version or contend with a Windows loader file lock.
     $testNative = Join-Path $run 'native'

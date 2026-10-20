@@ -2,6 +2,14 @@
 /// Presentation state owned by one workspace, never serialized as book data.
 class LibraryViewState {
   String search = '', filter = '全部书稿', format = '全部格式';
+
+  /// 显示范围（V84：'' 全部、'c:<收藏夹>'、'k:<类别>'）与排序。
+  String scope = '', sort = 'default';
+  bool descending = false;
+
+  /// 左栏收成图标条与左栏宽度（V84b，可拖动伸缩）。
+  bool railCollapsed = false;
+  double railWidth = 184;
   bool compact = false, onlySelected = false;
   String? topBookId, rangeAnchor;
   int topIndex = 0;

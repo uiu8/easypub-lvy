@@ -199,6 +199,8 @@ pub(crate) fn enabled(row: &Value, rules: &RuleSet, settings: &Settings, pipelin
         "layout.scene" => settings.scene_break_style != "off",
         "layout.system" => settings.system_block_style != "off",
         "layout.verse" => settings.verse_block_style != "off",
+        "layout.chat" => settings.chat_block_style != "off",
+        "layout.inset" => settings.inset_detect == "on",
         "layout.note" => settings.note_style == "popup",
         "layout.first_paragraph" => settings.first_paragraph_style != "normal",
         _ => true,

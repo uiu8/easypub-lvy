@@ -348,6 +348,14 @@ pub fn catalog() -> Value {
             true,
         ),
         (
+            "chat",
+            "聊天记录",
+            "chat_block_style",
+            json!(["window", "script", "channel"]),
+            true,
+        ),
+        ("inset", "场景识别", "inset_detect", json!(["on"]), true),
+        (
             "note",
             "自动弹出注释",
             "note_style",
@@ -393,6 +401,9 @@ pub fn catalog() -> Value {
         ("verse.five", "verse", "五言对句", true),
         ("verse.seven", "verse", "七言对句", true),
         ("verse.attribution", "verse", "诗词署名", true),
+        ("inset.edict", "inset", "诏书（奉天承运……钦此）", true),
+        ("inset.forum", "inset", "论坛楼层（连续两层以上）", true),
+        ("inset.custom", "inset", "自定义场景识别规则", true),
         ("note.circled", "note", "圆圈数字注释 ①", false),
         ("note.bracket", "note", "方括号数字注释 [1]", false),
         ("note.fullwidth", "note", "全角方括号注释 ［1］", false),
@@ -432,6 +443,7 @@ pub fn catalog() -> Value {
         ("quote", "引文"),
         ("verse", "诗词"),
         ("system", "系统提示"),
+        ("inset", "场景"),
         ("none", "取消自动标注"),
     ] {
         add(
@@ -520,6 +532,8 @@ pub fn catalog() -> Value {
             "layout.scene" => Some("keep"),
             "layout.system" => Some("box"),
             "layout.verse" => Some("center"),
+            "layout.chat" => Some("window"),
+            "layout.inset" => Some("on"),
             "layout.note" => Some("popup"),
             "layout.first_paragraph" => Some("no_indent"),
             "layout.rare_char" => Some("chapter"),
@@ -533,7 +547,10 @@ pub fn catalog() -> Value {
             });
             row["on_value"] = json!(on);
         }
-        if id.starts_with("layout.verse.") || id.starts_with("layout.note.") {
+        if id.starts_with("layout.verse.")
+            || id.starts_with("layout.note.")
+            || id.starts_with("layout.inset.")
+        {
             row["description"] = json!("可独立关闭；所属规则关闭时，此细分不生效。");
         }
     }

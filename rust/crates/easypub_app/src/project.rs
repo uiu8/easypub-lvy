@@ -38,6 +38,8 @@ pub struct Project {
     pub layout_presets: Vec<crate::layout_presets::Preset>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub folder_rules: Vec<crate::folder_mapping::Rule>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub collections: Vec<crate::collections::Collection>,
     pub schema: u32,
     pub rule_id: String,
     pub books: Vec<ProjectBook>,
@@ -131,6 +133,19 @@ pub struct ProjectBook {
     /// 诗词样式（V50，LAY-122）。
     #[serde(default = "crate::production::default_verse_block_style")]
     pub verse_block_style: String,
+    /// 场景样式（V81，LAY-135）。
+    #[serde(default = "crate::production::default_chat_block_style")]
+    pub chat_block_style: String,
+    #[serde(default = "crate::production::default_letter_block_style")]
+    pub letter_block_style: String,
+    #[serde(default = "crate::production::default_inset_font")]
+    pub inset_font: String,
+    /// 场景识别（V82，LAY-137），见 [crate::insets::INSET_DETECT]。
+    #[serde(default = "crate::production::default_inset_detect")]
+    pub inset_detect: String,
+    /// 本书改过的场景样式（V82，LAY-136）：按场景编号；没改的用内置预设。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inset_styles: Option<std::collections::BTreeMap<String, crate::inset_styles::InsetStyle>>,
     #[serde(default)]
     pub rule_options: crate::rule_options::Options,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -348,6 +363,7 @@ impl Project {
         crate::folder_mapping::validate_rules(&self.folder_rules)?;
         crate::layout_presets::validate(&self.layout_presets)?;
         crate::cleanup_presets::validate(&self.cleanup_presets)?;
+        crate::collections::validate(&self.collections)?;
         if self.rule_id != easypub_core::source::RULE_ID
             || self.schema != 1
             || self.books.len() > MAX_SOURCES
@@ -715,6 +731,7 @@ pub fn clear_workspace(
         cleanup_presets: Vec::new(),
         layout_presets: Vec::new(),
         folder_rules: Vec::new(),
+        collections: Vec::new(),
         schema: 1,
         rule_id: easypub_core::source::RULE_ID.into(),
         books: Vec::new(),
@@ -902,6 +919,11 @@ mod tests {
             system_block_style: crate::production::default_system_block_style(),
             system_styles: None,
             verse_block_style: crate::production::default_verse_block_style(),
+            chat_block_style: crate::production::default_chat_block_style(),
+            letter_block_style: crate::production::default_letter_block_style(),
+            inset_font: crate::production::default_inset_font(),
+            inset_detect: crate::production::default_inset_detect(),
+            inset_styles: None,
             rule_options: Default::default(),
             block_annotations: Vec::new(),
             manual_notes: Vec::new(),
@@ -959,6 +981,11 @@ mod tests {
             recognition_presets: Vec::new(),
             project_folder_rules_enabled: false,
             folder_rules: Vec::new(),
+            collections: serde_json::from_value(serde_json::json!([
+                {"id":"c-1","name":"武侠","books":[a.to_string_lossy().to_lowercase()],
+                 "template":{"category":{"op":"set","value":"武侠"}},"auto_apply":true}
+            ]))
+            .unwrap(),
             layout_presets: Vec::new(),
             cleanup_presets: Vec::new(),
             schema: 1,
@@ -993,6 +1020,12 @@ mod tests {
         let result: serde_json::Value =
             serde_json::from_str(&open(&reopened, target.to_str().unwrap()).unwrap()).unwrap();
         assert_eq!(result["project"]["books"][0]["title"], "改名甲");
+        assert_eq!(result["project"]["collections"][0]["name"], "武侠");
+        assert_eq!(result["project"]["collections"][0]["auto_apply"], true);
+        assert_eq!(
+            result["project"]["collections"][0]["template"]["category"]["value"],
+            "武侠"
+        );
         assert_eq!(result["project"]["books"][0]["include_toc"], false);
         assert_eq!(
             result["project"]["books"][0]["reference_catalog"]["title"],

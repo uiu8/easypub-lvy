@@ -1,0 +1,106 @@
+{
+  "bookSourceComment": "BY:溪",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "神话之后",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://www.shenhuazhihou.com",
+  "bookUrlPattern": "https://www.shenhuazhihou.com/book/\\d+/",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 404,
+  "easypub": {
+    "check": {
+      "at": 1792476039,
+      "chapters": 43,
+      "chars": 4730,
+      "error": "",
+      "kind": "check",
+      "ms": 3808,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 20,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476039,
+      "ms": [
+        3808
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://www.shenhuazhihou.com::0c3e8be5b8ea",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": false,
+  "enabledExplore": true,
+  "exploreUrl": "小说::https://www.shenhuazhihou.com/book/<,index_{{page}}.html>",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1769602489811,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 6923,
+  "ruleBookInfo": {
+    "author": ".m-infos@span.0@text",
+    "coverUrl": "img@src",
+    "intro": "p.0@text\n##(^|[。！？……]+[”」）……】]?)##$1<br>",
+    "kind": ".m-infos@span.1:2@text##.*：|.*：",
+    "lastChapter": ".m-upd@a@text",
+    "name": "h1@text"
+  },
+  "ruleContent": {
+    "content": "id.chaptercontent@p@html",
+    "nextContentUrl": "text.下一@href"
+  },
+  "ruleExplore": {
+    "author": "td.1@text",
+    "bookList": "tbody@tr",
+    "bookUrl": "a.0@href",
+    "kind": "td.2@text",
+    "name": "td.0@a@text"
+  },
+  "ruleSearch": {
+    "author": ".author@text",
+    "bookList": ".book-coverlist",
+    "bookUrl": "a.0@href",
+    "coverUrl": "img@src",
+    "intro": ".intro@text",
+    "name": "h4@a@text"
+  },
+  "ruleToc": {
+    "chapterList": "#play_0@li@a",
+    "chapterName": "text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "https://www.shenhuazhihou.com/e/search/index.php,{\n  \"body\": \"tbname=bookname&show=title,writer&tempid=1&keyboard={{key}}\",\n  \"method\": \"POST\"\n}",
+  "variableComment": "",
+  "weight": 1
+}

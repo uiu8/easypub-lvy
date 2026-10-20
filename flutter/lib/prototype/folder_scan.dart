@@ -10,10 +10,18 @@ String folderImportPathKey(String path) =>
     p.normalize(p.absolute(path)).toLowerCase();
 
 class FolderScanEntry {
-  const FolderScanEntry(this.path, this.bytes, this.alreadyImported);
+  const FolderScanEntry(
+    this.path,
+    this.bytes,
+    this.alreadyImported, {
+    this.modified,
+  });
   final String path;
   final int bytes;
   final bool alreadyImported;
+
+  /// 文件修改时间（扫描时读到的属性，V84 排序用）。
+  final DateTime? modified;
   String get name => path.replaceAll('\\', '/').split('/').last;
   String get format => bookFormatForPath(path);
 }
@@ -190,6 +198,7 @@ class BookFolderScan {
               entity.absolute.path,
               stat.size,
               known.contains(key),
+              modified: stat.modified,
             ),
           );
           added++;

@@ -1,0 +1,107 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "创世中文网",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://chuangshi.qq.com/",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 2700,
+  "easypub": {
+    "check": {
+      "at": 1792476127,
+      "chapters": 773,
+      "chars": 6017,
+      "error": "",
+      "kind": "check",
+      "ms": 3015,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 20,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476127,
+      "ms": [
+        3015
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://chuangshi.qq.com/::4c396e8e7899",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "                    🍀全部🎀分类🍀                    \n玄幻::https://chuangshi.qq.com/tab/20001\n武侠::https://chuangshi.qq.com/tab/20010\n历史::https://chuangshi.qq.com/tab/20028\n游戏::https://chuangshi.qq.com/tab/20050\n科幻::https://chuangshi.qq.com/tab/20042\n轻小说::https://chuangshi.qq.com/tab/20059",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1705095125314,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 21504,
+  "ruleBookInfo": {
+    "coverUrl": ".book-cover@tag.img@src",
+    "kind": ".book-info__categories@tag.a@text",
+    "lastChapter": ".catalogue-list__title.0@text",
+    "tocUrl": "@js:\nvar id = baseUrl.match(/(\\d+)/);\n\"https://chuangshi.qq.com/chapter/\" + id[1]",
+    "wordCount": ".book-info__categories@tag.span@text"
+  },
+  "ruleContent": {
+    "content": "id.article@tag.p@html",
+    "nextContentUrl": "text.下一页@href||text.下一章@href"
+  },
+  "ruleExplore": {
+    "author": ".author@text",
+    "bookList": ".book-li",
+    "bookUrl": ".book-simple@tag.a.0@href",
+    "intro": ".book-intro@text",
+    "kind": ".rect!2@text",
+    "name": ".book-title@text",
+    "wordCount": ".rect.2@text"
+  },
+  "ruleSearch": {
+    "author": ".book-survey@.author@text",
+    "bookList": ".book-box@tag.li",
+    "bookUrl": ".book-simple@tag.a.0@href",
+    "checkKeyWord": "神墓",
+    "intro": ".book-intro@text",
+    "name": ".book-title@text##"
+  },
+  "ruleToc": {
+    "chapterList": ".catalog-body@class.book-dir.1@tag.li!-1",
+    "chapterName": "tag.a@text",
+    "chapterUrl": "tag.a@href"
+  },
+  "searchUrl": "https://chuangshi.qq.com/search/{{key}}",
+  "variableComment": "",
+  "weight": 0
+}

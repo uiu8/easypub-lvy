@@ -70,7 +70,21 @@ impl Structure {
     /// unchanged so existing history hashes and node identities keep replaying.
     pub fn recognized(source: &SourceSnapshot) -> Self {
         let mut result = Self::new(source);
-        result.recognition_rules = Some(crate::chapter_rules::RuleSet::default());
+        let mut rules = crate::chapter_rules::RuleSet::default();
+        // V91：全书主要用“001：标题”这类纯数字标题时（至少 10 个，且是常规标题的 3 倍以上），
+        // 导入时自动打开纯数字识别；用户仍可在识别规则里关掉。
+        if let Ok(regular) = rules.compile() {
+            let mut numeric_rules = rules.clone();
+            numeric_rules.numeric = true;
+            if let Ok(numeric) = numeric_rules.compile() {
+                let base = regular.recognize(source).len();
+                let extra = numeric.recognize(source).len().saturating_sub(base);
+                if extra >= 10 && extra >= base * 3 {
+                    rules = numeric_rules;
+                }
+            }
+        }
+        result.recognition_rules = Some(rules);
         let dominant =
             crate::recognition::dominant_marker(source.headings().iter().map(|h| h.title.as_str()));
         let mut in_volume = false;
@@ -83,6 +97,15 @@ impl Structure {
                     role: Role::Body,
                     depth: 0,
                     include_toc: false,
+                });
+            } else if crate::recognition::inner_chapter(&h.title).is_some() {
+                // 卷名和章名在同一行：是这一卷下的一章，不是每章新开一卷。
+                in_chapter = true;
+                result.overrides.push(Override {
+                    source_line: h.source_line,
+                    role: Role::Chapter,
+                    depth: u8::from(in_volume),
+                    include_toc: true,
                 });
             } else if matches!(marker, Some('卷' | '部' | '篇' | '集')) {
                 in_volume = true;
@@ -356,5 +379,52 @@ mod tests {
             )
             .unwrap();
         assert_eq!(settings.tree(&s).unwrap().nodes[0].entry_id, id);
+    }
+    /// V91：作者说明和卷末标记导入后算正文；卷名和章名同行的按该卷下的章。
+    #[test]
+    fn recognized_demotes_notes_and_keeps_volume_chapter_lines_as_chapters() {
+        let text = "第一卷 风起\n第一章 甲\n甲文\n（第二章大概十一点左右。）\n仍是甲文\n第二章 乙\n乙文\n（第一卷终）\n第二卷垂幕之年 第三章 丙，我来了\n丙文\n第二卷垂幕之年 第四章 丁\n丁文\n";
+        let s = SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let tree = Structure::recognized(&s).tree(&s).unwrap();
+        let shown: Vec<_> = tree
+            .nodes
+            .iter()
+            .filter(|n| n.role != Role::Body)
+            .map(|n| (n.title.as_str(), n.role.clone()))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("第一卷 风起", Role::Volume),
+                ("第一章 甲", Role::Chapter),
+                ("第二章 乙", Role::Chapter),
+                ("第二卷垂幕之年 第三章 丙，我来了", Role::Chapter),
+                ("第二卷垂幕之年 第四章 丁", Role::Chapter),
+            ]
+        );
+    }
+    /// V91：全书用纯数字标题时导入自动打开纯数字识别；正文里零星的编号列表不触发。
+    #[test]
+    fn recognized_enables_numeric_titles_only_when_they_dominate() {
+        let body = "正文一行。\n".repeat(6);
+        let numeric: String = (1..=12)
+            .map(|i| format!("{i:03}：第{i}个标题。\n{body}"))
+            .collect();
+        let s = SourceSnapshot::from_utf8(numeric.into_bytes(), RULE_ID, || false).unwrap();
+        let structure = Structure::recognized(&s);
+        assert!(structure.recognition_rules.as_ref().unwrap().numeric);
+        let chapters = structure
+            .tree(&s)
+            .unwrap()
+            .nodes
+            .iter()
+            .filter(|n| n.role == Role::Chapter)
+            .count();
+        assert_eq!(chapters, 12);
+        let regular: String = (1..=20)
+            .map(|i| format!("第{i}章 标题\n{body}1、清单第一项\n{body}"))
+            .collect();
+        let s = SourceSnapshot::from_utf8(regular.into_bytes(), RULE_ID, || false).unwrap();
+        assert!(!Structure::recognized(&s).recognition_rules.unwrap().numeric);
     }
 }

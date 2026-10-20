@@ -13,6 +13,40 @@ pub struct Options {
     /// 系统提示自定义识别（V78，LAY-134）：整行匹配的正则；空时不写入，旧书不变。
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub system_patterns: Vec<String>,
+    /// 场景自定义识别（V82，LAY-137）：开头、结尾（正则）与最多行数；空时不写入，旧书不变。
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub inset_rules: Vec<InsetRule>,
+}
+
+/// 一条场景识别规则：从“开头”匹配的行起，到“结尾”匹配的行止（不超过最多行数），整段标为该场景。
+/// 结尾为空时只标开头这一行。
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InsetRule {
+    pub scene: String,
+    pub start: String,
+    #[serde(default)]
+    pub end: String,
+    pub max_lines: u16,
+}
+
+impl InsetRule {
+    /// 编译开头（锚定行首）与结尾（锚定行尾）；结尾为空时为 None。
+    pub fn compile(&self) -> Option<(regex::Regex, Option<regex::Regex>)> {
+        let build = |p: String| {
+            regex::RegexBuilder::new(&p)
+                .size_limit(1 << 20)
+                .build()
+                .ok()
+        };
+        let start = build(format!("^(?:{})", self.start))?;
+        let end = if self.end.is_empty() {
+            None
+        } else {
+            Some(build(format!("(?:{})$", self.end))?)
+        };
+        Some((start, end))
+    }
 }
 impl Options {
     pub fn validate(&self) -> Result<(), easypub_core::ApiError> {
@@ -46,6 +80,22 @@ impl Options {
                 easypub_core::ErrorCode::InvalidRule,
                 "rule_options",
                 "系统提示自定义识别规则无效",
+            ));
+        }
+        if self.inset_rules.len() > 20
+            || self.inset_rules.iter().any(|r| {
+                !crate::insets::is_type(&r.scene)
+                    || r.start.trim().is_empty()
+                    || r.start.chars().count() > 200
+                    || r.end.chars().count() > 200
+                    || !(1..=60).contains(&r.max_lines)
+                    || r.compile().is_none()
+            })
+        {
+            return Err(easypub_core::ApiError::new(
+                easypub_core::ErrorCode::InvalidRule,
+                "rule_options",
+                "场景识别规则无效",
             ));
         }
         if let Some(p) = &self.cleanup_pipeline {

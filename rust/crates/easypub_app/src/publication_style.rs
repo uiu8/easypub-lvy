@@ -188,6 +188,18 @@ pub fn prepare(settings: &Settings) -> Result<Stylesheet, ApiError> {
                 .css(),
         );
     }
+    // 场景样式（V81，LAY-135）：用到时才写入，旧书的样式表不变。
+    if crate::insets::used(settings) {
+        let paper = crate::insets::image_needs(settings)
+            .1
+            .then(|| crate::insets::image_id(&crate::insets::paper_png()));
+        css.push_str(&crate::inset_styles::css(
+            settings.inset_styles.as_ref(),
+            &settings.chat_block_style,
+            paper.as_deref(),
+            settings.inset_font == "kai",
+        ));
+    }
     // 章节样式包（V74，LAY-130）：标题下装饰线、章末装饰、卷页边框。
     if let Some(style) = &settings.chapter_style {
         if style.title_rule.is_some() {

@@ -26,7 +26,7 @@ void main() {
       expect(await library.savePatch({'check_after_import': false}), true);
       final source = File('$root/样书.txt')
         ..writeAsStringSync(
-          '第一章 开始\n正文①。\n＊＊＊\n床前明月光，疑是地上霜。\n①说明\n第三章 后来\n正文乙。\n第三章 重复\n正文丙。\n第五章 结尾\n结束。\n',
+          '第一章 开始\n正文①。\n＊＊＊\n床前明月光，疑是地上霜。\n举头望明月，低头思故乡。\n①说明\n第三章 后来\n正文乙。\n第三章 重复\n正文丙。\n第五章 结尾\n结束。\n',
         );
       final bytes = source.readAsBytesSync();
       expect((await library.importFiles([source.path])).single.succeeded, true);

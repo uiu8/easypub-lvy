@@ -1,0 +1,110 @@
+{
+  "bookSourceComment": "精准搜索",
+  "bookSourceGroup": "快速书源 ⚡,通常书源 📂",
+  "bookSourceName": "⚡📂笔趣阁",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://www.biqvge99.cc/#pb1101",
+  "bookUrlPattern": "https://www.biqvge99.cc/book/\\d+/",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 579,
+  "easypub": {
+    "check": {
+      "at": 1792475926,
+      "chapters": 999,
+      "chars": 3174,
+      "error": "",
+      "kind": "check",
+      "ms": 3363,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 1,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1315-20261020-133713.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792475926,
+      "ms": [
+        3363
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://www.biqvge99.cc/#pb1101",
+    "importWarnings": [],
+    "importedAt": 1792475778,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "[{\"title\":\"玄幻小说\",\"url\":\"/xuanhuan/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"武侠小说\",\"url\":\"/wuxia/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"都市小说\",\"url\":\"/dushi/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"历史小说\",\"url\":\"/lishi/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"网游小说\",\"url\":\"/wangyou/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"科幻小说\",\"url\":\"/kehuan/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"女生小说\",\"url\":\"/mm/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}}]",
+  "header": "{\n  \"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.73 Safari/537.36\"\n}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1789963280894,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "{\n  \"url\": \"\"\n}",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 2914,
+  "ruleBookInfo": {
+    "author": "class.info@class.small@tag.span.0@text##作者：",
+    "coverUrl": "class.cover@img@src",
+    "intro": "class.intro@text##简介：",
+    "kind": "class.info@class.small@tag.span.1@text&&\nclass.info@class.small@tag.span.2@text&&\nclass.info@class.small@tag.span.4@text##分类：|状态：|更新时间：",
+    "lastChapter": "class.info@class.small@tag.span.5@a@text##免费章节 |正文卷 |正文 |VIP章节 |百度搜索.*",
+    "name": "class.info@h1@text##\\（.*|\\(.*|免费阅读|全文.*阅读|最新章节|笔趣阁|小说"
+  },
+  "ruleContent": {
+    "content": "id.content@textNodes##请记住本书.*cc"
+  },
+  "ruleExplore": {
+    "author": "class.s4@text",
+    "bookList": "class.l@li",
+    "bookUrl": "class.s2@a@href",
+    "coverUrl": "class.s2@a@href<js>\nvar id = result.match(/(\\d+)\\/?$/)[1];\n'https://www.biqvge99.cc/bookimages/'+id+'.jpg';\n</js>",
+    "kind": "class.s5@text",
+    "lastChapter": "class.s3@a@text",
+    "name": "class.s2@a@text"
+  },
+  "ruleSearch": {
+    "author": "class.author@text##作者：|<",
+    "bookList": "class.bookbox",
+    "bookUrl": "class.bookname@tag.a@href",
+    "checkKeyWord": "万族之劫",
+    "coverUrl": "class.bookimg@tag.img.0@src",
+    "intro": "class.bookinfo@p@text",
+    "kind": "class.cat@text##分类：",
+    "lastChapter": "class.update@tag.a@text##免费章节 |正文卷 |正文 |VIP章节 |百度搜索.*",
+    "name": "class.bookname@tag.a@text##\\（.*|\\(.*|免费阅读|全文.*阅读|最新章节|笔趣阁|小说"
+  },
+  "ruleToc": {
+    "chapterList": "class.listmain@tag.dd@tag.a",
+    "chapterName": "text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "https://www.biqvge99.cc/s.php?ie=gbk&q={{key}}",
+  "variableComment": "",
+  "weight": 0
+}

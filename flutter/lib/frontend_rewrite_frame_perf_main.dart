@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show max;
 import 'dart:ui' as ui;
 
 import 'package:go_router/go_router.dart';
 
 import 'desk/metadata/cover_preview.dart';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +27,8 @@ final _root = GlobalKey();
 final _source = Platform.environment['EASYPUB_FRAME_SOURCE'];
 final _samples = <Map<String, Object>>[];
 final _issues = Platform.environment['EASYPUB_FRAME_TARGET'] == 'issues';
+// V83：拖动章节页目录与正文之间的分隔条。
+final _divider = Platform.environment['EASYPUB_FRAME_TARGET'] == 'divider';
 final _data = <String, Object?>{};
 final _initialRss = ProcessInfo.currentRss;
 int? _scrollStartRss;
@@ -65,6 +69,8 @@ ScrollPosition? _position() {
   return result;
 }
 
+final _flutterErrors = <String>[];
+
 Future<void> _writeReport(String? error) async {
   final builds = _frames.map((f) => f.buildDuration.inMicroseconds).toList();
   final rasters = _frames.map((f) => f.rasterDuration.inMicroseconds).toList();
@@ -77,7 +83,9 @@ Future<void> _writeReport(String? error) async {
             ? 'settings'
             : _issues
             ? 'issue browser'
-            : 'chapter tree'} automated scroll; no synthetic frame pump',
+            : _divider
+            ? 'chapter divider drag (synthetic mouse events)'
+            : 'chapter tree'} automated ${_divider ? 'drag' : 'scroll'}; no synthetic frame pump',
     'source': _source,
     'fixture': _data,
     if (_root.currentContext case final context?) ...{
@@ -86,6 +94,7 @@ Future<void> _writeReport(String? error) async {
       'device_pixel_ratio': View.of(context).devicePixelRatio,
     },
     'error': error,
+    if (_flutterErrors.isNotEmpty) 'flutter_errors': _flutterErrors,
     'frame_count': _frames.length,
     'build_p50_ms': _percentile(builds, .50),
     'build_p95_ms': _percentile(builds, .95),
@@ -100,14 +109,18 @@ Future<void> _writeReport(String? error) async {
         totals.where((v) => v > 16667).length /
         (_frames.isEmpty ? 1 : _frames.length),
     'scroll_samples': _samples,
-    'scroll_pattern': '10 forward then 10 backward; three viewports per 600ms',
+    'scroll_pattern': _divider
+        ? '6 drags: 45 moves of 4px right then 45 left, one move per 16ms'
+        : '10 forward then 10 backward; three viewports per 600ms',
     'frame_budget_ms': 16.667,
     'rss_before_init': _initialRss,
     'rss_before_scroll': _scrollStartRss,
     'rss_after_scroll': ProcessInfo.currentRss,
     'peak_rss_bytes': ProcessInfo.maxRss,
     'sample_completed':
-        error == null && _samples.length == 20 && _frames.isNotEmpty,
+        error == null &&
+        _samples.length == (_divider ? 6 : 20) &&
+        _frames.isNotEmpty,
     'performance_gate_passed': false,
     'gate_note': 'One scenario and one machine; not complete performance or desktop interaction acceptance.',
   };
@@ -191,7 +204,146 @@ Future<void> main() async {
       ),
     ),
   );
-  WidgetsBinding.instance.addPostFrameCallback((_) => _driveScroll());
+  WidgetsBinding.instance.addPostFrameCallback(
+    (_) => _divider ? _driveDivider() : _driveScroll(),
+  );
+}
+
+int _count<T extends Widget>() {
+  var n = 0;
+  void visit(Element element) {
+    if (element.widget is T) n++;
+    element.visitChildren(visit);
+  }
+
+  (_root.currentContext as Element?)?.visitChildren(visit);
+  return n;
+}
+
+RenderBox? _dividerBox() {
+  RenderBox? box;
+  void visit(Element element) {
+    if (element.widget.key == const ValueKey('chapter-tree-divider')) {
+      box = element.renderObject as RenderBox?;
+    }
+    if (box == null) element.visitChildren(visit);
+  }
+
+  (_root.currentContext as Element?)?.visitChildren(visit);
+  return box;
+}
+
+Future<void> _driveDivider() async {
+  try {
+    for (var i = 0; i < 150 && _dividerBox() == null; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    if (_dividerBox() == null) {
+      throw StateError('No chapter divider in target scene');
+    }
+    // 等正文排好。
+    await Future<void>.delayed(const Duration(milliseconds: 2500));
+    // 每次都重新找分隔条：页面可能在拖动结束后重建。
+    double x() => _dividerBox()!.localToGlobal(Offset.zero).dx;
+    _frames.clear();
+    _scrollStartRss = ProcessInfo.currentRss;
+    _collecting = true;
+    final clock = Stopwatch()..start();
+    Duration now() => Duration(microseconds: clock.elapsedMicroseconds);
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (_flutterErrors.length < 5) {
+        _flutterErrors.add(details.exceptionAsString());
+      }
+      previous?.call(details);
+    };
+    for (var round = 0; round < 6; round++) {
+      final watch = Stopwatch()..start();
+      final frameStart = _frames.length;
+      final pointer = 900 + round, device = 40 + round;
+      // 每轮从分隔条当前的中点按下。
+      final bar = _dividerBox()!;
+      var position = bar.localToGlobal(bar.size.center(Offset.zero));
+      GestureBinding.instance.handlePointerEvent(
+        PointerAddedEvent(
+          timeStamp: now(),
+          device: device,
+          position: position,
+          kind: PointerDeviceKind.mouse,
+        ),
+      );
+      GestureBinding.instance.handlePointerEvent(
+        PointerDownEvent(
+          timeStamp: now(),
+          pointer: pointer,
+          device: device,
+          position: position,
+          kind: PointerDeviceKind.mouse,
+          buttons: kPrimaryMouseButton,
+        ),
+      );
+      double? middle;
+      for (var step = 0; step < 90; step++) {
+        if (step == 45) {
+          // 拖到最右时分隔条的实际位置：证明拖动真的生效。
+          middle = x();
+        }
+        final dx = step < 45 ? 4.0 : -4.0;
+        position += Offset(dx, 0);
+        GestureBinding.instance.handlePointerEvent(
+          PointerMoveEvent(
+            timeStamp: now(),
+            pointer: pointer,
+            device: device,
+            position: position,
+            delta: Offset(dx, 0),
+            kind: PointerDeviceKind.mouse,
+            buttons: kPrimaryMouseButton,
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+      }
+      GestureBinding.instance.handlePointerEvent(
+        PointerUpEvent(
+          timeStamp: now(),
+          pointer: pointer,
+          device: device,
+          position: position,
+          kind: PointerDeviceKind.mouse,
+        ),
+      );
+      GestureBinding.instance.handlePointerEvent(
+        PointerRemovedEvent(
+          timeStamp: now(),
+          device: device,
+          position: position,
+          kind: PointerDeviceKind.mouse,
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      _samples.add({
+        'round': round + 1,
+        'frames': _frames.length,
+        'round_worst_total_ms': _frames
+            .skip(frameStart)
+            .fold<double>(
+              0,
+              (m, f) => max(m, f.totalSpan.inMicroseconds / 1000),
+            ),
+        'elapsed_ms': watch.elapsedMicroseconds / 1000,
+        'rss_bytes': ProcessInfo.currentRss,
+        'divider_end_x': x(),
+        'divider_middle_x': ?middle,
+        'reader_paragraphs': _count<RichText>(),
+      });
+    }
+    FlutterError.onError = previous;
+    _collecting = false;
+    await _writeReport(null);
+  } catch (error) {
+    _collecting = false;
+    await _writeReport(error.toString());
+  }
 }
 
 Future<void> _driveScroll() async {

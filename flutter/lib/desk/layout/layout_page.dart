@@ -28,6 +28,8 @@ import 'device_preview.dart';
 import 'layout_origins_dialog.dart';
 import 'layout_presets_dialog.dart';
 import 'block_style_editor.dart';
+import 'inset_rule_dialog.dart';
+import 'inset_style_editor.dart';
 import '../../application/settings_service.dart';
 
 class LayoutNavigationGuard {
@@ -93,6 +95,15 @@ class _LayoutPageState extends State<LayoutPage> {
   // 生僻字注音（V73，LAY-129）。
   String rareCharRuby = 'off';
   String rareCharScope = 'outside';
+  // 场景样式（V81，LAY-135）。
+  String chatBlockStyle = 'off';
+  String letterBlockStyle = 'plain';
+  String insetFont = 'kai';
+  // 场景识别（V82，LAY-137）与本书的自定义规则（存在 rule_options.inset_rules）。
+  String insetDetect = 'off';
+  List<Map<String, dynamic>> insetRules = const [];
+  // 本书改过的场景样式参数（V82，LAY-136）：场景编号 → 参数；没改的用内置预设。
+  Map<String, dynamic>? insetStyles;
   // 统一章首图（V54，LAY-124）：图片路径单独保存，不进草稿；范围与宽度是排版字段。
   String? chapterHeadImage;
   // 章节样式包（V74，LAY-130）：与章首图一样单独应用，不进草稿。
@@ -161,6 +172,11 @@ class _LayoutPageState extends State<LayoutPage> {
     'first_paragraph_style': firstParagraphStyle,
     'rare_char_ruby': rareCharRuby,
     'rare_char_scope': rareCharScope,
+    'chat_block_style': chatBlockStyle,
+    'letter_block_style': letterBlockStyle,
+    'inset_font': insetFont,
+    'inset_styles': insetStyles,
+    'inset_detect': insetDetect,
     'chapter_head_scope': chapterHeadScope,
     'chapter_head_width': chapterHeadWidth,
     'system_block_style': systemBlockStyle,
@@ -198,6 +214,14 @@ class _LayoutPageState extends State<LayoutPage> {
         draft['first_paragraph_style'] as String? ?? firstParagraphStyle;
     rareCharRuby = draft['rare_char_ruby'] as String? ?? rareCharRuby;
     rareCharScope = draft['rare_char_scope'] as String? ?? rareCharScope;
+    chatBlockStyle = draft['chat_block_style'] as String? ?? chatBlockStyle;
+    letterBlockStyle =
+        draft['letter_block_style'] as String? ?? letterBlockStyle;
+    insetFont = draft['inset_font'] as String? ?? insetFont;
+    insetDetect = draft['inset_detect'] as String? ?? insetDetect;
+    if (draft.containsKey('inset_styles')) {
+      insetStyles = (draft['inset_styles'] as Map?)?.cast<String, dynamic>();
+    }
     chapterHeadScope =
         draft['chapter_head_scope'] as String? ?? chapterHeadScope;
     chapterHeadWidth =
@@ -229,6 +253,11 @@ class _LayoutPageState extends State<LayoutPage> {
     'first_paragraph_style': firstParagraphStyle,
     'rare_char_ruby': rareCharRuby,
     'rare_char_scope': rareCharScope,
+    'chat_block_style': chatBlockStyle,
+    'letter_block_style': letterBlockStyle,
+    'inset_font': insetFont,
+    'inset_styles': insetStyles,
+    'inset_detect': insetDetect,
     'chapter_head_scope': chapterHeadScope,
     'chapter_head_width': chapterHeadWidth,
     'system_block_style': systemBlockStyle,
@@ -248,6 +277,11 @@ class _LayoutPageState extends State<LayoutPage> {
     'first_paragraph_style': firstParagraphStyle,
     'rare_char_ruby': rareCharRuby,
     'rare_char_scope': rareCharScope,
+    'chat_block_style': chatBlockStyle,
+    'letter_block_style': letterBlockStyle,
+    'inset_font': insetFont,
+    'inset_styles': insetStyles,
+    'inset_detect': insetDetect,
     'chapter_head_scope': chapterHeadScope,
     'chapter_head_width': chapterHeadWidth,
     'system_block_style': systemBlockStyle,
@@ -307,6 +341,17 @@ class _LayoutPageState extends State<LayoutPage> {
     firstParagraphStyle = saved['first_paragraph_style'] as String? ?? 'normal';
     rareCharRuby = saved['rare_char_ruby'] as String? ?? 'off';
     rareCharScope = saved['rare_char_scope'] as String? ?? 'outside';
+    chatBlockStyle = saved['chat_block_style'] as String? ?? 'off';
+    letterBlockStyle = saved['letter_block_style'] as String? ?? 'plain';
+    insetFont = saved['inset_font'] as String? ?? 'kai';
+    insetDetect = saved['inset_detect'] as String? ?? 'off';
+    insetRules = [
+      for (final r
+          in ((saved['rule_options'] as Map?)?['inset_rules'] as List?) ??
+              const [])
+        Map<String, dynamic>.from(r as Map),
+    ];
+    insetStyles = (saved['inset_styles'] as Map?)?.cast<String, dynamic>();
     chapterHeadImage = saved['chapter_head_image'] as String?;
     chapterStyle = (saved['chapter_style'] as Map?)?.cast<String, dynamic>();
     systemPatterns = [
@@ -634,6 +679,11 @@ class _LayoutPageState extends State<LayoutPage> {
           'first_paragraph_style': '章首段落',
           'rare_char_ruby': '生僻字注音',
           'rare_char_scope': '生僻字范围',
+          'chat_block_style': '聊天记录',
+          'letter_block_style': '书信样式',
+          'inset_font': '场景字体',
+          'inset_styles': '场景样式参数',
+          'inset_detect': '场景识别',
           'chapter_head_scope': '章首图用于',
           'chapter_head_width': '章首图宽度',
           'system_block_style': '系统提示',
@@ -657,6 +707,15 @@ class _LayoutPageState extends State<LayoutPage> {
     }
     if (key == 'rare_char_ruby') return rareCharRubyModes[value] ?? '$value';
     if (key == 'rare_char_scope') return rareCharScopes[value] ?? '$value';
+    if (key == 'chat_block_style') return chatBlockStyles[value] ?? '$value';
+    if (key == 'letter_block_style') {
+      return letterBlockStyles[value] ?? '$value';
+    }
+    if (key == 'inset_font') return insetFonts[value] ?? '$value';
+    if (key == 'inset_detect') return insetDetectModes[value] ?? '$value';
+    if (key == 'inset_styles') {
+      return value is Map && value.isNotEmpty ? '改过 ${value.length} 种' : '全部内置';
+    }
     if (key == 'system_block_style') {
       return systemBlockStyles[value] ?? '$value';
     }
@@ -687,7 +746,10 @@ class _LayoutPageState extends State<LayoutPage> {
     if (session == null || identity == baseline) return;
     final snapshot = Map<String, Object?>.from(values);
     final snapshotIdentity = identity;
-    if (snapshot.values.any((value) => value == null) ||
+    // 只有数字框没填完时才暂缓；系统提示、场景样式参数等可以为空（用内置默认）。
+    if (snapshot.entries.any(
+          (e) => numbers.containsKey(e.key) && e.value == null,
+        ) ||
         snapshot.values.whereType<double>().any((value) => !value.isFinite)) {
       if (mounted) setState(() => message = '输入已暂存；数字补全后自动应用。');
       return;
@@ -948,6 +1010,26 @@ class _LayoutPageState extends State<LayoutPage> {
           case 'rare_char_scope':
             if (value is String && rareCharScopes.containsKey(value)) {
               rareCharScope = value;
+            }
+          case 'chat_block_style':
+            if (value is String && chatBlockStyles.containsKey(value)) {
+              chatBlockStyle = value;
+            }
+          case 'letter_block_style':
+            if (value is String && letterBlockStyles.containsKey(value)) {
+              letterBlockStyle = value;
+            }
+          case 'inset_font':
+            if (value is String && insetFonts.containsKey(value)) {
+              insetFont = value;
+            }
+          case 'inset_detect':
+            if (value is String && insetDetectModes.containsKey(value)) {
+              insetDetect = value;
+            }
+          case 'inset_styles':
+            if (value == null || value is Map) {
+              insetStyles = (value as Map?)?.cast<String, dynamic>();
             }
           case 'chapter_head_scope':
             if (value is String && chapterHeadScopes.containsKey(value)) {
@@ -1554,6 +1636,7 @@ class _LayoutPageState extends State<LayoutPage> {
     if (style != null && mounted) {
       await setChapterStyle(style, '已使用样式包“${style['name']}”');
       applyPackBlocks(result?['blocks']);
+      applyPackInsets(result?['insets']);
     }
   }
 
@@ -1656,6 +1739,18 @@ class _LayoutPageState extends State<LayoutPage> {
     });
   }
 
+  /// 样式包带的场景样式（V82）：聊天记录样式、书信样式与改过的各场景参数一并套用。
+  void applyPackInsets(Object? insets) {
+    if (insets is! Map || !mounted) return;
+    edit(() {
+      chatBlockStyle = insets['chat_block_style'] as String? ?? chatBlockStyle;
+      letterBlockStyle =
+          insets['letter_block_style'] as String? ?? letterBlockStyle;
+      final styles = (insets['styles'] as Map?)?.cast<String, dynamic>();
+      insetStyles = styles == null || styles.isEmpty ? null : styles;
+    });
+  }
+
   Future<void> importStyle() async {
     final path = await widget.pickStylePack?.call();
     if (path == null || !mounted) return;
@@ -1667,6 +1762,7 @@ class _LayoutPageState extends State<LayoutPage> {
     if (style != null && mounted) {
       await setChapterStyle(style, '已导入并使用样式包“${style['name']}”');
       applyPackBlocks(result?['blocks']);
+      applyPackInsets(result?['insets']);
     }
   }
 
@@ -1683,6 +1779,13 @@ class _LayoutPageState extends State<LayoutPage> {
       'blocks': systemBlockStyle == 'styled'
           ? (systemStyles ?? defaultSystemStyles())
           : null,
+      // 场景样式（V82）：聊天、书信样式与改过的各场景参数。
+      'insets': {
+        'chat_block_style': chatBlockStyle,
+        'letter_block_style': letterBlockStyle,
+        if (insetStyles != null && insetStyles!.isNotEmpty)
+          'styles': insetStyles,
+      },
       'path': path,
     }, '样式包未能导出：请选择新的文件名');
     if (result != null && mounted) {
@@ -1902,6 +2005,293 @@ class _LayoutPageState extends State<LayoutPage> {
       ),
     ),
   );
+
+  /// 场景识别规则（V82，LAY-137）：写进本书 rule_options.inset_rules，进变更记录；添加规则时一并开启识别。
+  Future<void> setInsetRules(
+    List<Map<String, dynamic>> next,
+    String done, {
+    bool enable = false,
+  }) async {
+    final current = session;
+    if (current == null) return;
+    setState(() => busy = true);
+    try {
+      // 先把还没保存的排版修改存掉，再单独写规则。
+      _saveTimer?.cancel();
+      await save();
+      final clean = identity == baseline;
+      final options = Map<String, dynamic>.from(
+        (current.saved['rule_options'] as Map?) ?? const {},
+      );
+      if (next.isEmpty) {
+        options.remove('inset_rules');
+      } else {
+        options['inset_rules'] = next;
+      }
+      await current.apply(
+        await current.preview({
+          'rule_options': options,
+          if (enable && insetDetect != 'on') 'inset_detect': 'on',
+        }),
+      );
+      if (mounted) {
+        setState(() {
+          insetRules = next;
+          if (enable) insetDetect = 'on';
+          _identityCache = _computeIdentity();
+          savedValues = {...savedValues, 'inset_detect': insetDetect};
+          if (clean) baseline = identity;
+          message = done;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => message = deskErrorText(error, '识别规则未能保存'));
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Widget insetDetectControls() {
+    final d = context.desk;
+    return foldRow(
+      field: 'inset_detect',
+      label: '场景识别',
+      help: const DeskHelp(
+        '按规则把整段正文认成场景：内置“诏书”（以奉天承运、圣旨、诏曰开头，到“钦此”结束）与“论坛楼层”'
+        '（连续两层以上的“1楼”“#2”“沙发”）；也可以添加自己的规则：选场景，写开头和结尾（文字或正则）与最多行数。'
+        '手工标注优先，其次规则，再其次聊天自动识别。内置项可在规则页单独关闭。原文不改。',
+        key: ValueKey('layout-help-inset_detect'),
+      ),
+      current:
+          '${insetDetectModes[insetDetect] ?? insetDetect}'
+          '${insetRules.isEmpty ? '' : ' · 自定义 ${insetRules.length} 条'}',
+      control: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          KeyedSubtree(
+            key: const ValueKey('layout-inset_detect'),
+            child: DeskSegmented<String>(
+              value: insetDetect,
+              options: insetDetectModes,
+              onChanged: busy
+                  ? null
+                  : (value) => edit(() => insetDetect = value),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            key: const ValueKey('layout-inset-rules'),
+            children: [
+              for (final (i, r) in insetRules.indexed)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6, bottom: 4),
+                  child: InputChip(
+                    key: ValueKey(('layout-inset-rule', i)),
+                    label: Text(insetRuleLabel(r), style: ui(12, c: d.ink)),
+                    onDeleted: busy
+                        ? null
+                        : () => setInsetRules(
+                            [...insetRules]..removeAt(i),
+                            '已删除场景识别规则',
+                          ),
+                    deleteButtonTooltipMessage: '删除这条规则',
+                  ),
+                ),
+              DeskButton(
+                '添加规则…',
+                key: const ValueKey('layout-inset-rule-add'),
+                quiet: true,
+                onPressed: busy || insetRules.length >= 20
+                    ? null
+                    : () async {
+                        final rule = await showInsetRuleDialog(context);
+                        if (rule == null || !mounted) return;
+                        await setInsetRules(
+                          [...insetRules, rule],
+                          '已添加场景识别规则',
+                          enable: true,
+                        );
+                      },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 各场景的样式（V82，LAY-136）：预设、我的场景样式、自定义，“编辑…”打开编辑器。
+  Widget insetStyleControls() {
+    final d = context.desk;
+    final settings = widget.library is SettingsService
+        ? widget.library as SettingsService
+        : null;
+    Map<String, Object> current(String scene) {
+      final mine = insetStyles?[scene];
+      return mine is Map
+          ? Map<String, Object>.from(mine)
+          : defaultInsetStyle(scene, chatBlockStyle);
+    }
+
+    void choose(String scene, Map<String, Object> style) => edit(() {
+      // 选聊天的三种预设之一且开着识别时，改的是“聊天记录”设置本身。
+      final preset = insetPresetOf(scene, style);
+      if (scene == 'chat' && chatBlockStyle != 'off' && preset != 'custom') {
+        chatBlockStyle = preset;
+        insetStyles = {...?insetStyles}..remove('chat');
+      } else if (sameInsetStyle(
+        defaultInsetStyle(scene, chatBlockStyle),
+        style,
+      )) {
+        insetStyles = {...?insetStyles}..remove(scene);
+      } else {
+        insetStyles = {...?insetStyles, scene: style};
+      }
+      if (insetStyles!.isEmpty) insetStyles = null;
+    });
+
+    Widget row(String scene, Object? library) {
+      final style = current(scene);
+      final saved = savedInsetsOf(library, scene);
+      final preset = insetPresetOf(scene, style);
+      final matched =
+          preset != 'custom' ||
+          saved.values.any((s) => sameInsetStyle(s, style));
+      Widget chip(
+        String text,
+        bool selected,
+        VoidCallback onTap,
+        Key key, {
+        VoidCallback? onDelete,
+      }) => Padding(
+        padding: const EdgeInsets.only(right: 6, bottom: 4),
+        child: InputChip(
+          key: key,
+          label: Text(text, style: ui(12, c: d.ink)),
+          selected: selected,
+          showCheckmark: false,
+          onPressed: busy ? null : onTap,
+          onDeleted: busy ? null : onDelete,
+          deleteButtonTooltipMessage: '从我的场景样式中删除',
+        ),
+      );
+      return Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: SizedBox(
+                width: 64,
+                child: Text(insetTypes[scene]!, style: ui(12, c: d.ink2)),
+              ),
+            ),
+            Expanded(
+              child: Wrap(
+                key: ValueKey('layout-inset-$scene'),
+                children: [
+                  for (final e in insetStylePresets.entries)
+                    if (e.value.$1 == scene)
+                      chip(
+                        e.value.$2,
+                        preset == e.key,
+                        () => choose(scene, Map.of(e.value.$3)),
+                        ValueKey(('layout-inset-preset', scene, e.key)),
+                      ),
+                  for (final e in saved.entries)
+                    chip(
+                      e.key,
+                      sameInsetStyle(e.value, style),
+                      () => choose(scene, e.value),
+                      ValueKey(('layout-inset-saved', scene, e.key)),
+                      onDelete: settings == null
+                          ? null
+                          : () => settings.savePatch({
+                              'inset_style_library': [
+                                for (final item
+                                    in (library as List? ?? const []))
+                                  if (!(item is Map &&
+                                      item['scene'] == scene &&
+                                      item['name'] == e.key))
+                                    item,
+                              ],
+                            }),
+                    ),
+                  if (!matched)
+                    chip(
+                      '自定义',
+                      true,
+                      () {},
+                      ValueKey(('layout-inset-custom', scene)),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: DeskButton(
+                      '编辑…',
+                      key: ValueKey(('layout-inset-edit', scene)),
+                      quiet: true,
+                      onPressed: busy
+                          ? null
+                          : () async {
+                              final result = await showInsetStyleEditor(
+                                context,
+                                scene: scene,
+                                initial: style,
+                                takenNames: saved.keys.toSet(),
+                              );
+                              if (result == null || !mounted) return;
+                              choose(scene, result.style);
+                              if (result.name != null && settings != null) {
+                                await settings.savePatch({
+                                  'inset_style_library': [
+                                    ...(library as List? ?? const []),
+                                    {
+                                      'name': result.name,
+                                      'scene': scene,
+                                      'style': result.style,
+                                    },
+                                  ],
+                                });
+                              }
+                            },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget rows(Object? library) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [for (final scene in insetTypes.keys) row(scene, library)],
+    );
+    return foldRow(
+      field: 'inset_styles',
+      label: '各场景样式',
+      help: const DeskHelp(
+        '每种场景选一种样式，“编辑…”可逐项调整（外框、线型、底色、标题与饰纹、对齐、字号、首字放大、字体、卷轴杆），'
+        '另存为“我的场景样式”后所有书可用；导出章节样式包时连同聊天、书信样式一起带上。'
+        '“淡纸纹”是真机测试过的最浅一级，深色模式下会随页面反转；AZW3 不显示底色与楷体。',
+        key: ValueKey('layout-help-inset_styles'),
+      ),
+      current: insetStyles == null || insetStyles!.isEmpty
+          ? '全部内置'
+          : '改过 ${insetStyles!.length} 种',
+      control: settings == null
+          ? rows(null)
+          : ValueListenableBuilder<SettingsSnapshot>(
+              valueListenable: settings.snapshot,
+              builder: (_, snap, _) =>
+                  rows(snap.configuration['inset_style_library']),
+            ),
+    );
+  }
 
   /// 系统提示（V50、V77，LAY-121/132）：识别方式；“分类样式”下单行提示与多行面板各选一种样式。
   Widget systemControls() {
@@ -2255,6 +2645,50 @@ class _LayoutPageState extends State<LayoutPage> {
               noteStyles,
               (value) => noteStyle = value,
             ),
+          ]),
+          // 场景样式（V81，LAY-135）。
+          group('场景样式', [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '动态、论坛楼层、日记、古籍、诏书、羊皮纸、告示、剪报：在章节页选中正文行标注。',
+                style: ui(11.5, c: d.ink3),
+              ),
+            ),
+            blockControls(
+              '聊天记录',
+              '自动识别连续的“名字：内容”行（可带【】[ ]［ ］，名字不超过 6 个字，有人说话两次以上），'
+                  '中间可以夹空行和时间行。识别出的聊天优先于系统提示。“不识别”时，章节页手工标注的聊天按群聊窗口排。'
+                  '原文不改；同时用于 EPUB、AZW3、MOBI、KFX。',
+              'chat_block_style',
+              chatBlockStyle,
+              chatBlockStyles,
+              (value) {
+                chatBlockStyle = value;
+                if (value != 'off' && insetStyles != null) {
+                  insetStyles = {...insetStyles!}..remove('chat');
+                  if (insetStyles!.isEmpty) insetStyles = null;
+                }
+              },
+            ),
+            blockControls(
+              '书信',
+              '章节页标为“书信”的段落：信笺格线在每行下画虚线，落款靠右。',
+              'letter_block_style',
+              letterBlockStyle,
+              letterBlockStyles,
+              (value) => letterBlockStyle = value,
+            ),
+            blockControls(
+              '场景字体',
+              '书信（信笺格线）、古籍、诏书用楷体。Kindle 实测：KFX 里显示楷体；AZW3 由转换器去掉字体设置，用阅读器字体。',
+              'inset_font',
+              insetFont,
+              insetFonts,
+              (value) => insetFont = value,
+            ),
+            insetDetectControls(),
+            insetStyleControls(),
           ]),
         ],
         3 => pageAndStructure(),

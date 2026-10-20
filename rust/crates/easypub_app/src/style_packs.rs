@@ -110,6 +110,30 @@ struct PackFile {
     /// 系统提示块样式（V78，LAY-133）：应用样式包时一并套用。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     blocks: Option<crate::block_styles::SystemStyles>,
+    /// 场景样式（V82，LAY-136）：应用样式包时一并套用。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    insets: Option<PackInsets>,
+}
+
+/// 样式包里的场景样式：聊天记录样式、书信样式与改过的各场景参数。
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PackInsets {
+    pub chat_block_style: String,
+    pub letter_block_style: String,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub styles: std::collections::BTreeMap<String, crate::inset_styles::InsetStyle>,
+}
+
+impl PackInsets {
+    fn validate(&self) -> Result<(), ApiError> {
+        if !crate::insets::CHAT_BLOCK_STYLES.contains(&self.chat_block_style.as_str())
+            || !crate::insets::LETTER_BLOCK_STYLES.contains(&self.letter_block_style.as_str())
+        {
+            return Err(invalid());
+        }
+        crate::inset_styles::validate_book(&self.styles)
+    }
 }
 
 /// 包内图片文件名：只允许一层的字母数字文件名与常见图片扩展名。
@@ -245,10 +269,13 @@ fn builtin(id: &str, dir: &Path) -> Result<ChapterStyle, ApiError> {
     Ok(style)
 }
 
-fn import(
-    zip_path: &Path,
-    dir: &Path,
-) -> Result<(ChapterStyle, Option<crate::block_styles::SystemStyles>), ApiError> {
+type Imported = (
+    ChapterStyle,
+    Option<crate::block_styles::SystemStyles>,
+    Option<PackInsets>,
+);
+
+fn import(zip_path: &Path, dir: &Path) -> Result<Imported, ApiError> {
     let bytes = {
         let file = fs::File::open(zip_path).map_err(|_| invalid())?;
         let mut data = Vec::new();
@@ -285,7 +312,11 @@ fn import(
     if let Some(blocks) = &pack.blocks {
         blocks.validate()?;
     }
+    if let Some(insets) = &pack.insets {
+        insets.validate()?;
+    }
     let blocks = pack.blocks.clone();
+    let insets = pack.insets.clone();
     let target = dir.join(format!("pack-{}", &digest[..16]));
     fs::create_dir_all(&target).map_err(|_| io())?;
     let mut extract = |name: &str| -> Result<String, ApiError> {
@@ -314,16 +345,20 @@ fn import(
             .transpose()?,
     };
     style.validate(|_| Ok(()))?;
-    Ok((style, blocks))
+    Ok((style, blocks, insets))
 }
 
 fn export(
     style: &ChapterStyle,
     blocks: Option<&crate::block_styles::SystemStyles>,
+    insets: Option<&PackInsets>,
     zip_path: &Path,
 ) -> Result<(), ApiError> {
     if let Some(b) = blocks {
         b.validate()?;
+    }
+    if let Some(i) = insets {
+        i.validate()?;
     }
     style.validate(|_| Ok(()))?;
     let mut names = std::collections::BTreeMap::<String, String>::new();
@@ -368,6 +403,7 @@ fn export(
             .map(|p| name_for(p, "cover-background"))
             .transpose()?,
         blocks: blocks.cloned(),
+        insets: insets.cloned(),
     };
     let file = fs::OpenOptions::new()
         .write(true)
@@ -414,15 +450,17 @@ pub fn run(value: Value) -> Result<String, ApiError> {
             json!({"style": builtin(id, &absolute("dir")?)?, "blocks": builtin_blocks(id)})
         }
         Some("import") => {
-            let (style, blocks) = import(&absolute("path")?, &absolute("dir")?)?;
-            json!({"style": style, "blocks": blocks})
+            let (style, blocks, insets) = import(&absolute("path")?, &absolute("dir")?)?;
+            json!({"style": style, "blocks": blocks, "insets": insets})
         }
         Some("export") => {
             let style: ChapterStyle =
                 serde_json::from_value(value["style"].clone()).map_err(|_| invalid())?;
             let blocks: Option<crate::block_styles::SystemStyles> =
                 serde_json::from_value(value["blocks"].clone()).map_err(|_| invalid())?;
-            export(&style, blocks.as_ref(), &absolute("path")?)?;
+            let insets: Option<PackInsets> =
+                serde_json::from_value(value["insets"].clone()).map_err(|_| invalid())?;
+            export(&style, blocks.as_ref(), insets.as_ref(), &absolute("path")?)?;
             json!({"exported": true})
         }
         _ => return Err(invalid()),
@@ -468,10 +506,26 @@ mod tests {
         assert_eq!(builtin("classic", &dir).unwrap(), classic);
         let zip_path = dir.join("古典.zip");
         let blocks = builtin_blocks("classic");
-        export(&classic, Some(&blocks), &zip_path).unwrap();
-        assert!(export(&classic, None, &zip_path).is_err(), "不覆盖已有文件");
-        let (imported, imported_blocks) = import(&zip_path, &dir.join("installed")).unwrap();
+        let mut scroll = crate::inset_styles::default_for("scroll", "off");
+        scroll.rods = false;
+        let insets = PackInsets {
+            chat_block_style: "script".into(),
+            letter_block_style: "ruled".into(),
+            styles: [("scroll".to_owned(), scroll)].into(),
+        };
+        export(&classic, Some(&blocks), Some(&insets), &zip_path).unwrap();
+        assert!(
+            export(&classic, None, None, &zip_path).is_err(),
+            "不覆盖已有文件"
+        );
+        let (imported, imported_blocks, imported_insets) =
+            import(&zip_path, &dir.join("installed")).unwrap();
         assert_eq!(imported_blocks.as_ref(), Some(&blocks), "块样式随包往返");
+        assert_eq!(imported_insets.as_ref(), Some(&insets), "场景样式随包往返");
+        // 场景样式非法时导出被拒绝。
+        let mut bad = insets.clone();
+        bad.chat_block_style = "bubble".into();
+        assert!(export(&classic, None, Some(&bad), &dir.join("坏.zip")).is_err());
         assert_eq!(blocks.panel, crate::block_styles::preset("rules").unwrap());
         assert_eq!(imported.name, "古典");
         assert_eq!(imported.head_images.len(), 2);

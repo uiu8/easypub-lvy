@@ -285,6 +285,14 @@ class _Workspace extends StatelessWidget {
             selected: folders,
             onTap: () => context.go('/folders'),
           ),
+          // 书源下载插件启用后才出现。
+          if (PluginRegistry.instance.isActive('booksource'))
+            DeskRailEntry(
+              label: '书源',
+              icon: Icons.travel_explore_outlined,
+              selected: title == '书源下载',
+              onTap: () => context.go('/plugins/booksource'),
+            ),
         ],
         book: (expanded) => DeskBookSwitch(
           expanded: expanded,
@@ -382,6 +390,12 @@ class _Workspace extends StatelessWidget {
             icon: Icons.history_rounded,
             selected: title == '记录',
             onTap: () => context.go('/history'),
+          ),
+          DeskRailEntry(
+            label: '插件',
+            icon: Icons.extension_outlined,
+            selected: title == '插件',
+            onTap: () => context.go('/plugins'),
           ),
           DeskRailEntry(
             label: '设置',

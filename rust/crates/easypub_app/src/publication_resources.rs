@@ -117,6 +117,20 @@ pub struct Manifest {
     pub system_styles: Option<crate::block_styles::SystemStyles>,
     /// 诗词样式（V50，LAY-122）。
     pub verse_block_style: String,
+    /// 场景样式（V81，LAY-135）：默认值不写入，旧书的成品参数不变。
+    #[serde(skip_serializing_if = "crate::production::chat_block_style_is_off")]
+    pub chat_block_style: String,
+    #[serde(skip_serializing_if = "crate::production::letter_block_style_is_plain")]
+    pub letter_block_style: String,
+    #[serde(skip_serializing_if = "crate::production::inset_font_is_kai")]
+    pub inset_font: String,
+    #[serde(skip_serializing_if = "crate::production::inset_detect_is_off")]
+    pub inset_detect: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inset_styles: Option<std::collections::BTreeMap<String, crate::inset_styles::InsetStyle>>,
+    /// 羊皮纸的卷轴杆与淡纸纹（程序生成）；没有羊皮纸场景时为空。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inset_images: Option<crate::insets::Images>,
     #[serde(default)]
     pub rule_options: crate::rule_options::Options,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -382,6 +396,44 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
     for placement in &mut placements {
         placement.resource_id = paths[&settings.illustrations[placement.list_index].path].clone();
     }
+    // 场景样式（V81、V82）：用到卷轴杆或淡纸纹时程序生成图片，按内容寻址。
+    let (rods, paper) = crate::insets::image_needs(&settings);
+    let inset_images = if rods || paper {
+        let mut ids = Vec::new();
+        for bytes in [
+            rods.then(crate::insets::rod_png),
+            paper.then(crate::insets::paper_png),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let id = crate::insets::image_id(&bytes);
+            let (width, height) = image::load_from_memory(&bytes)
+                .map(|i| (i.width(), i.height()))
+                .map_err(|_| invalid("choose_supported_image"))?;
+            if !images.contains_key(&id) {
+                total = total
+                    .checked_add(bytes.len())
+                    .ok_or_else(|| invalid("reduce_resource_size"))?;
+                resources.push(Resource {
+                    id: id.clone(),
+                    media_type: "image/png".into(),
+                    byte_length: bytes.len(),
+                    width,
+                    height,
+                });
+                images.insert(id.clone(), bytes);
+            }
+            ids.push(id);
+        }
+        let mut ids = ids.into_iter();
+        Some(crate::insets::Images {
+            rod: if rods { ids.next() } else { None },
+            paper: if paper { ids.next() } else { None },
+        })
+    } else {
+        None
+    };
     placements.sort_by_key(|p| (p.output_line, p.list_index));
     let chapter_head_image_id = settings
         .chapter_head_image
@@ -516,6 +568,12 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
                 .unwrap_or_else(crate::block_styles::default_styles)
         }),
         verse_block_style: settings.verse_block_style.clone(),
+        chat_block_style: settings.chat_block_style.clone(),
+        letter_block_style: settings.letter_block_style.clone(),
+        inset_font: settings.inset_font.clone(),
+        inset_detect: settings.inset_detect.clone(),
+        inset_styles: settings.inset_styles.clone(),
+        inset_images,
         rule_options: settings.rule_options.clone(),
         block_annotations: settings.block_annotations.clone(),
         manual_notes: settings.manual_notes.clone(),

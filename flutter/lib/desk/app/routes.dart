@@ -554,6 +554,49 @@ extension _Routes on _RewriteAppState {
         ),
       ),
       GoRoute(
+        path: '/plugins',
+        builder: (context, state) => _Workspace(
+          library: widget.library,
+          picker: widget.picker,
+          title: '插件',
+          child: PluginsPage(
+            registry: PluginRegistry.instance,
+            chooseFolder: widget.picker.chooseFolder,
+            onOpen: (id) => context.go('/plugins/$id'),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/plugins/booksource',
+        builder: (context, state) => _Workspace(
+          library: widget.library,
+          picker: widget.picker,
+          title: '书源下载',
+          child: BookSourcePage(
+            openApi: () => PluginBookSourceApi.open(PluginRegistry.instance),
+            settingsPath:
+                '${PluginRegistry.instance.dataDirectory('booksource')}${Platform.pathSeparator}ui.json',
+            chooseFolder: widget.picker.chooseFolder,
+            chooseSourceFile: () async => (await files.openFile(
+              acceptedTypeGroups: [
+                const files.XTypeGroup(
+                  label: '书源',
+                  extensions: ['json', 'txt', 'js'],
+                ),
+              ],
+            ))?.path,
+            importToLibrary: (path) async {
+              final out = await widget.library.importFiles([path]);
+              final failed = out.where((o) => !o.succeeded && !o.skipped);
+              return failed.isEmpty ? null : failed.first.message;
+            },
+            openFolder: (path) =>
+                Process.start('explorer.exe', ['/select,', path]),
+            openPlugins: () => context.go('/plugins'),
+          ),
+        ),
+      ),
+      GoRoute(
         path: '/folders',
         builder: (context, state) => _Workspace(
           library: widget.library,

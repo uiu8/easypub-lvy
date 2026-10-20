@@ -1,0 +1,111 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "🎃零点看书🎃",
+  "bookSourceType": 0,
+  "bookSourceUrl": "http://23.225.143.232#🎃",
+  "bookUrlPattern": "http://23.225.143.232\\/ldks\\/\\d+.*?",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 1361,
+  "easypub": {
+    "check": {
+      "at": 1792476082,
+      "chapters": 69,
+      "chars": 2145,
+      "error": "",
+      "kind": "check",
+      "ms": 3637,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 50,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476082,
+      "ms": [
+        3637
+      ],
+      "retryAfter": 0
+    },
+    "id": "http://23.225.143.232#🎃",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "完本::/wanbenxiaoshuo/\n最新::/",
+  "header": "{\"User-Agent\": \"Mozilla/5.0 (Linux; Android 12; 22041211AC Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36\"}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 0,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 7985,
+  "ruleBookInfo": {
+    "author": "[property=\"og:novel:author\"]@content",
+    "coverUrl": "[property=\"og:image\"]@content",
+    "intro": "[property=\"og:description\"]@content##\\s{1,}",
+    "kind": "[property~=update_time|status|category]@content",
+    "lastChapter": "[property=\"og:novel:latest_chapter_name\"]@content",
+    "name": "[property=\"og:novel:book_name\"]@content"
+  },
+  "ruleContent": {
+    "content": "#content@textNodes",
+    "nextContentUrl": "text.下一页@href",
+    "replaceRegex": "##.*\\(第.*页\\)|.*\\（第.*页\\）|\\（本章未完.*\\）|\\(本章未完.*\\)"
+  },
+  "ruleExplore": {
+    "author": ".s4@text",
+    "bookList": "[class=\"layout layout2 layout-col2 fl\"]@ul@li||.txt-list@li",
+    "bookUrl": "a.0@href",
+    "coverUrl": "a.0@href##/ldks/(\\d+)(\\d{2})##http://www.23txtv.com/files/article/image/$1/$1$2/$1$2s.jpg###",
+    "kind": ".s5@text",
+    "lastChapter": ".s3@text",
+    "name": ".s2@text"
+  },
+  "ruleSearch": {
+    "author": ".s4@text",
+    "bookList": ".txt-list@li!0",
+    "bookUrl": "a.0@href",
+    "coverUrl": "a.0@href##/ldks/(\\d+)(\\d{3})##http://www.23txtv.com/files/article/image/$1/$1$2/$1$2s.jpg###",
+    "kind": ".s5@text&&.s1@text##\\[|\\]",
+    "lastChapter": ".s3@text",
+    "name": ".s2@text"
+  },
+  "ruleToc": {
+    "chapterList": ".section-list.1@li@a",
+    "chapterName": "text",
+    "chapterUrl": "href",
+    "nextTocUrl": "option!0@value"
+  },
+  "searchUrl": "/ar.php?keyWord={{key}}",
+  "variableComment": "",
+  "weight": 1
+}

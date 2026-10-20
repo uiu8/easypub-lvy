@@ -1,0 +1,112 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "❤️飞卢小说🎃",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://b.faloo.com",
+  "bookUrlPattern": "https://b\\.faloo\\.com/f/\\d+.html",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 1295,
+  "easypub": {
+    "check": {
+      "at": 1792476077,
+      "chapters": 4238,
+      "chars": 2104,
+      "error": "",
+      "kind": "check",
+      "ms": 798,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 29,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476077,
+      "ms": [
+        798
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://b.faloo.com",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1769593374511,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "https://u.faloo.com/regist/Login.aspx",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 4224,
+  "ruleBookInfo": {
+    "author": ".T-L-O-Z-Box1 a.0@text",
+    "coverUrl": ".T-L-T-Img img@src",
+    "intro": "&nbsp;📌 {{@@.T-R-T-B2-Box1[3]@text}}{{'\\n'+'​'}}\n{{@@.T-L-T-C-Box1@html}}",
+    "kind": "{{@@.T-R-T-Box2 a.0:1@text}}\n{{@@.T-L-O-Z-Box1 span.1@text}}\n{{@@.C-Thr-B3-Box3[0]@span@text##分.*##分}}",
+    "lastChapter": ".DivTd a.-1@text##正文卷.|正文.|VIP卷.|默认卷.|卷_|VIP章节.|免费章节.|章节目录.|最新章节.|[\\(（【].*?[求更票谢乐发订合补加架字修Kk].*?[】）\\)]",
+    "name": ".T-L-O-Z-Box1 h1@text",
+    "wordCount": ".T-R-Md-Bobx1[1]@text##已写|个字"
+  },
+  "ruleContent": {
+    "content": ".noveContent p@html",
+    "imageStyle": "FULL"
+  },
+  "ruleExplore": {
+    "author": ".c_c_d_da_author@a.0@text",
+    "bookList": "class.c_c_d_data1",
+    "bookUrl": ".c_c_d_da_data1@a@href",
+    "coverUrl": "img@src",
+    "intro": ".c_c_d_da_data@text",
+    "kind": ".c_c_d_da_author@a.1@text",
+    "name": ".c_c_d_da_title@a@text"
+  },
+  "ruleSearch": {
+    "author": "a.2@text",
+    "bookList": ".TwoBox02_02",
+    "bookUrl": "a.1@href",
+    "coverUrl": "img@data-original",
+    "intro": "a.4@text",
+    "kind": "a.3@text&&font.0@text",
+    "lastChapter": "a.5@text##正文卷.|正文.|VIP卷.|默认卷.|卷_|VIP章节.|免费章节.|章节目录.|最新章节.|[\\(（【].*?[求更票谢乐发订合补加架字修Kk].*?[】）\\)]",
+    "name": "a.1@text",
+    "wordCount": "##字数.([^<]+)##$1###"
+  },
+  "ruleToc": {
+    "chapterList": ".DivTr a",
+    "chapterName": "text##正文卷.|正文.|VIP卷.|默认卷.|卷_|VIP章节.|免费章节.|章节目录.|最新章节.|[\\(（【].*?[求更票谢乐发订合补加架字修Kk].*?[】）\\)]",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "https://b.faloo.com/l_0_{{page}}.html?t=1&k={{key}},{\"charset\": \"gbk\"}",
+  "variableComment": "",
+  "weight": 1
+}

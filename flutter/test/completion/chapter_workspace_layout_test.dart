@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:easypub_desktop/desk/chapters/workspace_layout.dart';
@@ -84,4 +85,97 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  // V83：分隔条跟手。一帧内多个移动事件都要算进去；拖过上下限再拖回来，
+  // 分隔条回到原位而不是漂走。
+  Future<void> dragFrames(
+    WidgetTester tester,
+    Finder divider,
+    List<List<double>> frames,
+  ) async {
+    final gesture = await tester.startGesture(
+      tester.getCenter(divider),
+      kind: PointerDeviceKind.mouse,
+    );
+    for (final moves in frames) {
+      for (final dx in moves) {
+        await gesture.moveBy(Offset(dx, 0));
+      }
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('chapter divider follows the pointer (V83)', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: deskTheme(),
+        home: const Scaffold(
+          body: DeskChapterLayout(
+            outline: SizedBox.expand(),
+            reader: SizedBox.expand(),
+            inspector: SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (final key in ['chapter-tree-divider', 'chapter-property-divider']) {
+      final divider = find.byKey(ValueKey(key));
+      final sign = key == 'chapter-tree-divider' ? 1.0 : -1.0;
+      final x = tester.getTopLeft(divider).dx;
+      // 一帧五个 6px 的移动：分隔条要走满 30px。
+      await dragFrames(tester, divider, [
+        [for (var i = 0; i < 5; i++) 6 * sign],
+      ]);
+      expect(tester.getTopLeft(divider).dx, x + 30 * sign, reason: key);
+      // 越过上限 300px 再拖回 300px：回到 +30 的位置。
+      await dragFrames(tester, divider, [
+        for (var i = 0; i < 10; i++) [30 * sign],
+        for (var i = 0; i < 10; i++) [-30 * sign],
+      ]);
+      expect(tester.getTopLeft(divider).dx, x + 30 * sign, reason: key);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('split view divider follows the pointer (V83)', (tester) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: deskTheme(),
+        home: const Scaffold(
+          body: DeskSplitView(
+            leadingLabel: '左',
+            trailingLabel: '右',
+            leadingWidth: 400,
+            leading: SizedBox.expand(key: ValueKey('split-leading')),
+            trailing: SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final leading = find.byKey(const ValueKey('split-leading'));
+    final divider = find.byTooltip('拖动调整；聚焦后用左右方向键');
+    final width = tester.getSize(leading).width;
+    await dragFrames(tester, divider, [
+      [for (var i = 0; i < 5; i++) 8],
+    ]);
+    expect(tester.getSize(leading).width, width + 40);
+    await dragFrames(tester, divider, [
+      for (var i = 0; i < 10; i++) [-60],
+      for (var i = 0; i < 10; i++) [60],
+    ]);
+    expect(tester.getSize(leading).width, width + 40);
+    expect(tester.takeException(), isNull);
+  });
 }

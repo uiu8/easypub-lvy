@@ -232,7 +232,7 @@ void main() {
 
       await t.tap(find.byTooltip('更多导入方式'));
       await t.pumpAndSettle();
-      await t.tap(find.text('从收藏夹导入'));
+      await t.tap(find.text('从收藏文件夹导入'));
       await until(() => find.byType(FavoritesDialog).evaluate().isNotEmpty);
       await until(() => find.text('收藏书稿').evaluate().isNotEmpty);
       await t.tap(find.text('收藏书稿'));
@@ -287,7 +287,7 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(find.byTooltip('更多导入方式'));
       await t.pumpAndSettle();
-      expect(find.text('从收藏夹导入'), findsOneWidget);
+      expect(find.text('从收藏文件夹导入'), findsOneWidget);
       expect(find.text('导入文件夹'), findsOneWidget);
       expect(find.text('导入文件'), findsOneWidget);
       expect(t.takeException(), isNull);

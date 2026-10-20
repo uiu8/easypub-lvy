@@ -86,6 +86,32 @@ pub const SYSTEM_BLOCK_STYLES: [&str; 4] = ["off", "box", "indent", "styled"];
 pub fn default_system_block_style() -> String {
     "box".into()
 }
+/// 场景样式（V81，LAY-135）：旧项目缺少字段时聊天记录不识别、书信原样（输出不变）；
+/// 新书出厂默认 window / ruled，见 layout_settings::factory。
+pub fn default_chat_block_style() -> String {
+    "off".into()
+}
+pub fn chat_block_style_is_off(v: &str) -> bool {
+    v == "off"
+}
+pub fn default_letter_block_style() -> String {
+    "plain".into()
+}
+pub fn letter_block_style_is_plain(v: &str) -> bool {
+    v == "plain"
+}
+pub fn default_inset_detect() -> String {
+    "off".into()
+}
+pub fn inset_detect_is_off(v: &str) -> bool {
+    v == "off"
+}
+pub fn default_inset_font() -> String {
+    "kai".into()
+}
+pub fn inset_font_is_kai(v: &str) -> bool {
+    v == "kai"
+}
 /// 诗词（V50，LAY-122）：off 不识别；center 居中；indent 缩进。
 pub const VERSE_BLOCK_STYLES: [&str; 3] = ["off", "center", "indent"];
 /// 插图版式（V54，RES-050）。
@@ -235,6 +261,19 @@ pub struct Settings {
     /// 诗词样式（V50，LAY-122），见 [VERSE_BLOCK_STYLES]。
     #[serde(default = "crate::production::default_verse_block_style")]
     pub verse_block_style: String,
+    /// 场景样式（V81，LAY-135）：聊天记录自动识别与样式、书信样式、场景字体，见 [crate::insets]。
+    #[serde(default = "crate::production::default_chat_block_style")]
+    pub chat_block_style: String,
+    #[serde(default = "crate::production::default_letter_block_style")]
+    pub letter_block_style: String,
+    #[serde(default = "crate::production::default_inset_font")]
+    pub inset_font: String,
+    /// 场景识别（V82，LAY-137），见 [crate::insets::INSET_DETECT]。
+    #[serde(default = "crate::production::default_inset_detect")]
+    pub inset_detect: String,
+    /// 本书改过的场景样式（V82，LAY-136）：按场景编号；没改的用内置预设。总是序列化（补丁只能改已有字段）。
+    #[serde(default)]
+    pub inset_styles: Option<std::collections::BTreeMap<String, crate::inset_styles::InsetStyle>>,
     #[serde(default)]
     pub rule_options: crate::rule_options::Options,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -340,6 +379,11 @@ impl From<&crate::project::ProjectBook> for Settings {
             system_block_style: book.system_block_style.clone(),
             system_styles: book.system_styles.clone(),
             verse_block_style: book.verse_block_style.clone(),
+            chat_block_style: book.chat_block_style.clone(),
+            letter_block_style: book.letter_block_style.clone(),
+            inset_font: book.inset_font.clone(),
+            inset_detect: book.inset_detect.clone(),
+            inset_styles: book.inset_styles.clone(),
             rule_options: book.rule_options.clone(),
             block_annotations: book.block_annotations.clone(),
             manual_notes: book.manual_notes.clone(),
@@ -545,6 +589,10 @@ impl Settings {
             || !RARE_CHAR_SCOPES.contains(&self.rare_char_scope.as_str())
             || !SYSTEM_BLOCK_STYLES.contains(&self.system_block_style.as_str())
             || !VERSE_BLOCK_STYLES.contains(&self.verse_block_style.as_str())
+            || !crate::insets::CHAT_BLOCK_STYLES.contains(&self.chat_block_style.as_str())
+            || !crate::insets::LETTER_BLOCK_STYLES.contains(&self.letter_block_style.as_str())
+            || !crate::insets::INSET_FONTS.contains(&self.inset_font.as_str())
+            || !crate::insets::INSET_DETECT.contains(&self.inset_detect.as_str())
             || !matches!(self.cover_fit.as_str(), "cover" | "contain" | "fill")
             || !matches!(
                 self.font_family.as_str(),
@@ -580,6 +628,9 @@ impl Settings {
         }
         if let Some(styles) = &self.system_styles {
             styles.validate()?;
+        }
+        if let Some(styles) = &self.inset_styles {
+            crate::inset_styles::validate_book(styles)?;
         }
         let mut paths = BTreeSet::new();
         for image in &self.illustrations {
@@ -819,6 +870,7 @@ fn edited(current: &Settings, fields: &BTreeMap<String, Edit>) -> Result<Setting
                     | "chapter_head_image"
                     | "chapter_style"
                     | "system_styles"
+                    | "inset_styles"
                     | "cover_crop"
                     | "cover_design"
                     | "font_resource"
@@ -1339,6 +1391,22 @@ pub fn run(
             .map(|(id, name, kind, style)| json!({"id": id, "name": name, "kind": kind, "style": style}))
             .collect();
         return serde_json::to_string(&json!({"presets": presets})).map_err(|_| invalid());
+    }
+    // V82 场景样式：只读列出内置预设（界面与 Rust 预设的一致性由测试核对）。
+    if value["op"] == "inset_styles" {
+        if apply || confirmed || !plan_id.is_empty() {
+            return Err(invalid());
+        }
+        let presets: Vec<Value> = crate::inset_styles::presets()
+            .into_iter()
+            .map(|(id, name, scene, style)| json!({"id": id, "name": name, "scene": scene, "style": style}))
+            .collect();
+        let scenes: Vec<Value> = crate::insets::TYPES
+            .iter()
+            .map(|(id, name)| json!({"id": id, "name": name}))
+            .collect();
+        return serde_json::to_string(&json!({"presets": presets, "scenes": scenes}))
+            .map_err(|_| invalid());
     }
     // V74 章节样式包：生成内置包、导入与导出样式包文件，不涉及书稿。
     if value["op"] == "chapter_style" {

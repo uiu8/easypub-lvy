@@ -78,6 +78,9 @@ pub struct Configuration {
     /// V78：我的系统提示样式（所有书可用）。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub block_style_library: Vec<crate::block_styles::SavedStyle>,
+    /// V82：我的场景样式（所有书可用）。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inset_style_library: Vec<crate::inset_styles::SavedInset>,
     /// V72：从文件名提取作者（auto / custom / off）、自定义格式、书名里是否去掉作者名。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filename_author_mode: Option<String>,
@@ -160,6 +163,7 @@ impl Configuration {
         }
         crate::supplemental_pages::validate_templates(&self.supplemental_templates)?;
         crate::block_styles::validate_library(&self.block_style_library)?;
+        crate::inset_styles::validate_library(&self.inset_style_library)?;
         if let Some(defaults) = &self.rule_defaults {
             crate::rule_toggles::validate_defaults(defaults)?;
         }
