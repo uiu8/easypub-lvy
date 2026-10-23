@@ -101,6 +101,36 @@ class Desk extends ThemeExtension<Desk> {
     grain: .02,
   );
 
+  /// 银灰（用户 2026-10-23 要求）：取用户截图里头发的五档灰（#F4F3F3、#D2D0D1、#C8C5C7、
+  /// #BEBABB、#A5A1A2、#706E74），比宣纸冷一点、略带紫调；语义色沿用宣纸。
+  static const silver = Desk(
+    dark: false,
+    canvas: Color(0xFFECEBED),
+    rail: Color(0xFFE6E4E7),
+    surface: Color(0xFFF7F6F7),
+    sunken: Color(0xFFE5E3E6),
+    paper: Color(0xFFFAF9FA),
+    line: Color(0xFFD9D6D9),
+    lineStrong: Color(0xFFC8C5C7),
+    ink: Color(0xFF242328),
+    ink2: Color(0xFF5B5960),
+    ink3: Color(0xFF8F8B91),
+    accent: Color(0xFF706E74),
+    accentInk: Color(0xFFF7F6F7),
+    accentSoft: Color(0xFFE4E2E5),
+    pen: Color(0xFFA94434),
+    penSoft: Color(0xFFF6EBE7),
+    warn: Color(0xFF8D6A3B),
+    warnSoft: Color(0xFFF4EEE3),
+    info: Color(0xFF5B5960),
+    infoSoft: Color(0xFFECEAED),
+    add: Color(0xFF4E6D58),
+    addSoft: Color(0xFFE9F0EA),
+    del: Color(0xFFA94434),
+    delSoft: Color(0xFFF6EBE7),
+    grain: .012,
+  );
+
   /// 高对比（V79，SET-074）：白底纯黑字、深灰线、黑色强调，给看不清浅灰的人用；不随主题色。
   static const contrast = Desk(
     dark: false,
@@ -227,6 +257,7 @@ class DeskAccent {
 /// 界面主题（V79，SET-074）：设置值 `ui_theme`。
 const deskThemes = {
   'paper': '宣纸',
+  'silver': '银灰',
   'night': '夜墨',
   'contrast': '高对比',
   'system': '跟随系统',
@@ -236,6 +267,7 @@ const deskThemes = {
 String deskThemeMode(Object? value, {required bool systemDark}) =>
     switch (value) {
       'night' => 'night',
+      'silver' => 'silver',
       'contrast' => 'contrast',
       'system' => systemDark ? 'night' : 'paper',
       _ => 'paper',
@@ -244,6 +276,8 @@ String deskThemeMode(Object? value, {required bool systemDark}) =>
 /// 某个主题与主题色的令牌；高对比固定黑色强调。
 Desk deskTokens(String mode, DeskAccent accent) => switch (mode) {
   'night' => Desk.darkTheme.withAccent(accent.forDark()),
+  // 银灰主题默认就用银灰强调；选了别的主题色时照常替换。
+  'silver' => accent.id == 'ink' ? Desk.silver : Desk.silver.withAccent(accent),
   'contrast' => Desk.contrast,
   _ => Desk.light.withAccent(accent),
 };
@@ -255,6 +289,14 @@ const deskAccents = [
     Color(0xFF6F6A63),
     Color(0xFFF7F5F0),
     Color(0xFFECE9E4),
+  ),
+  // 银灰：头发阴影那一档 #706E74，冷一点、略带紫调（2026-10-23）。
+  DeskAccent(
+    'silver',
+    '银灰',
+    Color(0xFF706E74),
+    Color(0xFFF7F6F7),
+    Color(0xFFE6E4E7),
   ),
   DeskAccent(
     'teal',

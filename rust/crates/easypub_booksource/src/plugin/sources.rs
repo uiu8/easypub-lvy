@@ -271,6 +271,7 @@ pub(super) fn handle(method: &str, params: &Value) -> Result<Value, String> {
         }
         "sources.list" => {
             let st = state();
+            support::prewarm(st.sources.iter().map(|(s, _)| s));
             let mut counts = HashMap::<&str, usize>::new();
             for (s, _) in &st.sources {
                 *counts.entry(&s.book_source_url).or_default() += 1;

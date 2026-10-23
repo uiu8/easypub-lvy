@@ -198,9 +198,94 @@ pub fn cause(problems: &[Problem]) -> Option<&'static str> {
     }
 }
 
+/// 静态扫描的结果按书源内容指纹缓存。书源列表每次要扫两千多个书源，原来每个书源要把全部脚本
+/// 拼成可执行文本三四遍（check、needs_web_view、tags 各一遍），sources.list 从约 0.4 秒退化到 6 秒。
+/// 指纹只取会影响扫描结果的字段；书源内容一改，指纹就变，不会用到旧结果。
+struct Scan {
+    problems: Vec<Problem>,
+    web_view: bool,
+}
+
+fn fingerprint(source: &BookSource) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (
+        source.book_source_type,
+        &source.search_url,
+        &source.explore_url,
+        &source.html,
+        &source.main_js,
+        &source.js_lib,
+        &source.login_check_js,
+        &source.cover_decode_js,
+        &source.login_action,
+        &source.header,
+        &source.login_url,
+        &source.login_ui,
+    )
+        .hash(&mut h);
+    for rules in [
+        &source.rule_search,
+        &source.rule_explore,
+        &source.rule_book_info,
+        &source.rule_toc,
+        &source.rule_content,
+    ] {
+        rules.hash(&mut h);
+    }
+    h.finish()
+}
+
+fn scan(source: &BookSource) -> std::sync::Arc<Scan> {
+    use std::{
+        collections::HashMap,
+        sync::{Arc, Mutex, OnceLock},
+    };
+    static CACHE: OnceLock<Mutex<HashMap<u64, Arc<Scan>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    let key = fingerprint(source);
+    if let Some(hit) = cache.lock().unwrap().get(&key) {
+        return hit.clone();
+    }
+    let blob = execution_blob(source);
+    let web_view = web_view_in(source, &blob);
+    let result = Arc::new(Scan {
+        problems: check_in(source, &blob, web_view),
+        web_view,
+    });
+    let mut cache = cache.lock().unwrap();
+    // 书源总数有限；超出上限时整体清空，避免反复导入改动的书源让缓存无限增长。
+    if cache.len() >= 20_000 {
+        cache.clear();
+    }
+    cache.insert(key, result.clone());
+    result
+}
+
+/// 列书源前把还没扫过的书源分给几个线程先扫一遍（结果进缓存），插件刚启动时第一次打开书源页也不用久等。
+pub fn prewarm<'a>(sources: impl Iterator<Item = &'a BookSource>) {
+    let list: Vec<&BookSource> = sources.collect();
+    let threads = std::thread::available_parallelism()
+        .map_or(4, |n| n.get())
+        .min(8);
+    let chunk = list.len().div_ceil(threads).max(1);
+    std::thread::scope(|s| {
+        for part in list.chunks(chunk) {
+            s.spawn(move || {
+                for source in part {
+                    scan(source);
+                }
+            });
+        }
+    });
+}
+
 /// 书源是否用到 WebView（网址选项、脚本函数或正文的 webJs）。
 pub fn needs_web_view(source: &BookSource) -> bool {
-    let blob = execution_blob(source);
+    scan(source).web_view
+}
+
+fn web_view_in(source: &BookSource, blob: &str) -> bool {
     !source.html.trim().is_empty()
         || WEB_VIEW.iter().any(|w| blob.contains(w))
         || !BookSource::rule(&source.rule_content, "webJs").is_empty()
@@ -286,6 +371,10 @@ pub fn web_view_supported() -> bool {
 }
 
 pub fn check(source: &BookSource) -> Vec<Problem> {
+    scan(source).problems.clone()
+}
+
+fn check_in(source: &BookSource, blob: &str, web_view: bool) -> Vec<Problem> {
     let mut problems = Vec::new();
     if source.book_source_type != 0 {
         problems.push(Problem::NotText(source.book_source_type));
@@ -299,8 +388,7 @@ pub fn check(source: &BookSource) -> Vec<Problem> {
     {
         problems.push(Problem::NoContentRule);
     }
-    let blob = execution_blob(source);
-    if !web_view_supported() && needs_web_view(source) {
+    if !web_view_supported() && web_view {
         problems.push(Problem::NeedsWebView);
     }
     // 仿 Java 仅放行已实现的具体类，绝不把 java.io/java.security 整个包放行。
@@ -369,7 +457,9 @@ pub fn check(source: &BookSource) -> Vec<Problem> {
             break;
         }
     }
-    let re = regex::Regex::new(r"\bjava\.([A-Za-z_][A-Za-z0-9_]*)").unwrap();
+    static JAVA_CALL: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re =
+        JAVA_CALL.get_or_init(|| regex::Regex::new(r"\bjava\.([A-Za-z_][A-Za-z0-9_]*)").unwrap());
     let mut unknown: Vec<String> = re
         .captures_iter(&executable)
         .map(|c| c[1].to_owned())
@@ -385,6 +475,28 @@ pub fn check(source: &BookSource) -> Vec<Problem> {
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn scan_cache_follows_source_content() {
+        // 同一书源反复检查走缓存；改了脚本，结果跟着变，不会拿到旧结果。
+        let mut source = BookSource {
+            search_url: "/search".into(),
+            js_lib: "java.someNewThing()".into(),
+            rule_content: serde_json::from_value(serde_json::json!({"content":"#c@text"})).unwrap(),
+            ..Default::default()
+        };
+        let first = check(&source);
+        assert_eq!(first, check(&source));
+        assert!(first.contains(&Problem::UnknownFunction("someNewThing".into())));
+        assert!(!needs_web_view(&source));
+        source.js_lib = "java.ajax('x')".into();
+        assert!(check(&source).is_empty());
+        source.js_lib = "java.webView('x')".into();
+        assert!(needs_web_view(&source));
+        // 并行预热后结果不变。
+        prewarm([&source].into_iter());
+        assert!(needs_web_view(&source));
+    }
 
     #[test]
     fn implemented_package_imports_do_not_allow_other_java_classes() {

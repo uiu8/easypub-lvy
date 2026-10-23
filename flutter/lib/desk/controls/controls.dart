@@ -32,6 +32,7 @@ abstract final class _Ink {
     // 浮层悬停凹底：中性色，不随主题色变化（V79 起按主题取值）。
     final selected = switch (mode) {
       'night' => Color(0xFF2E2C29),
+      'silver' => Color(0xFFE4E2E5),
       'contrast' => Color(0xFFDDDDDD),
       _ => Color(0xFFECE9E4),
     };

@@ -68,7 +68,9 @@ void main() {
     expect(deskThemeMode('contrast', systemDark: true), 'contrast');
     expect(deskThemeMode(null, systemDark: true), 'paper');
     expect(deskThemeMode('nope', systemDark: false), 'paper');
-    expect(deskThemes.keys, ['paper', 'night', 'contrast', 'system']);
+    // 银灰（V103，SET-101）排在宣纸之后。
+    expect(deskThemes.keys, ['paper', 'silver', 'night', 'contrast', 'system']);
+    expect(deskThemeMode('silver', systemDark: true), 'silver');
   });
 
   testWidgets('设置里换主题立即生效并保存；跟随系统时随系统深浅色切换', (t) async {

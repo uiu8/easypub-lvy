@@ -39,7 +39,7 @@ const _sizes = {
   '1500': Size(1500, 900),
   '1900': Size(1900, 1060),
 };
-const _themes = ['paper', 'night'];
+const _themes = ['paper', 'night', 'silver'];
 const _scales = {'1.0': 1.0, '1.3': 1.3};
 
 /// 样书：两卷、40 章，含一处跳号、一处重复标题与一个疑似标题的正文行，检查页有内容可看；

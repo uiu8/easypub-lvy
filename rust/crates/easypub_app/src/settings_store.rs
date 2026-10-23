@@ -237,8 +237,10 @@ impl Configuration {
         if self
             .ui_theme
             .as_deref()
-            // 跟随系统（V79，SET-074）。
-            .is_some_and(|theme| !matches!(theme, "paper" | "night" | "contrast" | "system"))
+            // 跟随系统（V79，SET-074）；银灰（2026-10-23）。
+            .is_some_and(|theme| {
+                !matches!(theme, "paper" | "silver" | "night" | "contrast" | "system")
+            })
         {
             return Err(error(ErrorCode::InvalidRule, "check_ui_theme"));
         }
@@ -840,6 +842,16 @@ mod tests {
             ..Default::default()
         }
     }
+    #[test]
+    fn silver_theme_is_accepted_and_unknown_themes_rejected() {
+        // 银灰主题（2026-10-23）可以保存；不认识的主题名仍然拒绝。
+        let mut configuration = config(18);
+        configuration.ui_theme = Some("silver".into());
+        assert!(configuration.validate().is_ok());
+        configuration.ui_theme = Some("rainbow".into());
+        assert!(configuration.validate().is_err());
+    }
+
     #[test]
     fn frontend_preferences_roundtrip_with_immutable_generation() {
         let dir = directory();
