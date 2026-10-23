@@ -177,15 +177,20 @@ bool Win32Window::Create(const std::wstring& title,
   int width, height;
   if (valid) {
     const double ratio = static_cast<double>(dpi) / saved.dpi;
-    width = std::clamp(static_cast<int>((saved.bounds.right - saved.bounds.left) * ratio), std::min(640, work_width), work_width);
-    height = std::clamp(static_cast<int>((saved.bounds.bottom - saved.bounds.top) * ratio), std::min(480, work_height), work_height);
+    // A restored window that nearly fills the work area looks the same as a
+    // maximized one; cap it so maximize/restore stays visibly different.
+    const int max_width = std::max(std::min(640, work_width), static_cast<int>(work_width * .85));
+    const int max_height = std::max(std::min(480, work_height), static_cast<int>(work_height * .85));
+    width = std::clamp(static_cast<int>((saved.bounds.right - saved.bounds.left) * ratio), std::min(640, work_width), max_width);
+    height = std::clamp(static_cast<int>((saved.bounds.bottom - saved.bounds.top) * ratio), std::min(480, work_height), max_height);
     bounds.left = std::clamp(saved.bounds.left, work.left, work.right - width);
     bounds.top = std::clamp(saved.bounds.top, work.top, work.bottom - height);
     restore_maximized_ = false;
   } else {
-    // Nominal 1200x800 logical pixels, uniformly reduced to leave desktop margins.
-    const double fit = std::min({1.0, work_width * .90 / (size.width * scale),
-                                work_height * .90 / (size.height * scale)});
+    // Nominal 1200x800 logical pixels, uniformly reduced to at most 75% of the
+    // work area so the first window leaves clear desktop margins.
+    const double fit = std::min({1.0, work_width * .75 / (size.width * scale),
+                                work_height * .75 / (size.height * scale)});
     width = static_cast<int>(std::round(size.width * scale * fit));
     height = static_cast<int>(std::round(size.height * scale * fit));
     bounds.left = work.left + (work_width - width) / 2;

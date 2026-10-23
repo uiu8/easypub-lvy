@@ -1,5 +1,6 @@
-// 自适应导航栏（G-005–018）：宽窗（≥1440 逻辑像素）展开为图标+文字，其余为
-// 图标在上、短名在下；窗口不够高时只留图标（悬停提示全名），再不够时可滚动。
+// 自适应导航栏（G-005–018）：默认是图标在上、短名在下的窄栏；宽窗（≥1440 逻辑像素）
+// 时栏底有“展开导航栏”，展开为图标+文字（G-084，用户反馈）。窗口不够高时只留图标
+// （悬停提示全名），再不够时可滚动。
 import 'package:flutter/material.dart';
 
 import '../tokens.dart';
@@ -40,9 +41,17 @@ class DeskRail extends StatelessWidget {
     required this.bookEntries,
     required this.output,
     required this.bottom,
+    this.expanded,
+    this.onToggleExpanded,
   });
   final List<DeskRailEntry> top, bookEntries, output, bottom;
   final Widget Function(bool expanded) book;
+
+  /// 用户选择的展开状态；null 时沿用旧行为（够宽就展开）。只在宽窗时生效。
+  final bool? expanded;
+
+  /// 给出时栏底显示“展开 / 收起导航栏”（只在宽窗时出现）。
+  final VoidCallback? onToggleExpanded;
 
   static bool expandedFor(BuildContext context) {
     final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.5);
@@ -53,7 +62,8 @@ class DeskRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = context.desk;
     final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.5);
-    final expanded = expandedFor(context);
+    final canExpand = expandedFor(context);
+    final expanded = canExpand && (this.expanded ?? true);
     final height = MediaQuery.sizeOf(context).height / scale;
     final short = height < 780, tiny = height < 700;
     Widget item(DeskRailEntry e) =>
@@ -97,6 +107,20 @@ class DeskRail extends StatelessWidget {
                   for (final e in output) item(e),
                   const Spacer(),
                   for (final e in bottom) item(e),
+                  if (canExpand && onToggleExpanded != null)
+                    KeyedSubtree(
+                      key: const ValueKey('desk-rail-toggle'),
+                      child: item(
+                        DeskRailEntry(
+                          label: expanded ? '收起导航栏' : '展开导航栏',
+                          shortLabel: expanded ? '收起' : '展开',
+                          icon: expanded
+                              ? Icons.keyboard_double_arrow_left_rounded
+                              : Icons.keyboard_double_arrow_right_rounded,
+                          onTap: onToggleExpanded!,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -74,10 +75,14 @@ void main() {
     final entries = log.list();
     expect(entries, hasLength(3));
     final newest = File(entries.first.path).readAsStringSync();
-    expect(newest, contains('第 4 次'));
-    expect(newest, contains('来源：测试'));
+    expect(newest, contains('错误类型：StateError'));
+    expect(newest, isNot(contains('第 4 次')));
+    expect(newest, contains('来源：应用'));
     expect(newest, contains('只保存在本机，不会上传'));
-    expect(File(entries.last.path).readAsStringSync(), contains('第 2 次'));
+    expect(
+      File(entries.last.path).readAsStringSync(),
+      contains('错误类型：StateError'),
+    );
     // 目录里其他文件不受影响，也不计入。
     File('${dir.path}/crash-logs/说明.txt').writeAsStringSync('x');
     expect(log.list(), hasLength(3));
@@ -87,6 +92,7 @@ void main() {
 
     // 接管 Flutter 框架错误：记录后仍交给原来的处理。
     final previous = FlutterError.onError;
+    final previousPlatform = PlatformDispatcher.instance.onError;
     final forwarded = <FlutterErrorDetails>[];
     FlutterError.onError = forwarded.add;
     final installed = CrashLog('${dir.path}/installed');
@@ -97,14 +103,30 @@ void main() {
       );
     } finally {
       FlutterError.onError = previous;
+      PlatformDispatcher.instance.onError = previousPlatform;
     }
     expect(forwarded, hasLength(1));
+    expect(forwarded.single.exception.toString(), isNot(contains('框架错误')));
     final recorded = installed.list();
     expect(recorded, hasLength(1));
     expect(
       File(recorded.single.path).readAsStringSync(),
-      contains('来源：Flutter 框架（测试库）'),
+      contains('来源：Flutter 框架'),
     );
+    log.record(
+      const FormatException(
+        'FAKE_BODY Cookie=FAKE_COOKIE http://user:FAKE_PASSWORD@proxy',
+      ),
+      StackTrace.fromString(
+        'FAKE_COOKIE\n#0 parse (package:easypub_desktop/prototype/txt_import.dart:1:2)',
+      ),
+      source: 'FAKE_PASSWORD',
+    );
+    final redacted = File(log.list().first.path).readAsStringSync();
+    for (final secret in ['FAKE_BODY', 'FAKE_COOKIE', 'FAKE_PASSWORD']) {
+      expect(redacted, isNot(contains(secret)));
+    }
+    expect(redacted, contains('txt_import.dart:1:2'));
   });
 
   testWidgets('设置 · 关于与许可：版本、本版更新与崩溃日志（SET-066/067）', (t) async {
@@ -192,7 +214,8 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
     await t.pumpAndSettle();
-    expect(find.textContaining('界面里出的错'), findsOneWidget);
+    expect(find.textContaining('错误类型：StateError'), findsOneWidget);
+    expect(find.textContaining('界面里出的错'), findsNothing);
     expect(find.text('最近一份崩溃日志'), findsOneWidget);
     // 只读日志文件夹中的日志。
     await t.runAsync(() async {

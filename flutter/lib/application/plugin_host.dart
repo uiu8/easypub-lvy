@@ -9,6 +9,8 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
+import '../infrastructure/atomic_file.dart';
+
 class PluginManifest {
   PluginManifest({
     required this.id,
@@ -107,7 +109,26 @@ class PluginRegistry {
     }
   }
 
-  List<PluginEntry> scan() {
+  /// 校验值缓存（V94）：按文件大小与修改时间记住上次算出的 SHA-256。
+  /// 左栏每次重建都要问书源插件是否可用；原先每次同步读整个插件程序（约 12MB）再算校验值，
+  /// 每次切页多花约 180ms。真正启动插件前仍重新计算（[fresh]）。
+  final Map<String, (int, DateTime, String)> _digests = {};
+
+  String _digest(File exe, {bool fresh = false}) {
+    final stat = exe.statSync();
+    final cached = _digests[exe.path];
+    if (!fresh &&
+        cached != null &&
+        cached.$1 == stat.size &&
+        cached.$2 == stat.modified) {
+      return cached.$3;
+    }
+    final digest = sha256.convert(exe.readAsBytesSync()).toString();
+    _digests[exe.path] = (stat.size, stat.modified, digest);
+    return digest;
+  }
+
+  List<PluginEntry> scan({bool fresh = false}) {
     final state = _state();
     final seen = <String, PluginEntry>{};
     for (final root in [userRoot, ..._extraRoots]) {
@@ -120,7 +141,7 @@ class PluginRegistry {
           m,
           // 新装的插件默认停用，由用户在设置里启用。
           enabled: state['enabled']?[m.id] == true,
-          problem: _problem(m),
+          problem: _problem(m, fresh: fresh),
           removable: root == userRoot,
         );
       }
@@ -129,7 +150,7 @@ class PluginRegistry {
       ..sort((a, b) => a.manifest.name.compareTo(b.manifest.name));
   }
 
-  String? _problem(PluginManifest m) {
+  String? _problem(PluginManifest m, {bool fresh = false}) {
     final exe = File(m.executablePath);
     if (m.executable.isEmpty ||
         m.executable.contains('..') ||
@@ -137,13 +158,13 @@ class PluginRegistry {
       return '找不到插件程序';
     }
     if (m.sha256.isEmpty) return '插件清单没有校验值';
-    final digest = sha256.convert(exe.readAsBytesSync()).toString();
+    final digest = _digest(exe, fresh: fresh);
     if (digest != m.sha256) return '插件程序与清单的校验值不符（可能被改动），已阻止运行';
     return null;
   }
 
-  PluginEntry? find(String id) {
-    for (final e in scan()) {
+  PluginEntry? find(String id, {bool fresh = false}) {
+    for (final e in scan(fresh: fresh)) {
       if (e.manifest.id == id) return e;
     }
     return null;
@@ -158,7 +179,7 @@ class PluginRegistry {
     final state = _state();
     (state['enabled'] ??= <String, dynamic>{})[id] = enabled;
     await _stateFile.parent.create(recursive: true);
-    await _stateFile.writeAsString(jsonEncode(state));
+    await writeAtomicText(_stateFile, jsonEncode(state));
     if (!enabled) await _clients.remove(id)?.close();
     changes.value++;
   }
@@ -167,7 +188,7 @@ class PluginRegistry {
   Future<PluginEntry> installFromFolder(String folder) async {
     final m = PluginManifest.read(Directory(folder));
     if (m == null) throw const PluginError('这个文件夹里没有有效的 plugin.json');
-    final problem = _problem(m);
+    final problem = _problem(m, fresh: true);
     if (problem != null) throw PluginError(problem);
     await _clients.remove(m.id)?.close();
     final target = Directory('$userRoot${Platform.pathSeparator}${m.id}');
@@ -197,7 +218,7 @@ class PluginRegistry {
   Future<PluginClient> client(String id) async {
     final existing = _clients[id];
     if (existing != null && !existing.closed) return existing;
-    final entry = find(id);
+    final entry = find(id, fresh: true);
     if (entry == null) throw const PluginError('没有安装这个插件');
     if (!entry.enabled) throw const PluginError('插件已停用，请在设置的“插件”里启用');
     if (entry.problem != null) throw PluginError(entry.problem!);

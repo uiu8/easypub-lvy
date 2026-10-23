@@ -6,6 +6,8 @@ target/
 .dart_tool/
 build/
 **/bin/
+!rust/crates/easypub_updater/src/bin/
+!rust/crates/easypub_updater/src/bin/release_sign.rs
 **/obj/
 **/__pycache__/
 .env

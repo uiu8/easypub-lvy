@@ -5,6 +5,7 @@ import '../application/parallel_books.dart';
 
 import '../src/rust/api.dart' as api;
 import 'kindling_job.dart';
+import 'conversion_error.dart';
 import 'conversion_preflight.dart';
 import 'conversion_preflight_runner.dart';
 import 'prototype_state.dart';
@@ -70,6 +71,7 @@ class OutputBatch {
 
   /// 批次记录写进全局设置，几本同时完成时排队保存，避免互相覆盖。
   final SerialQueue _records = SerialQueue();
+  String? _savedRecord;
 
   /// 同时处理的本数（V38，SET-069）；测试可以直接指定。
   int? parallelOverride;
@@ -119,9 +121,7 @@ class OutputBatch {
                   preflightAcknowledged))) &&
       items.every(
         (i) =>
-            i.preview != null &&
-            i.guard ==
-                state.conversionContext(i.bookId),
+            i.preview != null && i.guard == state.conversionContext(i.bookId),
       );
   Future<void> previewAll(
     void Function() changed, {
@@ -150,12 +150,8 @@ class OutputBatch {
         changed();
         try {
           final book = state.shelf.books.firstWhere((b) => b.id == item.bookId);
-          final guard = state.conversionContext(
-            item.bookId,
-          );
-          final publication = state.publicationRequest(
-            item.bookId,
-          );
+          final guard = state.conversionContext(item.bookId);
+          final publication = state.publicationRequest(item.bookId);
           item.inputFingerprint = publicationFingerprint(publication);
           publication['settings'] = conversionSettings(
             publication['settings'] as Map,
@@ -193,8 +189,7 @@ class OutputBatch {
               : format != 'EPUB'
               ? await KindlingJob(onChanged: () {}).run(request)
               : await epubCall(request);
-          if (guard !=
-              state.conversionContext(item.bookId)) {
+          if (guard != state.conversionContext(item.bookId)) {
             throw const FormatException('书稿已变化，请重新预览。');
           }
           item.guard = guard;
@@ -289,7 +284,7 @@ class OutputBatch {
       ? e.message
       : e is ExportStopped
       ? e.message
-      : '检查失败，请检查书稿、资源、输出路径和转换器后重新预览。';
+      : conversionApiErrorMessage(e);
   Future<void> stop() async {
     stopped = true;
     await Future.wait([
@@ -315,8 +310,7 @@ class OutputBatch {
           (item) =>
               item.preview == null ||
               item.request == null ||
-              item.guard !=
-                  state.conversionContext(item.bookId),
+              item.guard != state.conversionContext(item.bookId),
         )) {
       throw const FormatException('失败项的预览已过期，请重新预览整批。');
     }
@@ -341,8 +335,7 @@ class OutputBatch {
           changed();
           return;
         }
-        if (item.guard !=
-            state.conversionContext(item.bookId)) {
+        if (item.guard != state.conversionContext(item.bookId)) {
           item.phase = 'blocked';
           item.lastTaskId = null;
           item.status = '未执行：书稿变化，需重新预览';
@@ -487,10 +480,16 @@ class OutputBatch {
 
   Future<bool> _saveBatchRecord(String stateName) => _records.run(() async {
     if (state.settingsDirectory == null) return true;
-    if (!await state.outputs.saveBatchRecord(_record(stateName))) {
+    final record = _record(stateName);
+    final identity = jsonEncode(record);
+    // 并发完成的回调排队后可能看到同一份最新快照；成功保存过的相同
+    // 快照不再重复生成设置版本。失败不记缓存，单本成品回执仍独立保存。
+    if (identity == _savedRecord) return true;
+    if (!await state.outputs.saveBatchRecord(record)) {
       stopped = true;
       throw const FormatException('批次记录未能保存，已停止后续输出。请检查设置目录后重新核对任务记录。');
     }
+    _savedRecord = identity;
     return true;
   });
 

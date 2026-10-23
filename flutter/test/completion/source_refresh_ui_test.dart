@@ -58,13 +58,15 @@ void main() {
         library.dispose();
         state.dispose();
       });
-      Future<void> settle() async {
+      Future<void> settle({bool Function()? completed}) async {
         for (var i = 0; i < 500; i++) {
           await t.runAsync(
             () => Future<void>.delayed(const Duration(milliseconds: 10)),
           );
           await t.pump(const Duration(milliseconds: 20));
-          if (find.byType(LinearProgressIndicator).evaluate().isEmpty) {
+          if (!library.projectBusy.value &&
+              find.byType(LinearProgressIndicator).evaluate().isEmpty &&
+              (completed?.call() ?? true)) {
             await t.pumpAndSettle();
             return;
           }
@@ -148,7 +150,9 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(find.text('放弃更改'));
       await t.pump();
-      await settle();
+      // 项目打开使用原生异步 I/O，页面没有 LinearProgressIndicator；
+      // pumpAndSettle 或仅等动画结束不能证明书库已经恢复。
+      await settle(completed: () => library.books.value.length == 1);
       expect(library.books.value.length, 1);
       await t.runAsync(() async {
         expect(

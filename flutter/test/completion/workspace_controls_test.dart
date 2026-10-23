@@ -103,8 +103,13 @@ void main() {
     }
   }
 
+  // 换书、保存要等真实磁盘 IO（离开信息页会刷新工作区）；全量并发回归时
+  // 这类 IO 可能远超 150 轮（约 3 秒），所以按真实时间截止而不是只按轮数。
   Future<void> until(WidgetTester t, bool Function() complete) async {
-    for (var i = 0; i < 150 && !complete(); i++) {
+    final clock = Stopwatch()..start();
+    bool waiting(int i) =>
+        i < 150 || clock.elapsed < const Duration(seconds: 30);
+    for (var i = 0; !complete() && waiting(i); i++) {
       await t.pump(const Duration(milliseconds: 50));
       await t.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -195,7 +200,8 @@ void main() {
                     .single['name'] ==
                 '长篇小说',
           );
-          await t.pump(const Duration(milliseconds: 300));
+          // 配置保存后界面还要重读一次预设；并发负载下固定等 300ms 不够（2026-10-22 偶发失败）。
+          await until(t, () => find.text('长篇小说').evaluate().isNotEmpty);
           expect(find.text('长篇小说'), findsOneWidget);
         } else {
           expect(find.text('选择一本书，开始使用这个工具'), findsOneWidget, reason: label);
@@ -319,14 +325,8 @@ void main() {
       await settle(t);
       await t.enterText(find.byType(TextField).last, books.last.title);
       await t.pump();
-      await t.tap(
-        find
-            .descendant(
-              of: find.byType(ListTile),
-              matching: find.text(books.last.title),
-            )
-            .last,
-      );
+      // R1 起选书弹窗的行是编辑台自己的行（不再是 ListTile），按行的 Key 点。
+      await t.tap(find.byKey(ValueKey('book-picker-row-${books.last.id}')));
       await until(t, () => library.selection.value.current == books.last.id);
       expect(
         library.selection.value.current,

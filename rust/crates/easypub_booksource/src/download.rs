@@ -128,14 +128,46 @@ pub fn cache_dir(folder: &Path, book: &Book) -> PathBuf {
     folder.join(".easypub-cache").join(&key[..16])
 }
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_atomic_with(path, |file| file.write_all(bytes))
+}
+
+fn write_atomic_with(
+    path: &Path,
+    write: impl FnOnce(&mut std::fs::File) -> std::io::Result<()>,
+) -> Result<(), String> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|_| "无法创建保存目录")?;
     }
-    let tmp = path.with_extension("part");
-    std::fs::write(&tmp, bytes)
-        .and_then(|_| std::fs::rename(&tmp, path))
-        .map_err(|_| "无法写入文件（检查目录权限或是否被占用）".into())
+    let (tmp, mut file) = loop {
+        let tmp = path.with_file_name(format!(
+            ".easypub-write-{}-{}.tmp",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+        {
+            Ok(file) => break (tmp, file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return Err("无法创建临时文件，请检查磁盘空间和目录权限后重试".into()),
+        }
+    };
+    let result = (|| {
+        write(&mut file)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&tmp, path)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result.map_err(|_| "无法保存文件，请检查磁盘空间、目录权限或文件占用后重试".into())
 }
+
 pub(crate) fn wanted(toc: &[Chapter], options: &Options) -> Vec<usize> {
     (options.from.unwrap_or(1).max(1).saturating_sub(1)
         ..options.to.unwrap_or(toc.len()).min(toc.len()))
@@ -272,4 +304,144 @@ pub fn legacy_toc(path: &Path, expected: usize) -> Result<Vec<Chapter>, String> 
         return Err("旧 TXT 的标题与下载记录无法一一对应；请重新下载目录后再整理".into());
     }
     Ok(toc)
+}
+
+#[cfg(test)]
+mod atomic_tests {
+    use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn windows_long_unicode_paths_readonly_and_exclusive_lock_preserve_data() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let root = std::env::temp_dir().join(format!("easypub-boundary-{}", std::process::id()));
+        let mut directory = root.clone();
+        for _ in 0..8 {
+            directory = directory.join("中文 空格 #[] & 长路径验证123456789");
+        }
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("书源 💡.json");
+        assert!(path.as_os_str().len() > 260);
+        write_atomic(&path, b"old-complete").unwrap();
+        let lock = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&path)
+            .unwrap();
+        let error = write_atomic(&path, b"new-complete").unwrap_err();
+        assert!(error.contains("占用") && error.contains("重试"));
+        drop(lock);
+        assert_eq!(std::fs::read(&path).unwrap(), b"old-complete");
+        let original = std::fs::metadata(&path).unwrap().permissions();
+        let mut readonly = original.clone();
+        readonly.set_readonly(true);
+        std::fs::set_permissions(&path, readonly).unwrap();
+        let rejected = write_atomic(&path, b"new-complete");
+        std::fs::set_permissions(&path, original).unwrap();
+        assert!(rejected.is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"old-complete");
+        write_atomic(&path, b"new-complete").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new-complete");
+        // 文件只读属性不同于目录 ACL；另在本测试新建的短路径目录拒绝建文件。
+        let acl_path = root.join("acl.json");
+        write_atomic(&acl_path, b"old-acl").unwrap();
+        let identity = std::process::Command::new("whoami").output().unwrap();
+        assert!(identity.status.success());
+        let identity = String::from_utf8(identity.stdout).unwrap();
+        let identity = identity.trim();
+        let denied = std::process::Command::new("icacls")
+            .arg(&root)
+            .args(["/deny", &format!("{identity}:(WD)")])
+            .output()
+            .unwrap();
+        assert!(denied.status.success());
+        let rejected = write_atomic(&acl_path, b"new-acl");
+        let restored = std::process::Command::new("icacls")
+            .arg(&root)
+            .args(["/remove:d", identity])
+            .output()
+            .unwrap();
+        assert!(restored.status.success(), "必须恢复本测试目录 ACL");
+        assert!(rejected.is_err(), "目录拒绝新建临时文件时必须失败");
+        assert_eq!(std::fs::read(&acl_path).unwrap(), b"old-acl");
+        write_atomic(&acl_path, b"new-acl").unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn interrupted_writer_and_disk_full_preserve_previous_data() {
+        const ENV: &str = "EASYPUB_ATOMIC_CRASH_TEST";
+        if let Some(path) = std::env::var_os(ENV) {
+            let _ = write_atomic_with(Path::new(&path), |file| {
+                file.write_all(b"partial")?;
+                file.sync_all()?;
+                std::process::exit(73);
+            });
+            panic!("未到达写入中断点");
+        }
+        let root =
+            std::env::temp_dir().join(format!("easypub-atomic-crash-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("sources.json");
+        write_atomic(&path, b"old-complete").unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "download::atomic_tests::interrupted_writer_and_disk_full_preserve_previous_data",
+            ])
+            .env(ENV, &path)
+            .status()
+            .unwrap();
+        assert_eq!(status.code(), Some(73));
+        assert_eq!(std::fs::read(&path).unwrap(), b"old-complete");
+        let failure = write_atomic_with(&path, |file| {
+            file.write_all(b"partial")?;
+            Err(std::io::Error::from(std::io::ErrorKind::StorageFull))
+        })
+        .unwrap_err();
+        assert!(failure.contains("磁盘空间") && failure.contains("重试"));
+        assert_eq!(std::fs::read(&path).unwrap(), b"old-complete");
+        write_atomic(&path, b"new-complete").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new-complete");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn concurrent_same_stem_and_failed_replace_preserve_complete_files() {
+        let root = std::env::temp_dir().join(format!(
+            "easypub-atomic-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::thread::scope(|scope| {
+            for extension in ["json", "txt"] {
+                let path = root.join(format!("same.{extension}"));
+                scope.spawn(move || {
+                    for _ in 0..40 {
+                        write_atomic(&path, extension.repeat(4096).as_bytes()).unwrap();
+                    }
+                });
+            }
+        });
+        for extension in ["json", "txt"] {
+            assert_eq!(
+                std::fs::read(root.join(format!("same.{extension}"))).unwrap(),
+                extension.repeat(4096).as_bytes()
+            );
+        }
+        let blocked = root.join("blocked");
+        std::fs::create_dir(&blocked).unwrap();
+        std::fs::write(blocked.join("keep"), b"old").unwrap();
+        assert!(write_atomic(&blocked, b"new").is_err());
+        assert_eq!(std::fs::read(blocked.join("keep")).unwrap(), b"old");
+        assert!(
+            !std::fs::read_dir(&root).unwrap().any(|e| e
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".tmp"))
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

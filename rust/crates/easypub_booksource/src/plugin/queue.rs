@@ -241,6 +241,26 @@ pub(super) fn handle(method: &str, params: &Value) -> Result<Value, String> {
             changed();
             Ok(Value::Null)
         }
+        // 单独清除一条下载记录：只删记录，已下载的文件与章节缓存不动；进行中的任务不能删。
+        "queue.remove" => {
+            let id = param::<String>(params, "taskId")?;
+            let mut st = state();
+            let i = st
+                .queue
+                .iter()
+                .position(|t| t.id == id)
+                .ok_or("没有这个下载任务")?;
+            if st.tasks.contains_key(&id)
+                || ["queued", "running"].contains(&st.queue[i].status.as_str())
+            {
+                return Err("这本书还在下载或排队，请先取消或暂停再清除记录".into());
+            }
+            st.queue.remove(i);
+            drop(st);
+            persist(true)?;
+            changed();
+            Ok(Value::Null)
+        }
         "queue.pause" | "queue.resume" | "queue.cancel" | "queue.move" | "queue.retryFailed" => {
             let id = param::<String>(params, "taskId")?;
             let mut st = state();

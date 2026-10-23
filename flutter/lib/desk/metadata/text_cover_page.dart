@@ -270,40 +270,54 @@ class _TextCoverPageState extends State<TextCoverPage> {
                   field('封面标题', title),
                   field('作者署名', author),
                   field('系列文字', series),
-                  for (final (value, label) in [
-                    (false, '河岸 · 经典'),
-                    if (backgroundImage != null) (true, '样式包背景'),
-                  ])
-                    InkWell(
-                      key: ValueKey(
-                        'cover-template-${value ? 'pack' : 'river'}',
+                  // 只有一个模板时写成一行说明，不画成单个勾选项（R5-12）。
+                  if (backgroundImage == null)
+                    Padding(
+                      key: const ValueKey('cover-template-only'),
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        children: [
+                          DeskText('模板', size: 12, color: context.desk.ink2),
+                          const SizedBox(width: 12),
+                          const Expanded(child: DeskText('河岸 · 经典', size: 13)),
+                        ],
                       ),
-                      onTap: busy
-                          ? null
-                          : () {
-                              setState(() => useBackground = value);
-                              _previewRevision.value++;
-                              remember();
-                            },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Row(
-                          children: [
-                            Icon(
-                              useBackground == value
-                                  ? Icons.check_circle
-                                  : Icons.radio_button_unchecked,
-                              size: 18,
-                              color: useBackground == value
-                                  ? context.desk.accent
-                                  : context.desk.ink3,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(child: DeskText(label, size: 13)),
-                          ],
+                    )
+                  else
+                    for (final (value, label) in [
+                      (false, '河岸 · 经典'),
+                      if (backgroundImage != null) (true, '样式包背景'),
+                    ])
+                      InkWell(
+                        key: ValueKey(
+                          'cover-template-${value ? 'pack' : 'river'}',
+                        ),
+                        onTap: busy
+                            ? null
+                            : () {
+                                setState(() => useBackground = value);
+                                _previewRevision.value++;
+                                remember();
+                              },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(
+                            children: [
+                              Icon(
+                                useBackground == value
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                size: 18,
+                                color: useBackground == value
+                                    ? context.desk.accent
+                                    : context.desk.ink3,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(child: DeskText(label, size: 13)),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                   const SizedBox(height: 14),
                   DeskText('配色', size: 12, color: context.desk.ink2),
                   const SizedBox(height: 8),

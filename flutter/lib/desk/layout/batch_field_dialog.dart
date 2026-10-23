@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../application/book_information_service.dart';
 import '../../application/layout_service.dart';
 import '../controls/controls.dart';
+import '../dialogs.dart' show DeskDialog;
 import '../tokens.dart';
 
 const batchFieldLabels = {
@@ -154,92 +155,77 @@ class _BatchFieldDialogState extends State<BatchFieldDialog> {
       ),
     ],
   );
+  // 编辑台弹窗（R5-03）：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
   @override
-  Widget build(BuildContext context) => Dialog(
-    backgroundColor: context.desk.surface,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    child: SizedBox(
-      width: 624,
-      height: 600,
-      child: Padding(
-        padding: const EdgeInsets.all(26),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: DeskText('选择要复制的字段', size: 22, bold: true),
-                ),
-                IconButton(
-                  tooltip: '关闭',
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, size: 20),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SelectAllHeader(
-              selected: draft.length,
-              total: allFields.length,
-              padding: EdgeInsets.zero,
-              onChanged: (v) => setMany(allFields, v),
-              body: DeskText(
-                '只复制勾选项；来源为空的字段也会清空目标值，请在预览中核对。',
-                size: 12,
-                color: context.desk.ink2,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: SelectionKeys(
-                hasSelection: draft.isNotEmpty,
-                onSelectAll: () => setMany(allFields, true),
-                onClear: () => setMany(allFields, false),
-                child: DeskScrollView(
-                  child: Column(
-                    children: [
-                      group('书籍信息', bookInformationFields.keys),
-                      group('封面', const ['cover']),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: DeskText(
-                          '封面组包含现有文字封面参数；不会自动按目标书名重新生成图片。',
-                          size: 12,
-                          color: context.desk.ink2,
-                        ),
-                      ),
-                      group('文字与页面', layoutFields),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const Divider(height: 28),
-            Row(
-              children: [
-                DeskButton(
-                  '取消',
-                  quiet: true,
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const Spacer(),
-                DeskText(
-                  '已选 ${draft.length} 项',
-                  size: 12,
-                  color: context.desk.ink2,
-                ),
-                const SizedBox(width: 14),
-                DeskButton(
-                  '采用所选字段',
-                  primary: true,
-                  onPressed: () => Navigator.pop(context, draft),
-                ),
-              ],
-            ),
-          ],
+  Widget build(BuildContext context) => DeskDialog(
+    title: '选择要复制的字段',
+    closeTooltip: '关闭',
+    width: 624,
+    height: 600,
+    escapeCloses: true,
+    footerLeft: Align(
+      alignment: Alignment.centerLeft,
+      child: DeskButton(
+        '取消',
+        quiet: true,
+        onPressed: () => Navigator.pop(context),
+      ),
+    ),
+    actions: [
+      Center(
+        child: DeskText(
+          '已选 ${draft.length} 项',
+          size: 12,
+          color: context.desk.ink2,
         ),
       ),
+      const SizedBox(width: 6),
+      DeskButton(
+        '采用所选字段',
+        primary: true,
+        onPressed: () => Navigator.pop(context, draft),
+      ),
+    ],
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SelectAllHeader(
+          selected: draft.length,
+          total: allFields.length,
+          padding: EdgeInsets.zero,
+          onChanged: (v) => setMany(allFields, v),
+          body: DeskText(
+            '只复制勾选项；来源为空的字段也会清空目标值，请在预览中核对。',
+            size: 12,
+            color: context.desk.ink2,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Expanded(
+          child: SelectionKeys(
+            hasSelection: draft.isNotEmpty,
+            onSelectAll: () => setMany(allFields, true),
+            onClear: () => setMany(allFields, false),
+            child: DeskScrollView(
+              child: Column(
+                children: [
+                  group('书籍信息', bookInformationFields.keys),
+                  group('封面', const ['cover']),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: DeskText(
+                      '封面组包含现有文字封面参数；不会自动按目标书名重新生成图片。',
+                      size: 12,
+                      color: context.desk.ink2,
+                    ),
+                  ),
+                  group('文字与页面', layoutFields),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     ),
   );
 }

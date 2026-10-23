@@ -238,14 +238,15 @@ class _CatalogPageState extends State<CatalogPage> {
               style: ui(12, c: d.ink3),
             ),
           ),
-          DeskButton(
-            snapshot == null ? '获取参考目录' : '更换来源',
-            icon: snapshot == null
-                ? Icons.download_rounded
-                : Icons.swap_horiz_rounded,
-            onPressed: busy ? null : chooseSource,
-          ),
-          const SizedBox(width: 6),
+          // R3-05：还没有目录时只在页面中间放“获取参考目录”，标题行不再重复。
+          if (snapshot != null) ...[
+            DeskButton(
+              '更换来源',
+              icon: Icons.swap_horiz_rounded,
+              onPressed: busy ? null : chooseSource,
+            ),
+            const SizedBox(width: 6),
+          ],
           DeskButton(
             '返回章节编辑',
             quiet: true,
@@ -482,21 +483,76 @@ class _CatalogPageState extends State<CatalogPage> {
   Widget identityView(BoxConstraints c) {
     final d = context.desk;
     if (snapshot == null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      // R3-05：说明参考目录是什么、可以从哪里来，以及它不会改原稿。
+      Widget source(IconData icon, String title, String detail) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.list_alt_rounded, size: 26, color: d.ink3),
-            const SizedBox(height: 10),
-            Text('读取后核对书名、作者和章节目录', style: ui(14, w: 600, c: d.ink2)),
-            const SizedBox(height: 12),
-            DeskButton(
-              '获取参考目录',
-              primary: true,
-              icon: Icons.download_rounded,
-              onPressed: busy ? null : chooseSource,
+            Icon(icon, size: 17, color: d.ink2),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '$title  ',
+                      style: ui(12.5, w: 600, c: d.ink),
+                    ),
+                    TextSpan(
+                      text: detail,
+                      style: ui(12, c: d.ink2),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
+        ),
+      );
+      return Center(
+        key: const ValueKey('catalog-empty'),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Icon(Icons.list_alt_rounded, size: 28, color: d.ink3),
+                const SizedBox(height: 10),
+                Text(
+                  '用一份可靠的目录核对本书',
+                  textAlign: TextAlign.center,
+                  style: ui(15, w: 650, c: d.ink),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '拿到目录后，逐章对照书名、作者和章节标题，找出漏章、错位和标题错字，再决定要不要按它修复。只用来核对，不改原稿。',
+                  textAlign: TextAlign.center,
+                  style: ui(12.5, c: d.ink2, h: 1.55),
+                ),
+                const SizedBox(height: 18),
+                Text('目录可以来自', style: ui(11.5, c: d.ink3)),
+                const SizedBox(height: 8),
+                source(Icons.public_rounded, '在线', '输入书名或起点书籍链接，读取在线目录'),
+                source(Icons.extension_outlined, '书源', '装了书源插件时，用其中的书源取目录'),
+                source(Icons.folder_open_rounded, '本地', '电脑上已保存的目录文件'),
+                source(Icons.content_paste_rounded, '粘贴', '直接粘贴目录文字'),
+                const SizedBox(height: 12),
+                Center(
+                  child: DeskButton(
+                    '获取参考目录',
+                    key: const ValueKey('catalog-choose-source'),
+                    primary: true,
+                    icon: Icons.download_rounded,
+                    onPressed: busy ? null : chooseSource,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }

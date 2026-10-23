@@ -233,7 +233,15 @@ pub fn prepare_cancellable(
     }
     let request: Request = serde_json::from_str(json).map_err(|_| invalid())?;
     let protected = source.headings().iter().map(|h| h.source_line).collect();
-    prepare_context_cancellable(source, request, &protected, &BTreeSet::new(), &BTreeMap::new(), None, cancelled)
+    prepare_context_cancellable(
+        source,
+        request,
+        &protected,
+        &BTreeSet::new(),
+        &BTreeMap::new(),
+        None,
+        cancelled,
+    )
 }
 pub(crate) fn prepare_with_context(
     source: &SourceSnapshot,
@@ -243,7 +251,15 @@ pub(crate) fn prepare_with_context(
     heading_markers: &BTreeMap<u32, Option<char>>,
     duplicate_targets: Option<&BTreeMap<u32, u32>>,
 ) -> Result<Cleanup, ApiError> {
-    prepare_context_cancellable(source, request, structural_lines, explicit_body_lines, heading_markers, duplicate_targets, &|| false)
+    prepare_context_cancellable(
+        source,
+        request,
+        structural_lines,
+        explicit_body_lines,
+        heading_markers,
+        duplicate_targets,
+        &|| false,
+    )
 }
 
 fn prepare_context_cancellable(
@@ -255,9 +271,17 @@ fn prepare_context_cancellable(
     duplicate_targets: Option<&BTreeMap<u32, u32>>,
     cancelled: &dyn Fn() -> bool,
 ) -> Result<Cleanup, ApiError> {
-    let checkpoint = || if cancelled() {
-        Err(ApiError::new(ErrorCode::Cancelled, "cleanup", "request_statistics_again"))
-    } else { Ok(()) };
+    let checkpoint = || {
+        if cancelled() {
+            Err(ApiError::new(
+                ErrorCode::Cancelled,
+                "cleanup",
+                "request_statistics_again",
+            ))
+        } else {
+            Ok(())
+        }
+    };
     checkpoint()?;
     let lines = source.decoded_line_ranges();
     let first = request.start_line.unwrap_or(1);
@@ -373,7 +397,9 @@ fn prepare_context_cancellable(
         ranges.get(index).is_some_and(|&(first, _)| first <= end)
     };
     for (index, &(start, end)) in lines.iter().enumerate() {
-        if index % 256 == 0 { checkpoint()?; }
+        if index % 256 == 0 {
+            checkpoint()?;
+        }
         let n = index as u32 + 1;
         let next = lines.get(index + 1).map(|&(s, _)| s).unwrap_or(raw.len());
         let before = &raw[start..end];
@@ -405,7 +431,9 @@ fn prepare_context_cancellable(
                         preserved = preserved.or(matcher.preserve_reason(before)?);
                     }
                     matcher.reasons(before)?
-                } else if matches!(rule.rule, Rule::RemoveAdLines) && candidate(before) {
+                } else if matches!(rule.rule, Rule::RemoveAdLines)
+                    && (candidate(before) || crate::cleanup_notice::promotion(before))
+                {
                     vec!["default_notice"]
                 } else {
                     vec![]
@@ -760,7 +788,9 @@ fn prepare_context_cancellable(
         }
         let mut previous_blank = false;
         for (index, row) in rows.iter_mut().enumerate() {
-            if index % 256 == 0 { checkpoint()?; }
+            if index % 256 == 0 {
+                checkpoint()?;
+            }
             if !row.eligible {
                 previous_blank = false;
                 continue;
@@ -857,6 +887,13 @@ fn prepare_context_cancellable(
                     previous_blank = blank;
                     remove
                 }
+                Rule::TrimTrailingSpaces if !row.text.contains(['\r', '\n']) => {
+                    let trimmed = row.text.trim_end_matches([' ', '\t']);
+                    if trimmed.len() != row.text.len() {
+                        after = Some(trimmed.to_owned());
+                    }
+                    false
+                }
                 _ => {
                     after = Some(if row.text.contains(['\r', '\n']) {
                         crate::cleanup_text::transform_lines(
@@ -926,7 +963,9 @@ fn prepare_context_cancellable(
     let mut source_ranges = Vec::new();
     let mut output_spans = Vec::new();
     for (index, row) in rows.into_iter().enumerate() {
-        if index % 256 == 0 { checkpoint()?; }
+        if index % 256 == 0 {
+            checkpoint()?;
+        }
         if row.merged {
             continue;
         }
@@ -976,6 +1015,9 @@ fn prepare_context_cancellable(
             start
         })
         .collect();
+    // Spans follow output order. Advance monotonically instead of binary-searching
+    // the entire line index twice for every source line in a large manuscript.
+    let (mut first_line, mut last_line) = (0usize, 0usize);
     for (first, last, start, end) in output_spans {
         if start == end {
             source_ranges.push(SourceRange {
@@ -989,18 +1031,22 @@ fn prepare_context_cancellable(
             });
             continue;
         }
-        let first_line = starts.partition_point(|&s| s <= start) as u32;
-        let last_line = starts.partition_point(|&s| s < end) as u32;
+        while starts.get(first_line).is_some_and(|&s| s <= start) {
+            first_line += 1;
+        }
+        while starts.get(last_line).is_some_and(|&s| s < end) {
+            last_line += 1;
+        }
         if first_line == last_line {
             for n in first..=last {
-                line_map.push((n as u32 + 1, first_line));
+                line_map.push((n as u32 + 1, first_line as u32));
             }
         }
         source_ranges.push(SourceRange {
             source_line: first + 1,
             source_end_line: last + 1,
-            output_line: Some(first_line),
-            output_end_line: Some(last_line),
+            output_line: Some(first_line as u32),
+            output_end_line: Some(last_line as u32),
             output_utf8_start: start,
             output_utf8_end: end,
             mapping: if first_line == last_line {
@@ -1281,7 +1327,10 @@ impl Cleanup {
     }
     /// Complete source-line coverage for statistics/R4; independent of preview pagination.
     pub fn changed_ranges(&self) -> Vec<(u32, u32)> {
-        self.changes.iter().map(|c| (c.source_line, c.source_end_line)).collect()
+        self.changes
+            .iter()
+            .map(|c| (c.source_line, c.source_end_line))
+            .collect()
     }
     pub fn notice_candidates(&self) -> &[Value] {
         &self.candidates

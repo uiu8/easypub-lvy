@@ -8,7 +8,7 @@ import 'dart:io';
 import 'dart:convert';
 
 class LegacyResourceSession extends LegacyBookInformationSession
-    implements ResourceSession, ResourcePlacementSession {
+    implements ResourceSession, ResourcePlacementSession, ResourceLocator {
   LegacyResourceSession(super.backend, super.bookId);
   @override
   String guard() => backend.publicationContext(bookId);
@@ -127,7 +127,20 @@ class LegacyResourceSession extends LegacyBookInformationSession
     if (index < 0 || index >= positions.length) {
       throw const FormatException('插图已改变，请重新检查。');
     }
-    final row = positions[index];
+    return _location(positions[index]);
+  }
+
+  @override
+  Future<List<ResourceLocation>> locateAll() async {
+    fresh();
+    final positions = await backend.production.illustrationPositions(bookId);
+    fresh();
+    return [for (final row in positions) _location(row)];
+  }
+
+  ResourceLocation _location(Map row) {
+    final placed =
+        row['status'] != 'needs_relocation' && row['status'] != 'unplaced';
     return ResourceLocation(
       row['entry_id'] as String?,
       row['node_offset'] as int?,
@@ -140,6 +153,7 @@ class LegacyResourceSession extends LegacyBookInformationSession
               ? '插图位于首个章节之前。'
               : '编辑后第 ${row['output_line']} 行之后',
       },
+      outputLine: placed ? row['output_line'] as int? : null,
     );
   }
 

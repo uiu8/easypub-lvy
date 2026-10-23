@@ -2,7 +2,7 @@
 use crate::{engine::Scope, node::Node, pattern, source::BookSource, text};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const MAX_TOC_PAGES: usize = 500;
 const MAX_CHAPTERS: usize = 50_000;
@@ -28,9 +28,14 @@ pub struct Book {
     pub download_urls: Vec<String>,
     /// 书籍变量（`book.putVariable`），JSON 文字。
     pub variable: String,
+    /// 规则变量随书籍跨 RPC 传递；不能放入同源共享状态。
+    #[serde(with = "crate::rule_state", skip_serializing_if = "HashMap::is_empty")]
+    pub rule_variables: HashMap<String, String>,
     #[serde(alias = "totalChapterNum")]
     pub chapter_count: usize,
     pub count_exact: bool,
+    /// 书源脚本设置的目录方向，随书籍跨 RPC 保存。
+    pub reverse_toc: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -49,6 +54,8 @@ pub struct Chapter {
     pub is_vip: bool,
     pub is_pay: bool,
     pub update_time: String,
+    #[serde(with = "crate::rule_state", skip_serializing_if = "HashMap::is_empty")]
+    pub rule_variables: HashMap<String, String>,
 }
 
 fn truthy(text: &str) -> bool {
@@ -60,12 +67,25 @@ fn truthy(text: &str) -> bool {
 
 impl Book {
     fn json(&self) -> Value {
-        let mut v = serde_json::to_value(self).unwrap_or_else(|_| json!({}));
+        let mut public = self.clone();
+        public.rule_variables.clear();
+        let mut v = serde_json::to_value(public).unwrap_or_else(|_| json!({}));
+        v["ruleVariables"] = json!(self.rule_variables);
         if let Ok(vars) = serde_json::from_str::<Value>(&self.variable) {
             v["variables"] = vars;
         }
         v["latestChapterTitle"] = Value::String(self.last_chapter.clone());
         v
+    }
+}
+
+impl Chapter {
+    fn json(&self) -> Value {
+        let mut public = self.clone();
+        public.rule_variables.clear();
+        let mut value = serde_json::to_value(public).unwrap_or_else(|_| json!({}));
+        value["ruleVariables"] = json!(self.rule_variables);
+        value
     }
 }
 
@@ -83,6 +103,9 @@ impl Scope<'_, '_> {
                 self.get_string_on(&rule, item).trim().to_owned()
             }
         };
+        // name 中的 @put 常供后面的地址字段使用。
+        let name = text::clean_name(&field("name"));
+        let author = text::clean_author(&field("author"));
         let kind_rule = self.rules(group, "kind");
         let kind = if kind_rule.is_empty() {
             String::new()
@@ -98,8 +121,8 @@ impl Scope<'_, '_> {
         let book_url = self.url_field(&self.rules(group, "bookUrl"), item);
         let cover = self.url_field(&self.rules(group, "coverUrl"), item);
         Book {
-            name: text::clean_name(&field("name")),
-            author: text::clean_author(&field("author")),
+            name,
+            author,
             kind,
             word_count: field("wordCount"),
             last_chapter: field("lastChapter"),
@@ -116,6 +139,7 @@ impl Scope<'_, '_> {
             },
             origin: self.source().book_source_url.clone(),
             origin_name: self.source().book_source_name.clone(),
+            rule_variables: self.inner.st.borrow().vars.clone(),
             ..Default::default()
         }
     }
@@ -158,6 +182,7 @@ impl Scope<'_, '_> {
             st.key = key.to_owned();
             st.page = page;
             st.vars.clear();
+            st.script_error = None;
         }
         self.set_book(json!({}));
         let response = self.fetch(&url)?;
@@ -193,7 +218,9 @@ impl Scope<'_, '_> {
         }
         let mut books = Vec::new();
         let mut seen = HashSet::new();
+        let list_vars = self.inner.st.borrow().vars.clone();
         for item in &items {
+            self.inner.st.borrow_mut().vars = list_vars.clone();
             let mut book = self.book_from(item, |s| &s.rule_search);
             if book.name.is_empty() {
                 continue;
@@ -205,6 +232,11 @@ impl Scope<'_, '_> {
                 books.push(book);
             }
         }
+        if books.is_empty()
+            && let Some(e) = self.inner.st.borrow_mut().script_error.take()
+        {
+            return Err(format!("搜索脚本出错：{e}"));
+        }
         Ok(books)
     }
 
@@ -213,7 +245,11 @@ impl Scope<'_, '_> {
         if !self.source().main_js.is_empty() {
             return self.script_books(self.main_call("explore", json!([url, page]))?);
         }
-        self.inner.st.borrow_mut().page = page;
+        {
+            let mut st = self.inner.st.borrow_mut();
+            st.page = page;
+            st.script_error = None;
+        }
         self.fetch(url)?;
         let list_rule = self.rules(|s| &s.rule_explore, "bookList");
         let group: fn(&BookSource) -> &crate::source::Rules = if list_rule.is_empty() {
@@ -226,12 +262,22 @@ impl Scope<'_, '_> {
         } else {
             list_rule
         };
-        Ok(self
-            .get_elements(&list_rule)
+        let items = self.get_elements(&list_rule);
+        let list_vars = self.inner.st.borrow().vars.clone();
+        let books: Vec<Book> = items
             .iter()
-            .map(|item| self.book_from(item, group))
+            .map(|item| {
+                self.inner.st.borrow_mut().vars = list_vars.clone();
+                self.book_from(item, group)
+            })
             .filter(|b| !b.name.is_empty())
-            .collect())
+            .collect();
+        if books.is_empty()
+            && let Some(e) = self.inner.st.borrow_mut().script_error.take()
+        {
+            return Err(format!("发现脚本出错：{e}"));
+        }
+        Ok(books)
     }
 
     /// 打开书籍详情页并补全信息；目录地址为空时用详情页地址。
@@ -318,6 +364,10 @@ impl Scope<'_, '_> {
         }
         book.origin = self.source().book_source_url.clone();
         book.origin_name = self.source().book_source_name.clone();
+        book.rule_variables = self.inner.st.borrow().vars.clone();
+        book.reverse_toc = self.inner.st.borrow().book["reverseToc"]
+            .as_bool()
+            .unwrap_or(false);
         book.variable = self
             .inner
             .st
@@ -367,6 +417,7 @@ impl Scope<'_, '_> {
             return Ok(crate::chapter_cleanup::normalize_toc(chapters));
         }
         self.set_book(book.json());
+        self.inner.st.borrow_mut().script_error = None;
         let toc_url = if book.toc_url.is_empty() {
             book.book_url.clone()
         } else {
@@ -387,6 +438,8 @@ impl Scope<'_, '_> {
         let mut queue = std::collections::VecDeque::from([toc_url.clone()]);
         let mut seen: HashSet<String> = HashSet::from([toc_url]);
         let mut chapters: Vec<Chapter> = Vec::new();
+        let (mut unlinked, mut linked) = (Vec::new(), false);
+        let mut address_error = None;
         let mut pages = 0;
         while let Some(url) = queue.pop_front() {
             pages += 1;
@@ -394,7 +447,10 @@ impl Scope<'_, '_> {
                 return Err("目录页数过多".into());
             }
             self.fetch(&url)?;
-            for item in self.get_elements(&list_rule) {
+            let items = self.get_elements(&list_rule);
+            let list_vars = self.inner.st.borrow().vars.clone();
+            for item in items {
+                self.inner.st.borrow_mut().vars = list_vars.clone();
                 let get = |key: &str| {
                     let rule = self.rules(|s| &s.rule_toc, key);
                     if rule.is_empty() {
@@ -408,10 +464,22 @@ impl Scope<'_, '_> {
                     continue;
                 }
                 let raw_url = self.url_field(&self.rules(|s| &s.rule_toc, "chapterUrl"), &item);
-                // 没有链接的目录项按卷名处理（只保留标题，不去取正文）。
-                let is_volume = truthy(&get("isVolume")) || raw_url.is_empty();
+                if raw_url.is_empty()
+                    && let Some(error) = self.inner.st.borrow_mut().script_error.take()
+                {
+                    address_error.get_or_insert(error);
+                }
+                // 没有链接的目录项先按卷名处理（只保留标题，不去取正文）；整本都没有链接时见循环后。
+                let explicit_volume = truthy(&get("isVolume"));
+                let is_volume = explicit_volume || raw_url.is_empty();
+                let page = self.inner.st.borrow().redirect_url.clone();
+                if raw_url.is_empty() && !explicit_volume {
+                    unlinked.push((chapters.len(), page.clone()));
+                } else if !explicit_volume {
+                    linked = true;
+                }
                 let url = if raw_url.is_empty() {
-                    format!("{}#{}", self.inner.st.borrow().redirect_url, title)
+                    format!("{page}#{title}")
                 } else {
                     self.absolute(&raw_url)
                 };
@@ -423,12 +491,14 @@ impl Scope<'_, '_> {
                     is_vip: truthy(&get("isVip")),
                     is_pay: truthy(&get("isPay")),
                     update_time: get("updateTime"),
+                    rule_variables: self.inner.st.borrow().vars.clone(),
                     ..Default::default()
                 });
                 if chapters.len() > MAX_CHAPTERS {
                     return Err("章节过多".into());
                 }
             }
+            self.inner.st.borrow_mut().vars = list_vars;
             let next = self.rules(|s| &s.rule_toc, "nextTocUrl");
             if !next.is_empty() {
                 let content = self.content();
@@ -440,7 +510,27 @@ impl Scope<'_, '_> {
                 }
             }
         }
-        if reverse {
+        if chapters.is_empty()
+            && let Some(e) = self.inner.st.borrow_mut().script_error.take()
+        {
+            return Err(format!("目录脚本出错：{e}"));
+        }
+        // 整本目录都没有链接（单篇、诗词类书源）：与阅读一致，这些项是章节，正文就在所在目录页。
+        if !linked {
+            // 混合目录里的无链接项可以是卷名；只有全目录地址失败才阻止单篇回退。
+            if let Some(error) = address_error {
+                return Err(format!("目录脚本出错：{error}"));
+            }
+            for (i, page) in unlinked {
+                chapters[i].is_volume = false;
+                chapters[i].url = page;
+            }
+        }
+        if reverse
+            ^ self.inner.st.borrow().book["reverseToc"]
+                .as_bool()
+                .unwrap_or(false)
+        {
             chapters.reverse();
         }
         chapters = crate::chapter_cleanup::normalize_toc(chapters);
@@ -507,8 +597,12 @@ impl Scope<'_, '_> {
         context.profile = crate::control::Profile::Content;
         let _guard = context.clone().enter();
         self.set_book(book.json());
-        self.set_chapter(serde_json::to_value(chapter).unwrap_or_default());
-        self.inner.st.borrow_mut().next_chapter_url = next_chapter_url.to_owned();
+        self.set_chapter(chapter.json());
+        {
+            let mut st = self.inner.st.borrow_mut();
+            st.next_chapter_url = next_chapter_url.to_owned();
+            st.script_error = None;
+        }
         if !self.source().html.is_empty() {
             let value = crate::qysg::call(self, "content", json!([chapter.url]))?;
             let body = value.as_str().ok_or("HTML 书源正文格式无效")?;
@@ -590,6 +684,9 @@ impl Scope<'_, '_> {
             }
         }
         if output.trim().is_empty() {
+            if let Some(e) = self.inner.st.borrow_mut().script_error.take() {
+                return Err(format!("正文脚本出错：{e}"));
+            }
             return Err("正文为空".into());
         }
         Ok(output)
@@ -639,7 +736,7 @@ impl Scope<'_, '_> {
             state.batch_urls = urls;
             state.batch_content.clear();
         }
-        let args = serde_json::to_value(chapters).unwrap();
+        let args = json!(chapters.iter().map(Chapter::json).collect::<Vec<_>>());
         let setup = format!("globalThis.chapters={args};");
         self.eval_js(&setup, &[])?;
         let result = if !self.source().main_js.is_empty() {
@@ -678,15 +775,25 @@ impl Scope<'_, '_> {
         url: &str,
     ) -> Result<ContentPage, String> {
         self.set_book(book.json());
-        self.set_chapter(serde_json::to_value(chapter).unwrap_or_default());
+        self.set_chapter(chapter.json());
         let web_js = self.rules(|s| &s.rule_content, "webJs");
-        if web_js.is_empty() {
-            self.fetch(url)?;
-        } else {
-            let html = crate::webview::run(self, None, Some(url.to_owned()), Some(web_js))?;
-            self.set_content(Node::page(html), Some(url));
+        let mut spec = self.analyze_url(url)?;
+        if !web_js.is_empty() {
+            spec.web_js = web_js;
         }
+        let source_regex = self.rules(|s| &s.rule_content, "sourceRegex");
+        if spec.web_view && !source_regex.is_empty() {
+            spec.request.source_regex = Some(source_regex);
+        }
+        self.fetch_analyzed(&spec)?;
         let content = self.content();
+        let mut text =
+            text::html_to_text(&self.get_string(&self.rules(|s| &s.rule_content, "content")));
+        let replace = self.rules(|s| &s.rule_content, "replaceRegex");
+        if !replace.is_empty() {
+            text = self.get_string_on(&replace, &Node::Text(text));
+            text = text::html_to_text(&text);
+        }
         let next_rule = self.rules(|s| &s.rule_content, "nextContentUrl");
         let next = if next_rule.is_empty() {
             vec![]
@@ -696,16 +803,17 @@ impl Scope<'_, '_> {
                 .flat_map(|s| s.lines())
                 .filter(|u| !u.trim().is_empty())
                 .map(|u| self.absolute(u.trim()))
+                // 页尾按钮可能返回 javascript: / mailto: 等占位链接，它们不是正文分页。
+                .filter(|u| {
+                    reqwest::Url::parse(crate::engine::split_options(u).0)
+                        .is_ok_and(|url| matches!(url.scheme(), "http" | "https"))
+                })
                 .collect()
         };
-        let mut text =
-            text::html_to_text(&self.get_string(&self.rules(|s| &s.rule_content, "content")));
-        let replace = self.rules(|s| &s.rule_content, "replaceRegex");
-        if !replace.is_empty() {
-            text = self.get_string_on(&replace, &Node::Text(text));
-            text = text::html_to_text(&text);
-        }
         if text.trim().is_empty() {
+            if let Some(e) = self.inner.st.borrow_mut().script_error.take() {
+                return Err(format!("正文脚本出错：{e}"));
+            }
             return Err("正文为空".into());
         }
         if crate::webview::looks_like_challenge(&text) && text.chars().count() < 1000 {

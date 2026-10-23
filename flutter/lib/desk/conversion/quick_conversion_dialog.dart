@@ -69,7 +69,9 @@ class _QuickConversionDialogState extends State<QuickConversionDialog> {
       if (widget.outputRequest == null && service is SettingsService) {
         final settings = service as SettingsService;
         if (!await settings.load()) {
-          throw const FormatException('默认设置读取失败，请重试或打开转换设置。');
+          throw const FormatException(
+            '默认转换设置没有读出来：设置文件可能损坏或被占用。打开“转换”页核对设置后再试。',
+          );
         }
         config = Map.of(settings.snapshot.value.configuration);
       }

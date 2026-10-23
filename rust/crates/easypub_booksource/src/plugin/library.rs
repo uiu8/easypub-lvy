@@ -37,13 +37,10 @@ pub(super) fn load_library() -> Vec<Value> {
 
 pub(super) fn save_library(records: &[Value]) -> Result<(), String> {
     let path = library_path();
-    let tmp = path.with_extension("json.part");
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|_| "无法创建下载记录目录")?;
     let mut value = json!(records);
     source::sanitize_json(&mut value);
-    std::fs::write(&tmp, serde_json::to_vec(&value).unwrap_or_default())
-        .and_then(|_| std::fs::rename(&tmp, &path))
-        .map_err(|e| format!("无法保存下载记录：{e}"))
+    download::write_atomic(&path, &serde_json::to_vec(&value).unwrap_or_default())
 }
 
 pub(super) fn record_download(

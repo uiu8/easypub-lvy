@@ -5,6 +5,7 @@ import '../dialogs.dart';
 import '../tokens.dart';
 import '../../application/library_service.dart';
 import '../controls/controls.dart';
+import '../errors.dart';
 
 /// Returns a directory to scan; never moves or imports files itself.
 class FavoritesDialog extends StatefulWidget {
@@ -51,7 +52,14 @@ class _FavoritesDialogState extends State<FavoritesDialog> {
         setState(() => message = '未能保存，请检查目录、名称或设置文件权限；原设置保留。');
       }
     } catch (e) {
-      if (mounted) setState(() => message = '操作失败：$e');
+      if (mounted) {
+        setState(
+          () => message = deskErrorText(
+            e,
+            '没有改成：收藏的文件夹可能已不存在，或设置目录可能没有写入权限、磁盘已满或文件被其他程序占用。原设置保留。',
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }

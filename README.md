@@ -12,13 +12,15 @@ Windows 上把 TXT 小说整理成 Kindle 电子书的桌面工具：识别章�
 - **文本清理**：去广告、合并硬换行、规范标点、简繁转换等，每条规则都可以单独开关，原稿不改。
 - **排版**：字号、行距、缩进、标题样式、章首图、场景分隔、章首段落，系统提示框与诗词自动识别，弹出注释，前后附页（版权页、献词、后记等）。
 - **真机预览**：按所选 Kindle 机型的真实尺寸翻页预览，内容就是生成出来的成品。
-- **输出**：EPUB、AZW3 / MOBI（内置 Kindling）、KFX（内置 Bokai），生成的 KFX 能被 Calibre 读取。
+- **输出**：EPUB、AZW3 / MOBI（内置 Kindling）、KFX（内置 Bokai）。
+- **书源下载（可选插件）**：导入常见格式的文字书源，搜索并下载为 TXT，再直接导入书库整理。插件单独发布，需要时再装。
 
 ## 使用
 
 1. 从 Releases 下载 `easypub-lvy-…-win-x64.zip`，**完整解压**。
 2. 运行 `easypub_desktop.exe`。同目录下的 DLL、`data`、`converters`、`plugins`、`third_party` 都要保留，不要把 exe 单独移出来。
-3. 包里附有使用说明（`编辑台版使用说明-….txt`），写了每版新增的功能和尚未验证的内容。
+3. 包里附有使用说明（`先读我.txt`），写了每版新增的功能和尚未验证的内容。
+4. 需要书源下载时，从同一个 Release 另外下载 `easypub-lvy-booksource-…-win-x64.zip`，解压后在程序的“插件”页点“从文件夹安装…”，选中解压出来的 `booksource` 文件夹，再启用即可。
 
 系统要求：Windows 10 / 11 x64；“真机预览”需要系统自带的 Microsoft Edge。
 

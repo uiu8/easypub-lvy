@@ -52,6 +52,125 @@ fn content(index: usize) -> String {
     )
 }
 
+// 固定回环站点：每章两页，单请求固定等待；独立来源使用独立端口。
+fn measured_download(multi: bool, label: &str, chapters: usize) -> serde_json::Value {
+    let server = || {
+        serve(|req| {
+            std::thread::sleep(Duration::from_millis(25));
+            let i = req
+                .path
+                .rsplit('/')
+                .next()
+                .unwrap()
+                .parse::<usize>()
+                .unwrap();
+            html(&format!(
+                "<div id='c'>{}</div>{}",
+                content(i),
+                if req.path.starts_with("/c/") {
+                    format!("<a href='/p/{i}'>下一页</a>")
+                } else {
+                    String::new()
+                }
+            ))
+        })
+    };
+    let (base, primary_log) = server();
+    let (alt, alternate_log) = server();
+    let runtime = |url: &str| {
+        let mut source: BookSource = serde_json::from_value(json!({"bookSourceUrl":url,
+            "ruleContent":{"content":"#c@html", "nextContentUrl":"text.下一页@href"}}))
+        .unwrap();
+        source.meta.crawl.concurrency = Some(1);
+        SourceRt::new(source)
+    };
+    let main_toc = toc(&base, chapters);
+    let alt_toc = toc(&alt, chapters);
+    let lanes = if multi {
+        vec![Lane {
+            rt: runtime(&alt),
+            book: book(&alt),
+            mapping: scheduler::alignment(&main_toc, &alt_toc).unwrap(),
+            toc: alt_toc,
+        }]
+    } else {
+        vec![]
+    };
+    let options = Options {
+        folder: folder(label),
+        threads: 1,
+        retries: 0,
+        ..Default::default()
+    };
+    let reports = Arc::new(Mutex::new(Vec::new()));
+    let events = reports.clone();
+    let start = Instant::now();
+    let outcome = download::download_multi(
+        runtime(&base),
+        &book(&base),
+        &main_toc,
+        &options,
+        Arc::new(AtomicBool::new(false)),
+        Arc::new(move |p| events.lock().unwrap().push(p)),
+        lanes,
+    )
+    .unwrap();
+    let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+    let reports = reports.lock().unwrap();
+    assert!(
+        reports
+            .iter()
+            .any(|p| p.source_count == if multi { 2 } else { 1 })
+    );
+    let complete: Vec<_> = reports
+        .iter()
+        .filter_map(|p| p.chapter.as_ref())
+        .filter(|c| c.status == "completed")
+        .collect();
+    assert_eq!(complete.len(), chapters);
+    let requests = primary_log.lock().unwrap().len() + alternate_log.lock().unwrap().len();
+    let attributed: f64 = complete.iter().map(|c| c.http_requests).sum();
+    assert_eq!(attributed, requests as f64);
+    assert_eq!(requests, chapters * 2);
+    let mut latencies: Vec<_> = complete
+        .iter()
+        .map(|c| c.timing.net + c.timing.queue + c.timing.parse + c.timing.store)
+        .collect();
+    latencies.sort_unstable();
+    let result = json!({"multi":multi,"chapters":chapters,"elapsed_ms":elapsed,
+        "requests":requests,"requests_per_chapter":attributed / chapters as f64,
+        "chapter_median_ms":latencies[chapters/2], "chapter_p95_ms":latencies[(chapters*95).div_ceil(100)-1]});
+    std::fs::remove_dir_all(&options.folder).unwrap();
+    result
+}
+
+#[test]
+fn chapter_request_cost_matches_pagination() {
+    measured_download(false, "request-count", 4);
+}
+
+#[test]
+#[ignore = "B10 固定本地站点交替性能测量，显式运行"]
+fn b10_interleaved_local_download_probe() {
+    let mut runs = Vec::new();
+    for (i, multi) in [false, true, true, false, false, true]
+        .into_iter()
+        .enumerate()
+    {
+        runs.push(measured_download(multi, &format!("b10-perf-{i}"), 60));
+    }
+    let path = std::env::var("EASYPUB_B10_REPORT").expect("指定报告路径");
+    std::fs::write(
+        path,
+        serde_json::to_vec_pretty(
+            &json!({"runs":runs,"network":"loopback only; no external site"}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+}
+
 #[test]
 fn search_health_expires_and_legacy_failures_can_retry() {
     let mut health: source::Health = serde_json::from_value(json!({

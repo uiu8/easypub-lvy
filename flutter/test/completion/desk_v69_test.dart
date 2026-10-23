@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -15,6 +16,22 @@ import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/tokens.dart';
 
 class NoPicker extends Fake implements BookFilePicker {}
+
+class ThemeSaveLibrary extends LegacyLibraryAdapter {
+  ThemeSaveLibrary({required super.backend});
+
+  final themeSaveGate = Completer<bool>();
+  Future<bool>? themeSave;
+  bool themeSaveCompleted = false;
+
+  @override
+  Future<bool> savePatch(Map<String, dynamic> patch) {
+    if (!patch.containsKey('ui_accent')) return super.savePatch(patch);
+    return themeSave = themeSaveGate.future
+        .then<bool>((proceed) => proceed ? super.savePatch(patch) : false)
+        .whenComplete(() => themeSaveCompleted = true);
+  }
+}
 
 /// V69：主题色（G-072）。书籍标签页（G-073）已在 V71 删除，这里确认它不再出现。
 void main() {
@@ -65,7 +82,7 @@ void main() {
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.resetPhysicalSize);
     addTearDown(t.view.resetDevicePixelRatio);
-    late LegacyLibraryAdapter library;
+    late ThemeSaveLibrary library;
     late PrototypeState state;
     late String a, b;
     await t.runAsync(() async {
@@ -76,7 +93,7 @@ void main() {
       );
       final tmp = (await Directory('../artifacts').createTemp('v69-')).absolute;
       state = PrototypeState(settingsDirectory: '${tmp.path}/settings');
-      library = LegacyLibraryAdapter(backend: state);
+      library = ThemeSaveLibrary(backend: state);
       await library.load();
       await library.savePatch({'check_after_import': false});
       for (final name in ['山海之间', '雾港来信']) {
@@ -89,6 +106,8 @@ void main() {
       b = books.firstWhere((x) => x.title == '雾港来信').id;
     });
     addTearDown(() {
+      if (!library.themeSaveGate.isCompleted)
+        library.themeSaveGate.complete(false);
       library.dispose();
       state.dispose();
     });
@@ -137,6 +156,21 @@ void main() {
     await t.ensureVisible(find.byKey(const ValueKey('settings-accent-teal')));
     await t.tap(find.byKey(const ValueKey('settings-accent-teal')));
     await settle();
+    // 固定 pump 时长不能证明备份/写盘完成。先明确保持保存未完成，
+    // 再放行真实 adapter，并等它的 Future 完成后检查状态及主题。
+    expect(library.themeSave, isNotNull, reason: '主题色点击必须发起保存');
+    expect(library.themeSaveCompleted, isFalse);
+    library.themeSaveGate.complete(true);
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
+    while (!library.themeSaveCompleted && DateTime.now().isBefore(deadline)) {
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await t.pump(const Duration(milliseconds: 20));
+    }
+    expect(library.themeSaveCompleted, isTrue, reason: '等待真实设置保存完成');
+    expect(await t.runAsync(() => library.themeSave!), isTrue);
+    await t.pumpAndSettle();
     expect(state.globalConfiguration['ui_accent'], 'teal');
     final themed = Theme.of(
       t.element(find.byKey(const ValueKey('settings-accent'))),

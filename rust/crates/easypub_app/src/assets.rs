@@ -329,4 +329,44 @@ mod tests {
         assert!(inspect(p.to_str().unwrap()).is_err());
         std::fs::remove_file(p).unwrap();
     }
+
+    #[test]
+    fn real_cmyk_and_transparent_png_decode_and_crop_without_touching_sources() {
+        for (ext, bytes) in [
+            (
+                "jpg",
+                include_bytes!("../../../../samples/b7-covers/cmyk.jpg").as_slice(),
+            ),
+            (
+                "png",
+                include_bytes!("../../../../samples/b7-covers/transparent.png").as_slice(),
+            ),
+        ] {
+            let p = path(ext);
+            std::fs::write(&p, bytes).unwrap();
+            let source = snapshot(p.to_str().unwrap()).unwrap();
+            assert_eq!((source.evidence.width, source.evidence.height), (16, 12));
+            let result = cropped(
+                &source,
+                &Crop {
+                    x: 0.25,
+                    y: 0.25,
+                    width: 0.5,
+                    height: 0.5,
+                },
+            )
+            .unwrap();
+            assert_eq!((result.evidence.width, result.evidence.height), (8, 6));
+            let image = image::load_from_memory(&result.bytes).unwrap().to_rgba8();
+            let pixel = image.get_pixel(0, 0).0;
+            if ext == "png" {
+                assert_eq!(pixel, [20, 180, 40, 128]);
+            } else {
+                assert!(pixel[0] > 200 && pixel[1] < 100 && pixel[2] < 100);
+                assert_eq!(pixel[3], 255);
+            }
+            assert_eq!(std::fs::read(&p).unwrap(), bytes);
+            std::fs::remove_file(p).unwrap();
+        }
+    }
 }

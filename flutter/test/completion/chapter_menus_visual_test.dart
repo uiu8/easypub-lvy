@@ -128,7 +128,8 @@ void main() {
             await t.tap(find.byTooltip(menu));
             await settle();
             expect(
-              find.text(menu == '页面导航' ? '书库与文件' : '章节结构'),
+              // R1 起页面导航只列“最近访问”与“当前书”。
+              find.text(menu == '页面导航' ? '书籍信息与封面' : '章节结构'),
               findsOneWidget,
             );
             final boundary =

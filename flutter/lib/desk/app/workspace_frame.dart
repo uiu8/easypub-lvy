@@ -26,6 +26,7 @@ class _SaveStatus extends StatelessWidget {
           _ => DeskSaveState.saved,
         },
         message: save.message,
+        savedAt: save.savedAt,
         compact: compact,
         onTap: () => autosave.flushWorkspace(),
       ),
@@ -139,25 +140,6 @@ class _Workspace extends StatelessWidget {
   final BookFilePicker picker;
   final Widget child;
 
-  static const _bookTitles = {
-    '书稿概览',
-    '章节编辑',
-    '章节修复',
-    '检查与修复',
-    '文本清理',
-    '书籍信息',
-    '排版',
-    '图片与资源',
-    '转换设置',
-    '任务',
-    '转换历史',
-    '成品验收',
-    '记录',
-    '参考目录',
-    '识别与检查规则',
-    '设置',
-  };
-
   @override
   Widget build(BuildContext context) {
     final app = _WorkspaceControls.of(context);
@@ -257,6 +239,7 @@ class _Workspace extends StatelessWidget {
       library.selection,
       library.books,
       app.conversion.changes,
+      app.navExpanded,
     ]),
     builder: (context, _) {
       final selection = library.selection.value;
@@ -270,12 +253,15 @@ class _Workspace extends StatelessWidget {
           ? app.conversion.outputs.where((o) => !o.complete).length
           : 0;
       return DeskRail(
+        expanded: app.navExpanded.value,
+        onToggleExpanded: () => app.navExpanded.value = !app.navExpanded.value,
         top: [
           DeskRailEntry(
             label: '书库',
             icon: Icons.library_books_outlined,
             shortcut: 'Alt 1',
-            selected: !folders && !_bookTitles.contains(title),
+            // 只有书库页本身（没有页面标题）才高亮；书源、插件等页不再连带点亮书库（V94）。
+            selected: !folders && title == null,
             onTap: () => context.go('/'),
           ),
           DeskRailEntry(

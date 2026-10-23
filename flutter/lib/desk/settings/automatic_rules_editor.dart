@@ -9,6 +9,7 @@ import '../../application/cleanup_service.dart';
 import '../controls/controls.dart';
 import '../cleanup/rule_dialog.dart';
 import '../tokens.dart';
+import '../errors.dart';
 
 class AutomaticRulesEditor extends StatelessWidget {
   const AutomaticRulesEditor({
@@ -59,10 +60,15 @@ class AutomaticRulesEditor extends StatelessWidget {
           (r) => (r as Map).cast<String, dynamic>(),
         ),
       ]);
-    } catch (_) {
+    } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('规则库读取失败，请重试。')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              deskErrorText(e, '规则库没有读出来：规则文件可能损坏或被占用。关闭占用的程序后重新打开。'),
+            ),
+          ),
+        );
       }
     }
   }

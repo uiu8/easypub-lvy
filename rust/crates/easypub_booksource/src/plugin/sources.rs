@@ -29,13 +29,16 @@ pub(super) fn summary(source: &BookSource, enabled: bool, duplicate: bool) -> Va
         );
     }
     reasons.extend(source.meta.import_warnings.clone());
-    let cause = support::cause(&problems)
-        .or_else(|| source.meta.check.as_ref().and_then(|c| c["cause"].as_str()));
+    let cause = if support::can_run(source) {
+        source.meta.check.as_ref().and_then(|c| c["cause"].as_str())
+    } else {
+        Some("unsupported")
+    };
     json!({"pinned":source.meta.pinned,"customOrder":source.custom_order,"rating":source.meta.rating,"autoWeight":source.auto_weight(),"weight":source.weight,
-        "cause":cause,"unsupported":problems.iter().filter(|p|!matches!(p,support::Problem::NoSearch|support::Problem::NoContentRule)).map(|p|p.message()).collect::<Vec<_>>(),
+        "cause":cause,"unsupported":source.meta.check.as_ref().and_then(|c| c["unsupported"].as_array()).cloned().unwrap_or_default(),"staticWarnings":problems.iter().filter(|p|!matches!(p,support::Problem::NoSearch|support::Problem::NoContentRule)).map(|p|p.message()).collect::<Vec<_>>(),
         "tags":source.tags(),"recommended":source.recommended(),"id":source.id(), "url":source.book_source_url, "name":source.book_source_name.trim(),
         "group":source.book_source_group, "groups":source.groups(), "file":file(source), "importedAt":source.meta.imported_at,
-        "enabled":enabled, "supported":problems.is_empty(), "reasons":reasons, "webView":support::needs_web_view(source),
+        "enabled":enabled, "supported":support::can_run(source), "reasons":reasons, "webView":support::needs_web_view(source),
         "login":!source.login_url.trim().is_empty(), "check":source.meta.check, "ping":source.meta.ping, "health":source.meta.health,
         "format":if source.html.is_empty() {"阅读 / 规则"} else {"轻悦时光 HTML（文字）"},
         "duplicate":duplicate, "updated":source.meta.updated})
@@ -145,7 +148,7 @@ pub(super) fn import_text(text: &str, origin: &str) -> Result<Value, String> {
                 imported_at: now_secs(),
                 ..s.meta.clone()
             };
-            let enabled = support::check(&s).is_empty();
+            let enabled = support::can_run(&s);
             fresh.push(st.sources.len());
             st.sources.push((s, enabled));
             added += 1;
@@ -412,6 +415,15 @@ pub(super) fn handle(method: &str, params: &Value) -> Result<Value, String> {
         }
         "sources.ping" => probe(params, true),
         "sources.check" => probe(params, false),
+        "sources.check.cancel" => {
+            let id: String = param(params, "checkId")?;
+            let runs = check_runs().lock().unwrap();
+            let found = runs.get(&id);
+            if let Some(run) = found {
+                run.cancel.store(true, Ordering::Relaxed);
+            }
+            Ok(json!({"checkId":id,"cancelled":found.is_some()}))
+        }
         _ => Err("不支持的书源管理请求".into()),
     }
 }
@@ -442,8 +454,30 @@ pub(super) fn retry_after_network_change() -> Result<(), String> {
     save(&st)
 }
 
+struct CheckRun {
+    cancel: Arc<AtomicBool>,
+    sources: HashSet<String>,
+}
+static CHECK_RUNS: OnceLock<Mutex<HashMap<String, CheckRun>>> = OnceLock::new();
+fn check_runs() -> &'static Mutex<HashMap<String, CheckRun>> {
+    CHECK_RUNS.get_or_init(Default::default)
+}
+struct CheckGuard(String);
+impl Drop for CheckGuard {
+    fn drop(&mut self) {
+        check_runs().lock().unwrap().remove(&self.0);
+    }
+}
+
 fn probe(params: &Value, ping: bool) -> Result<Value, String> {
+    let interactive = match params.get("interactive") {
+        None => false,
+        Some(v) => v.as_bool().ok_or("参数 interactive 不对")?,
+    };
     let wanted = params["ids"].as_array();
+    if interactive && (ping || !wanted.is_some_and(|ids| ids.len() == 1 && ids[0].is_string())) {
+        return Err("交互式校验必须且只能指定一个书源 id".into());
+    }
     let list: Vec<_> = state()
         .sources
         .iter()
@@ -452,12 +486,52 @@ fn probe(params: &Value, ping: bool) -> Result<Value, String> {
             (
                 s.id().to_owned(),
                 s.base_url().to_owned(),
-                BookSource::rule(&s.rule_search, "checkKeyWord").to_owned(),
                 s.meta.crawl.clone(),
             )
         })
         .collect();
     let total = list.len();
+    if interactive && total != 1 {
+        return Err("没有这个书源".into());
+    }
+    let check_id = if ping {
+        String::new()
+    } else if let Some(id) = params.get("checkId") {
+        id.as_str()
+            .filter(|s| !s.trim().is_empty() && s.len() <= 128)
+            .ok_or("参数 checkId 不对")?
+            .to_owned()
+    } else if interactive {
+        return Err("交互式校验需要唯一 checkId".into());
+    } else {
+        let mut bytes = [0; 16];
+        ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut bytes)
+            .map_err(|_| "无法创建校验标识")?;
+        hex::encode(bytes)
+    };
+    let cancel = Arc::new(AtomicBool::new(false));
+    let _check_guard = if ping {
+        None
+    } else {
+        let sources: HashSet<String> = list.iter().map(|(id, _, _)| id.clone()).collect();
+        let mut runs = check_runs().lock().unwrap();
+        if runs.contains_key(&check_id) || runs.values().any(|r| !r.sources.is_disjoint(&sources)) {
+            return Err("校验标识或书源已有正在执行的校验，请等待结束".into());
+        }
+        runs.insert(
+            check_id.clone(),
+            CheckRun {
+                cancel: cancel.clone(),
+                sources,
+            },
+        );
+        Some(CheckGuard(check_id.clone()))
+    };
+    if !ping {
+        send(
+            json!({"event":"check.started","checkId":check_id,"total":total,"interactive":interactive}),
+        );
+    }
     let workers = params["concurrency"]
         .as_u64()
         .unwrap_or(if ping { 32 } else { 8 })
@@ -468,12 +542,14 @@ fn probe(params: &Value, ping: bool) -> Result<Value, String> {
     let keyword = params["key"].as_str().unwrap_or("").trim().to_owned();
     std::thread::scope(|scope| {
         for _ in 0..workers.min(total) {
-            let (queue, done, ok, keyword) = (&queue, &done, &ok, &keyword);
+            let (queue, done, ok, keyword, check_id, cancel) =
+                (&queue, &done, &ok, &keyword, &check_id, &cancel);
             scope.spawn(move || {
                 loop {
-                    let Some((id,url,key,crawl))=queue.lock().unwrap().pop_front() else {break;};
-                    let start=Instant::now(); let mut context=Context::new(if ping {Profile::Ping}else{Profile::Detail},Arc::new(AtomicBool::new(false)));
-                    context.deadline=Some(start+Duration::from_secs(if ping {5}else{40})); context.interactive=false; context.crawl=crawl.clone();
+                    if cancel.load(Ordering::Relaxed) { break; }
+                    let Some((id,url,crawl))=queue.lock().unwrap().pop_front() else {break;};
+                    let start=Instant::now(); let mut context=Context::new(if ping {Profile::Ping}else{Profile::Detail},cancel.clone());
+                    context.deadline=Some(start+Duration::from_secs(if ping {5}else if interactive {360}else{40})); context.interactive=interactive; context.crawl=crawl.clone();
                     let network_route=context.network_route.clone();
                     let _guard=context.enter();
                     let mut report = crate::probe::Check { stage: if ping {"connect"} else {"engine"}, ..Default::default() };
@@ -482,20 +558,31 @@ fn probe(params: &Value, ping: bool) -> Result<Value, String> {
                         net.fetch(&Request{url,method:"GET".into(),..Default::default()}).map_err(|e|e.0).and_then(|r|if r.status<400 {Ok(r.status)}else{Err(format!("网站返回 {}",r.status))})
                     } else {
                         with_engine(&id,|e| {
-                            let key=if !keyword.is_empty(){keyword.as_str()}else if !key.is_empty(){&key}else{"我的"};
-                            crate::probe::check(e,key,&mut report)
+                            crate::probe::check(e,keyword,&mut report)
                         })
                     };
+                    let result = crate::control::current().check().and(result);
                     let ms=start.elapsed().as_millis() as u64;
+                    if let Err(error)=&result
+                        && let Some(name)=crate::probe::unsupported_interface(error) {
+                            report.unsupported_interface=Some(name.to_owned());
+                            report.unsupported=vec![format!("脚本调用了尚未支持的 {name}")];
+                    }
                     if report.cause.is_none() {
                         report.cause=result.as_ref().err().and_then(|e|crate::control::ErrorKind::classify(e).cause());
                     }
+                    report.network_failure=result.as_ref().err().and_then(|e|crate::network_failure::code(e));
                     let error=result.as_ref().err().map(|e|crate::probe::reason(e)).unwrap_or("");
                     let success=result.is_ok(); if success{ok.fetch_add(1,Ordering::Relaxed);}
                     let mut v=serde_json::to_value(report).unwrap();
                     let map=v.as_object_mut().unwrap();
                     map.insert("route".into(),network_route.lock().unwrap().clone());
                     map.extend(json!({"kind":if ping{"ping"}else{"check"},"ok":success,"ms":ms,"status":result.as_ref().ok(),"error":error,"at":now_secs()}).as_object().unwrap().clone());
+                    if !ping {
+                        v["checkId"]=json!(check_id);
+                        v["interactive"]=json!(interactive);
+                        v["cancelled"]=json!(cancel.load(Ordering::Relaxed));
+                    }
                     let health=if ping {
                         let mut st=state();
                         if let Some((s,_))=st.sources.iter_mut().find(|(s,_)|s.id()==id) {
@@ -509,11 +596,13 @@ fn probe(params: &Value, ping: bool) -> Result<Value, String> {
                     v["id"]=json!(id);
                     v["health"]=health;
                     send(v);
-                    send(json!({"event":if ping{"ping.progress"}else{"check.progress"},"done":n,"total":total,"ok":ok.load(Ordering::Relaxed)}));
+                    send(json!({"event":if ping{"ping.progress"}else{"check.progress"},"done":n,"total":total,"ok":ok.load(Ordering::Relaxed),"checkId":check_id}));
                 }
             });
         }
     });
     save(&state())?;
-    Ok(json!({"total":total,"ok":ok.load(Ordering::Relaxed)}))
+    Ok(
+        json!({"total":total,"done":done.load(Ordering::Relaxed),"ok":ok.load(Ordering::Relaxed),"checkId":check_id,"cancelled":cancel.load(Ordering::Relaxed)}),
+    )
 }

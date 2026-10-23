@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'atomic_file.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as paths;
@@ -267,7 +269,8 @@ class LocalWorkspaceAutosave {
         }
         // This last file is the commit marker. Incomplete generations are not
         // restored, and older committed generations stay available on failure.
-        await File(paths.join(folder.path, 'workspace.json')).writeAsString(
+        await writeAtomicText(
+          File(paths.join(folder.path, 'workspace.json')),
           jsonEncode({
             'schema': 1,
             'saved_at': now.toIso8601String(),
@@ -275,7 +278,6 @@ class LocalWorkspaceAutosave {
             'project_snapshot': paths.basename(projectDirectory),
             'drafts': document['drafts'],
           }),
-          flush: true,
         );
         _identity = identity;
         _payload = payload;

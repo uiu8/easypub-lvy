@@ -136,6 +136,16 @@ impl Parser<'_> {
         let mut comb = Comb::Descendant;
         self.ws();
         // 以组合符开头（如 `:has(> p)`）：相对上下文。
+        if let Some(first) = match self.peek() {
+            Some('>') => Some(Comb::Child),
+            Some('+') => Some(Comb::Adjacent),
+            Some('~') => Some(Comb::Sibling),
+            _ => None,
+        } {
+            comb = first;
+            self.i += 1;
+            self.ws();
+        }
         loop {
             let compound = self.compound()?;
             parts.push((comb, compound));
@@ -439,7 +449,23 @@ fn matches_compound(node: NodeRef<'_, DomNode>, c: &Compound) -> bool {
                 _ => index > *n,
             }
         }
-        Cond::Has(sel) => node.descendants().skip(1).any(|d| sel.matches(d)),
+        Cond::Has(sel) => {
+            // 相邻/后续兄弟关系需要搜索父节点子树，但仍以当前元素为锚点。
+            let siblings = sel
+                .groups
+                .iter()
+                .any(|p| matches!(p[0].0, Comb::Adjacent | Comb::Sibling));
+            let root = if siblings {
+                node.parent().unwrap_or(node)
+            } else {
+                node
+            };
+            root.descendants().any(|d| {
+                sel.groups
+                    .iter()
+                    .any(|parts| match_from(d, parts, parts.len() - 1, Some(node.id())))
+            })
+        }
         Cond::Not(sel) => !sel.matches(node),
         Cond::Is(sel) => sel.matches(node),
         Cond::Nth {
@@ -480,30 +506,45 @@ impl Selector2 {
     fn matches(&self, node: NodeRef<'_, DomNode>) -> bool {
         self.groups
             .iter()
-            .any(|parts| match_from(node, parts, parts.len() - 1))
+            .any(|parts| match_from(node, parts, parts.len() - 1, None))
     }
 }
 
-fn match_from(node: NodeRef<'_, DomNode>, parts: &[(Comb, Compound)], i: usize) -> bool {
+fn match_from(
+    node: NodeRef<'_, DomNode>,
+    parts: &[(Comb, Compound)],
+    i: usize,
+    scope: Option<NodeId>,
+) -> bool {
     let (comb, compound) = &parts[i];
     if !matches_compound(node, compound) {
         return false;
     }
     if i == 0 {
-        return true;
+        return scope.is_none_or(|scope| match comb {
+            Comb::Child => node.parent().is_some_and(|p| p.id() == scope),
+            Comb::Descendant => node.ancestors().any(|p| p.id() == scope),
+            Comb::Adjacent => node
+                .prev_siblings()
+                .find(|p| p.value().is_element())
+                .is_some_and(|p| p.id() == scope),
+            Comb::Sibling => node.prev_siblings().any(|p| p.id() == scope),
+        });
     }
     let prev = i - 1;
     match comb {
-        Comb::Child => node.parent().is_some_and(|p| match_from(p, parts, prev)),
-        Comb::Descendant => node.ancestors().any(|a| match_from(a, parts, prev)),
+        Comb::Child => node
+            .parent()
+            .is_some_and(|p| match_from(p, parts, prev, scope)),
+        Comb::Descendant => node.ancestors().any(|a| match_from(a, parts, prev, scope)),
         Comb::Adjacent => node
             .prev_siblings()
             .find(|s| s.value().is_element())
-            .is_some_and(|s| match_from(s, parts, prev)),
+            .is_some_and(|s| match_from(s, parts, prev, scope)),
         Comb::Sibling => node
             .prev_siblings()
             .filter(|s| s.value().is_element())
-            .any(|s| match_from(s, parts, prev)),
+            .any(|s| match_from(s, parts, prev, scope)),
     }
 }
 
@@ -553,7 +594,13 @@ pub fn select(sel: &Selector2, doc: &Html, root: NodeId) -> Vec<NodeId> {
     };
     start
         .descendants()
-        .filter(|n| n.value().is_element() && sel.matches(*n))
+        .filter(|n| {
+            n.value().is_element()
+                && sel.groups.iter().any(|parts| {
+                    let scope = (parts[0].0 != Comb::Descendant).then_some(root);
+                    match_from(*n, parts, parts.len() - 1, scope)
+                })
+        })
         .map(|n| n.id())
         .collect()
 }
@@ -594,6 +641,31 @@ mod tests {
             .into_iter()
             .map(|id| dom::text(doc.tree.get(id).unwrap()))
             .collect()
+    }
+
+    #[test]
+    fn relative_has_anchors_combinators_to_the_candidate() {
+        let html = "<main><div id='a'><p>甲</p></div><div id='b'><section><p>乙</p></section></div><div id='c'><p>丙</p></div></main>";
+        assert_eq!(
+            texts(html, "div:has(>:last-child:matchesOwn(^甲$))"),
+            ["甲"]
+        );
+        assert_eq!(texts(html, "div:has(>p:matchesOwn(^乙$))").len(), 0);
+        assert_eq!(texts(html, "div:has(p:matchesOwn(^乙$))"), ["乙"]);
+        assert_eq!(
+            texts(html, "div:has(main p:matchesOwn(^甲$))").len(),
+            0,
+            "不得借用锚点外的祖先"
+        );
+        assert_eq!(texts(html, "div:has(+div p:matchesOwn(^乙$))"), ["甲"]);
+        assert_eq!(
+            texts(html, "div:has(~div p:matchesOwn(^丙$))"),
+            ["甲", "乙"]
+        );
+        assert_eq!(
+            texts(html, "div:has(>p:matchesOwn(^甲$), >section)"),
+            ["甲", "乙"]
+        );
     }
 
     #[test]

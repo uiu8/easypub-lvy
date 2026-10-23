@@ -82,18 +82,25 @@ extension _BookSourceSettingsView on _BookSourcePageState {
     final d = context.desk;
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 46),
+      // 名称占满左侧、控件靠右，所有行的控件右边缘对齐（原来 Flexible + Spacer 平分宽度，
+      // 控件位置随标签长短漂移）。
       child: Row(
         children: [
-          Flexible(child: DeskText(label, size: 14)),
-          if (help != null) ...[
-            const SizedBox(width: 6),
-            Tooltip(
-              message: help,
-              child: Icon(Icons.help, size: 16, color: d.ink3),
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(child: DeskText(label, size: 14)),
+                if (help != null) ...[
+                  const SizedBox(width: 6),
+                  Tooltip(
+                    message: help,
+                    child: Icon(Icons.help_outline, size: 16, color: d.ink3),
+                  ),
+                ],
+              ],
             ),
-          ],
+          ),
           const SizedBox(width: 12),
-          const Spacer(),
           control,
         ],
       ),
@@ -185,12 +192,39 @@ extension _BookSourceSettingsView on _BookSourcePageState {
                   key: const ValueKey('booksource-max-books'),
                   help: '下载队列里同时进行的书数，其余排队。',
                 ),
-                _toggle(
-                  '下载完自动加入书库',
-                  settings.autoImport,
-                  (v) => _saveSettings(() => settings.autoImport = v),
-                  key: const ValueKey('booksource-auto-import'),
-                ),
+                if (widget.exportEpub != null)
+                  _row(
+                    '下载格式',
+                    SizedBox(
+                      width: 240,
+                      child: DeskChoice<String>(
+                        key: const ValueKey('booksource-download-format'),
+                        value: settings.downloadFormat,
+                        items: const [
+                          DropdownMenuItem(value: 'txt', child: Text('TXT')),
+                          DropdownMenuItem(
+                            value: 'epub',
+                            child: Text('EPUB（全局默认排版）'),
+                          ),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            _saveSettings(() => settings.downloadFormat = v);
+                          }
+                        },
+                      ),
+                    ),
+                    help: 'EPUB：下载完先加入书库，再按全局默认排版（含自动规则）生成 EPUB，放在下载文件夹，TXT 保留。样式取“排版”页的全局默认（用于以后导入的书稿）；已在书库的同一本书沿用它自己的排版。',
+                  ),
+                // 下载为 EPUB 时总会先加入书库，这个开关不起作用，隐藏。
+                if (settings.downloadFormat != 'epub' ||
+                    widget.exportEpub == null)
+                  _toggle(
+                    '下载完自动加入书库',
+                    settings.autoImport,
+                    (v) => _saveSettings(() => settings.autoImport = v),
+                    key: const ValueKey('booksource-auto-import'),
+                  ),
                 _toggle(
                   '清理分页首尾的固定提示',
                   settings.removePagePrompts,
@@ -243,6 +277,21 @@ extension _BookSourceSettingsView on _BookSourcePageState {
                   [20, 40, 60, 100, 200],
                   (n) => _saveSettings(() => settings.quickLimit = n),
                   help: '“快速搜索”只搜健康排名靠前的这么多个书源。',
+                ),
+                _row(
+                  '校验用的搜索词',
+                  SizedBox(
+                    width: 180,
+                    child: TextField(
+                      key: const ValueKey('booksource-check-keyword'),
+                      controller: checkKeyword,
+                      decoration: const InputDecoration(
+                        hintText: '留空按书源自带',
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  help: '“校验”时用这个词搜索；留空时用书源自带的校验词，没有就用“我的”。',
                 ),
                 _numberChoice('完整校验并发', settings.checkConcurrency, [
                   4,

@@ -12,6 +12,7 @@
 用法：python tools/clean_artifacts.py [--keep 20] [--apply]
 """
 import argparse
+import json
 import re
 import shutil
 import sys
@@ -52,6 +53,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--keep", type=int, default=20)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--out", type=Path, help="保存逐目录审阅清单；不改变默认仅预览行为")
     args = parser.parse_args()
     if not ARTIFACTS.is_dir():
         print("artifacts/ 不存在")
@@ -74,12 +76,17 @@ def main() -> int:
         key = next((f for f in FAMILIES if p.name.startswith(f)), "测试临时目录")
         groups.setdefault(key, []).append(p)
     total = 0
+    sizes = {p: size_of(p) for p in plan}
     for key, items in sorted(groups.items()):
-        size = sum(size_of(p) for p in items)
+        size = sum(sizes[p] for p in items)
         total += size
         print(f"{key}: {len(items)} 个目录，{size / 1024 / 1024:.1f} MB")
     print(f"合计将删除 {len(plan)} 个目录，{total / 1024 / 1024:.1f} MB；"
           f"保留最近 {args.keep} 次回归与 {len(refs)} 个被引用的名称。")
+    if args.out:
+        args.out.write_text(json.dumps({"dry_run": not args.apply, "bytes": total,
+            "candidates": [{"path": str(p.resolve()), "bytes": sizes[p]} for p in plan]},
+            ensure_ascii=False, indent=2), encoding="utf-8")
     if not args.apply:
         print("（预览：未删除任何内容。确认后加 --apply 执行。）")
         return 0

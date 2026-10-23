@@ -250,13 +250,18 @@ void main() {
         matching: find.byType(TextButton),
       );
       expect(tester.widget<TextButton>(previewButton).onPressed, isNull);
-      await tester.runAsync(() async {
-        await tester.tap(find.text('保存规则配置'));
-        for (var i = 0; i < 20; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 20));
-          await tester.pump();
-        }
-      });
+      await tester.tap(find.text('保存规则配置'));
+      final saved = find.text('规则已保存；之后导入自动匹配，已有书籍请先预览差异。');
+      final clock = Stopwatch()..start();
+      // 保存走真实磁盘 I/O；并发回归不能假设 400ms 后已结束。
+      while (saved.evaluate().isEmpty &&
+          clock.elapsed < const Duration(seconds: 30)) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(saved, findsOneWidget);
       await tester.pumpAndSettle();
       expect(find.text('规则已保存；之后导入自动匹配，已有书籍请先预览差异。'), findsOneWidget);
       expect(tester.takeException(), isNull);

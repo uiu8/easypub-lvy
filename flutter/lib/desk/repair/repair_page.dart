@@ -843,19 +843,29 @@ class _ChapterRepairPageState extends State<ChapterRepairPage>
         .toList();
     final remaining = options!.report.total - selected.length;
     final wide = c.maxWidth >= 1000;
+    // R3-04：没有可自动处理的项、只剩要逐项决定的问题时，引导去逐项处理，
+    // 不再显示“0 / 0”和看起来能点的“预览”主按钮。
+    final manualOnly = !numeric && changes.isEmpty && pendingIssues.isNotEmpty;
     final summary = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('本次所选修改', style: ui(12, w: 600, c: d.ink2)),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            stat('${selected.length} / ${changes.length}', '已选方案', d.ink),
-            stat('$remaining', '保留待核对', remaining > 0 ? d.warn : d.ink),
-          ],
-        ),
+        if (manualOnly)
+          Text(
+            '没有可自动处理的项；${pendingIssues.length} 项需要你逐项决定。',
+            key: const ValueKey('repair-manual-only-summary'),
+            style: ui(12.5, c: d.ink2, h: 1.5),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              stat('${selected.length} / ${changes.length}', '已选方案', d.ink),
+              stat('$remaining', '保留待核对', remaining > 0 ? d.warn : d.ink),
+            ],
+          ),
         const SizedBox(height: 16),
         Text('保证', style: ui(12, w: 600, c: d.ink2)),
         const SizedBox(height: 6),
@@ -887,6 +897,8 @@ class _ChapterRepairPageState extends State<ChapterRepairPage>
         Text(
           numeric
               ? '找到 ${options!.total} 个待识别的数字标题'
+              : manualOnly
+              ? '没有可以自动处理的项'
               : '找到 ${options!.total} 项可选处理方案',
           style: ui(15, w: 650, c: d.ink),
         ),
@@ -894,6 +906,8 @@ class _ChapterRepairPageState extends State<ChapterRepairPage>
         Text(
           numeric
               ? '把“238：以命换伤！”这样的标题收入章节目录。保留标题写法和正文；勾选后预览，再应用。'
+              : manualOnly
+              ? '下面的问题需要你逐项决定：每项先看前后对照，再选怎么改。点“逐项处理第一项”开始，处理完一项会带到下一项。'
               : '已勾选可直接判断的项目；需要你决定的项目不默认勾选。查看差异后，可应用到编辑稿或另存修订 TXT。',
           style: ui(12, c: d.ink2, h: 1.5),
         ),
@@ -907,52 +921,53 @@ class _ChapterRepairPageState extends State<ChapterRepairPage>
           ),
         if (!wide) ...[const SizedBox(height: 12), summary],
         const SizedBox(height: 12),
-        box(
-          boxHead(
-            Icon(Icons.checklist_rounded, size: 17, color: d.ink2),
-            '方案内容',
-            DeskTag('${changes.length} 项', Tone.ok),
-            '',
-            right: '已选 ${selected.length} / ${changes.length}',
-          ),
-          changes.isEmpty
-              ? [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text('没有可安全自动处理的章节问题', style: ui(12.5, c: d.ink2)),
-                  ),
-                ]
-              : [
-                  for (final MapEntry(key: kind, value: items)
-                      in groups.entries) ...[
-                    category(
-                      chapterIssueCategories[kind] ?? '章节结构',
-                      items.length,
-                      items: items,
-                      action: numeric && kind == 'unrecognized-heading'
-                          ? DeskButton(
-                              selected.length == changes.length &&
-                                      selected.isNotEmpty
-                                  ? '取消勾选本批'
-                                  : '勾选本批数字章节',
-                              quiet: true,
-                              onPressed: busy || changes.isEmpty
-                                  ? null
-                                  : () => setState(() {
-                                      selected =
-                                          selected.length == changes.length
-                                          ? <String>{}
-                                          : changes.map((c) => c.id).toSet();
-                                      plan = null;
-                                    }),
-                            )
-                          : null,
+        if (!manualOnly)
+          box(
+            boxHead(
+              Icon(Icons.checklist_rounded, size: 17, color: d.ink2),
+              '方案内容',
+              DeskTag('${changes.length} 项', Tone.ok),
+              '',
+              right: '已选 ${selected.length} / ${changes.length}',
+            ),
+            changes.isEmpty
+                ? [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text('没有可安全自动处理的章节问题', style: ui(12.5, c: d.ink2)),
                     ),
-                    for (final change in items)
-                      changeRow(change, shown, shown.indexOf(change)),
+                  ]
+                : [
+                    for (final MapEntry(key: kind, value: items)
+                        in groups.entries) ...[
+                      category(
+                        chapterIssueCategories[kind] ?? '章节结构',
+                        items.length,
+                        items: items,
+                        action: numeric && kind == 'unrecognized-heading'
+                            ? DeskButton(
+                                selected.length == changes.length &&
+                                        selected.isNotEmpty
+                                    ? '取消勾选本批'
+                                    : '勾选本批数字章节',
+                                quiet: true,
+                                onPressed: busy || changes.isEmpty
+                                    ? null
+                                    : () => setState(() {
+                                        selected =
+                                            selected.length == changes.length
+                                            ? <String>{}
+                                            : changes.map((c) => c.id).toSet();
+                                        plan = null;
+                                      }),
+                              )
+                            : null,
+                      ),
+                      for (final change in items)
+                        changeRow(change, shown, shown.indexOf(change)),
+                    ],
                   ],
-                ],
-        ),
+          ),
         box(
           boxHead(
             Icon(Icons.help_outline_rounded, size: 16, color: d.warn),
@@ -1019,31 +1034,53 @@ class _ChapterRepairPageState extends State<ChapterRepairPage>
                 )
               : list,
         ),
-        footer(
-          [
-            DeskButton(
-              '逐项提示修复',
-              quiet: true,
-              icon: Icons.checklist_rounded,
-              onPressed: busy || options!.report.total == 0
-                  ? null
-                  : () => guide(null),
-            ),
-          ],
-          [
-            Text('已选 ${selected.length} 项', style: ui(12, c: d.ink2)),
-            DeskButton(
-              selected.isEmpty ? '预览当前稿／另存 TXT' : '查看完整差异',
-              primary: true,
-              icon: Icons.arrow_forward_rounded,
-              onPressed:
-                  busy || (selected.isEmpty && session is! ChapterCopySession)
-                  ? null
-                  : () => prepare(),
-            ),
-          ],
-          note: '下一步只读预览，不写入',
-        ),
+        if (manualOnly)
+          footer(
+            [
+              if (session is ChapterCopySession)
+                DeskButton(
+                  '预览当前稿／另存 TXT',
+                  quiet: true,
+                  onPressed: busy ? null : () => prepare(),
+                ),
+            ],
+            [
+              DeskButton(
+                '逐项处理第一项',
+                key: const ValueKey('repair-guide-first'),
+                primary: true,
+                icon: Icons.arrow_forward_rounded,
+                onPressed: busy ? null : () => guide(null),
+              ),
+            ],
+            note: '逐项处理时每一步都先预览，确认后才写入',
+          )
+        else
+          footer(
+            [
+              DeskButton(
+                '逐项提示修复',
+                quiet: true,
+                icon: Icons.checklist_rounded,
+                onPressed: busy || options!.report.total == 0
+                    ? null
+                    : () => guide(null),
+              ),
+            ],
+            [
+              Text('已选 ${selected.length} 项', style: ui(12, c: d.ink2)),
+              DeskButton(
+                selected.isEmpty ? '预览当前稿／另存 TXT' : '查看完整差异',
+                primary: true,
+                icon: Icons.arrow_forward_rounded,
+                onPressed:
+                    busy || (selected.isEmpty && session is! ChapterCopySession)
+                    ? null
+                    : () => prepare(),
+              ),
+            ],
+            note: '下一步只读预览，不写入',
+          ),
       ],
     );
   }

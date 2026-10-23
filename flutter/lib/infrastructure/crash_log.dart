@@ -11,6 +11,12 @@ class CrashLog {
   final String directory;
   final int limit;
   static final _name = RegExp(r'^crash-\d{8}-\d{6}-\d{3}(?:-\d+)?\.txt$');
+  static final _frame = RegExp(
+    r'\(((?:package:(?:easypub_desktop|flutter)/|dart:)[A-Za-z0-9_./-]+:\d+:\d+)\)',
+  );
+  static StackTrace _safeStack(StackTrace? stack) => StackTrace.fromString(
+    _frame.allMatches('$stack').map((m) => m.group(1)!).join('\n'),
+  );
 
   String _stamp(DateTime t) {
     String two(int v) => v.toString().padLeft(2, '0');
@@ -35,12 +41,17 @@ class CrashLog {
         [
           'EasyPub++ 崩溃日志（只保存在本机，不会上传）',
           '时间：${now.toIso8601String()}',
-          '来源：$source',
+          '来源：${source.startsWith('Flutter 框架')
+              ? 'Flutter 框架'
+              : source == '未捕获的异步错误'
+              ? source
+              : '应用'}',
           '程序：${Platform.resolvedExecutable}',
           '版本：$version',
-          '错误：$error',
+          // 异常消息可能带原文、HTTP 头和代理地址；只记录类型和可信代码位置。
+          '错误类型：${error.runtimeType}',
           '调用栈：',
-          '${stack ?? '（没有调用栈）'}',
+          ..._frame.allMatches('$stack').map((m) => m.group(1)!),
         ].join('\n'),
         flush: true,
       );
@@ -75,7 +86,7 @@ class CrashLog {
     return result;
   }
 
-  /// 接管 Flutter 框架错误与未捕获的异步错误；原有的处理（打印到控制台）保留。
+  /// 日志与转交给控制台的错误都去除异常原文，避免凭据经默认处理器泄露。
   void install() {
     final previous = FlutterError.onError;
     FlutterError.onError = (details) {
@@ -84,12 +95,21 @@ class CrashLog {
         details.stack,
         source: 'Flutter 框架（${details.library ?? '未知'}）',
       );
-      if (previous != null) previous(details);
+      if (previous != null) {
+        previous(
+          FlutterErrorDetails(
+            exception: '错误类型：${details.exception.runtimeType}',
+            stack: _safeStack(details.stack),
+            library: '应用',
+          ),
+        );
+      }
     };
     final platform = PlatformDispatcher.instance.onError;
     PlatformDispatcher.instance.onError = (error, stack) {
       record(error, stack, source: '未捕获的异步错误');
-      return platform?.call(error, stack) ?? false;
+      platform?.call('错误类型：${error.runtimeType}', _safeStack(stack));
+      return true;
     };
   }
 }

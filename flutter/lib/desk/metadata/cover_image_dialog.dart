@@ -23,7 +23,11 @@ class CoverImageDialog extends StatefulWidget {
     required this.initialFit,
     this.autosave,
     this.draftKey,
+    this.initialPath,
   });
+
+  /// 拖入的图片：打开时直接核验它（优先于上次未确认的选择）。
+  final String? initialPath;
   final BookInformationSession session;
   final WorkspaceAutosaveService? autosave;
   final String? draftKey;
@@ -57,6 +61,26 @@ class _CoverImageDialogState extends State<CoverImageDialog> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialPath case final path?) {
+      busy = true;
+      widget.session
+          .inspectImage(path)
+          .then((value) {
+            if (mounted) setState(() => evidence = value);
+            remember();
+          })
+          .catchError((Object _) {
+            if (mounted) {
+              setState(
+                () => error = '拖入的图片不能用作封面，请换一张 PNG、JPEG、WebP、GIF 或 BMP。',
+              );
+            }
+          })
+          .whenComplete(() {
+            if (mounted) setState(() => busy = false);
+          });
+      return;
+    }
     final saved = widget.draftKey == null
         ? null
         : widget.autosave?.readDraft(widget.draftKey!);

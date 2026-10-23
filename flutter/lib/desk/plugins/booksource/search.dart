@@ -41,21 +41,25 @@ extension _BookSourceSearch on _BookSourcePageState {
     });
   }
 
-  Map<String, dynamic> _searchParams(String key) => {
-    'key': key,
-    'stream': true,
-    'searchId': activeSearchId,
-    'concurrency': settings.searchConcurrency,
-    'quick': settings.quick,
-    'limit': settings.quickLimit,
-    'skipUnhealthy': settings.skipUnhealthy && !includeSkippedOnce,
-    'includeWebView': settings.includeWebView || sourceOnly != null,
-    'filterTitle': settings.filterTitle,
-    'onlyPriority': settings.onlyPriority,
-    if (sourceOnly != null) 'sourceIds': [sourceOnly],
-    if (searchScope.startsWith('f:')) 'files': [searchScope.substring(2)],
-    if (searchScope.startsWith('g:')) 'groups': [searchScope.substring(2)],
-  };
+  Map<String, dynamic> _searchParams(String key) {
+    // 收藏或手动选择的书源（LIB-220/221）：明确指定，不再叠加“快速”“只搜优先”。
+    final ids = _scopeIds();
+    return {
+      'key': key,
+      'stream': true,
+      'searchId': activeSearchId,
+      'concurrency': settings.searchConcurrency,
+      'quick': ids == null && settings.quick,
+      'limit': settings.quickLimit,
+      'skipUnhealthy': settings.skipUnhealthy && !includeSkippedOnce,
+      'includeWebView': settings.includeWebView || ids != null,
+      'filterTitle': settings.filterTitle,
+      'onlyPriority': ids == null && settings.onlyPriority,
+      'sourceIds': ?ids,
+      if (searchScope.startsWith('f:')) 'files': [searchScope.substring(2)],
+      if (searchScope.startsWith('g:')) 'groups': [searchScope.substring(2)],
+    };
+  }
 
   void _mergeSearch(Map event) {
     if (event['pageState'] is Map) {
@@ -245,6 +249,11 @@ extension _BookSourceSearch on _BookSourcePageState {
   Future<void> _search() async {
     final key = query.text.trim();
     if (key.isEmpty || api == null || searching) return;
+    if (_scopeIds()?.isEmpty ?? false) {
+      update(() => searchStatus = '收藏或选中的书源都已不在，请重新选择搜索范围。');
+      return;
+    }
+    _saveSettings(() => settings.rememberSearch(key));
     searchRefresh?.cancel();
     searchRefresh = null;
     pendingSearchResults.clear();
@@ -347,6 +356,8 @@ extension _BookSourceSearch on _BookSourcePageState {
       toc = null;
     });
     try {
+      // 读取详情和目录时书源脚本可能请求验证码等交互（LIB-212）。
+      await _enableInteractions('${s['sourceId']}');
       final info = await api!.call('book.info', {
         'sourceId': s['sourceId'],
         'book': s['book'],
@@ -415,224 +426,359 @@ extension _BookSourceSearch on _BookSourcePageState {
 
   Widget _searchTab(BuildContext context) {
     final d = context.desk;
+    final morePages = searchPages.values.any(
+      (p) => p['ended'] != true && p['failed'] != true,
+    );
+    final failedPages = searchPages.values
+        .where((p) => p['failed'] == true)
+        .toList();
     final list = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // R1c：大搜索条——一张圆角卡片里放搜索框、范围与按钮。
+        Container(
+          padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+          decoration: BoxDecoration(
+            color: d.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: d.lineStrong),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const ValueKey('booksource-query'),
+                  controller: query,
+                  style: ui(15, c: d.ink),
+                  decoration: InputDecoration(
+                    hintText: '搜索书名或作者',
+                    isDense: true,
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      size: 20,
+                      color: d.ink2,
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 20,
+                    ),
+                  ),
+                  onSubmitted: (_) => _search(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 190,
+                child: DeskChoice<String>(
+                  key: const ValueKey('booksource-search-scope'),
+                  value:
+                      (searchScope == 'fav' &&
+                              settings.favoriteSources.isEmpty) ||
+                          (searchScope == 'pick' && pickedSources.isEmpty)
+                      ? ''
+                      : searchScope,
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('全部来源与分组')),
+                    if (settings.favoriteSources.isNotEmpty)
+                      DropdownMenuItem(
+                        value: 'fav',
+                        child: Text(
+                          '收藏的书源（${settings.favoriteSources.length}）',
+                        ),
+                      ),
+                    DropdownMenuItem(
+                      value: 'pick',
+                      child: Text(
+                        pickedSources.isEmpty ? '选择书源…' : _pickedLabel(),
+                      ),
+                    ),
+                    for (final file in {
+                      for (final s in sources) '${s['file'] ?? '旧版导入'}',
+                    })
+                      DropdownMenuItem(
+                        value: 'f:$file',
+                        child: Text('文件：${_sourceFileName(file)}'),
+                      ),
+                    for (final group in {
+                      for (final s in sources) ..._sourceGroups(s),
+                    })
+                      DropdownMenuItem(
+                        value: 'g:$group',
+                        child: Text('分组：$group'),
+                      ),
+                  ],
+                  onChanged: searching
+                      ? null
+                      : (v) => v == 'pick'
+                            ? _pickSources()
+                            : update(() => searchScope = v ?? ''),
+                ),
+              ),
+              const SizedBox(width: 8),
+              DeskButton(
+                '搜索',
+                key: const ValueKey('booksource-search'),
+                primary: true,
+                busy: searching,
+                onPressed: searching ? null : _search,
+              ),
+              if (searching) ...[
+                const SizedBox(width: 6),
+                DeskButton(
+                  '停止',
+                  key: const ValueKey('booksource-search-stop'),
+                  onPressed: () =>
+                      api!.call('search.cancel', {'searchId': activeSearchId}),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
-              child: TextField(
-                key: const ValueKey('booksource-query'),
-                controller: query,
-                decoration: const InputDecoration(
-                  hintText: '书名或作者',
-                  isDense: true,
-                ),
-                onSubmitted: (_) => _search(),
-              ),
-            ),
-            const SizedBox(width: 10),
-            DeskButton(
-              '搜索',
-              key: const ValueKey('booksource-search'),
-              primary: true,
-              busy: searching,
-              onPressed: searching ? null : _search,
-            ),
-            if (searching)
-              DeskButton(
-                '停止搜索',
-                key: const ValueKey('booksource-search-stop'),
-                quiet: true,
-                onPressed: () =>
-                    api!.call('search.cancel', {'searchId': activeSearchId}),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            SizedBox(
-              width: 210,
-              child: DeskChoice<String>(
-                key: const ValueKey('booksource-search-scope'),
-                value: searchScope,
-                items: [
-                  const DropdownMenuItem(value: '', child: Text('全部来源与分组')),
-                  for (final file in {
-                    for (final s in sources) '${s['file'] ?? '旧版导入'}',
-                  })
-                    DropdownMenuItem(
-                      value: 'f:$file',
-                      child: Text('文件：${_sourceFileName(file)}'),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  FilterChip(
+                    key: const ValueKey('booksource-quick'),
+                    label: const Text('快速'),
+                    tooltip: _scopeIds() != null
+                        ? '已指定要搜的书源，这次不按“快速”筛选'
+                        : '只搜健康排名靠前的 ${settings.quickLimit} 个书源',
+                    selected: settings.quick && _scopeIds() == null,
+                    onSelected: _scopeIds() != null
+                        ? null
+                        : (v) => _saveSettings(() => settings.quick = v),
+                  ),
+                  FilterChip(
+                    key: const ValueKey('booksource-priority-only'),
+                    label: const Text('只搜优先'),
+                    tooltip: _scopeIds() != null
+                        ? '已指定要搜的书源，这次不按“只搜优先”筛选'
+                        : '只搜置顶书源和“优先”分组',
+                    selected: settings.onlyPriority && _scopeIds() == null,
+                    onSelected: _scopeIds() != null
+                        ? null
+                        : (v) => _saveSettings(() => settings.onlyPriority = v),
+                  ),
+                  FilterChip(
+                    key: const ValueKey('booksource-include-skipped'),
+                    label: const Text('含暂避源'),
+                    tooltip: '这一次也搜连续失败而暂时跳过的书源',
+                    selected: includeSkippedOnce,
+                    onSelected: searching
+                        ? null
+                        : (v) => update(() => includeSkippedOnce = v),
+                  ),
+                  FilterChip(
+                    key: const ValueKey('booksource-favorites-scope'),
+                    avatar: Icon(
+                      searchScope == 'fav'
+                          ? Icons.star_rounded
+                          : Icons.star_outline_rounded,
+                      size: 16,
                     ),
-                  for (final group in {
-                    for (final s in sources) ..._sourceGroups(s),
-                  })
-                    DropdownMenuItem(
-                      value: 'g:$group',
-                      child: Text('分组：$group'),
+                    label: Text(
+                      settings.favoriteSources.isEmpty
+                          ? '收藏'
+                          : '收藏 ${settings.favoriteSources.length}',
+                    ),
+                    tooltip: settings.favoriteSources.isEmpty
+                        ? '在书源页点星标收藏书源后，可一键只搜收藏'
+                        : '只搜收藏的书源',
+                    showCheckmark: false,
+                    selected: searchScope == 'fav',
+                    onSelected: searching || settings.favoriteSources.isEmpty
+                        ? null
+                        : (v) => update(() => searchScope = v ? 'fav' : ''),
+                  ),
+                  if (searchScope == 'pick' && pickedSources.isNotEmpty)
+                    InputChip(
+                      key: const ValueKey('booksource-picked-chip'),
+                      label: Text(_pickedLabel()),
+                      tooltip: '点一下修改所选书源',
+                      onPressed: searching ? null : _pickSources,
+                      onDeleted: searching
+                          ? null
+                          : () => update(() {
+                              pickedSources.clear();
+                              searchScope = '';
+                            }),
                     ),
                 ],
-                onChanged: searching
-                    ? null
-                    : (v) => update(() {
-                        searchScope = v ?? '';
-                        sourceOnly = null;
-                      }),
               ),
             ),
-            _toggle(
-              '快速搜索',
-              settings.quick,
-              (v) => _saveSettings(() => settings.quick = v),
-            ),
-            DeskButton(
-              '这次也搜暂避源',
-              quiet: true,
-              onPressed: searching
-                  ? null
-                  : () {
-                      includeSkippedOnce = true;
-                      _search();
-                    },
-            ),
-            if (sourceOnly != null)
-              DeskButton(
-                '取消单源限制',
-                quiet: true,
-                onPressed: searching
-                    ? null
-                    : () => update(() => sourceOnly = null),
+            SizedBox(
+              width: 120,
+              child: DeskChoice<String>(
+                key: const ValueKey('booksource-result-sort'),
+                value: settings.resultSort,
+                items: [
+                  for (final e in {
+                    'overall': '综合排序',
+                    'chapters': '章节数',
+                    'latest': '最新章节',
+                    'sources': '书源数',
+                    'speed': '响应速度',
+                  }.entries)
+                    DropdownMenuItem(value: e.key, child: Text(e.value)),
+                ],
+                onChanged: (v) => _saveSettings(() {
+                  settings.resultSort = v ?? 'overall';
+                  _orderResults(query.text.trim());
+                }),
               ),
-          ],
-        ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: [
-            DeskButton(
-              '全选结果',
-              quiet: true,
-              onPressed: results.isEmpty
+            ),
+            IconButton(
+              key: const ValueKey('booksource-enrich'),
+              tooltip: '补全前 10 本的真实章节数（读取目录）',
+              icon: enriching
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.format_list_numbered, size: 20),
+              onPressed: searching || enriching || results.isEmpty
                   ? null
-                  : () => update(
-                      () => selectedBooks.addAll(results.map(_bookKey)),
-                    ),
-            ),
-            DeskButton(
-              '加入下载（${selectedBooks.length}）',
-              key: const ValueKey('booksource-download-selected'),
-              quiet: true,
-              onPressed: selectedBooks.isEmpty ? null : _downloadSelected,
-            ),
-            DeskButton(
-              '书名清单…',
-              key: const ValueKey('booksource-batch'),
-              quiet: true,
-              busy: batchBusy,
-              onPressed: batchBusy || searching ? null : _batchDownload,
+                  : _enrichResults,
             ),
           ],
         ),
-        _resultControls(),
-        if (searchPages.isNotEmpty)
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              DeskButton(
-                '加载更多',
-                key: const ValueKey('booksource-search-more'),
-                onPressed:
-                    searching ||
-                        !searchPages.values.any(
-                          (p) => p['ended'] != true && p['failed'] != true,
-                        )
-                    ? null
-                    : () => _continueSearch(),
-              ),
-              DeskButton(
-                '只重试失败的',
-                key: const ValueKey('booksource-search-retry'),
-                onPressed:
-                    searching ||
-                        !searchPages.values.any((p) => p['failed'] == true)
-                    ? null
-                    : () => _continueSearch(retry: true),
-              ),
-              for (final p in searchPages.values.where(
-                (p) => p['failed'] == true,
-              ))
-                DeskButton(
-                  '重试 ${p['sourceName']}',
-                  quiet: true,
-                  onPressed: searching
-                      ? null
-                      : () => _continueSearch(
-                          retry: true,
-                          sourceId: '${p['sourceId']}',
-                        ),
-                ),
-            ],
-          ),
         if (sources.isEmpty)
           DeskNote(
             '还没有书源。先到“书源”页签导入阅读 JSON、单文件 JS 或 so-novel JSON。',
             tone: Tone.info,
           )
-        else if (searchStatus.isNotEmpty)
-          DeskText(searchStatus, size: 12, color: d.ink2),
-        const SizedBox(height: 8),
+        else if (searchStatus.isNotEmpty || searchPages.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (searchStatus.isNotEmpty)
+                  DeskText(searchStatus, size: 12, color: d.ink2),
+                if (searchPages.isNotEmpty) ...[
+                  DeskButton(
+                    '加载更多',
+                    key: const ValueKey('booksource-search-more'),
+                    quiet: true,
+                    onPressed: searching || !morePages
+                        ? null
+                        : () => _continueSearch(),
+                  ),
+                  DeskButton(
+                    '只重试失败的（${failedPages.length}）',
+                    key: const ValueKey('booksource-search-retry'),
+                    quiet: true,
+                    onPressed: searching || failedPages.isEmpty
+                        ? null
+                        : () => _continueSearch(retry: true),
+                  ),
+                  if (failedPages.isNotEmpty)
+                    DeskMenuButton<String>(
+                      tooltip: '单独重试某个书源',
+                      onSelected: (id) =>
+                          _continueSearch(retry: true, sourceId: id),
+                      itemBuilder: (_) => [
+                        for (final p in failedPages)
+                          PopupMenuItem(
+                            value: '${p['sourceId']}',
+                            child: Text('重试 ${p['sourceName']}'),
+                          ),
+                      ],
+                      // R1：用图标代替“▾”文字（缺字时会显示成方框）。
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          DeskText('单独重试', size: 12, color: d.ink2),
+                          Icon(
+                            Icons.expand_more_rounded,
+                            size: 15,
+                            color: d.ink2,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        const SizedBox(height: 6),
         Expanded(
-          child: ListView.builder(
-            itemCount: results.length,
-            itemBuilder: (context, i) {
-              final r = results[i];
-              final first =
-                  ((r['sources'] as List).first as Map)['book'] as Map;
-              return Material(
-                color: selected == i ? d.surface : Colors.transparent,
-                child: ListTile(
-                  key: ValueKey('booksource-result-$i'),
-                  dense: true,
-                  leading: Checkbox(
-                    key: ValueKey('booksource-select-$i'),
-                    value: selectedBooks.contains(_bookKey(r)),
-                    onChanged: (v) => update(() {
-                      if (v == true) {
-                        selectedBooks.add(_bookKey(r));
-                      } else {
-                        selectedBooks.remove(_bookKey(r));
-                      }
-                    }),
-                  ),
-                  title: DeskText('${r['name']}', bold: true),
-                  subtitle: DeskText(
-                    [
-                      if ('${r['author']}'.isNotEmpty) '${r['author']}',
-                      '${(r['sources'] as List).length} 个书源',
-                      if (_num(first['chapterCount']) > 0)
-                        '${first['countExact'] == true ? '' : '约'}${first['chapterCount']} 章',
-                      if ('${first['lastChapter'] ?? ''}'.isNotEmpty)
-                        '最新：${first['lastChapter']}',
-                    ].join(' · '),
-                    size: 12,
-                    color: d.ink2,
-                    lines: 1,
-                  ),
-                  onTap: () => update(() {
-                    selected = i;
-                    selectedSource = 0;
-                    toc = null;
-                    detailError = null;
-                  }),
+          child: results.isEmpty
+              ? _searchEmpty(context)
+              : LayoutBuilder(
+                  builder: (context, box) => box.maxWidth >= 620
+                      ? GridView.builder(
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                mainAxisExtent: 104,
+                                crossAxisSpacing: 8,
+                              ),
+                          itemCount: results.length,
+                          itemBuilder: (context, i) => _resultRow(i),
+                        )
+                      : ListView.builder(
+                          itemCount: results.length,
+                          itemBuilder: (context, i) => _resultRow(i),
+                        ),
                 ),
-              );
-            },
+        ),
+        Container(
+          margin: const EdgeInsets.only(top: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: d.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: d.line),
+          ),
+          child: Row(
+            children: [
+              DeskText('已选 ${selectedBooks.length} 本', size: 12, color: d.ink2),
+              DeskButton(
+                '全选结果',
+                quiet: true,
+                onPressed: results.isEmpty
+                    ? null
+                    : () => update(
+                        () => selectedBooks.addAll(results.map(_bookKey)),
+                      ),
+              ),
+              if (selectedBooks.isNotEmpty)
+                DeskButton(
+                  '清空',
+                  quiet: true,
+                  onPressed: () => update(selectedBooks.clear),
+                ),
+              const Spacer(),
+              DeskButton(
+                '书名清单…',
+                key: const ValueKey('booksource-batch'),
+                quiet: true,
+                busy: batchBusy,
+                onPressed: batchBusy || searching ? null : _batchDownload,
+              ),
+              const SizedBox(width: 6),
+              DeskButton(
+                '加入下载（${selectedBooks.length}）',
+                key: const ValueKey('booksource-download-selected'),
+                primary: selectedBooks.isNotEmpty,
+                quiet: selectedBooks.isEmpty,
+                onPressed: selectedBooks.isEmpty ? null : _downloadSelected,
+              ),
+            ],
           ),
         ),
       ],
@@ -644,8 +790,113 @@ extension _BookSourceSearch on _BookSourcePageState {
         children: [
           Expanded(flex: 5, child: list),
           const SizedBox(width: 14),
-          Expanded(flex: 4, child: _detail(context)),
+          Expanded(
+            flex: 4,
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: d.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: d.line),
+              ),
+              child: _detail(context),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  /// 搜索结果一行：书名首字封面块、书名、作者 · 章数 · 书源数 · 最快书源 · 最新章节。
+  Widget _resultRow(int i) {
+    final d = context.desk;
+    final r = results[i];
+    final list = r['sources'] as List;
+    final first = (list.first as Map)['book'] as Map;
+    final fastest = list
+        .map((s) => _num((s as Map)['ms']))
+        .where((ms) => ms > 0)
+        .fold<num>(0, (a, b) => a == 0 || b < a ? b : a);
+    final name = '${r['name']}';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Material(
+        color: selected == i ? d.accentSoft : d.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: selected == i ? d.accent : d.line),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: ValueKey('booksource-result-$i'),
+          onTap: () => update(() {
+            selected = i;
+            selectedSource = 0;
+            toc = null;
+            detailError = null;
+          }),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+            child: Row(
+              children: [
+                _coverThumb(
+                  first['coverUrl']?.toString(),
+                  name,
+                  width: 60,
+                  height: 80,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DeskText(name, bold: true, lines: 1),
+                      // R1c：卡片两列时信息分行，不再挤成一行被截断。
+                      DeskText(
+                        [
+                          if ('${r['author']}'.isNotEmpty) '${r['author']}',
+                          if (_num(first['chapterCount']) > 0)
+                            '${first['countExact'] == true ? '' : '约'}${first['chapterCount']} 章',
+                        ].join(' · '),
+                        size: 12,
+                        color: d.ink2,
+                        lines: 1,
+                      ),
+                      DeskText(
+                        [
+                          '${list.length} 个书源',
+                          if (fastest > 0)
+                            '最快 ${(fastest / 1000).toStringAsFixed(1)}s',
+                        ].join(' · '),
+                        size: 12,
+                        color: fastest > 0 && fastest < 1000 ? d.add : d.ink2,
+                        lines: 1,
+                      ),
+                      if ('${first['lastChapter'] ?? ''}'.isNotEmpty)
+                        DeskText(
+                          '最新：${first['lastChapter']}',
+                          size: 12,
+                          color: d.ink3,
+                          lines: 1,
+                        ),
+                    ],
+                  ),
+                ),
+                Checkbox(
+                  key: ValueKey('booksource-select-$i'),
+                  value: selectedBooks.contains(_bookKey(r)),
+                  onChanged: (v) => update(() {
+                    if (v == true) {
+                      selectedBooks.add(_bookKey(r));
+                    } else {
+                      selectedBooks.remove(_bookKey(r));
+                    }
+                  }),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -663,9 +914,28 @@ extension _BookSourceSearch on _BookSourcePageState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          DeskText('${c['name']}', bold: true, size: 17),
-          if ('${c['author']}'.isNotEmpty)
-            DeskText('${c['author']}', color: d.ink2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _coverThumb(
+                book['coverUrl']?.toString(),
+                '${c['name']}',
+                width: 84,
+                height: 112,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DeskText('${c['name']}', bold: true, size: 17),
+                    if ('${c['author']}'.isNotEmpty)
+                      DeskText('${c['author']}', color: d.ink2),
+                  ],
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
           const DeskLabel('书源'),
           DropdownButton<int>(
@@ -747,6 +1017,92 @@ extension _BookSourceSearch on _BookSourcePageState {
             DeskNote(detailError!, tone: Tone.warn),
           ],
         ],
+      ),
+    );
+  }
+
+  /// 封面缩略图（R1c）：书源给了封面地址就加载，加载失败或没有时显示书名首字。
+  Widget _coverThumb(
+    String? url,
+    String name, {
+    required double width,
+    required double height,
+  }) {
+    final d = context.desk;
+    final placeholder = Container(
+      width: width,
+      height: height,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: d.sunken,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: d.line),
+      ),
+      child: DeskText(
+        name.isEmpty ? '?' : name.characters.first,
+        size: width / 2.6,
+        color: d.ink3,
+      ),
+    );
+    if (url == null || !url.startsWith('http')) return placeholder;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Image.network(
+        url,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        cacheWidth: (width * 2).round(),
+        errorBuilder: (_, _, _) => placeholder,
+        loadingBuilder: (context, child, progress) =>
+            progress == null ? child : placeholder,
+      ),
+    );
+  }
+
+  /// 搜索页空状态（R1c）：最近搜索可以点着再搜。
+  Widget _searchEmpty(BuildContext context) {
+    final d = context.desk;
+    if (searching) {
+      return Center(child: DeskText('正在搜索…', color: d.ink2));
+    }
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.travel_explore_rounded, size: 34, color: d.lineStrong),
+            const SizedBox(height: 10),
+            DeskText('输入书名或作者开始搜索', color: d.ink2),
+            if (settings.recentSearches.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              Text('最近搜索', style: ui(11.5, w: 600, c: d.ink3)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                alignment: WrapAlignment.center,
+                children: [
+                  for (final q in settings.recentSearches)
+                    ActionChip(
+                      key: ValueKey('booksource-recent-$q'),
+                      avatar: Icon(
+                        Icons.history_rounded,
+                        size: 15,
+                        color: d.ink3,
+                      ),
+                      label: Text(q),
+                      onPressed: () {
+                        query.text = q;
+                        _search();
+                      },
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

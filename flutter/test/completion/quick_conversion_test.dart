@@ -4,6 +4,7 @@ import 'package:easypub_desktop/infrastructure/legacy_conversion_session.dart';
 
 import 'dart:convert';
 
+import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/conversion/conversion_page.dart';
 
 import 'package:flutter/material.dart';
@@ -193,16 +194,21 @@ void main() {
           action.evaluate().isNotEmpty &&
           t.widget<TextButton>(action).onPressed != null;
       final rangeMenu = find.byWidgetPredicate(
-        (widget) => widget is PopupMenuButton<bool> && widget.tooltip == '转换范围',
+        (widget) => widget is DeskMenuButton<bool> && widget.tooltip == '转换范围',
       );
       await until(
         () =>
             rangeMenu.evaluate().isNotEmpty &&
-            t.widget<PopupMenuButton<bool>>(rangeMenu).enabled,
+            t.widget<DeskMenuButton<bool>>(rangeMenu).enabled,
       );
       await t.tap(find.byTooltip('转换范围'));
       await t.pumpAndSettle();
-      await t.tap(find.widgetWithText(PopupMenuItem<bool>, '已勾选 2 本'));
+      await t.tap(
+        find.descendant(
+          of: find.byKey(deskMenuPanelKey),
+          matching: find.text('已勾选 2 本'),
+        ),
+      );
       await t.pumpAndSettle();
 
       for (final format in [

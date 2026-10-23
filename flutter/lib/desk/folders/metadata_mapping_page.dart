@@ -427,21 +427,23 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
                   }),
                   quiet: true,
                 ),
-              action(
-                '放弃未应用规则',
-                () => setState(() {
-                  rules
-                    ..clear()
-                    ..addAll(session.rules);
-                  index = 0;
-                  loadRule();
-                  dirty = false;
-                  preview = null;
-                  message = '已恢复已保存的规则';
-                }),
-                enabled: dirty,
-                quiet: true,
-              ),
+              // R2-09：没有未应用的改动时不显示。
+              if (dirty)
+                action(
+                  '放弃未应用规则',
+                  () => setState(() {
+                    rules
+                      ..clear()
+                      ..addAll(session.rules);
+                    index = 0;
+                    loadRule();
+                    dirty = false;
+                    preview = null;
+                    message = '已恢复已保存的规则';
+                  }),
+                  enabled: dirty,
+                  quiet: true,
+                ),
               action(
                 '保存规则配置',
                 () => run(() async {
@@ -590,42 +592,106 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
                 bottom: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-                    child: Text(
-                      '采用最具体的目录规则：项目规则命中时优先；同一来源只项目规则优先，同层使用最具体目录。旧规则值按已记录的原值重新计算，手工值保留。',
-                      style: ui(11.5, c: d.ink3, h: 1.5),
+                    child: Tooltip(
+                      message: '采用最具体的目录规则：项目规则命中时优先；同一来源只项目规则优先，同层使用最具体目录。旧规则值按已记录的原值重新计算，手工值保留。',
+                      child: Text(
+                        '一本书命中几条规则时，项目规则优先，其次用目录最具体的那条。改过规则会按原值重算，你手工改过的值保留。',
+                        style: ui(11.5, c: d.ink3, h: 1.5),
+                      ),
                     ),
                   ),
-                  action('添加规则', () {
-                    if (rules.length >= 128) return;
-                    setState(() {
-                      flush();
-                      rules.add(
-                        MappingRule.create('', {
-                          'title': {'op': 'keep'},
-                        }),
-                      );
-                      index = rules.length - 1;
-                      loadRule();
-                      dirty = true;
-                    });
-                  }, icon: Icons.add_rounded),
+                  action('添加规则', addRule, icon: Icons.add_rounded),
                 ],
               ),
-              Expanded(
-                child: rules.isEmpty
-                    ? Center(
-                        child: Text(
-                          '添加一条目录规则，设置需要补全或修改的字段。',
-                          style: ui(13, c: d.ink2),
-                        ),
-                      )
-                    : fieldEditor(),
-              ),
+              Expanded(child: rules.isEmpty ? emptyRules() : fieldEditor()),
             ],
           ),
         ),
         footer(previewing: false),
       ],
+    );
+  }
+
+  void addRule() {
+    if (rules.length >= 128) return;
+    setState(() {
+      flush();
+      rules.add(
+        MappingRule.create('', {
+          'title': {'op': 'keep'},
+        }),
+      );
+      index = rules.length - 1;
+      loadRule();
+      dirty = true;
+    });
+  }
+
+  /// 没有规则时的说明（R2-09）：用一条示例讲清规则是什么，再给“添加第一条规则”。
+  Widget emptyRules() {
+    final d = context.desk;
+    Widget step(String a, String b) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: d.paper,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: d.line),
+          ),
+          child: Text(a, style: mono(12, c: d.ink)),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Icon(Icons.arrow_forward_rounded, size: 16, color: d.ink3),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: d.accentSoft,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(b, style: ui(12.5, w: 600, c: d.accent)),
+        ),
+      ],
+    );
+    return Center(
+      key: const ValueKey('mapping-empty'),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.account_tree_outlined, size: 28, color: d.ink3),
+              const SizedBox(height: 10),
+              Text('按文件夹统一补全书籍信息', style: ui(15, w: 650, c: d.ink)),
+              const SizedBox(height: 6),
+              Text(
+                '一条规则对应一个文件夹：从这里导入的书，自动补上或改掉指定的字段，比如作者、系列、标签。导入前可以逐书预览差异。',
+                textAlign: TextAlign.center,
+                style: ui(12.5, c: d.ink2, h: 1.55),
+              ),
+              const SizedBox(height: 16),
+              Text('例如', style: ui(11.5, c: d.ink3)),
+              const SizedBox(height: 6),
+              step(r'D:\小说\金庸', '作者 = 金庸'),
+              const SizedBox(height: 6),
+              step(r'D:\小说\金庸\射雕三部曲', '系列 = 射雕三部曲'),
+              const SizedBox(height: 18),
+              DeskButton(
+                '添加第一条规则',
+                key: const ValueKey('mapping-add-first'),
+                icon: Icons.add_rounded,
+                primary: true,
+                onPressed: busy ? null : addRule,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

@@ -1269,6 +1269,7 @@ class LegacyChapterSession
             row['line_offset'] as int,
             row['selectable'] == true,
             nextCharOffset: row['next_char_offset'] as int?,
+            outputLine: row['source_line'] as int?,
           ),
         ),
       ),

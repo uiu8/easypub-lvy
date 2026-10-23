@@ -47,6 +47,10 @@ impl Profile {
 
 #[derive(Clone, Default)]
 pub struct Context {
+    /// 离线算法夹具：所有非计算原生桥接调用均拒绝。
+    pub pure_compute: bool,
+    /// 发现查询期间不递归触发同一界面的刷新。
+    pub exploring: bool,
     pub cancel: Arc<AtomicBool>,
     pub deadline: Option<Instant>,
     pub profile: Profile,
@@ -182,7 +186,8 @@ impl ErrorKind {
             Self::Server
         } else if message.contains("缓存写入失败") {
             Self::Storage
-        } else if message.contains("连接")
+        } else if crate::network_failure::code(message).is_some()
+            || message.contains("连接")
             || message.contains("DNS")
             || message.contains("读取响应失败")
         {
@@ -275,6 +280,8 @@ pub use crate::hosts::{Host, host};
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct Timing {
+    /// HTTP 发送尝试数，包含重定向与发送失败；不含纯缓存命中。
+    pub requests: u64,
     pub queue: u64,
     pub net: u64,
     pub parse: u64,

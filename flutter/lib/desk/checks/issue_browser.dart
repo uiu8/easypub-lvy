@@ -219,7 +219,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
     } catch (e) {
       if (mounted && ticket == generation) {
         setState(() {
-          error = deskErrorText(e, '问题读取失败，请重试。');
+          error = deskErrorText(e, '问题列表没有读出来：书稿可能刚被修改。点“重新检查”后再看。');
         });
       }
     } finally {
@@ -438,7 +438,12 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
       });
     } catch (e) {
       if (mounted && ticket == selectionGeneration) {
-        setState(() => previewError = deskErrorText(e, '方案读取失败，请重试。'));
+        setState(
+          () => previewError = deskErrorText(
+            e,
+            '修复方案没有读出来：书稿可能已变化。重新选中这个问题生成方案。',
+          ),
+        );
       }
     } finally {
       if (mounted && ticket == selectionGeneration) {
@@ -552,6 +557,9 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
 
   // ---------------------------------------------------------------- 视图
 
+  /// 问题列表较窄时，筛选下拉的“全部”项写短（R3-01），免得只剩“全部…”。
+  bool narrowFilters = false;
+
   List<Widget> filters() => [
     if (widget.session is FilteredChapterSession) ...[
       Expanded(
@@ -562,7 +570,10 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
           key: const ValueKey('check-category'),
           isExpanded: true,
           items: [
-            const DropdownMenuItem(value: '', child: Text('全部类型')),
+            DropdownMenuItem(
+              value: '',
+              child: Text(narrowFilters ? '类型' : '全部类型'),
+            ),
             for (final item in chapterIssueCategories.entries)
               DropdownMenuItem(
                 value: item.key,
@@ -586,7 +597,10 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
           key: const ValueKey('check-severity'),
           isExpanded: true,
           items: [
-            const DropdownMenuItem(value: '', child: Text('全部级别')),
+            DropdownMenuItem(
+              value: '',
+              child: Text(narrowFilters ? '级别' : '全部级别'),
+            ),
             for (final item in chapterIssueSeverities.entries)
               DropdownMenuItem(
                 value: item.key,
@@ -697,7 +711,14 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                 ),
                 if (widget.session is FilteredChapterSession) ...[
                   const SizedBox(height: 6),
-                  Row(children: filters()),
+                  LayoutBuilder(
+                    builder: (context, box) {
+                      narrowFilters =
+                          box.maxWidth <
+                          300 * MediaQuery.textScalerOf(context).scale(1);
+                      return Row(children: filters());
+                    },
+                  ),
                 ],
                 if (category != null || severity != null)
                   Align(
@@ -1060,146 +1081,285 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
             color: d.surface,
             border: Border(top: BorderSide(color: d.line)),
           ),
-          // 按用途分三组（V12）：查看 | 处理 | 当前修改；组间细竖线，窄窗时整组换行。
-          child: Wrap(
-            key: const ValueKey('issue-actions'),
-            alignment: WrapAlignment.end,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _ActionGroup(
+          // 按用途分三组（V12）：查看 | 处理 | 当前修改；组间细竖线。
+          // R3-02：窄时不再换行，“定位章节”只留图标，处理组收进“⋯”，主按钮始终在同一行。
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final narrow =
+                  box.maxWidth <
+                  640 * MediaQuery.textScalerOf(context).scale(1);
+              if (narrow) return compactActions(d, issue);
+              return Wrap(
+                key: const ValueKey('issue-actions'),
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 6,
                 children: [
-                  if (editedHere && widget.session.canUndo)
-                    DeskButton(
-                      '撤销修改',
-                      icon: Icons.undo_rounded,
-                      quiet: true,
-                      onPressed: busy ? null : undo,
-                    ),
-                  DeskButton(
-                    '定位章节',
-                    icon: Icons.my_location_rounded,
-                    onPressed: busy || locating
-                        ? null
-                        : () =>
-                              widget.onChapter(issue.atAnchor(selectedAnchor)),
+                  _ActionGroup(
+                    children: [
+                      if (editedHere && widget.session.canUndo)
+                        DeskButton(
+                          '撤销修改',
+                          icon: Icons.undo_rounded,
+                          quiet: true,
+                          onPressed: busy ? null : undo,
+                        ),
+                      DeskButton(
+                        '定位章节',
+                        icon: Icons.my_location_rounded,
+                        onPressed: busy || locating
+                            ? null
+                            : () => widget.onChapter(
+                                issue.atAnchor(selectedAnchor),
+                              ),
+                      ),
+                      DeskCommandMenu<String>(
+                        key: ValueKey('review-${issue.id}'),
+                        tooltip: '审阅此项',
+                        enabled: !busy && !locating,
+                        onSelected: review,
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(
+                            value: 'confirmed_normal',
+                            child: Text('本项已核实正常'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'ignored',
+                            child: Text('本项暂时忽略'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'reset',
+                            child: Text('撤销本项结论'),
+                          ),
+                          if (widget.onAddNonHeading != null &&
+                              (issue.category == 'unrecognized-heading' ||
+                                  issue.category == 'prose-heading'))
+                            const PopupMenuItem(
+                              value: 'non_heading',
+                              child: Text('不是标题，加入非标题词库…'),
+                            ),
+                        ],
+                        child: const _Chip(text: '审阅此项', trailing: true),
+                      ),
+                    ],
                   ),
-                  DeskCommandMenu<String>(
-                    key: ValueKey('review-${issue.id}'),
-                    tooltip: '审阅此项',
-                    enabled: !busy && !locating,
-                    onSelected: review,
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(
-                        value: 'confirmed_normal',
-                        child: Text('本项已核实正常'),
+                  _ActionGroup(
+                    divider: true,
+                    children: [
+                      // 重复类问题：直接打开两处所在章节的正文对照（CH-247）。
+                      if (issue.category.startsWith('duplicate') ||
+                          issue.category == 'number-reset')
+                        DeskButton(
+                          '对比两章正文',
+                          key: const ValueKey('issue-compare-bodies'),
+                          icon: Icons.compare_outlined,
+                          onPressed: busy || locating
+                              ? null
+                              : () => showDialog<void>(
+                                  context: context,
+                                  builder: (_) => ChapterBodyCompareDialog(
+                                    session: widget.session,
+                                    lines: [
+                                      for (final a in issue.anchors) a.line,
+                                      if (issue.anchors.isEmpty) ...issue.lines,
+                                    ],
+                                  ),
+                                ),
+                        ),
+                      DeskButton(
+                        '批量修复同类（${categories[issue.category] ?? 1}）…',
+                        key: const ValueKey('batch-repair'),
+                        icon: Icons.done_all_rounded,
+                        tooltip: '一次处理全部“${issue.categoryLabel}”：勾选、合并预览、确认应用',
+                        onPressed: busy || locating ? null : batchRepair,
                       ),
-                      const PopupMenuItem(
-                        value: 'ignored',
-                        child: Text('本项暂时忽略'),
-                      ),
-                      const PopupMenuItem(
-                        value: 'reset',
-                        child: Text('撤销本项结论'),
-                      ),
-                      if (widget.onAddNonHeading != null &&
-                          (issue.category == 'unrecognized-heading' ||
-                              issue.category == 'prose-heading'))
-                        const PopupMenuItem(
-                          value: 'non_heading',
-                          child: Text('不是标题，加入非标题词库…'),
+                      if (widget.onRepairIssue != null ||
+                          widget.onRepair != null)
+                        DeskButton(
+                          '完整方案',
+                          icon: Icons.auto_fix_high_outlined,
+                          quiet: true,
+                          onPressed: busy
+                              ? null
+                              : () => widget.onRepairIssue != null
+                                    ? widget.onRepairIssue!(issue)
+                                    : widget.onRepair!(false),
                         ),
                     ],
-                    child: const _Chip(text: '审阅此项', trailing: true),
+                  ),
+                  _ActionGroup(
+                    divider: true,
+                    children: [
+                      if (comparison == 'preview') ...[
+                        DeskButton(
+                          '取消预览',
+                          quiet: true,
+                          onPressed: busy
+                              ? null
+                              : () {
+                                  setState(() => comparison = 'evidence');
+                                  rememberView();
+                                },
+                        ),
+                        DeskButton(
+                          '应用修改',
+                          primary: true,
+                          icon: Icons.check_rounded,
+                          disabledReason: repairPlan == null
+                              ? '暂无可应用的方案'
+                              : '等待修改前后对照读取完成',
+                          onPressed:
+                              busy ||
+                                  previewBusy ||
+                                  repairPlan == null ||
+                                  (widget.session
+                                          is ChapterRepairComparisonSession &&
+                                      !comparisonReady)
+                              ? null
+                              : applyPreview,
+                        ),
+                      ] else
+                        DeskButton(
+                          '预览处理',
+                          primary: true,
+                          onPressed: busy || locating
+                              ? null
+                              : () => previewIssue(),
+                        ),
+                    ],
                   ),
                 ],
-              ),
-              _ActionGroup(
-                divider: true,
-                children: [
-                  // 重复类问题：直接打开两处所在章节的正文对照（CH-247）。
-                  if (issue.category.startsWith('duplicate') ||
-                      issue.category == 'number-reset')
-                    DeskButton(
-                      '对比两章正文',
-                      key: const ValueKey('issue-compare-bodies'),
-                      icon: Icons.compare_outlined,
-                      onPressed: busy || locating
-                          ? null
-                          : () => showDialog<void>(
-                              context: context,
-                              builder: (_) => ChapterBodyCompareDialog(
-                                session: widget.session,
-                                lines: [
-                                  for (final a in issue.anchors) a.line,
-                                  if (issue.anchors.isEmpty) ...issue.lines,
-                                ],
-                              ),
-                            ),
-                    ),
-                  DeskButton(
-                    '批量修复同类（${categories[issue.category] ?? 1}）…',
-                    key: const ValueKey('batch-repair'),
-                    icon: Icons.done_all_rounded,
-                    tooltip: '一次处理全部“${issue.categoryLabel}”：勾选、合并预览、确认应用',
-                    onPressed: busy || locating ? null : batchRepair,
-                  ),
-                  if (widget.onRepairIssue != null || widget.onRepair != null)
-                    DeskButton(
-                      '完整方案',
-                      icon: Icons.auto_fix_high_outlined,
-                      quiet: true,
-                      onPressed: busy
-                          ? null
-                          : () => widget.onRepairIssue != null
-                                ? widget.onRepairIssue!(issue)
-                                : widget.onRepair!(false),
-                    ),
-                ],
-              ),
-              _ActionGroup(
-                divider: true,
-                children: [
-                  if (comparison == 'preview') ...[
-                    DeskButton(
-                      '取消预览',
-                      quiet: true,
-                      onPressed: busy
-                          ? null
-                          : () {
-                              setState(() => comparison = 'evidence');
-                              rememberView();
-                            },
-                    ),
-                    DeskButton(
-                      '应用修改',
-                      primary: true,
-                      icon: Icons.check_rounded,
-                      disabledReason: repairPlan == null
-                          ? '暂无可应用的方案'
-                          : '等待修改前后对照读取完成',
-                      onPressed:
-                          busy ||
-                              previewBusy ||
-                              repairPlan == null ||
-                              (widget.session
-                                      is ChapterRepairComparisonSession &&
-                                  !comparisonReady)
-                          ? null
-                          : applyPreview,
-                    ),
-                  ] else
-                    DeskButton(
-                      '预览处理',
-                      primary: true,
-                      onPressed: busy || locating ? null : () => previewIssue(),
-                    ),
-                ],
-              ),
-            ],
+              );
+            },
           ),
         ),
+      ],
+    );
+  }
+
+  /// 窄时的操作条（R3-02）：一行放下；对比两章、批量修复同类、完整方案收进“⋯”。
+  Widget compactActions(Desk d, ChapterIssue issue) {
+    final disabled = busy || locating;
+    final compare =
+        issue.category.startsWith('duplicate') ||
+        issue.category == 'number-reset';
+    void more(String value) {
+      switch (value) {
+        case 'compare':
+          showDialog<void>(
+            context: context,
+            builder: (_) => ChapterBodyCompareDialog(
+              session: widget.session,
+              lines: [
+                for (final a in issue.anchors) a.line,
+                if (issue.anchors.isEmpty) ...issue.lines,
+              ],
+            ),
+          );
+        case 'batch':
+          batchRepair();
+        case 'full':
+          widget.onRepairIssue != null
+              ? widget.onRepairIssue!(issue)
+              : widget.onRepair!(false);
+      }
+    }
+
+    return Row(
+      key: const ValueKey('issue-actions'),
+      children: [
+        if (editedHere && widget.session.canUndo)
+          IconButton(
+            tooltip: '撤销修改',
+            visualDensity: VisualDensity.compact,
+            onPressed: busy ? null : undo,
+            icon: Icon(Icons.undo_rounded, size: 18, color: d.ink2),
+          ),
+        IconButton(
+          key: const ValueKey('issue-locate'),
+          tooltip: '定位章节',
+          visualDensity: VisualDensity.compact,
+          onPressed: disabled
+              ? null
+              : () => widget.onChapter(issue.atAnchor(selectedAnchor)),
+          icon: Icon(Icons.my_location_rounded, size: 18, color: d.ink2),
+        ),
+        const SizedBox(width: 4),
+        DeskCommandMenu<String>(
+          key: ValueKey('review-${issue.id}'),
+          tooltip: '审阅此项',
+          enabled: !disabled,
+          onSelected: review,
+          itemBuilder: (_) => [
+            const PopupMenuItem(
+              value: 'confirmed_normal',
+              child: Text('本项已核实正常'),
+            ),
+            const PopupMenuItem(value: 'ignored', child: Text('本项暂时忽略')),
+            const PopupMenuItem(value: 'reset', child: Text('撤销本项结论')),
+            if (widget.onAddNonHeading != null &&
+                (issue.category == 'unrecognized-heading' ||
+                    issue.category == 'prose-heading'))
+              const PopupMenuItem(
+                value: 'non_heading',
+                child: Text('不是标题，加入非标题词库…'),
+              ),
+          ],
+          child: const _Chip(text: '审阅此项', trailing: true),
+        ),
+        const SizedBox(width: 4),
+        DeskCommandMenu<String>(
+          key: const ValueKey('issue-more'),
+          tooltip: '更多处理方式',
+          enabled: !disabled,
+          onSelected: more,
+          itemBuilder: (_) => [
+            if (compare)
+              const PopupMenuItem(value: 'compare', child: Text('对比两章正文')),
+            PopupMenuItem(
+              key: const ValueKey('batch-repair'),
+              value: 'batch',
+              child: Text('批量修复同类（${categories[issue.category] ?? 1}）…'),
+            ),
+            if (widget.onRepairIssue != null || widget.onRepair != null)
+              const PopupMenuItem(value: 'full', child: Text('完整方案')),
+          ],
+          icon: Icon(Icons.more_horiz_rounded, color: d.ink2),
+        ),
+        const Spacer(),
+        if (comparison == 'preview') ...[
+          DeskButton(
+            '取消预览',
+            quiet: true,
+            onPressed: busy
+                ? null
+                : () {
+                    setState(() => comparison = 'evidence');
+                    rememberView();
+                  },
+          ),
+          const SizedBox(width: 6),
+          DeskButton(
+            '应用修改',
+            primary: true,
+            icon: Icons.check_rounded,
+            disabledReason: repairPlan == null ? '暂无可应用的方案' : '等待修改前后对照读取完成',
+            onPressed:
+                busy ||
+                    previewBusy ||
+                    repairPlan == null ||
+                    (widget.session is ChapterRepairComparisonSession &&
+                        !comparisonReady)
+                ? null
+                : applyPreview,
+          ),
+        ] else
+          DeskButton(
+            '预览处理',
+            primary: true,
+            onPressed: disabled ? null : () => previewIssue(),
+          ),
       ],
     );
   }

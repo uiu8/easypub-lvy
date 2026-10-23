@@ -560,6 +560,9 @@ class _CleanupPageState extends State<CleanupPage>
   /// 窄窗时左右两栏改为分段切换：0 规则，1 预览。
   int pane = 1;
 
+  /// 用户展开逐行查看的连续空行组（按组首行号）。
+  final expandedBlanks = <int>{};
+
   Widget header() {
     final d = context.desk;
     return Container(
@@ -575,7 +578,7 @@ class _CleanupPageState extends State<CleanupPage>
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              '与章节识别规则无关',
+              '去掉行尾空白、多余空行和广告行；原稿始终保留',
               overflow: TextOverflow.ellipsis,
               style: ui(12, c: d.ink3),
             ),
@@ -946,19 +949,157 @@ class _CleanupPageState extends State<CleanupPage>
             ),
             if (showStages) ...[
               const SizedBox(width: 8),
-              DeskTag(
-                '${value.step + 1} ${cleanupLabel(rules[math.min(value.step, rules.length - 1)])}',
-                Tone.neutral,
+              SizedBox(
+                width: 132 * textScale,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: DeskTag(
+                      '${value.step + 1} ${cleanupLabel(rules[math.min(value.step, rules.length - 1)])}',
+                      Tone.neutral,
+                    ),
+                  ),
+                ),
               ),
             ],
-            if (on && !diff) ...[
-              const SizedBox(width: 6),
+            ...actionSlot(on && !diff, [
+              if (!showStages && expandedBlanks.contains(value.line))
+                DeskButton(
+                  '收起',
+                  quiet: true,
+                  onPressed: () =>
+                      setState(() => expandedBlanks.remove(value.line)),
+                ),
               DeskButton(
                 showStages ? '保留本步原文' : '保留原文',
                 quiet: true,
                 onPressed: busy || !current ? null : () => keep(value),
               ),
-            ],
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double get textScale => MediaQuery.textScalerOf(context).scale(10) / 10;
+
+  /// R4-05：差异行右侧固定留出操作区，选中行多出按钮时其他行的右栏不再错位。
+  List<Widget> actionSlot(bool show, List<Widget> buttons) => diff
+      ? const []
+      : [
+          const SizedBox(width: 6),
+          SizedBox(
+            // 最终差异里连续空行一组有两个按钮，各行统一按两个按钮留宽。
+            width: (showStages ? 112 : 170) * textScale,
+            child: show
+                ? Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 2,
+                    children: buttons,
+                  )
+                : null,
+          ),
+        ];
+
+  /// R4-04：最终差异里相邻的整行空行删除合并成一组；逐步骤差异照旧逐条列出。
+  List<List<int>> changeGroups(List<CleanupChange> changes) {
+    bool blank(CleanupChange c) => c.after == null && c.before.trim().isEmpty;
+    final groups = <List<int>>[];
+    var run = -1; // 当前这串连续空行的首行；展开按它记，整串都逐行列出。
+    for (var i = 0; i < changes.length; i++) {
+      final c = changes[i];
+      final continues =
+          i > 0 &&
+          blank(c) &&
+          blank(changes[i - 1]) &&
+          changes[i - 1].end + 1 == c.line;
+      if (!continues) run = c.line;
+      if (!showStages && continues && !expandedBlanks.contains(run)) {
+        groups.last.add(i);
+      } else {
+        groups.add([i]);
+      }
+    }
+    return groups;
+  }
+
+  /// 一组连续空行：一行显示，可整组保留或展开后逐行处理。
+  Widget blankGroupRow(
+    List<int> group,
+    List<CleanupChange> changes,
+    bool current,
+  ) {
+    final d = context.desk;
+    final first = changes[group.first], last = changes[group.last];
+    final on = group.contains(math.min(change, changes.length - 1));
+    return InkWell(
+      key: ValueKey('cleanup-blank-group-${first.line}'),
+      onTap: busy ? null : () => setState(() => change = group.first),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        decoration: BoxDecoration(
+          color: on ? d.surface : null,
+          border: Border(
+            bottom: BorderSide(color: d.line),
+            left: BorderSide(
+              color: on ? d.accent : Colors.transparent,
+              width: 2.5,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 66,
+              child: Text(
+                '${first.line}–${last.end}',
+                style: mono(10.5, c: d.ink3),
+              ),
+            ),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  text: '（${last.end - first.line + 1} 个连续空行）',
+                  style: serif(
+                    13.5,
+                    c: d.del,
+                    h: 1.6,
+                  ).copyWith(backgroundColor: d.delSoft),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('（删除这些行）', style: serif(13.5, c: d.ink3, h: 1.6)),
+            ),
+            ...actionSlot(on && !diff, [
+              DeskButton(
+                '逐行',
+                quiet: true,
+                onPressed: busy
+                    ? null
+                    : () => setState(() => expandedBlanks.add(first.line)),
+              ),
+              DeskButton(
+                '保留这些行',
+                quiet: true,
+                onPressed: busy || !current
+                    ? null
+                    : () => keep(
+                        CleanupChange(
+                          first.line,
+                          last.end,
+                          first.step,
+                          '',
+                          null,
+                          first.reason,
+                          false,
+                        ),
+                      ),
+              ),
+            ]),
           ],
         ),
       ),
@@ -1187,6 +1328,10 @@ class _CleanupPageState extends State<CleanupPage>
     final entry = changes.isEmpty
         ? null
         : changes[math.min(change, changes.length - 1)];
+    final groups = changeGroups(changes);
+    final at = groups.indexWhere(
+      (g) => g.contains(math.min(change, math.max(0, changes.length - 1))),
+    );
     final key = '$current:$showStages:${plan?.id}:${entry?.line}:${entry?.end}';
     if (key != contextKey) {
       contextKey = key;
@@ -1256,36 +1401,44 @@ class _CleanupPageState extends State<CleanupPage>
               ),
             ),
           ],
-          DeskButton(
-            showWhitespace ? '隐藏空白标记' : '显示空白标记',
-            icon: Icons.space_bar_rounded,
-            quiet: true,
-            onPressed: () => setState(() => showWhitespace = !showWhitespace),
-          ),
+          // R4-03：空白标记开关并入“⋯”，窄窗时工具栏不再把它单独挤到第二行。
           DeskCommandMenu<String>(
+            key: const ValueKey('cleanup-view-menu'),
             enabled: !busy,
-            tooltip: '候选与保留管理',
+            tooltip: '显示与保留管理',
             icon: Icon(Icons.more_horiz_rounded, color: d.ink2),
-            itemBuilder: (_) => const [
+            itemBuilder: (_) => [
               PopupMenuItem(
+                height: 36,
+                value: 'whitespace',
+                child: Text(showWhitespace ? '隐藏空白标记' : '显示空白标记'),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
                 height: 36,
                 value: 'notices',
                 child: Text('清空提示候选排除选择'),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
                 height: 36,
                 value: 'kept',
                 child: Text('清空逐行与逐步骤保留选择'),
               ),
             ],
-            onSelected: (value) => edit(() {
-              if (value == 'notices') {
-                draft['remove_lines'] = <int>[];
-              } else {
-                draft['skip_lines'] = <int>[];
-                draft['step_exclusions'] = <Map<String, dynamic>>[];
+            onSelected: (value) {
+              if (value == 'whitespace') {
+                setState(() => showWhitespace = !showWhitespace);
+                return;
               }
-            }),
+              edit(() {
+                if (value == 'notices') {
+                  draft['remove_lines'] = <int>[];
+                } else {
+                  draft['skip_lines'] = <int>[];
+                  draft['step_exclusions'] = <Map<String, dynamic>>[];
+                }
+              });
+            },
           ),
         ],
       ),
@@ -1325,15 +1478,24 @@ class _CleanupPageState extends State<CleanupPage>
           : candidateList(current);
     } else if (entry == null) {
       body = Center(
-        child: Text(
-          plan != null
-              ? '所选规则未发现需要清理的内容。'
-              : busy
-              ? '正在按规则逐行检测，结果出来后先显示差异…'
-              : error.isNotEmpty
-              ? '检测没有完成，原因见上方。'
-              : '尚未检测。修改规则后点“自动检测”。',
-          style: ui(12.5, c: d.ink3),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              plan != null
+                  ? '所选规则未发现需要清理的内容。'
+                  : busy
+                  ? '正在按规则逐行检测，结果出来后先显示差异…'
+                  : error.isNotEmpty
+                  ? '检测没有完成，原因见上方。'
+                  : '尚未检测。修改规则后点“自动检测”。',
+              style: ui(12.5, c: d.ink3),
+            ),
+            if (plan != null) ...[
+              const SizedBox(height: 4),
+              Text('可以“添加规则”，或从“规则库与预设”选一组预设后重新检测。', style: ui(12, c: d.ink3)),
+            ],
+          ],
         ),
       );
     } else {
@@ -1350,8 +1512,14 @@ class _CleanupPageState extends State<CleanupPage>
               SizedBox(
                 height: top,
                 child: ListView.builder(
-                  itemCount: changes.length,
-                  itemBuilder: (_, i) => pairRow(changes[i], i, current),
+                  itemCount: groups.length,
+                  itemBuilder: (_, i) => groups[i].length == 1
+                      ? pairRow(
+                          changes[groups[i].first],
+                          groups[i].first,
+                          current,
+                        )
+                      : blankGroupRow(groups[i], changes, current),
                 ),
               ),
               MouseRegion(
@@ -1419,8 +1587,10 @@ class _CleanupPageState extends State<CleanupPage>
             onPressed: busy || !current || plan!.offset + change == 0
                 ? null
                 : () {
-                    if (change > 0 && !showCandidates) {
-                      setState(() => change--);
+                    if (!showCandidates && at > 0) {
+                      setState(() => change = groups[at - 1].first);
+                    } else if (change > 0 && !showCandidates) {
+                      setState(() => change = 0);
                     } else {
                       detect(
                         offset: math.max(0, plan!.offset - 40),
@@ -1438,11 +1608,14 @@ class _CleanupPageState extends State<CleanupPage>
                     !current ||
                     (showCandidates
                         ? plan!.offset + 40 >= plan!.candidateTotal
-                        : plan!.offset + change + 1 >= changeTotal)
+                        : plan!.offset +
+                                  (at < 0 ? change : groups[at].last) +
+                                  1 >=
+                              changeTotal)
                 ? null
                 : () {
-                    if (!showCandidates && change + 1 < changes.length) {
-                      setState(() => change++);
+                    if (!showCandidates && at >= 0 && at + 1 < groups.length) {
+                      setState(() => change = groups[at + 1].first);
                     } else {
                       detect(offset: plan!.offset + 40, asDiff: diff);
                     }
@@ -1481,7 +1654,7 @@ class _CleanupPageState extends State<CleanupPage>
             Tooltip(
               message: '查看清理差异；确认采用前正文不会改变',
               child: DeskButton(
-                '清理所选项…',
+                '查看清理差异…',
                 primary: true,
                 icon: Icons.arrow_forward_rounded,
                 disabledReason: '先自动检测，且至少有一处变更',
@@ -1569,9 +1742,15 @@ class _CleanupPageState extends State<CleanupPage>
     );
   }
 
-  Widget stat(String value, String label) {
+  Widget stat(
+    String value,
+    String label, {
+    VoidCallback? onTap,
+    String? tooltip,
+    Key? key,
+  }) {
     final d = context.desk;
-    return Container(
+    final box = Container(
       width: 170,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1583,7 +1762,25 @@ class _CleanupPageState extends State<CleanupPage>
         children: [
           Text(value, style: ui(18, w: 680, c: d.ink)),
           Text(label, style: ui(11.5, c: d.ink2)),
+          if (onTap != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('到检查页查看 →', style: ui(11.5, c: d.accent)),
+            ),
         ],
+      ),
+    );
+    if (onTap == null) return box;
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Material(
+        key: key,
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(9),
+          onTap: onTap,
+          child: box,
+        ),
       ),
     );
   }
@@ -1646,7 +1843,16 @@ class _CleanupPageState extends State<CleanupPage>
           children: [
             stat('${receipt!.changes} 处', '规则变更已纳入草稿'),
             stat('${receipt!.candidates} 条', '提示候选；未选择的原文保留'),
-            stat('${receipt!.chapterIssues} 项', '有效章节结构待核对'),
+            // R4-06：有待核对项时这一格可点，直接到检查页。
+            stat(
+              '${receipt!.chapterIssues} 项',
+              '有效章节结构待核对',
+              key: const ValueKey('cleanup-result-chapter-issues'),
+              tooltip: '清理后有效稿的章节结构有 ${receipt!.chapterIssues} 项需要核对，点此到检查页查看',
+              onTap: receipt!.chapterIssues > 0 && !busy
+                  ? widget.onChecks
+                  : null,
+            ),
             if (receipt!.editsKept > 0)
               stat('${receipt!.editsKept} 处', '章节修改已随清理保留'),
             if (receipt!.editsDropped > 0)
@@ -1766,11 +1972,16 @@ class _CleanupPageState extends State<CleanupPage>
               child: LayoutBuilder(
                 builder: (context, c) {
                   final right = receipt != null ? result() : previewColumn();
-                  if (c.maxWidth >= 900) {
+                  // R4-03：字号放大时两栏需要的宽度和规则栏的宽度一起放大，放不下就改成切换。
+                  final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
+                  if (c.maxWidth >= 900 * scale) {
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        SizedBox(width: 340, child: rulesColumn()),
+                        SizedBox(
+                          width: (340 * scale).clamp(340.0, 440.0),
+                          child: rulesColumn(),
+                        ),
                         Expanded(child: right),
                       ],
                     );

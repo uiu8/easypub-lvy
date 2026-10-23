@@ -44,7 +44,9 @@ class _GlobalLayoutPresetsPanelState extends State<GlobalLayoutPresetsPanel> {
       }
       return ok;
     } catch (_) {
-      if (mounted) setState(() => message = '保存失败，请重试；原预设保留。');
+      if (mounted) {
+        setState(() => message = '预设没有保存：设置目录可能没有写入权限、磁盘已满或文件被其他程序占用。原预设保留。');
+      }
       return false;
     } finally {
       if (mounted) setState(() => busy = false);

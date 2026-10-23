@@ -91,195 +91,260 @@ extension _CommandPalette on _RewriteAppState {
           run: () => go(bookPageLocation(b.id, 'overview')),
         ),
     ];
-    await showDeskCommandPalette(context, recent: recent(), onRun: remember, [
-      ...currentBook,
-      page(
-        'G-005',
-        '书库',
-        'sk',
-        Icons.library_books_outlined,
-        () => go('/'),
-        shortcut: 'Alt 1',
-      ),
-      page(
-        'G-006',
-        '文件夹与收藏',
-        'wjjysc',
-        Icons.folder_outlined,
-        () => go('/folders'),
-        shortcut: 'Alt 2',
-      ),
-      page(
-        'G-023',
-        '文件夹元数据映射',
-        'wjjysjys',
-        Icons.account_tree_outlined,
-        () => go('/folders/mapping'),
-      ),
-      page(
-        'G-007',
-        '书稿概览',
-        'sggl',
-        Icons.space_dashboard_outlined,
-        () => book('overview'),
-      ),
-      page(
-        'G-009',
-        '章节编辑',
-        'zjbj',
-        Icons.account_tree_outlined,
-        () => book('chapters'),
-        shortcut: 'Alt 3',
-      ),
-      page(
-        'G-008',
-        '检查与修复',
-        'jcyxf',
-        Icons.fact_check_outlined,
-        () => book('checks'),
-        shortcut: 'Alt 4',
-      ),
-      page(
-        'G-024',
-        '参考目录',
-        'ckml',
-        Icons.list_alt_rounded,
-        () => book('catalog'),
-      ),
-      page(
-        'G-012',
-        '文本清理',
-        'wbql',
-        Icons.cleaning_services_outlined,
-        () => book('cleanup'),
-      ),
-      page(
-        'G-010',
-        '书籍信息与封面',
-        'sjxxyfm',
-        Icons.info_outline_rounded,
-        () => book('information'),
-      ),
-      page(
-        'G-011',
-        '排版',
-        'pb',
-        Icons.text_fields_rounded,
-        () => book('layout'),
-      ),
-      page(
-        'G-013',
-        '图片与资源',
-        'tpyzy',
-        Icons.image_outlined,
-        () => book('resources'),
-      ),
-      page(
-        'G-014',
-        '转换设置',
-        'zhsz',
-        Icons.output_rounded,
-        () => go('/conversion'),
-        shortcut: 'Alt 5',
-      ),
-      page(
-        'G-015',
-        '转换任务',
-        'zhrw',
-        Icons.checklist_rounded,
-        () => go('/tasks'),
-        shortcut: 'Alt 6',
-      ),
-      page(
-        'G-026',
-        '转换历史',
-        'zhls',
-        Icons.history_rounded,
-        () => go('/tasks/history'),
-      ),
-      page(
-        'G-016',
-        '变更记录',
-        'bgjl',
-        Icons.edit_note_rounded,
-        () => go('/history'),
-      ),
-      page('G-017', '设置', 'sz', Icons.settings_outlined, () => go('/settings')),
-      DeskCommand(
-        id: 'G-018',
-        label: '选择书稿…',
-        group: '操作',
-        initials: 'xzsg',
-        icon: Icons.menu_book_outlined,
-        run: () => chooseBook(context),
-      ),
-      DeskCommand(
-        id: 'G-028',
-        label: '导入书稿…',
-        group: '操作',
-        initials: 'drsg',
-        icon: Icons.file_open_outlined,
-        run: () async {
-          final paths = await widget.picker.chooseBooks();
-          if (paths.isEmpty || !mounted) return;
-          await widget.library.importFiles(paths);
-        },
-      ),
-      DeskCommand(
-        id: 'G-038',
-        label: '转换当前书…',
-        group: '操作',
-        initials: 'zhdqs',
-        keywords: '输出 epub azw3 mobi kfx',
-        icon: Icons.arrow_forward_rounded,
-        disabledReason: current == null
-            ? '先选择书稿'
-            : busy
-            ? '等待当前操作完成'
-            : null,
-        run: () => quickConvert(context, bookId: current),
-      ),
-      DeskCommand(
-        id: 'G-032',
-        label: '本次书稿排版预设…',
-        group: '操作',
-        initials: 'bcsgpbys',
-        icon: Icons.text_fields_rounded,
-        disabledReason: current == null
-            ? '先选择书稿'
-            : busy
-            ? '等待当前操作完成'
-            : null,
-        run: () => chooseLayout(context),
-      ),
-      DeskCommand(
-        id: 'G-035',
-        label: '更改输出位置…',
-        group: '操作',
-        initials: 'ggscwz',
-        icon: Icons.folder_outlined,
-        disabledReason: busy ? '等待当前操作完成' : null,
-        run: chooseOutputDirectory,
-      ),
-      DeskCommand(
-        id: 'G-036',
-        label: '打开输出文件夹',
-        group: '操作',
-        initials: 'dkscwjj',
-        icon: Icons.open_in_new_rounded,
-        disabledReason: conversionDraft.directory.isEmpty ? '尚未设置输出位置' : null,
-        run: openOutputDirectory,
-      ),
-      DeskCommand(
-        id: 'G-030',
-        label: '立即保存工作区',
-        group: '操作',
-        initials: 'ljbcgzq',
-        icon: Icons.save_outlined,
-        disabledReason: autosave == null ? '当前运行环境没有自动保存服务' : null,
-        run: () => autosave?.flushWorkspace(),
-      ),
-      ...books,
-    ]);
+    // 设置项（R1，G-062）：只在输入后出现，打开设置页对应分组并定位到该项。
+    final settingItems = [
+      for (final (label, tab, keywords) in settingsIndex)
+        DeskCommand(
+          id: 'G-062',
+          label: label,
+          group: '设置 · ${settingsTabNames[tab]}',
+          initials: '',
+          keywords: '设置 $keywords',
+          icon: Icons.settings_outlined,
+          searchOnly: true,
+          run: () => go(
+            Uri(
+              path: '/settings',
+              queryParameters: {'tab': '$tab', 'item': label},
+            ).toString(),
+          ),
+        ),
+    ];
+    // 章节（R1，G-062）：面板打开后再读取当前书的章节标题（最多 5000 个），只在输入后出现，
+    // 选中跳到章节页的该章。
+    Future<List<DeskCommand>> chapterItems() async {
+      final id = current;
+      if (id == null) return const [];
+      final session = widget.library.openChapters(id);
+      final nodes = <ChapterNode>[];
+      var page = await session.read(0);
+      nodes.addAll(page.nodes);
+      while (nodes.length < page.total && nodes.length < 5000) {
+        page = await session.read(nodes.length);
+        if (page.nodes.isEmpty) break;
+        nodes.addAll(page.nodes);
+      }
+      return [
+        for (final n in nodes)
+          if (n.title.trim().isNotEmpty)
+            DeskCommand(
+              id: 'G-062',
+              label: n.title,
+              group: '章节 · ${title ?? ''}',
+              initials: '',
+              keywords: '章节',
+              icon: n.role == 'volume'
+                  ? Icons.folder_open_outlined
+                  : Icons.segment_rounded,
+              searchOnly: true,
+              run: () =>
+                  go(bookPageLocation(id, 'chapters', query: {'node': n.id})),
+            ),
+      ];
+    }
+
+    await showDeskCommandPalette(
+      context,
+      recent: recent(),
+      onRun: remember,
+      more: chapterItems(),
+      [
+        ...currentBook,
+        page(
+          'G-005',
+          '书库',
+          'sk',
+          Icons.library_books_outlined,
+          () => go('/'),
+          shortcut: 'Alt 1',
+        ),
+        page(
+          'G-006',
+          '文件夹与收藏',
+          'wjjysc',
+          Icons.folder_outlined,
+          () => go('/folders'),
+          shortcut: 'Alt 2',
+        ),
+        page(
+          'G-023',
+          '文件夹元数据映射',
+          'wjjysjys',
+          Icons.account_tree_outlined,
+          () => go('/folders/mapping'),
+        ),
+        page(
+          'G-007',
+          '书稿概览',
+          'sggl',
+          Icons.space_dashboard_outlined,
+          () => book('overview'),
+        ),
+        page(
+          'G-009',
+          '章节编辑',
+          'zjbj',
+          Icons.account_tree_outlined,
+          () => book('chapters'),
+          shortcut: 'Alt 3',
+        ),
+        page(
+          'G-008',
+          '检查与修复',
+          'jcyxf',
+          Icons.fact_check_outlined,
+          () => book('checks'),
+          shortcut: 'Alt 4',
+        ),
+        page(
+          'G-024',
+          '参考目录',
+          'ckml',
+          Icons.list_alt_rounded,
+          () => book('catalog'),
+        ),
+        page(
+          'G-012',
+          '文本清理',
+          'wbql',
+          Icons.cleaning_services_outlined,
+          () => book('cleanup'),
+        ),
+        page(
+          'G-010',
+          '书籍信息与封面',
+          'sjxxyfm',
+          Icons.info_outline_rounded,
+          () => book('information'),
+        ),
+        page(
+          'G-011',
+          '排版',
+          'pb',
+          Icons.text_fields_rounded,
+          () => book('layout'),
+        ),
+        page(
+          'G-013',
+          '图片与资源',
+          'tpyzy',
+          Icons.image_outlined,
+          () => book('resources'),
+        ),
+        page(
+          'G-014',
+          '转换设置',
+          'zhsz',
+          Icons.output_rounded,
+          () => go('/conversion'),
+          shortcut: 'Alt 5',
+        ),
+        page(
+          'G-015',
+          '转换任务',
+          'zhrw',
+          Icons.checklist_rounded,
+          () => go('/tasks'),
+          shortcut: 'Alt 6',
+        ),
+        page(
+          'G-026',
+          '转换历史',
+          'zhls',
+          Icons.history_rounded,
+          () => go('/tasks/history'),
+        ),
+        page(
+          'G-016',
+          '变更记录',
+          'bgjl',
+          Icons.edit_note_rounded,
+          () => go('/history'),
+        ),
+        page(
+          'G-017',
+          '设置',
+          'sz',
+          Icons.settings_outlined,
+          () => go('/settings'),
+        ),
+        DeskCommand(
+          id: 'G-018',
+          label: '选择书稿…',
+          group: '操作',
+          initials: 'xzsg',
+          icon: Icons.menu_book_outlined,
+          run: () => chooseBook(context),
+        ),
+        DeskCommand(
+          id: 'G-028',
+          label: '导入书稿…',
+          group: '操作',
+          initials: 'drsg',
+          icon: Icons.file_open_outlined,
+          run: () async {
+            final paths = await widget.picker.chooseBooks();
+            if (paths.isEmpty || !mounted) return;
+            await widget.library.importFiles(paths);
+          },
+        ),
+        DeskCommand(
+          id: 'G-038',
+          label: '转换当前书…',
+          group: '操作',
+          initials: 'zhdqs',
+          keywords: '输出 epub azw3 mobi kfx',
+          icon: Icons.arrow_forward_rounded,
+          disabledReason: current == null
+              ? '先选择书稿'
+              : busy
+              ? '等待当前操作完成'
+              : null,
+          run: () => quickConvert(context, bookId: current),
+        ),
+        DeskCommand(
+          id: 'G-032',
+          label: '本次书稿排版预设…',
+          group: '操作',
+          initials: 'bcsgpbys',
+          icon: Icons.text_fields_rounded,
+          disabledReason: current == null
+              ? '先选择书稿'
+              : busy
+              ? '等待当前操作完成'
+              : null,
+          run: () => chooseLayout(context),
+        ),
+        DeskCommand(
+          id: 'G-035',
+          label: '更改输出位置…',
+          group: '操作',
+          initials: 'ggscwz',
+          icon: Icons.folder_outlined,
+          disabledReason: busy ? '等待当前操作完成' : null,
+          run: chooseOutputDirectory,
+        ),
+        DeskCommand(
+          id: 'G-036',
+          label: '打开输出文件夹',
+          group: '操作',
+          initials: 'dkscwjj',
+          icon: Icons.open_in_new_rounded,
+          disabledReason: conversionDraft.directory.isEmpty ? '尚未设置输出位置' : null,
+          run: openOutputDirectory,
+        ),
+        DeskCommand(
+          id: 'G-030',
+          label: '立即保存工作区',
+          group: '操作',
+          initials: 'ljbcgzq',
+          icon: Icons.save_outlined,
+          disabledReason: autosave == null ? '当前运行环境没有自动保存服务' : null,
+          run: () => autosave?.flushWorkspace(),
+        ),
+        ...books,
+        ...settingItems,
+      ],
+    );
   }
 }

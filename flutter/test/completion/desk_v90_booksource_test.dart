@@ -159,7 +159,8 @@ void main() {
     await v88.open(tester, api, temp);
     await tester.tap(find.text('书源 1/2'));
     await v89.pump(tester);
-    await tester.tap(find.text('订阅与更新'));
+    await v88.menu(tester, 'booksource-menu-import');
+    await tester.tap(find.byKey(const ValueKey('booksource-subscriptions')));
     await v89.pump(tester);
     await tester.tap(find.text('检查更新'));
     await v89.pump(tester);

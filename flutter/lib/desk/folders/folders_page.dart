@@ -70,7 +70,9 @@ class _FoldersPageState extends State<FoldersPage> {
 
   Future<void> loadFavorites() async {
     final ok = await widget.library.loadFavorites();
-    if (mounted && !ok) setState(() => favoriteError = '收藏读取失败，请重试。');
+    if (mounted && !ok) {
+      setState(() => favoriteError = '收藏夹列表没有读出来：设置文件可能损坏或被占用。重新打开这一页再试。');
+    }
   }
 
   @override

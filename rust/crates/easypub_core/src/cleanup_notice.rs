@@ -8,6 +8,62 @@ use serde::{Deserialize, Serialize};
 fn yes() -> bool {
     true
 }
+/// Page-turn and traffic lines common on pirate sites. Prompt-only: callers list
+/// them as candidates and never remove them unless the user selects them.
+pub(crate) fn promotion(text: &str) -> bool {
+    static WEBSITE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+        compile(
+            r"(?:https?://|www\.|[a-z0-9-]+\.(?:com|org|net|cn|cc|me|io|info|la|tw|co|top|xyz|vip)\b)",
+            true,
+        )
+        .unwrap()
+    });
+    let t = text.trim();
+    let chars = t.chars().count();
+    if chars == 0 || chars > 80 {
+        return false;
+    }
+    let paging = [
+        "本章未完",
+        "点击下一页",
+        "请翻页",
+        "下一页继续",
+        "翻页继续阅读",
+    ];
+    if chars <= 40 && paging.iter().any(|w| t.contains(w)) {
+        return true;
+    }
+    let traffic = [
+        "最新章节",
+        "请访问",
+        "手机版",
+        "手机阅读",
+        "手机用户",
+        "记住本站",
+        "本站域名",
+        "本站网址",
+        "加入书签",
+        "最快更新",
+        "无弹窗",
+        "全文阅读",
+        "首发",
+    ];
+    let hits = traffic.iter().filter(|w| t.contains(**w)).count();
+    // Prose may mention a website or one of these words; a promotion line has both,
+    // or is a short line that opens with the pitch.
+    hits >= 1 && WEBSITE.is_match(t)
+        || hits >= 2 && chars <= 30
+        || chars <= 20
+            && [
+                "请记住本站",
+                "记住本站",
+                "加入书签",
+                "手机版阅读",
+                "最新章节请",
+            ]
+            .iter()
+            .any(|w| t.starts_with(w))
+}
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pattern {
@@ -52,6 +108,66 @@ mod tests {
         ] {
             assert!(m.reasons(line).unwrap().is_empty(), "{line}");
         }
+    }
+    #[test]
+    fn promotion_lines_need_a_pitch_not_just_a_website() {
+        for line in [
+            "本章未完，请点击下一页继续阅读",
+            "（本章未完，请翻页）",
+            "最新章节请访问 www.example-novel.invalid 手机版阅读",
+            "请记住本站域名：example.com",
+            "手机版阅读网址：m.example.com",
+            "最快更新，无弹窗全文阅读",
+            "加入书签，方便阅读",
+        ] {
+            assert!(promotion(line), "{line}");
+        }
+        for line in [
+            "他在 example.com 上写日记。",
+            "正文中的 www.example.com",
+            "她翻到下一页继续读，窗外的雨停了。他抬起头，看见她仍低着头，手指压着书角，像是怕风把纸吹走。",
+            "这是他的首发作品。",
+            "第12章 最新章节",
+            "未完待续",
+            "",
+        ] {
+            assert!(!promotion(line), "{line}");
+        }
+    }
+    /// Counts what the default signals flag in a local corpus; prints numbers only.
+    /// `EASYPUB_NOTICE_CORPUS=<dir> EASYPUB_NOTICE_HITS=<file> cargo test -- --ignored`
+    #[test]
+    #[ignore]
+    fn promotion_corpus_scan() {
+        let dir = std::env::var("EASYPUB_NOTICE_CORPUS").unwrap();
+        let out = std::env::var("EASYPUB_NOTICE_HITS").unwrap();
+        let mut stack = vec![std::path::PathBuf::from(dir)];
+        let (mut files, mut lines, mut old, mut new) = (0, 0, 0, 0);
+        let mut hits = String::new();
+        while let Some(p) = stack.pop() {
+            if p.is_dir() {
+                stack.extend(std::fs::read_dir(&p).unwrap().map(|e| e.unwrap().path()));
+                continue;
+            }
+            if p.extension().is_none_or(|e| e != "txt") {
+                continue;
+            }
+            let Ok(text) = String::from_utf8(std::fs::read(&p).unwrap()) else {
+                continue;
+            };
+            files += 1;
+            for line in text.lines() {
+                lines += 1;
+                if crate::cleanup::candidate(line) {
+                    old += 1;
+                } else if promotion(line) {
+                    new += 1;
+                    hits.push_str(&format!("{}\t{}\n", files, line.trim()));
+                }
+            }
+        }
+        std::fs::write(out, hits).unwrap();
+        println!("files={files} lines={lines} old={old} new={new}");
     }
     #[test]
     fn literal_regex_case_and_preserve_conditions_are_distinct() {
@@ -215,7 +331,7 @@ impl Matcher {
             result.push("match_pattern");
         }
         if self.options.include_defaults {
-            if crate::cleanup::candidate(text) || self.defaults.is_match(text) {
+            if crate::cleanup::candidate(text) || promotion(text) || self.defaults.is_match(text) {
                 result.push("default_notice");
             }
             let context = ["更新不易", "书友", "章节", "小说", "本书", "无错"]

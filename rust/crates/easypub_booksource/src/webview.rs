@@ -30,6 +30,7 @@ pub struct Job {
     pub html: Option<String>,
     /// 页面加载后反复执行，直到返回非空；没有时取整页 HTML。
     pub js: Option<String>,
+    pub source_regex: Option<String>,
     pub user_agent: String,
     pub cookies: Vec<(String, String)>,
     pub timeout: Duration,
@@ -67,6 +68,7 @@ pub fn sync_cookies_from_webview(scope: &Scope<'_, '_>, url: &str) -> Result<usi
         headers: Vec::new(),
         html: None,
         js: None,
+        source_regex: None,
         user_agent: DEFAULT_UA.into(),
         cookies: Vec::new(),
         timeout: Duration::from_secs(10),
@@ -97,8 +99,36 @@ pub fn is_challenge_response(r: &Response) -> bool {
         "确认您是真人",
     ];
     let head: String = r.text.chars().take(6000).collect::<String>().to_lowercase();
-    (matches!(r.status, 403 | 429 | 503) && looks_like_challenge(&head))
+    r.header("cf-mitigated")
+        .is_some_and(|v| v.eq_ignore_ascii_case("challenge"))
+        || (matches!(r.status, 403 | 429 | 503) && looks_like_challenge(&head))
         || strong.iter().any(|m| head.contains(m))
+}
+
+/// 仅识别明确提示启用 JS、且 body 没有静态文本的 HTML 空壳。
+pub fn needs_javascript(r: &Response) -> bool {
+    if r.status != 200 || is_challenge_response(r) {
+        return false;
+    }
+    let doc = scraper::Html::parse_document(&r.text);
+    let select = |s| scraper::Selector::parse(s).unwrap();
+    let hint = doc.select(&select("noscript")).any(|n| {
+        let text = n.text().collect::<String>().to_lowercase();
+        [
+            "enable javascript",
+            "启用javascript",
+            "启用 javascript",
+            "开启javascript",
+            "开启 javascript",
+        ]
+        .iter()
+        .any(|p| text.contains(p))
+    });
+    hint && doc.select(&select("script")).next().is_some()
+        && doc
+            .select(&select("body"))
+            .next()
+            .is_some_and(|b| crate::text::html_to_text(&b.inner_html()).is_empty())
 }
 
 /// 页面像人机验证 / 验证码页（标题与正文前部）。
@@ -166,6 +196,11 @@ pub fn execute_with(
     interactive: Interactive,
     prompt: String,
 ) -> Result<Output, String> {
+    if let Some(regex) = request.and_then(|r| r.source_regex.as_deref())
+        && crate::pattern::compile(regex).is_none()
+    {
+        return Err("资源匹配规则正则无效".into());
+    }
     let headers: &[(String, String)] = request.map_or(&[], |r| &r.headers);
     let url = scope.absolute(url);
     let user_agent = headers
@@ -177,7 +212,7 @@ pub fn execute_with(
     let cookies = reqwest::Url::parse(&url)
         .map(|u| cookie_pairs(&scope.net().cookie_header(&u)))
         .unwrap_or_default();
-    scope.log(format!("WebView 打开 {url}"));
+    scope.log("WebView 请求打开网页");
     let out = submit(Job {
         context: {
             let mut c = crate::control::current();
@@ -193,6 +228,7 @@ pub fn execute_with(
             .map(|(_, v)| v.clone()),
         html,
         js: js.filter(|j| !j.trim().is_empty()),
+        source_regex: request.and_then(|r| r.source_regex.clone()),
         headers: headers.to_vec(),
         user_agent,
         cookies,
@@ -247,6 +283,25 @@ pub fn run(
     Ok(execute(scope, &url, html, js, None)?.text)
 }
 
+pub fn run_source(
+    scope: &Scope<'_, '_>,
+    html: Option<String>,
+    url: Option<String>,
+    js: Option<String>,
+    regex: String,
+) -> Result<String, String> {
+    if regex.trim().is_empty() {
+        return Err("资源匹配规则不能为空".into());
+    }
+    let request = Request {
+        url: scope.absolute(url.as_deref().unwrap_or("")),
+        method: "GET".into(),
+        source_regex: Some(regex),
+        ..Default::default()
+    };
+    Ok(execute(scope, &request.url, html, js, Some(&request))?.text)
+}
+
 pub fn supported() -> bool {
     cfg!(windows)
 }
@@ -294,6 +349,9 @@ mod host {
         // 载入 HTML 时 url 是基准地址，同样只接受网页。
         if !super::web_url(&job.url) {
             return Err(super::NOT_WEB.into());
+        }
+        if job.interactive == super::Interactive::Always && !context.interactive {
+            return Err("需要网页验证：当前任务不允许交互".into());
         }
         let html = job.bridge.is_some();
         let queues = if html { &HTML_QUEUE } else { &QUEUE };
@@ -345,7 +403,10 @@ mod host {
                             };
                             let configuration =
                                 format!("{}:{args}", html || job.context.corpus.is_some());
-                            if webview.is_none() || configuration != active_args {
+                            if webview.is_none()
+                                || configuration != active_args
+                                || job.source_regex.is_some()
+                            {
                                 drop(webview.take());
                                 match unsafe { create(&args, html || job.context.corpus.is_some()) }
                                 {
@@ -362,7 +423,14 @@ mod host {
                             let webview = webview.as_ref().unwrap();
                             let result =
                                 unsafe { run_job(&webview.0.0, &webview.1, &webview.2, &job) };
-                            if result.is_err() || job.context.check().is_err() {
+                            let result = if let Err(error) = job.context.check() {
+                                Err(error)
+                            } else if CLOSE_ABORT.get() && CLOSED.get() {
+                                Err("验证窗口已关闭，没有完成验证".into())
+                            } else {
+                                result
+                            };
+                            if result.is_err() {
                                 unsafe {
                                     let _ = webview.1.Stop();
                                 }
@@ -384,6 +452,7 @@ mod host {
     thread_local! {
         static WINDOW: std::cell::Cell<isize> = const { std::cell::Cell::new(0) };
         static CLOSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        static CLOSE_ABORT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     }
 
     extern "system" fn window_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
@@ -417,6 +486,7 @@ mod host {
     }
 
     fn hide() {
+        CLOSE_ABORT.set(false);
         unsafe {
             let _ = ShowWindow(window(), SW_HIDE);
         }
@@ -632,7 +702,10 @@ mod host {
             if let Ok(v) = rx.try_recv() {
                 return Some(v);
             }
-            if Instant::now() > deadline || crate::control::current().check().is_err() {
+            if Instant::now() > deadline
+                || crate::control::current().check().is_err()
+                || (CLOSE_ABORT.get() && CLOSED.get())
+            {
                 return None;
             }
             pump();
@@ -642,7 +715,10 @@ mod host {
 
     fn sleep_pumping(d: Duration) {
         let end = Instant::now() + d;
-        while Instant::now() < end && crate::control::current().check().is_ok() {
+        while Instant::now() < end
+            && crate::control::current().check().is_ok()
+            && !(CLOSE_ABORT.get() && CLOSED.get())
+        {
             pump();
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -734,6 +810,41 @@ mod host {
                     cookies,
                 });
             }
+            // 注册在导航之前，返回首个匹配的 HTTP(S) 请求 URL，不读取资源正文。
+            let captured = std::rc::Rc::new(std::cell::RefCell::new(None::<String>));
+            let _capture = if let Some(regex) = &job.source_regex {
+                let pattern = crate::pattern::compile(regex).ok_or("资源匹配规则正则无效")?;
+                webview
+                    .AddWebResourceRequestedFilter(w!("*"), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)
+                    .map_err(|_| "资源捕获不可用")?;
+                let result = captured.clone();
+                let mut token = 0;
+                webview
+                    .add_WebResourceRequested(
+                        &WebResourceRequestedEventHandler::create(Box::new(move |_, args| {
+                            if result.borrow().is_none()
+                                && let Some(args) = args
+                            {
+                                let request = args.Request()?;
+                                let mut uri = PWSTR::null();
+                                request.Uri(&mut uri)?;
+                                let uri = take_pwstr(uri);
+                                if super::web_url(&uri) && pattern.is_match(&uri) {
+                                    *result.borrow_mut() = Some(uri);
+                                }
+                            }
+                            Ok(())
+                        })),
+                        &mut token,
+                    )
+                    .map_err(|_| "资源捕获不可用")?;
+                Some(ResourceCapture {
+                    view: webview.clone(),
+                    token,
+                })
+            } else {
+                None
+            };
             if let Ok(settings) = webview
                 .Settings()
                 .and_then(|s| s.cast::<ICoreWebView2Settings2>())
@@ -801,9 +912,12 @@ mod host {
                 shown = true;
                 deadline = Instant::now() + Duration::from_secs(600);
             }
-            let probe = "document.title + '\n' + (document.body ? document.body.innerText : '')";
+            let probe = r"document.title + '\n' + (document.body ? document.body.innerText : '')";
             let text = loop {
                 job.context.check()?;
+                if let Some(url) = captured.borrow_mut().take() {
+                    break url;
+                }
                 if let Some(rt) = &job.bridge {
                     let queue = script(
                         webview,
@@ -838,13 +952,24 @@ mod host {
                 }
                 let text = script(webview, &js, deadline)?;
                 let challenge = job.interactive == super::Interactive::OnChallenge
-                    && std::env::var_os("EASYPUB_WEBVIEW_NONINTERACTIVE").is_none()
                     && (started.elapsed() > Duration::from_secs(3) || !empty(&text))
                     && script(webview, probe, deadline)
                         .map(|t| super::looks_like_challenge(&t))
                         .unwrap_or(false);
-                if !empty(&text) && !challenge {
+                let pending_render = job.js.is_none()
+                    && super::needs_javascript(&crate::net::Response {
+                        status: 200,
+                        text: text.clone(),
+                        ..Default::default()
+                    });
+                if !empty(&text) && !challenge && !pending_render && job.source_regex.is_none() {
                     break text;
+                }
+                if challenge
+                    && (!job.context.interactive
+                        || std::env::var_os("EASYPUB_WEBVIEW_NONINTERACTIVE").is_some())
+                {
+                    return Err("需要网页验证".into());
                 }
                 if challenge && !shown {
                     show(
@@ -856,13 +981,16 @@ mod host {
                         },
                     );
                     shown = true;
+                    CLOSE_ABORT.set(true);
                     deadline = Instant::now() + Duration::from_secs(300);
                 }
                 if shown && CLOSED.get() {
                     return Err("验证窗口已关闭，没有完成验证".into());
                 }
                 if Instant::now() + Duration::from_millis(500) > deadline {
-                    return Err(if shown {
+                    return Err(if job.source_regex.is_some() && !shown {
+                        "资源匹配规则未捕获到网址".into()
+                    } else if shown {
                         "等待网页验证超时".into()
                     } else {
                         "WebView 脚本一直没有返回内容".into()
@@ -890,6 +1018,23 @@ mod host {
                 None => Vec::new(),
             };
             Ok(Output { text, url, cookies })
+        }
+    }
+
+    struct ResourceCapture {
+        view: ICoreWebView2,
+        token: i64,
+    }
+    impl Drop for ResourceCapture {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = self.view.remove_WebResourceRequested(self.token);
+                let _ = self.view.RemoveWebResourceRequestedFilter(
+                    w!("*"),
+                    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+                );
+                let _ = self.view.Stop();
+            }
         }
     }
 

@@ -5,7 +5,7 @@ use crate::{
 };
 use std::{
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
@@ -13,24 +13,43 @@ use std::{
 
 #[test]
 fn initialization_is_cancellable_and_native_errors_keep_causes_without_secrets() {
-    let cancel = Arc::new(AtomicBool::new(false));
-    let worker = cancel.clone();
-    let start = Instant::now();
-    let thread = std::thread::spawn(move || {
-        let _guard = Context::new(Profile::Content, worker).enter();
-        let source = BookSource {
-            js_lib: "while(true){}".into(),
-            ..Default::default()
+    for main_script in [false, true] {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let _guard = Context::new(Profile::Content, cancel.clone()).enter();
+        let script = "java.toast('ready'); while(true){}";
+        let source = if main_script {
+            BookSource {
+                main_js: script.into(),
+                ..Default::default()
+            }
+        } else {
+            BookSource {
+                js_lib: script.into(),
+                ..Default::default()
+            }
         };
-        Engine::new(SourceRt::new(source)).map(|_| ())
-    });
-    std::thread::sleep(Duration::from_millis(40));
-    cancel.store(true, Ordering::Relaxed);
-    let _ = thread.join().unwrap();
-    assert!(
-        start.elapsed() < Duration::from_secs(2),
-        "JS 库初始化必须响应任务取消"
-    );
+        let rt = SourceRt::new(source);
+        let cancelled_at = Arc::new(Mutex::new(None));
+        let observed = cancelled_at.clone();
+        // 从脚本内的宿主回调同步发出取消，排除线程调度和引擎启动耗时。
+        // 回调正常返回，后续无限循环必须由 QuickJS 中断处理器终止。
+        *rt.services.interaction.lock().unwrap() = Some(Arc::new(move |_, _| {
+            *observed.lock().unwrap() = Some(Instant::now());
+            cancel.store(true, Ordering::Relaxed);
+            Ok(true.into())
+        }));
+        let error = Engine::new(rt).err().expect("初始化必须响应取消");
+        let elapsed = cancelled_at
+            .lock()
+            .unwrap()
+            .expect("初始化必须进入目标脚本")
+            .elapsed();
+        assert_eq!(ErrorKind::classify(&error), ErrorKind::Cancelled);
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "不能依赖 JS 自身预算退出：{elapsed:?}"
+        );
+    }
     let e = Engine::new(SourceRt::new(BookSource::default())).unwrap();
     e.run(|s| {
         let error = s

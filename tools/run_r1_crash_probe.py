@@ -1,5 +1,6 @@
 """Kill only owned worker processes at explicit R1-only checkpoints."""
 from pathlib import Path
+import argparse
 import datetime
 import hashlib
 import json
@@ -8,6 +9,9 @@ import subprocess
 import time
 
 root = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--output', type=Path, default=root / 'docs/evidence/r1-process-crash.json')
+args = parser.parse_args()
 worker = root / 'target/debug/examples/r1_crash_worker.exe'
 run_root = root / 'artifacts' / ('r1-crash-' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
 run_root.mkdir(parents=True)
@@ -79,6 +83,7 @@ report = dict(passed=True, recorded_at=datetime.datetime.now().astimezone().isof
               limitations=['storage-controller power-loss durability not measured',
                            'publication requires same-volume hard-link support',
                            'only minimal new-copy transaction, not multi-file EPUB commit'])
-(root / 'docs/evidence/r1-process-crash.json').write_text(
+args.output.parent.mkdir(parents=True, exist_ok=True)
+args.output.write_text(
     json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 print(json.dumps(report, ensure_ascii=False))

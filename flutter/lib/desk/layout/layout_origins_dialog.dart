@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../application/layout_service.dart';
 import '../../application/book_information_service.dart';
 import '../controls/controls.dart';
+import '../dialogs.dart' show DeskDialog;
 import '../tokens.dart';
 
 class LayoutOriginsDialog extends StatefulWidget {
@@ -85,144 +86,119 @@ class _LayoutOriginsDialogState extends State<LayoutOriginsDialog> {
     }
   }
 
+  // 编辑台弹窗（R5-03）：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !busy,
-    child: Dialog(
-      backgroundColor: context.desk.surface,
-      child: SizedBox(
-        width: 680,
-        height: 600,
-        child: Padding(
-          padding: const EdgeInsets.all(26),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: DeskText(
-                      plan == null ? '排版设置来源' : '确认按字段恢复',
-                      size: 22,
-                      bold: true,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: busy
-                        ? null
-                        : () => Navigator.pop(context, false),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              if (plan == null)
-                DeskModeSwitch<bool>(
-                  value: global,
-                  options: const {false: '出厂默认', true: '全局默认'},
-                  onChanged: busy
-                      ? null
-                      : (value) => setState(() => global = value),
-                ),
-              const SizedBox(height: 14),
-              Expanded(
-                child: DeskScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final key in plan == null ? layoutFields : selected)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => DeskDialog(
+    title: plan == null ? '排版设置来源' : '确认按字段恢复',
+    closeTooltip: '关闭',
+    width: 680,
+    height: 600,
+    busy: busy,
+    escapeCloses: true,
+    onClose: () => Navigator.pop(context, false),
+    footerLeft: Align(
+      alignment: Alignment.centerLeft,
+      child: DeskButton(
+        plan == null ? '取消' : '返回选择',
+        quiet: true,
+        onPressed: busy
+            ? null
+            : () {
+                if (plan == null) {
+                  Navigator.pop(context, false);
+                } else {
+                  setState(() => plan = null);
+                }
+              },
+      ),
+    ),
+    actions: [
+      DeskButton(
+        plan == null ? '预览并确认' : '确认恢复',
+        primary: true,
+        disabledReason: '先勾选要恢复的项',
+        onPressed: busy || (plan == null && selected.isEmpty)
+            ? null
+            : plan == null
+            ? preview
+            : apply,
+      ),
+    ],
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (plan == null)
+          DeskModeSwitch<bool>(
+            value: global,
+            options: const {false: '出厂默认', true: '全局默认'},
+            onChanged: busy ? null : (value) => setState(() => global = value),
+          ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: DeskScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final key in plan == null ? layoutFields : selected)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (plan == null)
+                          Checkbox(
+                            value: selected.contains(key),
+                            onChanged: busy
+                                ? null
+                                : (value) => setState(() {
+                                    if (value == true && selected.length < 13) {
+                                      selected.add(key);
+                                    } else if (value != true) {
+                                      selected.remove(key);
+                                    }
+                                  }),
+                          ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              if (plan == null)
-                                Checkbox(
-                                  value: selected.contains(key),
-                                  onChanged: busy
-                                      ? null
-                                      : (value) => setState(() {
-                                          if (value == true &&
-                                              selected.length < 13) {
-                                            selected.add(key);
-                                          } else if (value != true) {
-                                            selected.remove(key);
-                                          }
-                                        }),
-                                ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    DeskText(widget.label(key), bold: true),
-                                    const SizedBox(height: 4),
-                                    DeskText(
-                                      plan == null
-                                          ? '当前：${widget.valueText(key, widget.values[key])} · ${origin(key)}'
-                                          : '${widget.valueText(key, plan!.before[key])} → ${widget.valueText(key, plan!.after[key])}',
-                                      size: 13,
-                                      color: context.desk.ink2,
-                                    ),
-                                  ],
-                                ),
+                              DeskText(widget.label(key), bold: true),
+                              const SizedBox(height: 4),
+                              DeskText(
+                                plan == null
+                                    ? '当前：${widget.valueText(key, widget.values[key])} · ${origin(key)}'
+                                    : '${widget.valueText(key, plan!.before[key])} → ${widget.valueText(key, plan!.after[key])}',
+                                size: 13,
+                                color: context.desk.ink2,
                               ),
                             ],
                           ),
                         ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(14),
-                color: context.desk.accentSoft,
-                child: DeskText(
-                  plan == null
-                      ? '按字段恢复：每次选择1至13项；其余参数保持原值。确认后计入制作历史。'
-                      : '恢复到${global ? '生成预览时的全局默认' : '出厂默认'}；原始书稿不变。',
-                  size: 12,
-                  color: context.desk.accent,
-                ),
-              ),
-              if (error.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: DeskText(error),
-                ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  DeskButton(
-                    plan == null ? '取消' : '返回选择',
-                    quiet: true,
-                    onPressed: busy
-                        ? null
-                        : () {
-                            if (plan == null) {
-                              Navigator.pop(context, false);
-                            } else {
-                              setState(() => plan = null);
-                            }
-                          },
-                  ),
-                  const Spacer(),
-                  DeskButton(
-                    plan == null ? '预览并确认' : '确认恢复',
-                    primary: true,
-                    onPressed: busy || (plan == null && selected.isEmpty)
-                        ? null
-                        : plan == null
-                        ? preview
-                        : apply,
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(14),
+          color: context.desk.accentSoft,
+          child: DeskText(
+            plan == null
+                ? '勾选要恢复的项（一次最多 13 项），其余保持不变；确认后可在变更记录里撤销。'
+                : '恢复到${global ? '生成预览时的全局默认' : '出厂默认'}；原始书稿不变。',
+            size: 12,
+            color: context.desk.accent,
+          ),
+        ),
+        if (error.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: DeskText(error),
+          ),
+      ],
     ),
   );
 }

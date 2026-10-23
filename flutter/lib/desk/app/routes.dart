@@ -88,6 +88,12 @@ extension _Routes on _RewriteAppState {
             child: service == null
                 ? const Center(child: DeskText('当前运行环境未提供设置服务。'))
                 : SettingsPage(
+                    // 命令面板“设置项”（R1）：?tab=分组&item=设置项名称；换了参数就重建页面。
+                    key: ValueKey(state.uri.query),
+                    initialTab: int.tryParse(
+                      state.uri.queryParameters['tab'] ?? '',
+                    ),
+                    focusItem: state.uri.queryParameters['item'],
                     pickLegacyFile: () async => (await files.openFile(
                       acceptedTypeGroups: [
                         const files.XTypeGroup(
@@ -535,6 +541,7 @@ extension _Routes on _RewriteAppState {
             listenable: Listenable.merge([quickActivity, conversion.changes]),
             builder: (_, _) => LibraryPage(
               showConversionActions: false,
+              pickImage: pickCoverImage,
               viewState: libraryView,
               conversionBusy:
                   quickActivity.value || (_conversion?.busy ?? false),
@@ -588,8 +595,12 @@ extension _Routes on _RewriteAppState {
             importToLibrary: (path) async {
               final out = await widget.library.importFiles([path]);
               final failed = out.where((o) => !o.succeeded && !o.skipped);
-              return failed.isEmpty ? null : failed.first.message;
+              if (failed.isNotEmpty) return failed.first.message;
+              // 插件下载的封面存为 TXT 同名图片：书还没有封面时自动设为封面（用户反馈）。
+              await bindSidecarCover(widget.library, path);
+              return null;
             },
+            exportEpub: exportDownloadedEpub,
             openFolder: (path) =>
                 Process.start('explorer.exe', ['/select,', path]),
             openPlugins: () => context.go('/plugins'),

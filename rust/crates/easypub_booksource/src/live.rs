@@ -86,10 +86,7 @@ fn live_sample() {
         .and_then(|c| c.parse().ok())
         .unwrap_or(1);
     let (sources, _) = source::import(&std::fs::read_to_string(path).unwrap()).unwrap();
-    let mut runnable: Vec<_> = sources
-        .into_iter()
-        .filter(|s| support::check(s).is_empty())
-        .collect();
+    let mut runnable: Vec<_> = sources.into_iter().filter(support::can_run).collect();
     // EASYPUB_LIVE_FILTER=webview：只跑用到 WebView 的书源。
     if std::env::var("EASYPUB_LIVE_FILTER").as_deref() == Ok("webview") {
         runnable.retain(support::needs_web_view);

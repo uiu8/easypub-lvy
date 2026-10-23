@@ -1,4 +1,7 @@
 import 'dart:convert';
+
+import 'infrastructure/import_profile.dart';
+
 import 'dart:io';
 import 'dart:math' show max;
 import 'dart:ui' as ui;
@@ -14,6 +17,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'application/plugin_host.dart';
 import 'desk/app/rewrite_app.dart';
 import 'desk/chapters/outline.dart';
 import 'infrastructure/legacy_library_adapter.dart';
@@ -136,6 +140,14 @@ Future<void> _writeReport(String? error) async {
 Future<void> main() async {
   if (Platform.environment['EASYPUB_FRAME_TARGET'] == 'navigation') {
     await _navigationCovers();
+    return;
+  }
+  if (Platform.environment['EASYPUB_FRAME_TARGET'] == 'switch') {
+    await _navigationSwitch();
+    return;
+  }
+  if (Platform.environment['EASYPUB_FRAME_TARGET'] == 'library') {
+    await _libraryScrollFilter();
     return;
   }
   WidgetsFlutterBinding.ensureInitialized();
@@ -531,6 +543,265 @@ Future<void> _navigationCovers() async {
       'dpr': View.of(_root.currentContext!).devicePixelRatio,
       'image_cache_limit_bytes':
           PaintingBinding.instance.imageCache.maximumSizeBytes,
+    }),
+  );
+  exit(0);
+}
+
+double _median(List<double> values) {
+  if (values.isEmpty) return 0;
+  final sorted = [...values]..sort();
+  return sorted[sorted.length ~/ 2];
+}
+
+/// 书库规模（R0）：EASYPUB_FRAME_BOOKS 取 40 / 300 / 1000，默认 40。
+int get _bookCount {
+  final n =
+      int.tryParse(Platform.environment['EASYPUB_FRAME_BOOKS'] ?? '') ?? 40;
+  if (n != 40 && n != 300 && n != 1000) {
+    throw StateError('EASYPUB_FRAME_BOOKS must be 40, 300 or 1000');
+  }
+  return n;
+}
+
+/// 切页与书库场景共用：导入 [_bookCount] 本样本书（每本 30 章），有书源插件目录时启用插件，
+/// 启动真实 RewriteApp 并等 3 秒稳定。
+Future<(LegacyLibraryAdapter, GoRouter, bool, String, File, int)>
+_switchFixture() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+  await _initBridge();
+  SchedulerBinding.instance.addTimingsCallback((batch) {
+    if (_collecting) _frames.addAll(batch);
+  });
+  final report = File(Platform.environment['EASYPUB_FRAME_REPORT']!);
+  final root = report.parent;
+  await root.create(recursive: true);
+  final library = LegacyLibraryAdapter(
+    settingsDirectory: '${root.path}/settings',
+  );
+  await library.load();
+  await library.savePatch({'check_after_import': false});
+  final sources = <String>[];
+  for (var i = 0; i < _bookCount; i++) {
+    final source = File('${root.path}/books/样本书-$i.txt');
+    await source.parent.create(recursive: true);
+    await source.writeAsString(
+      [for (var c = 1; c <= 30; c++) '第$c章 标题$c\n样本正文$i-$c。\n'].join(),
+    );
+    sources.add(source.path);
+  }
+  final importWatch = Stopwatch()..start();
+  for (var i = 0; i < sources.length; i += 100) {
+    final imported = await library.importFiles(
+      sources.sublist(i, (i + 100).clamp(0, sources.length)),
+    );
+    if (imported.any((r) => !r.succeeded)) throw StateError('import failed');
+  }
+  final importMs = importWatch.elapsedMilliseconds;
+  if (ImportProfile.enabled) _data['import_totals'] = ImportProfile.snapshot();
+  if (PluginRegistry.instance.find('booksource') != null) {
+    await PluginRegistry.instance.setEnabled('booksource', true);
+  }
+  final plugin = PluginRegistry.instance.isActive('booksource');
+  final id = library.books.value.first.id;
+  library.selectBook(id);
+  runApp(
+    ProviderScope(
+      child: RepaintBoundary(
+        key: _root,
+        child: RewriteApp(library: library, picker: NativeBookPicker()),
+      ),
+    ),
+  );
+  await SchedulerBinding.instance.endOfFrame;
+  await Future<void>.delayed(const Duration(seconds: 3));
+  GoRouter? foundRouter;
+  void findContext(Element element) {
+    if (element.widget is Scaffold) foundRouter = GoRouter.of(element);
+    element.visitChildren(findContext);
+  }
+
+  (_root.currentContext! as Element).visitChildren(findContext);
+  return (library, foundRouter!, plugin, id, report, importMs);
+}
+
+Map<String, double> _frameStats() {
+  final builds = _frames.map((f) => f.buildDuration.inMicroseconds / 1000);
+  final rasters = _frames.map((f) => f.rasterDuration.inMicroseconds / 1000);
+  return {
+    'max_build_ms': builds.fold(0.0, max),
+    'max_raster_ms': rasters.fold(0.0, max),
+    'frames': _frames.length.toDouble(),
+    'janky_frames': _frames
+        .where((f) => f.totalSpan.inMicroseconds > 16667)
+        .length
+        .toDouble(),
+  };
+}
+
+/// V94：侧栏切页耗时。导入 [_bookCount] 本书，在真实 RewriteApp 里按侧栏顺序切换页面 5 轮；
+/// 每次记录从 go() 到首帧结束的时间，以及之后 600ms 内各帧的构建 / 光栅耗时。
+/// 设置 EASYPUB_PLUGIN_DIR 指向带书源插件的目录时，同时启用插件并包含书源页。
+Future<void> _navigationSwitch() async {
+  final (_, router, plugin, id, report, importMs) = await _switchFixture();
+  final book = Uri.encodeComponent(id);
+  final routes = [
+    '/',
+    '/folders',
+    if (plugin) '/plugins/booksource',
+    '/books/$book/overview',
+    '/books/$book/chapters',
+    '/tasks',
+    '/history',
+    '/plugins',
+    '/settings',
+  ];
+  final perRoute = <String, List<Map<String, double>>>{
+    for (final r in routes) r: [],
+  };
+  for (var round = 0; round < 5; round++) {
+    for (final route in routes) {
+      _frames.clear();
+      _collecting = true;
+      final watch = Stopwatch()..start();
+      router.go(route);
+      await SchedulerBinding.instance.endOfFrame;
+      final first = watch.elapsedMicroseconds / 1000;
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      _collecting = false;
+      perRoute[route]!.add({'first_frame_ms': first, ..._frameStats()});
+    }
+  }
+  await report.writeAsString(
+    const JsonEncoder.withIndent('  ').convert({
+      'schema': 'navigation-switch-v1',
+      'scope':
+          'Profile RewriteApp, $_bookCount imported books, 5 rounds of router.go over rail pages; first frame = go() to endOfFrame; frames within 600ms after.',
+      'books': _bookCount,
+      'import_ms': importMs,
+      if (ImportProfile.enabled) 'import_profile': ImportProfile.rows,
+      if (ImportProfile.enabled) 'import_totals': _data['import_totals'],
+      'plugin_active': plugin,
+      'physical_width': View.of(_root.currentContext!).physicalSize.width,
+      'physical_height': View.of(_root.currentContext!).physicalSize.height,
+      'dpr': View.of(_root.currentContext!).devicePixelRatio,
+      'median': {
+        for (final e in perRoute.entries)
+          e.key: {
+            for (final k in e.value.first.keys)
+              k: _median([for (final s in e.value) s[k]!]),
+          },
+      },
+      'samples': perRoute,
+    }),
+  );
+  exit(0);
+}
+
+/// R0：书库滚动与筛选。导入 [_bookCount] 本书，在书库页：
+/// 1) 书架列表每 16ms 滚动 120 像素，先到底再回到顶（每个方向最多 200 步），统计逐帧耗时；
+/// 2) 在搜索框里逐字输入“样本书-1”再逐字删掉，每次改动记录到首帧结束的时间。
+Future<void> _libraryScrollFilter() async {
+  final (_, _, plugin, _, report, importMs) = await _switchFixture();
+  ScrollPosition? shelf;
+  EditableTextState? search;
+  void visit(Element element) {
+    if (element is StatefulElement) {
+      final state = element.state;
+      if (state is ScrollableState &&
+          state.position.axis == Axis.vertical &&
+          state.position.maxScrollExtent > (shelf?.maxScrollExtent ?? -1)) {
+        shelf = state.position;
+      }
+      if (state is EditableTextState &&
+          search == null &&
+          (element
+                      .findAncestorWidgetOfExactType<TextField>()
+                      ?.decoration
+                      ?.hintText ??
+                  '')
+              .contains('搜索书名')) {
+        search = state;
+      }
+    }
+    element.visitChildren(visit);
+  }
+
+  (_root.currentContext! as Element).visitChildren(visit);
+  if (shelf == null || search == null) {
+    throw StateError('No library shelf or search field');
+  }
+  final position = shelf!;
+  _frames.clear();
+  _collecting = true;
+  var steps = 0;
+  for (var direction = 1; direction >= -1; direction -= 2) {
+    for (var i = 0; i < 200; i++) {
+      final target = (position.pixels + 120 * direction).clamp(
+        0.0,
+        position.maxScrollExtent,
+      );
+      if (target == position.pixels) break;
+      position.jumpTo(target);
+      steps++;
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+  }
+  await Future<void>.delayed(const Duration(milliseconds: 300));
+  _collecting = false;
+  final scroll = <String, double>{
+    'steps': steps.toDouble(),
+    'max_scroll_extent': position.maxScrollExtent,
+    ..._frameStats(),
+    'build_p95_ms': _percentile(
+      _frames.map((f) => f.buildDuration.inMicroseconds).toList(),
+      .95,
+    ),
+    'total_p95_ms': _percentile(
+      _frames.map((f) => f.totalSpan.inMicroseconds).toList(),
+      .95,
+    ),
+  };
+  const word = '样本书-1';
+  final typing = <double>[];
+  _frames.clear();
+  _collecting = true;
+  for (final text in [
+    for (var i = 1; i <= word.length; i++) word.substring(0, i),
+    for (var i = word.length - 1; i >= 0; i--) word.substring(0, i),
+  ]) {
+    final watch = Stopwatch()..start();
+    search!.updateEditingValue(
+      TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      ),
+    );
+    await SchedulerBinding.instance.endOfFrame;
+    typing.add(watch.elapsedMicroseconds / 1000);
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+  }
+  _collecting = false;
+  await report.writeAsString(
+    const JsonEncoder.withIndent('  ').convert({
+      'schema': 'library-scroll-filter-v1',
+      'scope':
+          'Profile RewriteApp library page, $_bookCount imported books; scroll 120px per 16ms down then up; type and delete a 5-character query one character at a time.',
+      'books': _bookCount,
+      'import_ms': importMs,
+      if (ImportProfile.enabled) 'import_profile': ImportProfile.rows,
+      if (ImportProfile.enabled) 'import_totals': _data['import_totals'],
+      'plugin_active': plugin,
+      'physical_width': View.of(_root.currentContext!).physicalSize.width,
+      'physical_height': View.of(_root.currentContext!).physicalSize.height,
+      'scroll': scroll,
+      'filter': {
+        'keystrokes': typing.length,
+        'first_frame_median_ms': _median(typing),
+        'first_frame_max_ms': typing.fold(0.0, max),
+        ..._frameStats(),
+      },
     }),
   );
   exit(0);

@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../prototype/kindling_job.dart';
+import '../prototype/conversion_error.dart';
 import '../prototype/output_task.dart';
 import '../prototype/prototype_state.dart';
 import '../src/rust/api.dart' as api;
@@ -212,7 +213,9 @@ class OutputStore {
       update(
         task,
         job.phase == 'cancelled' ? 'cancelled' : 'failed',
-        detail: error is ExportStopped ? error.message : '无法完成导出，请检查转换器和输出路径。',
+        detail: error is ExportStopped
+            ? error.message
+            : conversionApiErrorMessage(error),
         terminal: true,
       );
       rethrow;

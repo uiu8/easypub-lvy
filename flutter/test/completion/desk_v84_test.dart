@@ -252,17 +252,19 @@ void main() {
     await t.drag(handle, const Offset(60, 0));
     await t.pumpAndSettle();
     expect(railWidth(), closeTo(before + 60, 1));
-    // 拖到最窄以下：收成图标条，收藏夹仍在、可点。
+    // 拖到最窄以下：整栏收起（V94），显示范围改用筛选行的下拉。
     await t.drag(handle, const Offset(-200, 0));
     await t.pumpAndSettle();
     expect(rail, findsNothing);
-    expect(strip, findsOne);
-    await t.tap(find.byKey(ValueKey('library-collection-${c.id}')));
+    expect(strip, findsNothing);
+    expect(find.byKey(const ValueKey('library-rail')), findsNothing);
+    // 标题行的开关展开，回到上次的宽度；再点收起、再点展开。
+    await t.tap(find.byKey(const ValueKey('library-rail-toggle')));
     await t.pumpAndSettle();
-    expect(find.text('0 / 2 本'), findsOne);
-    await t.tap(find.byKey(const ValueKey('library-scope-all')));
+    expect(rail, findsOne);
+    await t.tap(find.byKey(const ValueKey('library-rail-toggle')));
     await t.pumpAndSettle();
-    // 开关展开，回到上次的宽度。
+    expect(rail, findsNothing);
     await t.tap(find.byKey(const ValueKey('library-rail-toggle')));
     await t.pumpAndSettle();
     expect(rail, findsOne);
@@ -285,10 +287,13 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byTooltip('筛选：待处理'), findsOne);
 
-    // 600 宽：只显示图标条，开关不可用。
+    // 600 宽：只显示图标条，开关不可用；收藏夹仍在、可点。
     await resize(600);
     expect(strip, findsOne);
     expect(rail, findsNothing);
+    await t.tap(find.byKey(ValueKey('library-collection-${c.id}')));
+    await t.pumpAndSettle();
+    expect(find.text('0 / 2 本'), findsOne);
     await t.pumpWidget(const SizedBox());
   });
 

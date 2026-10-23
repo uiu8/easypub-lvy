@@ -126,7 +126,7 @@ fn collect(params: &Value, emit: bool) -> Result<(Vec<Value>, Value), String> {
         let st = state();
         for (s, enabled) in &st.sources {
             if !wanted.map_or(*enabled, |ids| ids.iter().any(|id| id == s.id()))
-                || !support::check(s).is_empty()
+                || !support::can_run(s)
             {
                 continue;
             }

@@ -106,7 +106,23 @@ void main() {
         await settle();
         expect(t.takeException(), isNull, reason: '$size $route');
         final rail = t.getSize(find.byKey(const ValueKey('desk-rail')));
-        expect(rail.width, size.width >= 1440 ? 212 : 64, reason: '$size');
+        // G-084：默认窄栏；宽窗时栏底有“展开导航栏”。
+        expect(rail.width, 64, reason: '$size');
+        expect(
+          find.byKey(const ValueKey('desk-rail-toggle')),
+          size.width >= 1440 ? findsOne : findsNothing,
+          reason: '$size',
+        );
+        if (size.width >= 1440 && route == '/') {
+          // 点“展开导航栏”变成图标+文字，再点收回窄栏。
+          await t.tap(find.byKey(const ValueKey('desk-rail-toggle')));
+          await settle();
+          expect(t.getSize(find.byKey(const ValueKey('desk-rail'))).width, 212);
+          expect(find.text('收起导航栏'), findsOne);
+          await t.tap(find.byKey(const ValueKey('desk-rail-toggle')));
+          await settle();
+          expect(t.getSize(find.byKey(const ValueKey('desk-rail'))).width, 64);
+        }
         expect(find.byKey(const ValueKey('workspace-book-picker')), findsOne);
         expect(
           t.getRect(find.byKey(const ValueKey('workspace-output-bar'))).bottom,

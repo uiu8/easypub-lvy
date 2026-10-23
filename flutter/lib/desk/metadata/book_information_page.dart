@@ -4,7 +4,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../errors.dart';
 
@@ -17,6 +19,7 @@ import '../dialogs.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 import 'cover_editor_page.dart';
+import 'cover_drop.dart';
 import 'cover_image_dialog.dart';
 import 'cover_preview.dart';
 import 'supplemental_pages_card.dart';
@@ -158,7 +161,26 @@ class _BookInformationPageState extends State<BookInformationPage> {
     return await autosave?.flushWorkspace() ?? !busy;
   }
 
-  Future<void> chooseImage() async {
+  /// 拖入的图片（R1 后，用户反馈）：与“选择图片”同一流程，预先核验这张图。
+  bool dropHover = false;
+  Future<void> dropImage(DropDoneDetails details) async {
+    setState(() => dropHover = false);
+    final image = details.files
+        .map((f) => f.path)
+        .where(isCoverImagePath)
+        .firstOrNull;
+    if (image == null) {
+      if (details.files.isNotEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('这里只接受图片：PNG、JPEG、WebP、GIF 或 BMP。')),
+        );
+      }
+      return;
+    }
+    await chooseImage(initialPath: image);
+  }
+
+  Future<void> chooseImage({String? initialPath}) async {
     _saveTimer?.cancel();
     await save();
     if (dirty) await save();
@@ -172,6 +194,7 @@ class _BookInformationPageState extends State<BookInformationPage> {
         initialFit: fit,
         autosave: autosave,
         draftKey: 'cover-image:${widget.bookId}',
+        initialPath: initialPath,
       ),
     );
     if (mounted && choice != null) {
@@ -281,7 +304,21 @@ class _BookInformationPageState extends State<BookInformationPage> {
         maxLines: lines,
         enabled: !busy,
         style: ui(13, c: context.desk.ink),
-        decoration: deskInput(context),
+        // 语言留空时成品用设置里的默认语言，写明并给入口（R5-07）。
+        decoration: key == 'language'
+            ? deskInput(context).copyWith(
+                hintText: '留空时用设置里的默认语言',
+                suffixIcon: Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: TextButton(
+                    key: const ValueKey('information-language-settings'),
+                    onPressed: () => GoRouter.maybeOf(context)?.go('/settings'),
+                    child: const Text('去设置'),
+                  ),
+                ),
+                suffixIconConstraints: const BoxConstraints(),
+              )
+            : deskInput(context),
       ),
     ],
   );
@@ -514,7 +551,35 @@ class _BookInformationPageState extends State<BookInformationPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => DropTarget(
+    onDragEntered: (_) => setState(() => dropHover = true),
+    onDragExited: (_) => setState(() => dropHover = false),
+    onDragDone: dropImage,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        _page(context),
+        if (dropHover && session != null && !generating && !adjusting)
+          IgnorePointer(
+            child: Container(
+              key: const ValueKey('information-cover-drop'),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: context.desk.accentSoft.withValues(alpha: .6),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.desk.accent, width: 2),
+              ),
+              child: Text(
+                '松开即可把图片设为封面（先预览，确认后才保存）',
+                style: ui(14, w: 600, c: context.desk.accent),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+
+  Widget _page(BuildContext context) {
     final d = context.desk;
     if (session == null) {
       return Center(

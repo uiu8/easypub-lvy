@@ -1,4 +1,7 @@
 // 图片与资源（D3-M，V8 按设计重写视图）：读取、编辑、定位、重新关联逻辑沿用原实现。
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -12,6 +15,7 @@ import '../../application/library_service.dart';
 import '../../application/workspace_autosave_service.dart';
 import '../../application/resource_service.dart';
 import '../../application/book_information_service.dart';
+import '../../application/chapter_service.dart';
 import '../controls/controls.dart';
 import '../metadata/cover_preview.dart';
 import 'resource_relink_dialog.dart';
@@ -47,17 +51,71 @@ class _ResourcesPageState extends State<ResourcesPage> {
   String query = '', error = '';
   bool busy = false;
 
+  /// 插图位置的章节写法（R5-05），按资源序号；没算出来的仍写原稿行号。
+  Map<int, String> anchors = const {};
+  String locationOf(BookResource r) => anchors[r.index] ?? r.location;
+
   void _rebuildVisibleResources() {
     final needle = query.trim().toLowerCase();
     visibleResources = needle.isEmpty
         ? List<BookResource>.of(resources)
         : resources
               .where(
-                (r) => '${r.name} ${r.location} ${r.caption}'
+                (r) => '${r.name} ${r.location} ${locationOf(r)} ${r.caption}'
                     .toLowerCase()
                     .contains(needle),
               )
               .toList(growable: false);
+  }
+
+  /// 插图位置写成“章节 · 第 N 段之后”（R5-05）：按插图在成品里的行号，数所在章节
+  /// 标题之后到这一行的非空段落。读不出时保留原稿行号的写法，不报错。
+  Future<void> loadAnchors(List<BookResource> list) async {
+    final s = session;
+    if (s is! ResourceLocator || s is! ResourcePlacementSession) return;
+    try {
+      final locations = await (s as ResourceLocator).locateAll();
+      final nodes = {
+        for (final n
+            in await (s as ResourcePlacementSession).placementChapters())
+          n.id: n,
+      };
+      final next = <int, String>{};
+      final rowsOf = <String, List<ResourceParagraph>>{};
+      for (final r in list) {
+        if (r.index < 0 || r.index >= locations.length) continue;
+        final at = locations[r.index];
+        final line = at.outputLine;
+        if (line == null) continue;
+        final node = nodes[at.nodeId ?? chapterPrefixNode.id];
+        if (node == null) continue;
+        final target = line - node.line;
+        // 太靠后的不逐页去数，保留原写法。
+        if (target > 3000) continue;
+        final rows = rowsOf[node.id] ??= [];
+        while (rows.length < target) {
+          final page = await (s as ResourcePlacementSession)
+              .placementParagraphs(node.id, rows.length);
+          if (page.rows.isEmpty) break;
+          rows.addAll(page.rows);
+          if (rows.length >= page.total) break;
+        }
+        final count = rows
+            .take(math.max(0, target))
+            .where((p) => p.text.trim().isNotEmpty)
+            .length;
+        next[r.index] = count == 0
+            ? '${node.title} · 开头'
+            : '${node.title} · 第 $count 段之后';
+      }
+      if (!mounted) return;
+      setState(() {
+        anchors = next;
+        _rebuildVisibleResources();
+      });
+    } catch (_) {
+      // 只影响位置的写法。
+    }
   }
 
   @override
@@ -88,6 +146,7 @@ class _ResourcesPageState extends State<ResourcesPage> {
           final matches = result.where((r) => r.index == selected?.index);
           selected = matches.isNotEmpty ? matches.first : result.firstOrNull;
         });
+        unawaited(loadAnchors(result));
       }
     } catch (_) {
       if (mounted) setState(() => error = '无法检查资源，请重新读取书稿。');
@@ -396,11 +455,14 @@ class _ResourcesPageState extends State<ResourcesPage> {
                 ),
                 Expanded(
                   flex: 4,
-                  child: Text(
-                    r.location,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: ui(12, c: d.ink2),
+                  child: Tooltip(
+                    message: anchors.containsKey(r.index) ? r.location : '',
+                    child: Text(
+                      locationOf(r),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: ui(12, c: d.ink2),
+                    ),
                   ),
                 ),
                 SizedBox(
@@ -448,100 +510,103 @@ class _ResourcesPageState extends State<ResourcesPage> {
         child: Text('选择资源查看详情', style: ui(12.5, c: d.ink3)),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SelectableText(current.name, style: ui(14, w: 650, c: d.ink)),
-        const SizedBox(height: 10),
-        Container(
-          height: 180,
-          decoration: BoxDecoration(
-            color: d.sunken,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: current.image == null
-              ? Center(
-                  child: Icon(
-                    current.editable
-                        ? Icons.broken_image_outlined
-                        : current.kind.startsWith('css')
-                        ? Icons.code_rounded
-                        : Icons.inventory_2_outlined,
-                    size: 42,
-                    color: d.ink3,
-                  ),
-                )
-              : CoverPreview(
-                  key: ValueKey('${current.path}:${current.image!.sha256}'),
-                  path: current.path,
-                  decodeWidth: 600,
-                ),
-        ),
-        const SizedBox(height: 14),
-        Expanded(
-          child: DeskScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                detailRow('位置', current.location),
-                detailRow('替代文本', current.alt.isEmpty ? '未填写' : current.alt),
-                detailRow(
-                  '图注',
-                  current.caption.isEmpty ? '未填写' : current.caption,
-                ),
-                detailRow(
-                  current.image == null ? '状态' : '尺寸',
-                  current.image == null
-                      ? current.error.isEmpty
-                            ? (current.status ?? '待复核')
-                            : current.error
-                      : '${sizeOf(current)} · ${current.image!.width} × ${current.image!.height}',
-                ),
-              ],
+    // 整栏一起滚动，按钮跟在信息后面（R5-06）；大字号时预览图矮一些，信息少被挤出。
+    final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
+    return DeskScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SelectableText(current.name, style: ui(14, w: 650, c: d.ink)),
+          const SizedBox(height: 10),
+          Container(
+            height: scale > 1.1 ? 140 : 180,
+            decoration: BoxDecoration(
+              color: d.sunken,
+              borderRadius: BorderRadius.circular(8),
             ),
+            clipBehavior: Clip.antiAlias,
+            child: current.image == null
+                ? Center(
+                    child: Icon(
+                      current.editable
+                          ? Icons.broken_image_outlined
+                          : current.kind.startsWith('css')
+                          ? Icons.code_rounded
+                          : Icons.inventory_2_outlined,
+                      size: 42,
+                      color: d.ink3,
+                    ),
+                  )
+                : CoverPreview(
+                    key: ValueKey('${current.path}:${current.image!.sha256}'),
+                    path: current.path,
+                    decodeWidth: 600,
+                  ),
           ),
-        ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (current.editable)
-              DeskButton(
-                '替换 / 编辑…',
-                icon: Icons.edit_outlined,
-                onPressed: busy ? null : () => edit(current),
-              ),
-            if (current.editable && current.index >= 0)
-              DeskButton(
-                '定位章节',
-                icon: Icons.my_location_rounded,
-                onPressed: busy ? null : () => locate(current),
-              ),
-            if (current.kind.startsWith('css'))
-              DeskButton('编辑附加 CSS', onPressed: busy ? null : widget.openCss),
-            if (current.kind == 'epub-images' || current.kind == 'epub-pending')
-              DeskButton(
-                current.alreadyIllustrated ? '已在插图列表中' : '作为插图…',
-                onPressed: busy || current.alreadyIllustrated
-                    ? null
-                    : () => edit(null, original: current),
-              ),
-            if (current.editable)
-              DeskButton(
-                '移除引用',
-                icon: Icons.link_off_rounded,
-                quiet: true,
-                dangerous: true,
-                onPressed: busy ? null : () => edit(current, remove: true),
-              ),
+          const SizedBox(height: 14),
+          detailRow('位置', locationOf(current)),
+          if (anchors.containsKey(current.index))
+            detailRow('原稿', current.location),
+          detailRow(
+            '替代文本',
+            current.alt.isEmpty
+                ? current.editable
+                      ? '未填写 · 读屏和图片显示不出时用到，可不填'
+                      : '未填写'
+                : current.alt,
+          ),
+          detailRow('图注', current.caption.isEmpty ? '未填写' : current.caption),
+          detailRow(
+            current.image == null ? '状态' : '尺寸',
+            current.image == null
+                ? current.error.isEmpty
+                      ? (current.status ?? '待复核')
+                      : current.error
+                : '${sizeOf(current)} · ${current.image!.width} × ${current.image!.height}',
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (current.editable)
+                DeskButton(
+                  '替换 / 编辑…',
+                  icon: Icons.edit_outlined,
+                  onPressed: busy ? null : () => edit(current),
+                ),
+              if (current.editable && current.index >= 0)
+                DeskButton(
+                  '定位章节',
+                  icon: Icons.my_location_rounded,
+                  onPressed: busy ? null : () => locate(current),
+                ),
+              if (current.kind.startsWith('css'))
+                DeskButton('编辑附加 CSS', onPressed: busy ? null : widget.openCss),
+              if (current.kind == 'epub-images' ||
+                  current.kind == 'epub-pending')
+                DeskButton(
+                  current.alreadyIllustrated ? '已在插图列表中' : '作为插图…',
+                  onPressed: busy || current.alreadyIllustrated
+                      ? null
+                      : () => edit(null, original: current),
+                ),
+              if (current.editable)
+                DeskButton(
+                  '移除引用',
+                  icon: Icons.link_off_rounded,
+                  quiet: true,
+                  dangerous: true,
+                  onPressed: busy ? null : () => edit(current, remove: true),
+                ),
+            ],
+          ),
+          if (current.editable) ...[
+            const SizedBox(height: 6),
+            Text('移除只删引用，原图片文件保留。', style: ui(11.5, c: d.ink3)),
           ],
-        ),
-        if (current.editable) ...[
-          const SizedBox(height: 6),
-          Text('移除只删引用，原图片文件保留。', style: ui(11.5, c: d.ink3)),
         ],
-      ],
+      ),
     );
   }
 }

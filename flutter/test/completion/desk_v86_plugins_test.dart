@@ -156,6 +156,14 @@ class FakeApi implements BookSourceApi {
   }
 }
 
+/// V93：书源页的检查、维护操作收进菜单，先打开菜单再点菜单项。
+Future<void> _menu(WidgetTester tester, String key) async {
+  await tester.ensureVisible(find.byKey(ValueKey(key)));
+  await tester.tap(find.byKey(ValueKey(key)));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
 void main() {
   test(
     'plugin registry verifies, enables and talks to the real plugin process',
@@ -383,6 +391,7 @@ void main() {
         findsOneWidget,
         reason: '有登录设置的书源显示登录',
       );
+      await _menu(tester, 'booksource-menu-check');
       await tester.tap(find.byKey(const ValueKey('booksource-check')));
       await tester.pumpAndSettle();
       expect(
@@ -393,13 +402,14 @@ void main() {
         findsOneWidget,
       );
       expect(find.textContaining('校验：超时'), findsOneWidget);
+      await _menu(tester, 'booksource-menu-maintain');
       await tester.tap(find.byKey(const ValueKey('booksource-disable-failed')));
       await tester.pumpAndSettle();
       expect(api.sourceList[0]['enabled'], isFalse);
       expect(find.textContaining('已停用 1 个'), findsOneWidget);
       await tester.tap(find.text('书架'));
       await tester.pumpAndSettle();
-      expect(find.text('2 新章'), findsOneWidget);
+      expect(find.text('+2 新章'), findsOneWidget);
       expect(find.textContaining('最新：第一百零二章'), findsOneWidget);
       await tester.tap(
         find.byKey(const ValueKey('booksource-shelf-update-k1')),

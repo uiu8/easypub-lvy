@@ -195,7 +195,7 @@ void main() {
         ),
       ),
     );
-    await until(t, () => find.text('清理所选项…').evaluate().isNotEmpty);
+    await until(t, () => find.text('查看清理差异…').evaluate().isNotEmpty);
     await until(
       t,
       () => find.byKey(const Key('cleanup-impact-note')).evaluate().isNotEmpty,
@@ -203,7 +203,7 @@ void main() {
     expect(find.text('操作没有完成'), findsNothing);
     expect(find.text('正在准备清理预览…'), findsNothing);
     expect(find.textContaining('处章节修改无法保留'), findsOneWidget);
-    await t.tap(find.text('清理所选项…'));
+    await t.tap(find.text('查看清理差异…'));
     await t.pumpAndSettle();
     await t.tap(find.byKey(const Key('cleanup-apply')));
     await t.pumpAndSettle();

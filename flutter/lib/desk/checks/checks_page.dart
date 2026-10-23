@@ -291,66 +291,99 @@ class _BookChecksPageState extends State<BookChecksPage> {
     final phase = busy && session is BookCheckProgressSession
         ? (session as BookCheckProgressSession).checkPhase
         : '';
-    return Container(
-      constraints: const BoxConstraints(minHeight: 56),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: d.line)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final domain in values) ...[
-                    tab(d, domain),
-                    const SizedBox(width: 2),
-                  ],
-                ],
-              ),
-            ),
+    final checkedAt = when == null ? null : '检查于 ${_time(when)}';
+    return LayoutBuilder(
+      builder: (context, box) {
+        // R3-01：窄时（字号放大或窗口窄）检查时间放进“检查本书”的悬停提示，
+        // “规则”只留图标，领域页签右端渐隐，表示可以横向滑动看到其余页签。
+        final narrow =
+            box.maxWidth < 860 * MediaQuery.textScalerOf(context).scale(1);
+        Widget tabs = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final domain in values) ...[
+                tab(d, domain),
+                const SizedBox(width: 2),
+              ],
+            ],
           ),
-          const SizedBox(width: 10),
-          if (phase.isNotEmpty || upgrading)
-            Flexible(
-              child: Text(
-                upgrading ? '正在更新为新的显示方式…' : phase,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: ui(12, c: d.ink2),
-              ),
-            )
-          else if (when != null)
-            Text(
-              '检查于 ${_time(when)}',
-              key: const ValueKey('checks-checked-at'),
-              style: ui(12, c: d.ink3),
-            ),
-          const SizedBox(width: 10),
-          if (widget.onRules case final open?) ...[
-            DeskButton(
-              '规则',
-              key: const ValueKey('checks-rules'),
-              quiet: true,
-              icon: Icons.tune_rounded,
-              tooltip: '识别与检查规则：查看每条规则在本书的命中',
-              onPressed: () => open(null),
-            ),
-            const SizedBox(width: 6),
-          ],
-          busy
-              ? DeskButton('取消检查', icon: Icons.stop_rounded, onPressed: cancel)
-              : DeskButton(
-                  '检查本书',
-                  icon: Icons.refresh_rounded,
-                  onPressed: book == null ? null : check,
+        );
+        if (narrow) {
+          tabs = ShaderMask(
+            key: const ValueKey('checks-tabs-fade'),
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (rect) => const LinearGradient(
+              colors: [Colors.white, Colors.white, Color(0x00FFFFFF)],
+              stops: [0, .9, 1],
+            ).createShader(rect),
+            child: tabs,
+          );
+        }
+        return Container(
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: d.line)),
+          ),
+          child: Row(
+            children: [
+              Expanded(child: tabs),
+              const SizedBox(width: 10),
+              if (phase.isNotEmpty || upgrading)
+                Flexible(
+                  child: Text(
+                    upgrading ? '正在更新为新的显示方式…' : phase,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: ui(12, c: d.ink2),
+                  ),
+                )
+              else if (checkedAt != null && !narrow)
+                Text(
+                  checkedAt,
+                  key: const ValueKey('checks-checked-at'),
+                  style: ui(12, c: d.ink3),
                 ),
-          const SizedBox(width: 8),
-          repairButton(book),
-        ],
-      ),
+              const SizedBox(width: 10),
+              if (widget.onRules case final open?) ...[
+                if (narrow)
+                  IconButton(
+                    key: const ValueKey('checks-rules'),
+                    tooltip: '规则：查看每条识别与检查规则在本书的命中',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => open(null),
+                    icon: Icon(Icons.tune_rounded, size: 18, color: d.ink2),
+                  )
+                else
+                  DeskButton(
+                    '规则',
+                    key: const ValueKey('checks-rules'),
+                    quiet: true,
+                    icon: Icons.tune_rounded,
+                    tooltip: '识别与检查规则：查看每条规则在本书的命中',
+                    onPressed: () => open(null),
+                  ),
+                const SizedBox(width: 6),
+              ],
+              busy
+                  ? DeskButton(
+                      '取消检查',
+                      icon: Icons.stop_rounded,
+                      onPressed: cancel,
+                    )
+                  : DeskButton(
+                      '检查本书',
+                      icon: Icons.refresh_rounded,
+                      tooltip: narrow ? checkedAt : null,
+                      onPressed: book == null ? null : check,
+                    ),
+              const SizedBox(width: 8),
+              repairButton(book),
+            ],
+          ),
+        );
+      },
     );
   }
 

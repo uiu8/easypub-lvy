@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../src/rust/api.dart' as api;
+import 'conversion_error.dart';
 
 typedef JobCall = Future<Map<String, dynamic>> Function(
   Map<String, dynamic> request,
@@ -93,19 +94,7 @@ class KindlingJob {
         } catch (_) {}
         if (phase == 'cancelled') throw const ExportStopped('已取消，没有生成最终文件。');
         if (status['error'] != null) {
-          final action = (status['error'] as Map)['next_action'];
-          final detail = switch (action) {
-            'choose_cover_before_kindling_export' => '请先为本书选择封面。',
-            'choose_publication_language' =>
-              '请先在本书制作信息中填写语言（如 zh、zh-CN 或 en），再重新预览。',
-            'engine_failed_review_log' => '转换器未能完成，请查看转换目录中的日志。',
-            'kfx_validation_failed_review_log' =>
-              'KFX 与原 EPUB 的内容或排版校验未通过，未提交成品。请查看转换目录中的 validation.log。',
-            'engine_metadata_mismatch' =>
-              '转换结果丢失或改变了书目信息，已停止保存。请使用配套修订版转换器后重试。',
-            'reopen_preview' => '书稿、资源或转换器已变化，请重新预览。',
-            _ => '导出失败，请检查原稿、资源、转换器及输出路径。',
-          };
+          final detail = conversionFailureMessage(status['error'] as Map);
           throw ExportStopped(
             '$detail${status['conversion_directory'] == null ? '' : '\n转换记录：${status['conversion_directory']}'}',
           );

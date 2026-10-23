@@ -3,6 +3,7 @@ import '../application/book_information_service.dart';
 import '../application/output_defaults.dart';
 import '../application/conversion_snapshot.dart';
 import 'legacy_book_information_session.dart';
+import 'atomic_file.dart';
 
 import 'dart:convert';
 import 'dart:io';
@@ -36,10 +37,7 @@ class LegacyLayoutSession extends LegacyBookInformationSession
   Future<void> savePreviewDevice(String value) async {
     final file = _deviceFile;
     if (file == null) return;
-    await file.parent.create(recursive: true);
-    final temp = File('${file.path}.tmp');
-    await temp.writeAsString(value, flush: true);
-    await temp.rename(file.path);
+    await writeAtomicText(file, value);
   }
 
   @override

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../errors.dart';
 
-import '../dialogs.dart' show DeskAlert;
+import '../dialogs.dart' show DeskAlert, DeskDialog;
 
 import '../../application/layout_service.dart';
 import '../../application/book_information_service.dart';
@@ -62,7 +62,12 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
       await action();
     } catch (error) {
       if (mounted) {
-        setState(() => message = deskErrorText(error, '操作失败，请检查排版参数或重新打开预设库。'));
+        setState(
+          () => message = deskErrorText(
+            error,
+            '预设没有改成：参数可能超出范围，或预设文件被占用。核对排版参数后重新打开预设库。',
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -198,292 +203,234 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !busy,
-    child: Dialog(
-      backgroundColor: context.desk.surface,
-      child: SizedBox(
-        width: 680,
-        height: 580,
-        child: Padding(
-          padding: const EdgeInsets.all(26),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: DeskText(
-                      plan == null ? '预设库' : '应用排版预设',
-                      size: 22,
-                      bold: true,
+  // 编辑台弹窗（R5-03）：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
+  Widget build(BuildContext context) => DeskDialog(
+    title: plan == null ? '预设库' : '应用排版预设',
+    closeTooltip: '关闭',
+    width: 680,
+    height: 580,
+    busy: busy,
+    escapeCloses: true,
+    onClose: () => Navigator.pop(context, false),
+    footerLeft: Align(
+      alignment: Alignment.centerLeft,
+      child: DeskButton(
+        plan == null ? '取消' : '返回选择',
+        quiet: true,
+        onPressed: busy
+            ? null
+            : () {
+                if (plan == null) {
+                  Navigator.pop(context, false);
+                } else {
+                  setState(() => plan = null);
+                }
+              },
+      ),
+    ),
+    actions: [
+      DeskButton(
+        plan == null ? '预览并确认' : '确认应用',
+        primary: true,
+        busy: busy,
+        disabledReason: selected == null
+            ? '先选择一个预设'
+            : !widget.allowApply
+            ? '先补全排版数值'
+            : !local
+            ? '先复制到本项目，再应用到书籍'
+            : '正在处理',
+        onPressed: busy || selected == null || !widget.allowApply || !local
+            ? null
+            : plan == null
+            ? preview
+            : apply,
+      ),
+    ],
+    child: DeskScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (plan == null)
+            Wrap(
+              spacing: 10,
+              children: [
+                DeskModeSwitch<String>(
+                  value: scope,
+                  options: const {
+                    'project': '本项目',
+                    'global': '全局预设',
+                    'builtin': '内置',
+                  },
+                  onChanged: busy
+                      ? null
+                      : (value) {
+                          if (value == 'builtin') {
+                            showBuiltin();
+                          } else {
+                            switchScope(value == 'global');
+                          }
+                        },
+                ),
+                if (global)
+                  DeskButton(
+                    '重新读取',
+                    quiet: true,
+                    onPressed: busy ? null : () => switchScope(true),
+                  ),
+                DeskButton(
+                  '导入文件',
+                  quiet: true,
+                  onPressed: busy ? null : loadFile,
+                ),
+                if (scope == 'file') const Chip(label: Text('已导入文件 · 待复制')),
+              ],
+            )
+          else
+            DeskText('$selected · 当前书', color: context.desk.accent),
+          const SizedBox(height: 14),
+          if (plan == null) ...[
+            TextField(
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: '搜索预设',
+                prefixIcon: Icon(Icons.search, size: 18),
+              ),
+              onChanged: (value) => setState(() => search = value),
+            ),
+            const SizedBox(height: 10),
+          ],
+          SizedBox(
+            height: 240,
+            child: plan == null
+                ? visiblePresets.isEmpty
+                      ? Center(
+                          child: DeskText(
+                            presets.isEmpty ? '尚无预设，可将当前排版另存为预设。' : '没有匹配的预设',
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: visiblePresets.length,
+                          itemBuilder: (_, index) {
+                            final preset = visiblePresets[index];
+                            return ListTile(
+                              selected: selected == preset.name,
+                              selectedTileColor: context.desk.accentSoft,
+                              title: DeskText(preset.name, bold: true),
+                              subtitle: DeskText(
+                                '排版 · ${preset.values.length} 项参数',
+                                size: 12,
+                                color: context.desk.ink2,
+                              ),
+                              onTap: busy
+                                  ? null
+                                  : () =>
+                                        setState(() => selected = preset.name),
+                            );
+                          },
+                        )
+                : DeskScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final key in plan!.changed)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: Text(
+                              '${widget.label(key)}\n${widget.valueText(key, plan!.before[key])}'
+                              ' → ${widget.valueText(key, plan!.after[key])}',
+                            ),
+                          ),
+                        if (plan!.changed.isEmpty) const Text('没有需要修改的字段。'),
+                      ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: busy
-                        ? null
-                        : () => Navigator.pop(context, false),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: DeskScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (plan == null)
-                        Wrap(
-                          spacing: 10,
-                          children: [
-                            DeskModeSwitch<String>(
-                              value: scope,
-                              options: const {
-                                'project': '本项目',
-                                'global': '全局预设',
-                                'builtin': '内置',
-                              },
-                              onChanged: busy
-                                  ? null
-                                  : (value) {
-                                      if (value == 'builtin') {
-                                        showBuiltin();
-                                      } else {
-                                        switchScope(value == 'global');
-                                      }
-                                    },
-                            ),
-                            if (global)
-                              DeskButton(
-                                '重新读取',
-                                quiet: true,
-                                onPressed: busy
-                                    ? null
-                                    : () => switchScope(true),
-                              ),
-                            DeskButton(
-                              '导入文件',
-                              quiet: true,
-                              onPressed: busy ? null : loadFile,
-                            ),
-                            if (scope == 'file')
-                              const Chip(label: Text('已导入文件 · 待复制')),
-                          ],
-                        )
-                      else
-                        DeskText('$selected · 当前书', color: context.desk.accent),
-                      const SizedBox(height: 14),
-                      if (plan == null) ...[
-                        TextField(
-                          autofocus: true,
-                          decoration: const InputDecoration(
-                            hintText: '搜索预设',
-                            prefixIcon: Icon(Icons.search, size: 18),
-                          ),
-                          onChanged: (value) => setState(() => search = value),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-                      SizedBox(
-                        height: 240,
-                        child: plan == null
-                            ? visiblePresets.isEmpty
-                                  ? Center(
-                                      child: DeskText(
-                                        presets.isEmpty
-                                            ? '尚无预设，可将当前排版另存为预设。'
-                                            : '没有匹配的预设',
-                                      ),
-                                    )
-                                  : ListView.builder(
-                                      itemCount: visiblePresets.length,
-                                      itemBuilder: (_, index) {
-                                        final preset = visiblePresets[index];
-                                        return ListTile(
-                                          selected: selected == preset.name,
-                                          selectedTileColor:
-                                              context.desk.accentSoft,
-                                          title: DeskText(
-                                            preset.name,
-                                            bold: true,
-                                          ),
-                                          subtitle: DeskText(
-                                            '排版 · ${preset.values.length} 项参数',
-                                            size: 12,
-                                            color: context.desk.ink2,
-                                          ),
-                                          onTap: busy
-                                              ? null
-                                              : () => setState(
-                                                  () => selected = preset.name,
-                                                ),
-                                        );
-                                      },
-                                    )
-                            : DeskScrollView(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    for (final key in plan!.changed)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 14,
-                                        ),
-                                        child: Text(
-                                          '${widget.label(key)}\n${widget.valueText(key, plan!.before[key])}'
-                                          ' → ${widget.valueText(key, plan!.after[key])}',
-                                        ),
-                                      ),
-                                    if (plan!.changed.isEmpty)
-                                      const Text('没有需要修改的字段。'),
-                                  ],
-                                ),
-                              ),
-                      ),
-                      if (plan == null && local) ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                key: const ValueKey('layout-preset-name'),
-                                controller: name,
-                                enabled: !busy,
-                                decoration: const InputDecoration(
-                                  labelText: '新预设名称',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            DeskButton(
-                              '另存为预设',
-                              icon: Icons.add,
-                              onPressed: busy ? null : save,
-                            ),
-                            const SizedBox(width: 8),
-                            DeskButton(
-                              '删除',
-                              quiet: true,
-                              dangerous: true,
-                              onPressed: busy || selected == null
-                                  ? null
-                                  : remove,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Wrap(
-                          spacing: 10,
-                          children: [
-                            DeskButton(
-                              '重命名为输入名称',
-                              quiet: true,
-                              onPressed: busy || selected == null
-                                  ? null
-                                  : rename,
-                            ),
-                            DeskButton(
-                              '保存到全局',
-                              quiet: true,
-                              onPressed: busy || selected == null
-                                  ? null
-                                  : publish,
-                            ),
-                            DeskButton(
-                              '导出文件',
-                              quiet: true,
-                              onPressed: busy || selected == null
-                                  ? null
-                                  : exportFile,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      if (plan == null && !local) ...[
-                        Wrap(
-                          spacing: 10,
-                          children: [
-                            DeskButton(
-                              '复制到本项目',
-                              onPressed: busy || selected == null
-                                  ? null
-                                  : copyToProject,
-                            ),
-                            if (global)
-                              DeskButton(
-                                '删除全局预设',
-                                quiet: true,
-                                dangerous: true,
-                                onPressed: busy || selected == null
-                                    ? null
-                                    : remove,
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        color: context.desk.accentSoft,
-                        child: DeskText(
-                          widget.allowApply
-                              ? '应用前查看差异；预设不携带书名、封面或正文。'
-                              : '补全排版数值后即可应用；当前输入也可另存为预设。',
-                          size: 12,
-                          color: context.desk.accent,
-                        ),
-                      ),
-                      if (message.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 10),
-                          child: DeskText(message, size: 12),
-                        ),
-                    ],
+          ),
+          if (plan == null && local) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('layout-preset-name'),
+                    controller: name,
+                    enabled: !busy,
+                    decoration: const InputDecoration(labelText: '新预设名称'),
                   ),
                 ),
-              ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
+                const SizedBox(width: 12),
+                DeskButton(
+                  '另存为预设',
+                  icon: Icons.add,
+                  onPressed: busy ? null : save,
+                ),
+                const SizedBox(width: 8),
+                DeskButton(
+                  '删除',
+                  quiet: true,
+                  dangerous: true,
+                  onPressed: busy || selected == null ? null : remove,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              children: [
+                DeskButton(
+                  '重命名为输入名称',
+                  quiet: true,
+                  onPressed: busy || selected == null ? null : rename,
+                ),
+                DeskButton(
+                  '保存到全局',
+                  quiet: true,
+                  onPressed: busy || selected == null ? null : publish,
+                ),
+                DeskButton(
+                  '导出文件',
+                  quiet: true,
+                  onPressed: busy || selected == null ? null : exportFile,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (plan == null && !local) ...[
+            Wrap(
+              spacing: 10,
+              children: [
+                DeskButton(
+                  '复制到本项目',
+                  onPressed: busy || selected == null ? null : copyToProject,
+                ),
+                if (global)
                   DeskButton(
-                    plan == null ? '取消' : '返回选择',
+                    '删除全局预设',
                     quiet: true,
-                    onPressed: busy
-                        ? null
-                        : () {
-                            if (plan == null) {
-                              Navigator.pop(context, false);
-                            } else {
-                              setState(() => plan = null);
-                            }
-                          },
+                    dangerous: true,
+                    onPressed: busy || selected == null ? null : remove,
                   ),
-                  const Spacer(),
-                  DeskButton(
-                    plan == null ? '预览并确认' : '确认应用',
-                    primary: true,
-                    busy: busy,
-                    disabledReason: selected == null
-                        ? '先选择一个预设'
-                        : !widget.allowApply
-                        ? '先补全排版数值'
-                        : !local
-                        ? '先复制到本项目，再应用到书籍'
-                        : '正在处理',
-                    onPressed:
-                        busy || selected == null || !widget.allowApply || !local
-                        ? null
-                        : plan == null
-                        ? preview
-                        : apply,
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+          Container(
+            padding: const EdgeInsets.all(14),
+            color: context.desk.accentSoft,
+            child: DeskText(
+              widget.allowApply
+                  ? '应用前查看差异；预设不携带书名、封面或正文。'
+                  : '补全排版数值后即可应用；当前输入也可另存为预设。',
+              size: 12,
+              color: context.desk.accent,
+            ),
           ),
-        ),
+          if (message.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: DeskText(message, size: 12),
+            ),
+        ],
       ),
     ),
   );

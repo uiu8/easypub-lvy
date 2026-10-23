@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    io::Read,
+    io::{Read, Write},
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -249,10 +249,34 @@ fn save(root: &Path, sources: &[Source]) -> Result<(), ApiError> {
         return Err(err("book_source_too_large"));
     }
     std::fs::create_dir_all(root).map_err(|_| err("book_source_write_failed"))?;
-    let temp = root.join("sources.tmp");
-    std::fs::write(&temp, bytes)
-        .and_then(|_| std::fs::rename(&temp, root.join("sources.json")))
-        .map_err(|_| err("book_source_write_failed"))
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let (temp, mut file) = loop {
+        let temp = root.join(format!(
+            "sources-{}-{}.tmp",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)
+        {
+            Ok(file) => break (temp, file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return Err(err("book_source_write_failed")),
+        }
+    };
+    let result = (|| {
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&temp, root.join("sources.json"))
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(temp);
+    }
+    result.map_err(|_| err("book_source_write_failed"))
 }
 fn listing(sources: &[Source]) -> Value {
     json!({"stage":"book_sources", "sources": sources.iter().map(|s| json!({

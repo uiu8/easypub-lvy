@@ -145,6 +145,35 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
     );
   }
 
+  /// R4-01：逐字段的原始差异，默认折叠；只有服务给了说明（如文本清理）时才单独列出。
+  Widget technical(ChangeDetail detail) {
+    final d = context.desk;
+    if (detail.technical.isEmpty) return const SizedBox.shrink();
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        key: PageStorageKey('${detail.record.id}-technical'),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+        title: Text(
+          '技术细节 · ${detail.technical.length} 项字段',
+          style: ui(12, w: 600, c: d.ink2),
+        ),
+        children: [
+          for (final field in detail.technical)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: SelectableText(
+                '${field.label}：${field.before} → ${field.after}',
+                style: mono(11.5, c: d.ink3),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> showTrees(ChangeDetail change) => showDialog<void>(
     context: context,
     builder: (context) => DeskDialog(
@@ -197,7 +226,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                         shape: const Border(),
                         title: Text(row.title, style: ui(13, w: 600, c: d.ink)),
                         subtitle: Text(
-                          '${row.category} · 版本 ${row.version} · ${row.applied ? '已采用' : '已撤销'}',
+                          '${row.category} · 版本 ${row.version} · ${row.applied ? '已应用' : '已撤销'}',
                           style: ui(11.5, c: d.ink3),
                         ),
                         children: [
@@ -240,6 +269,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                                           ],
                                         ),
                                       ),
+                                    technical(change),
                                     Wrap(
                                       spacing: 6,
                                       runSpacing: 6,
@@ -252,6 +282,19 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                                               ? null
                                               : () => undo(change),
                                         ),
+                                        // R4-08：章节页的紧凑列表也能重做，与全局记录页一致。
+                                        if (widget.history
+                                            is RedoChangeHistoryService)
+                                          DeskButton(
+                                            '重做此次修改',
+                                            icon: Icons.redo_rounded,
+                                            disabledReason:
+                                                '只能重做紧接当前一步之后的已撤销记录',
+                                            onPressed: busy || !row.canRedo
+                                                ? null
+                                                : () =>
+                                                      undo(change, redo: true),
+                                          ),
                                         if (row.domain == '章节')
                                           DeskButton(
                                             '查看章节变化',
@@ -306,12 +349,16 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
           : books.any((b) => b.id == book)
           ? book
           : books.firstOrNull?.id;
-      final filtered = id == null
-          ? <ChangeRecord>[]
-          : widget.history
-                .records(id)
-                .where((r) => filter == '全部类型' || r.category == filter)
-                .toList();
+      final all = id == null
+          ? const <ChangeRecord>[]
+          : widget.history.records(id);
+      final counts = <String, int>{};
+      for (final r in all) {
+        counts[r.category] = (counts[r.category] ?? 0) + 1;
+      }
+      final filtered = all
+          .where((r) => filter == '全部类型' || r.category == filter)
+          .toList();
       // 有时间的按时间倒序在前；登记开始前的旧版本保持原顺序，归入“时间未记录”。
       final timed = filtered.where((r) => r.time != null).toList()
         ..sort((a, b) => b.time!.compareTo(a.time!));
@@ -370,8 +417,9 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                             selected = null;
                             error = '';
                           }),
+                    // R4-09：每类带数量；这本书没有记录的类型不列（当前选中的除外）。
                     items: [
-                      for (final value in [
+                      for (final value in {
                         '全部类型',
                         '章节',
                         '人工编辑',
@@ -380,8 +428,17 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                         '排版',
                         '书籍信息',
                         '批量制作',
-                      ])
-                        DropdownMenuItem(value: value, child: Text(value)),
+                        ...counts.keys,
+                      })
+                        if (value == '全部类型' ||
+                            value == filter ||
+                            (counts[value] ?? 0) > 0)
+                          DropdownMenuItem(
+                            value: value,
+                            child: Text(
+                              '$value ${value == '全部类型' ? all.length : counts[value] ?? 0}',
+                            ),
+                          ),
                     ],
                     onChanged: busy
                         ? null
@@ -496,7 +553,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${record.category} · 版本 ${record.version} · ${record.time == null ? '时间未记录' : '${dayLabel(record.time!)} ${clock(record.time!)}'} · ${detail.fields.length} 项字段变化',
+                    '${record.category} · 版本 ${record.version} · ${record.time == null ? '时间未记录' : '${dayLabel(record.time!)} ${clock(record.time!)}'}${detail.technical.isEmpty ? ' · ${detail.fields.length} 项字段变化' : ''}',
                     style: ui(12, c: d.ink2),
                   ),
                   const SizedBox(height: 10),
@@ -563,17 +620,25 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                         : LayoutBuilder(
                             builder: (context, c) => c.maxWidth >= 640
                                 ? SingleChildScrollView(
-                                    child: Row(
+                                    child: Column(
                                       crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                          CrossAxisAlignment.stretch,
                                       children: [
-                                        Expanded(
-                                          child: comparison(detail, false),
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: comparison(detail, false),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: comparison(detail, true),
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: comparison(detail, true),
-                                        ),
+                                        const SizedBox(height: 8),
+                                        technical(detail),
                                       ],
                                     ),
                                   )
@@ -582,6 +647,8 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                                       comparison(detail, false),
                                       const SizedBox(height: 10),
                                       comparison(detail, true),
+                                      const SizedBox(height: 8),
+                                      technical(detail),
                                     ],
                                   ),
                           ),

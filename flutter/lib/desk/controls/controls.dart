@@ -136,7 +136,9 @@ abstract final class _Ink {
           ),
         ),
       ),
+      // V94：弹出菜单一律在按钮下方展开，不盖住按钮本身。
       popupMenuTheme: PopupMenuThemeData(
+        position: PopupMenuPosition.under,
         color: d.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 6,

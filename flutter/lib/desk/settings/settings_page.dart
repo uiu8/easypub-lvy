@@ -23,6 +23,7 @@ import '../../application/parallel_books.dart';
 import '../../application/crash_log_service.dart';
 import '../errors.dart';
 import '../controls/controls.dart';
+import 'settings_index.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -36,7 +37,13 @@ class SettingsPage extends StatefulWidget {
     this.performanceScrollController,
     this.pickLegacyFile,
     this.appInfo = loadAppInfo,
+    this.initialTab,
+    this.focusItem,
   });
+
+  /// 打开时的分组与要定位的设置项（R1，命令面板“设置项”组）。
+  final int? initialTab;
+  final String? focusItem;
 
   /// 读取版本与本版更新（V22，SET-066）；测试可以替换。
   final Future<AppInfo> Function() appInfo;
@@ -78,15 +85,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// 分区名称与各页标题一致（SET-062）；配置迁移并入“数据与迁移”，
   /// 设置的来源层级并入“关于与许可”。
-  static const tabs = [
-    '外观与交互',
-    '导入与收藏',
-    '成品与输出',
-    '自动检查',
-    '转换工具',
-    '数据与迁移',
-    '关于与许可',
-  ];
+  static const tabs = settingsTabNames;
   static const tabIcons = [
     Icons.palette_outlined,
     Icons.drive_folder_upload_outlined,
@@ -99,6 +98,16 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
+    final initial = widget.initialTab;
+    if (initial != null && initial >= 0 && initial < tabs.length) {
+      tab = initial;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.pageTitle?.value = tabs[initial];
+      });
+    }
+    if (widget.focusItem case final item? when item.isNotEmpty) {
+      _focusItem(item);
+    }
     // load() 一开始就会同步通知共享状态；放到首帧之后，避免在构建期间刷新其他页面
     // （从“变更记录”进入设置时，正在释放的记录页会收到通知而报错，V15）。
     widget.appInfo().then((value) {
@@ -284,10 +293,18 @@ class _SettingsPageState extends State<SettingsPage> {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('收藏修改未能保存，原设置保留。')));
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('收藏操作失败，请重试。')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              deskErrorText(
+                e,
+                '收藏没有改成：设置目录可能没有写入权限、磁盘已满或文件被其他程序占用。处理后再点一次；原来的收藏保留。',
+              ),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => saving = false);
@@ -655,7 +672,9 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) {
         setState(() {
           saving = false;
-          saveStatus = path == null ? '备份失败，请重试' : '已自动保存';
+          saveStatus = path == null
+              ? '备份没有完成：备份位置可能无法写入或空间不足，换一个位置再试'
+              : '已自动保存';
         });
       }
     }
@@ -832,14 +851,20 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       ok = await widget.settings.savePatch(patch);
       if (mounted) {
-        setState(() => saveStatus = ok ? '已自动保存' : '保存失败，请重试刚才的更改');
+        setState(
+          () => saveStatus = ok
+              ? '已自动保存'
+              : '没有保存：设置目录可能没有写入权限、磁盘已满或文件被其他程序占用，处理后再改一次',
+        );
       }
       if (mounted && !ok) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('保存失败，原设置保持不变。')));
       }
     } catch (_) {
-      if (mounted) setState(() => saveStatus = '保存失败，请重试刚才的更改');
+      if (mounted) {
+        setState(() => saveStatus = '没有保存：设置目录可能没有写入权限、磁盘已满或文件被其他程序占用，处理后再改一次');
+      }
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -2195,6 +2220,65 @@ class _SettingsPageState extends State<SettingsPage> {
           'right': '右对齐',
         }[value] ??
         '$value';
+  }
+
+  /// 定位设置项（R1）：等分组内容出来后找到同名文字，滚到可见处并短暂框出。
+  Future<void> _focusItem(String label) async {
+    for (var i = 0; i < 60 && mounted; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (!mounted) return;
+      Element? hit;
+      void visit(Element element) {
+        if (hit != null) return;
+        final w = element.widget;
+        if (w is Text && w.data == label) {
+          hit = element;
+          return;
+        }
+        element.visitChildren(visit);
+      }
+
+      (context as Element).visitChildren(visit);
+      final target = hit;
+      if (target == null) continue;
+      await Scrollable.ensureVisible(
+        target,
+        alignment: .2,
+        duration: DeskMotion.of(context, DeskMotion.base),
+      );
+      if (!mounted || !target.mounted) return;
+      final box = target.renderObject as RenderBox?;
+      final overlay = Overlay.maybeOf(context);
+      if (box == null || !box.hasSize || overlay == null) return;
+      final origin = box.localToGlobal(
+        Offset.zero,
+        ancestor: overlay.context.findRenderObject(),
+      );
+      final d = context.desk;
+      final entry = OverlayEntry(
+        builder: (_) => Positioned(
+          left: origin.dx - 8,
+          top: origin.dy - 5,
+          width: box.size.width + 16,
+          height: box.size.height + 10,
+          child: IgnorePointer(
+            child: Container(
+              key: const ValueKey('settings-focus-flash'),
+              decoration: BoxDecoration(
+                color: d.accentSoft.withValues(alpha: .5),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: d.accent, width: 1.5),
+              ),
+            ),
+          ),
+        ),
+      );
+      overlay.insert(entry);
+      await Future<void>.delayed(const Duration(milliseconds: 1600));
+      entry.remove();
+      entry.dispose();
+      return;
+    }
   }
 
   void selectTab(int index) => setState(() {

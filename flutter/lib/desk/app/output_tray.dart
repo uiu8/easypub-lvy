@@ -55,7 +55,6 @@ class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
               constraints.maxWidth /
               MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.5);
           final wide = effectiveWidth >= 1360;
-          final mid = effectiveWidth >= 1100;
           final compact = effectiveWidth < 1000;
           final tiny = effectiveWidth < 780;
           final book = library.books.value
@@ -170,7 +169,8 @@ class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
                     Text('输出', style: ui(12, c: d.ink3)),
                     const SizedBox(width: 8),
                   ],
-                  if (mid)
+                  // R1：只有极窄时才收成下拉；其余宽度都用分段按钮（四个格式名本来就短）。
+                  if (!tiny)
                     KeyedSubtree(
                       key: ValueKey('quick-format-${draft.format}'),
                       child: DeskSegmented<String>(
@@ -214,7 +214,16 @@ class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
                   const SizedBox(width: 8),
                   if (!tiny)
                     Tooltip(
-                      message: multipleBooks ? '本次书稿批量排版' : '本次书稿排版预设',
+                      // R1：窄时按钮只写“排版”，完整名称放在悬停提示里。
+                      message: [
+                        multipleBooks ? '本次书稿批量排版' : '本次书稿排版预设',
+                        if (compact)
+                          multipleBooks
+                              ? '沿用各书排版'
+                              : outputBooks.contains(book?.id)
+                              ? presetLabel
+                              : '沿用本书排版',
+                      ].join('：'),
                       child: InkWell(
                         onTap: busy || outputBooks.isEmpty
                             ? null
@@ -222,7 +231,9 @@ class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
                                   app.chooseLayout(context, books: outputBooks),
                         borderRadius: BorderRadius.circular(7),
                         child: _TrayChip(
-                          multipleBooks
+                          compact
+                              ? '排版'
+                              : multipleBooks
                               ? '沿用各书排版'
                               : outputBooks.contains(book?.id)
                               ? presetLabel

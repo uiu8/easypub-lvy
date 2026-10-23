@@ -235,10 +235,12 @@ void main() {
     await v88.open(tester, api, temp);
     await tester.tap(find.text('书源 1/2'));
     await pump(tester);
+    await v88.menu(tester, 'booksource-row-menu-https://a');
     await tester.tap(find.byKey(const ValueKey('booksource-pin-https://a')));
     await pump(tester);
     expect(api.sourceList[0]['pinned'], true);
-    await tester.tap(find.byTooltip('置底书源').first);
+    await v88.menu(tester, 'booksource-row-menu-https://a');
+    await tester.tap(find.byKey(const ValueKey('booksource-bottom-https://a')));
     await pump(tester);
     expect(api.sourceList[0]['pinned'], false);
     final first = find.byKey(
@@ -253,6 +255,8 @@ void main() {
     );
     await pump(tester);
     expect(api.requests.any((r) => r.$1 == 'sources.order'), true);
+    await tester.tap(find.byKey(const ValueKey('booksource-filters-toggle')));
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.tap(find.byKey(const ValueKey('booksource-recommended')));
     await pump(tester);
     expect(find.text('乙源'), findsNothing);
@@ -276,6 +280,11 @@ void main() {
     await tester.tap(find.text('书源 1/2'));
     await pump(tester);
     await tester.tap(find.text('甲源'));
+    await pump(tester);
+    // R1c 起宽窗口下点书源在右侧检查面板里看，详情从面板里打开。
+    await tester.tap(
+      find.byKey(const ValueKey('booksource-inspector-detail-https://a')),
+    );
     await pump(tester);
     await tester.tap(find.byKey(const ValueKey('booksource-profile')));
     await pump(tester);

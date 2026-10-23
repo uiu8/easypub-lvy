@@ -8,6 +8,61 @@ const _sourceCauses = {
   'verification': '登录或验证',
 };
 
+/// 连接失败的细分原因（V102 D）：插件固定词表；未知值或空值不显示，仍用原来的 error。
+const _networkFailures = {
+  'dns': 'DNS 解析失败',
+  'connection_refused': '连接被拒绝',
+  'timeout': '连接或响应超时',
+  'certificate_expired': '证书已过期或尚未生效',
+  'certificate_name': '证书域名不符',
+  'certificate_untrusted': '证书链不受信任',
+  'tls': 'TLS 连接或证书校验失败',
+  'proxy_auth': '代理认证失败',
+  'connect': '目标或代理不可达',
+  'response': '连接中断或响应读取失败',
+};
+
+/// 书源脚本出错的分类（V101）：JSON 数据错误多半是网站变了，不等于书源写错。
+const _scriptDiagnostics = {
+  'script_json_error': '网站返回的不是有效 JSON（多半是网站变了）',
+  'script_syntax_error': '书源脚本有语法错误',
+  'script_missing_identifier': '书源脚本用到了未定义的名字',
+  'script_not_callable': '书源脚本调用了不能调用的值',
+  'script_null_input': '书源脚本拿到了空值',
+  'script_type_error': '书源脚本类型错误',
+  'script_error': '书源脚本出错',
+};
+
+/// 校验词从哪来（V101）。
+const _keywordOrigins = {
+  'user': '你输入的词',
+  'source': '书源自带的校验词',
+  'default': '默认校验词',
+};
+
+/// 未通过校验的原因（V102）：原来的概括，加上网络细分、运行时遇到的未支持接口、脚本错误分类。
+/// 有细分时不再重复大类名。
+String _checkReason(Map? check) {
+  final parts = <String>['${check?['error'] ?? ''}'];
+  final network = _networkFailures[check?['networkFailure']];
+  if (network != null && network != parts.first) parts.add(network);
+  final api = '${check?['unsupportedInterface'] ?? ''}';
+  if (api.isNotEmpty) parts.add('调用了尚未支持的接口 $api');
+  final script = _scriptDiagnostics[check?['diagnostic']];
+  if (script != null) parts.add(script);
+  if (check?['cause'] == 'verification') {
+    parts.add('需要在网页里人工验证，后台校验不能弹出网页');
+  }
+  return parts.where((p) => p.isNotEmpty).join(' · ');
+}
+
+/// 是否已经写出了比大类更具体的原因。
+bool _hasSpecificReason(Map? check) =>
+    _networkFailures.containsKey(check?['networkFailure']) ||
+    '${check?['unsupportedInterface'] ?? ''}'.isNotEmpty ||
+    _scriptDiagnostics.containsKey(check?['diagnostic']) ||
+    check?['cause'] == 'verification';
+
 extension _BookSourceSubscriptions on _BookSourcePageState {
   Future<void> _failureCauses(List failures) async {
     String selected = '';

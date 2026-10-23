@@ -17,6 +17,13 @@ pub const DEFAULT_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb
 
 #[derive(Clone, Debug, Default)]
 pub struct Request {
+    /// 健康检查及显式响应接口使用：由调用方解释 HTTP 错误状态，不回显响应正文。
+    pub inspect_error_status: bool,
+    /// 仅规则引擎保留验证页，让调用方决定是否打开 WebView。
+    pub capture_challenge: bool,
+    pub source_regex: Option<String>,
+    /// 调用方可收紧完整响应的字节上限。
+    pub max_body: Option<usize>,
     pub url: String,
     pub method: String,
     pub body: Option<Vec<u8>>,
@@ -78,6 +85,7 @@ struct RateState {
 }
 
 pub struct Net {
+    pub fqnovel: bool,
     pub cookies: Mutex<cookie_store::CookieStore>,
     rate: Option<Rate>,
     pub crawl: crate::source::CrawlProfile,
@@ -102,6 +110,7 @@ impl Net {
             rate,
             crawl: Default::default(),
             respond_time: 0,
+            fqnovel: false,
             state: Mutex::default(),
             headers,
         }
@@ -162,18 +171,14 @@ impl Net {
     }
     pub fn remove_cookies(&self, url: &str) {
         let Ok(url) = Url::parse(url) else { return };
-        let Some(host) = url.host_str() else { return };
         let mut jar = self.cookies.lock().unwrap();
         let names: Vec<(String, String, String)> = jar
             .iter_any()
-            .filter(|c| {
-                c.domain()
-                    .is_some_and(|d| host.ends_with(d.trim_start_matches('.')))
-            })
+            .filter(|c| c.domain.matches(&url))
             .map(|c| {
                 (
-                    c.domain().unwrap_or("").to_owned(),
-                    c.path().unwrap_or("/").to_owned(),
+                    String::from(&c.domain),
+                    String::from(&c.path),
                     c.name().to_owned(),
                 )
             })
@@ -251,6 +256,14 @@ impl Net {
         let mut method =
             Method::from_bytes(req.method.to_ascii_uppercase().as_bytes()).unwrap_or(Method::GET);
         let mut body = req.body.clone();
+        // 显式 Cookie 仅属于初始地址；后续跳转由 Cookie 罐按域、路径和 Secure 筛选。
+        for (name, value) in self.headers.iter().chain(&req.headers) {
+            if name.trim().eq_ignore_ascii_case("cookie") {
+                self.set_cookie(url.as_str(), value);
+            }
+        }
+        let mut forward_credentials = true;
+        let mut dropped_body = false;
         let mut network_time = Duration::ZERO;
         for _ in 0..10 {
             if !matches!(url.scheme(), "http" | "https") {
@@ -313,11 +326,25 @@ impl Net {
                     HeaderName::from_bytes(k.trim().as_bytes()),
                     HeaderValue::from_str(v.trim()),
                 ) {
-                    if name == "cookie" {
-                        self.set_cookie(url.as_str(), v);
+                    if name == "cookie"
+                        || (!forward_credentials
+                            && matches!(
+                                name.as_str(),
+                                "authorization" | "proxy-authorization" | "host"
+                            ))
+                        || (dropped_body
+                            && matches!(
+                                name.as_str(),
+                                "content-type" | "content-length" | "transfer-encoding"
+                            ))
+                    {
                         continue;
                     }
-                    headers.insert(name, value);
+                    if name == "user-agent" && value == "null" {
+                        headers.remove("user-agent");
+                    } else {
+                        headers.insert(name, value);
+                    }
                 }
             }
             let cookie = self.cookie_header(&url);
@@ -346,6 +373,7 @@ impl Net {
             if let Some(b) = &body {
                 builder = builder.body(b.clone());
             }
+            context.timing.lock().unwrap().requests += 1;
             let mut resp = builder.send().await.map_err(|e| {
                 NetError(format!(
                     "{} · {}",
@@ -381,15 +409,18 @@ impl Net {
                 && status.is_redirection()
                 && let Some(location) = resp.headers().get("location").and_then(|v| v.to_str().ok())
             {
-                url = url
+                let next = url
                     .join(location)
                     .map_err(|_| NetError("重定向网址无效".into()))?;
+                forward_credentials &= url.origin() == next.origin();
+                url = next;
                 if status.as_u16() == 303
                     || ((status.as_u16() == 301 || status.as_u16() == 302)
                         && method == Method::POST)
                 {
                     method = Method::GET;
                     body = None;
+                    dropped_body = true;
                 }
                 network_time += network_started.elapsed();
                 continue;
@@ -418,7 +449,7 @@ impl Net {
                     }
                     continue;
                 }
-                if bytes.len() + chunk.len() > MAX_BODY {
+                if bytes.len() + chunk.len() > req.max_body.unwrap_or(MAX_BODY).min(MAX_BODY) {
                     return Err(NetError("响应过大".into()));
                 }
                 bytes.extend_from_slice(&chunk);
@@ -429,7 +460,27 @@ impl Net {
                 .map(|(_, v)| v.as_str())
                 .unwrap_or("");
             let text = decode(&bytes, req.charset.as_deref(), content_type);
-            if !status.is_success() && !status.is_redirection() {
+            if self.fqnovel
+                && crate::network_config::local(&url)
+                && let Some(message) = crate::plugin::fqnovel::response_error(&Response {
+                    status: status.as_u16(),
+                    text: text.clone(),
+                    ..Default::default()
+                })
+            {
+                return Err(NetError(message.into()));
+            }
+            if !req.inspect_error_status
+                && !status.is_success()
+                && !status.is_redirection()
+                && !(req.capture_challenge
+                    && crate::webview::is_challenge_response(&Response {
+                        status: status.as_u16(),
+                        text: text.clone(),
+                        headers: headers.clone(),
+                        ..Default::default()
+                    }))
+            {
                 let kind = if matches!(status.as_u16(), 403 | 503)
                     && crate::webview::looks_like_challenge(&text)
                 {

@@ -100,6 +100,7 @@ pub fn call(scope: &Scope<'_, '_>, method: &str, args: Value) -> Result<Value, S
         headers: Vec::new(),
         html: Some(html),
         js: Some(js),
+        source_regex: None,
         user_agent: DEFAULT_UA.into(),
         cookies: Vec::new(),
         timeout: Duration::from_secs(30),
@@ -283,6 +284,7 @@ pub fn bridge(rt: &Arc<SourceRt>, name: &str, args: &[Value]) -> Result<Value, S
                 headers: h.clone(),
                 html: (!html.is_empty()).then_some(html),
                 js: (!js.is_empty()).then_some(js),
+                source_regex: None,
                 user_agent: h
                     .iter()
                     .find(|(k, _)| k.eq_ignore_ascii_case("user-agent"))

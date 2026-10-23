@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import '../errors.dart';
 
 import '../../application/cleanup_service.dart';
-import '../controls/controls.dart' show DeskButton;
+import '../controls/controls.dart' show DeskButton, DeskChoice;
 import '../dialogs.dart';
 import '../tokens.dart';
 import '../widgets.dart';
@@ -356,7 +356,8 @@ class _CleanupRuleDialogState extends State<CleanupRuleDialog> {
     Key? key,
   }) {
     final d = context.desk;
-    return DropdownButtonFormField<String>(
+    // R4-10：编辑台的选择框（原为 Material 下拉）。
+    return DeskChoice<String>(
       key: key,
       initialValue: value,
       isExpanded: true,
@@ -368,7 +369,9 @@ class _CleanupRuleDialogState extends State<CleanupRuleDialog> {
             child: Text(e.value, style: ui(13, c: d.ink)),
           ),
       ],
-      onChanged: (v) => edit(() => onChanged(v!)),
+      onChanged: (v) {
+        if (v != null) edit(() => onChanged(v));
+      },
     );
   }
 

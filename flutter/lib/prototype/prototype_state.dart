@@ -1,3 +1,5 @@
+import '../infrastructure/import_profile.dart';
+
 import 'dart:convert';
 import 'dart:async';
 
@@ -341,11 +343,14 @@ class PrototypeState extends ChangeNotifier {
 
   Future<bool> _loadGlobalSettings() async {
     if (settingsDirectory == null) return true;
-    change(() => globalSettingsBusy = true);
+    change(() => globalSettingsBusy = true, bookIds: const {});
     try {
       final result = jsonDecode(
         await api.loadSettingsText(directory: settingsDirectory!),
       ) as Map<String, dynamic>;
+      final settingsChanged =
+          jsonEncode(globalConfiguration) !=
+          jsonEncode(result['configuration']);
       change(() {
         globalConfiguration = Map<String, dynamic>.from(
           result['configuration'] as Map,
@@ -378,16 +383,16 @@ class PrototypeState extends ChangeNotifier {
             (result['retired_check_fields'] as List? ?? []).isEmpty
             ? '全局设置已读取。'
             : '全局设置已读取；旧版无效检查开关已停用，检查使用当前章节规则和文本规则。';
-      });
+      }, bookIds: settingsChanged ? null : const {});
       return true;
     } catch (_) {
       change(() {
         globalSettingsLoaded = false;
         globalSettingsStatus = '全局设置读取失败，请检查设置目录；新书导入已暂停，已有项目设置不变。';
-      });
+      }, bookIds: const {});
       return false;
     } finally {
-      change(() => globalSettingsBusy = false);
+      change(() => globalSettingsBusy = false, bookIds: const {});
     }
   }
 
@@ -642,7 +647,15 @@ class PrototypeState extends ChangeNotifier {
     current.id,
   ]);
 
-  String publicationContext(String bookId) => illustrationContext(bookId);
+  // 内容版本不包含当前导航的书；导入/换书不会改变其他书的内容。
+  String publicationContext(String bookId) => jsonEncode([
+    production.guardFor(bookId),
+    manuscript.structures[bookId],
+    manuscript.structureHistories[bookId],
+    manuscript.effectiveHistories[bookId],
+    manuscript.manualEditDrafts[bookId],
+    cleanup.drafts[bookId],
+  ]);
 
   /// Conversion identity follows the actual publication input, not navigation.
   String conversionContext(String bookId) => jsonEncode([
@@ -709,15 +722,25 @@ class PrototypeState extends ChangeNotifier {
     });
   }
 
-  void change(VoidCallback action, {bool taskOnly = false}) {
+  /// null 表示调用者未限定范围，监听者必须按全量变化处理。
+  Set<String>? changedBookIds;
+
+  void change(
+    VoidCallback action, {
+    bool taskOnly = false,
+    Set<String>? bookIds,
+  }) {
     if (_disposed) return;
     action();
     stateRevision++;
     taskNotification = taskOnly;
+    final previousBooks = changedBookIds;
+    changedBookIds = bookIds;
     try {
-      notifyListeners();
+      ImportProfile.measure('notify', notifyListeners);
     } finally {
       taskNotification = false;
+      changedBookIds = previousBooks;
     }
   }
 
@@ -754,7 +777,7 @@ class PrototypeState extends ChangeNotifier {
       importing = true;
       _cancelImport = false;
       importStatus = '正在读取书稿…';
-    });
+    }, bookIds: const {});
     try {
       Map<String, dynamic>? initialLayout;
       final globalFields = <String>{};
@@ -807,7 +830,7 @@ class PrototypeState extends ChangeNotifier {
           importStatus = same
               ? '已在书库，保留现有草稿；更新来源信息请使用“刷新来源”。'
               : '来源内容已变化，现有草稿保留；请在书籍菜单选择“刷新来源”。';
-        });
+        }, bookIds: const {});
         return true;
       }
       var draft = existing < 0
@@ -1057,17 +1080,17 @@ class PrototypeState extends ChangeNotifier {
         if (unavailableRules > 0) {
           importStatus += ' · $unavailableRules 条离线或不可访问规则未参与';
         }
-      });
+      }, bookIds: {id});
       return true;
     } catch (error) {
       change(() {
         importStatus = error is FormatException
             ? error.message.toString()
             : '读取失败，请检查路径和文件权限。';
-      });
+      }, bookIds: const {});
       return false;
     } finally {
-      change(() => importing = false);
+      change(() => importing = false, bookIds: const {});
     }
   }
 

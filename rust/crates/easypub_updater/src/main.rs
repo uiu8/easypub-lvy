@@ -94,7 +94,12 @@ fn launch(app_dir: &Path) {
 pub fn run(mode: &str, app_dir: &Path) -> Result<String, String> {
     let work = app_dir.join(WORK_DIR);
     let journal = work.join("journal.json");
-    if recover(&journal) {
+    if journal.exists() {
+        if !recover(&journal) {
+            return Err(
+                "上次更新未能恢复，请关闭占用程序后重试；保留 .update 目录用于恢复。".into(),
+            );
+        }
         log(&work, "recovered an interrupted replacement");
     }
     let (source, backup) = (

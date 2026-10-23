@@ -93,6 +93,9 @@ class _DeskChoiceState<T> extends State<DeskChoice<T>> {
     return LayoutBuilder(
       builder: (context, bounds) {
         final width = bounds.maxWidth.isFinite ? bounds.maxWidth : 260.0;
+        // 面板最宽 = 选择框宽度，但至少 360、至多 520（R1 后修：窄选择框里的长选项
+        // 原来按 420 排字、面板却只有约 280 宽，长文件名被截掉）；选项文字按面板实际宽度省略。
+        final panel = width.clamp(360.0, 520.0);
         // V42（G-071）：外壳透明、不裁剪，由 _MenuEntrance 画出原来的面板并负责入场动画；
         // 四周留出阴影的位置，再用 alignmentOffset 抵消，面板位置与原来相同。
         return MenuAnchor(
@@ -106,7 +109,7 @@ class _DeskChoiceState<T> extends State<DeskChoice<T>> {
             ),
             maximumSize: WidgetStatePropertyAll(
               Size(
-                width.clamp(260, 520) + 2 * _MenuEntrance.gutter,
+                panel + 2 * _MenuEntrance.gutter,
                 420 + _MenuEntrance.gutter,
               ),
             ),
@@ -157,12 +160,17 @@ class _DeskChoiceState<T> extends State<DeskChoice<T>> {
                     trailingIcon: item.value == value
                         ? const Icon(Icons.check, size: 17)
                         : null,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      child: DefaultTextStyle.merge(
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        child: item.child,
+                    child: Tooltip(
+                      message: textOf(item.child),
+                      waitDuration: const Duration(milliseconds: 600),
+                      child: ConstrainedBox(
+                        // 减去面板内边距、按钮左右留白与勾选图标。
+                        constraints: BoxConstraints(maxWidth: panel - 64),
+                        child: DefaultTextStyle.merge(
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          child: item.child,
+                        ),
                       ),
                     ),
                   ),
@@ -271,7 +279,11 @@ class DeskFilter<T> extends StatelessWidget {
   );
 }
 
-/// Commands retain native anchored-menu keyboard traversal and focus return.
+/// 打开着的命令菜单面板（测试与自动化按它找菜单里的条目）。
+const deskMenuPanelKey = ValueKey<String>('desk-menu-panel');
+
+/// 命令菜单（R1 起与 [DeskMenuButton] 同一实现）：保留原来的参数，面板在按钮正下方展开、
+/// 条目紧凑、点选当帧执行；[initialValue] 与 CheckedPopupMenuItem 在条目左侧打勾。
 class DeskCommandMenu<T> extends StatelessWidget {
   const DeskCommandMenu({
     super.key,
@@ -294,9 +306,11 @@ class DeskCommandMenu<T> extends StatelessWidget {
   final String? tooltip, disabledReason;
   final bool enabled;
   final Widget? icon, child;
+
+  /// 旧参数，保留以免调用处改动；面板总是贴着按钮下方展开。
   final Offset offset;
   @override
-  Widget build(BuildContext context) => PopupMenuButton<T>(
+  Widget build(BuildContext context) => DeskMenuButton<T>(
     itemBuilder: itemBuilder,
     onSelected: onSelected,
     onCanceled: onCanceled,
@@ -305,12 +319,213 @@ class DeskCommandMenu<T> extends StatelessWidget {
     tooltip: !enabled ? disabledReason ?? tooltip : tooltip,
     enabled: enabled,
     icon: icon,
-    offset: offset,
-    position: PopupMenuPosition.under,
-    requestFocus: true,
-    constraints: const BoxConstraints(minWidth: 180, maxWidth: 380),
     child: child,
   );
+}
+
+/// 命令下拉菜单（V94）：写法同 PopupMenuButton（itemBuilder 里放 PopupMenuItem），
+/// 但面板在按钮正下方展开、不盖住按钮；条目 32 高、13 号字，入场 120ms，与 DeskChoice 同一面板。
+/// 条目沿用 PopupMenuItem 的 Key，只在菜单打开时才构造。
+class DeskMenuButton<T> extends StatefulWidget {
+  const DeskMenuButton({
+    super.key,
+    required this.itemBuilder,
+    this.onSelected,
+    this.onCanceled,
+    this.onOpened,
+    this.initialValue,
+    this.tooltip,
+    this.icon,
+    this.child,
+    this.enabled = true,
+  });
+  final PopupMenuItemBuilder<T> itemBuilder;
+  final PopupMenuItemSelected<T>? onSelected;
+  final VoidCallback? onCanceled, onOpened;
+
+  /// 当前值：对应条目左侧打勾。
+  final T? initialValue;
+  final String? tooltip;
+  final Widget? icon, child;
+  final bool enabled;
+
+  @override
+  State<DeskMenuButton<T>> createState() => _DeskMenuButtonState<T>();
+}
+
+class _DeskMenuButtonState<T> extends State<DeskMenuButton<T>> {
+  final controller = MenuController();
+  bool picked = false;
+
+  List<Widget> entries(BuildContext context) {
+    final items = widget.itemBuilder(context);
+    // 有任何条目可能打勾时，所有条目都留出勾的位置，文字保持对齐。
+    final checks =
+        widget.initialValue != null ||
+        items.any((e) => e is CheckedPopupMenuItem<T>);
+    return [
+      for (final entry in items)
+        switch (entry) {
+          PopupMenuItem<T>(
+            :final key,
+            :final value,
+            :final enabled,
+            :final child,
+          ) =>
+            DeskMenuRow(
+              key: key,
+              checked: !checks
+                  ? null
+                  : entry is CheckedPopupMenuItem<T>
+                  ? entry.checked
+                  : value != null && value == widget.initialValue,
+              onTap: !enabled
+                  ? null
+                  : () {
+                      // 先关菜单再立即执行（MenuItemButton 会推迟到下一帧）。
+                      picked = true;
+                      controller.close();
+                      widget.onSelected?.call(value as T);
+                    },
+              child: child ?? const SizedBox.shrink(),
+            ),
+          _ => const Divider(height: 9),
+        },
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) => MenuAnchor(
+    controller: controller,
+    clipBehavior: Clip.none,
+    alignmentOffset: const Offset(-_MenuEntrance.gutter, 4),
+    onOpen: () {
+      picked = false;
+      widget.onOpened?.call();
+    },
+    onClose: () {
+      if (!picked) widget.onCanceled?.call();
+    },
+    style: const MenuStyle(
+      minimumSize: WidgetStatePropertyAll(
+        Size(140 + 2 * _MenuEntrance.gutter, 0),
+      ),
+      backgroundColor: WidgetStatePropertyAll(Colors.transparent),
+      surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+      shadowColor: WidgetStatePropertyAll(Colors.transparent),
+      elevation: WidgetStatePropertyAll(0),
+      padding: WidgetStatePropertyAll(EdgeInsets.zero),
+      shape: WidgetStatePropertyAll(RoundedRectangleBorder()),
+    ),
+    menuChildren: [
+      _MenuEntrance(
+        children: [
+          Builder(
+            builder: (context) => Column(
+              key: deskMenuPanelKey,
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: entries(context),
+            ),
+          ),
+        ],
+      ),
+    ],
+    builder: (context, controller, _) {
+      final onTap = !widget.enabled
+          ? null
+          : () => controller.isOpen ? controller.close() : controller.open();
+      if (widget.child == null) {
+        return IconButton(
+          tooltip: widget.tooltip,
+          onPressed: onTap,
+          icon: widget.icon ?? const Icon(Icons.more_vert),
+        );
+      }
+      final trigger = InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: widget.child,
+      );
+      return widget.tooltip == null
+          ? trigger
+          : Tooltip(message: widget.tooltip!, child: trigger);
+    },
+  );
+}
+
+/// 命令菜单的一行（R1 公开，分组菜单共用）：32 高、13 号字，悬停凹底；不可用时变浅、不响应。
+/// [checked] 不为 null 时左侧留出勾的位置（为 true 时打勾）。
+class DeskMenuRow extends StatelessWidget {
+  const DeskMenuRow({
+    super.key,
+    required this.onTap,
+    required this.child,
+    this.checked,
+  });
+  final VoidCallback? onTap;
+  final Widget child;
+  final bool? checked;
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desk;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        hoverColor: d.sunken,
+        focusColor: d.sunken,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 32, maxWidth: 380),
+          padding: EdgeInsets.fromLTRB(checked == null ? 10 : 6, 6, 10, 6),
+          alignment: Alignment.centerLeft,
+          child: DefaultTextStyle.merge(
+            style: TextStyle(
+              fontSize: 13,
+              color: onTap == null ? d.ink3 : d.ink,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            child: IconTheme.merge(
+              data: IconThemeData(size: 16, color: d.ink2),
+              child: checked == null
+                  ? child
+                  : Row(
+                      children: [
+                        SizedBox(
+                          width: 22,
+                          child: checked!
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  size: 16,
+                                  color: d.accent,
+                                )
+                              : null,
+                        ),
+                        Flexible(child: child),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 编辑台菜单面板（R1 公开）：表面色、10 圆角、细边与阴影，120ms 入场；分组菜单与命令菜单共用。
+class DeskMenuSurface extends StatelessWidget {
+  const DeskMenuSurface({
+    super.key,
+    required this.children,
+    this.maxHeight = 420,
+  });
+  final List<Widget> children;
+  final double maxHeight;
+  @override
+  Widget build(BuildContext context) =>
+      _MenuEntrance(maxHeight: maxHeight, children: children);
 }
 
 class DeskModeSwitch<T> extends StatelessWidget {
@@ -441,8 +656,11 @@ class _DeskSearchScopeState extends State<DeskSearchScope> {
 /// 打开时淡入并下滑 4 像素，[DeskMotion.snap] + [DeskMotion.easeOut]；减少动效时直接出现。
 /// 关闭仍由 MenuAnchor 立即移除。
 class _MenuEntrance extends StatefulWidget {
-  const _MenuEntrance({required this.children});
+  const _MenuEntrance({required this.children, this.maxHeight = 420});
   final List<Widget> children;
+
+  /// 面板最高多少（超出时在面板里滚动）；分组菜单传窗口可用高度。
+  final double maxHeight;
 
   /// 面板四周留给阴影的宽度。
   static const gutter = 10.0;
@@ -506,7 +724,7 @@ class _MenuEntranceState extends State<_MenuEntrance>
             side: BorderSide(color: d.line),
           ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 420),
+            constraints: BoxConstraints(maxHeight: widget.maxHeight),
             child: SingleChildScrollView(
               primary: false,
               padding: const EdgeInsets.all(4),

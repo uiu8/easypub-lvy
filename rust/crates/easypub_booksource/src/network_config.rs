@@ -329,27 +329,7 @@ pub fn client(
     Ok(client)
 }
 pub fn error(error: &reqwest::Error) -> &'static str {
-    if error.is_timeout() {
-        return "连接或响应超时";
-    }
-    if error.is_dns() {
-        return "DNS 解析失败";
-    }
-    let mut chain: Option<&(dyn std::error::Error + 'static)> = Some(error);
-    let mut detail = String::new();
-    while let Some(e) = chain {
-        detail.push_str(&e.to_string().to_lowercase());
-        chain = e.source();
-    }
-    if detail.contains("certificate") || detail.contains("tls") || detail.contains("ssl") {
-        "TLS 连接或证书校验失败"
-    } else if detail.contains("407") || detail.contains("authentication") {
-        "代理认证失败"
-    } else if error.is_connect() {
-        "无法建立连接（目标或代理不可达）"
-    } else {
-        "连接中断或响应读取失败"
-    }
+    crate::network_failure::describe(error)
 }
 
 /// 对照测试不写配置、不记录正文，也不改变书源健康分数。

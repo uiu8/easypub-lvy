@@ -302,6 +302,36 @@ pub(crate) fn toggle(
 fn decode<T: serde::de::DeserializeOwned>(v: &Value) -> Result<T, ApiError> {
     serde_json::from_value(v.clone()).map_err(|_| invalid("规则请求无效，请重新读取本书"))
 }
+// 只比较已应用前缀；保留完整历史供跨规则事务往返时恢复重做分支。
+fn applied_snapshot(
+    snapshot: &Value,
+    base: &Value,
+    source: &easypub_core::source::SourceSnapshot,
+) -> Result<Value, ApiError> {
+    let mut result = snapshot.clone();
+    if !snapshot["effective_history"].is_null() {
+        let h: crate::effective_draft::History = decode(&snapshot["effective_history"])?;
+        h.validate(source)?;
+        if h.cursor == 0 && h.current().request.is_empty() && json!(h.current().base) == *base {
+            result["effective_history"] = Value::Null;
+        } else {
+            result["effective_history"]["history"] = json!(&h.history[..=h.cursor]);
+        }
+    }
+    if !snapshot["production_history"].is_null() {
+        let h: crate::production::History = decode(&snapshot["production_history"])?;
+        h.validate(source.summary().line_count)?;
+        if h.source_id != source.summary().source_id || h.revision != source.summary().revision {
+            return Err(invalid("历史来源已变化，请重新读取本书"));
+        }
+        if h.cursor == 0 && json!(h.states[0]) == snapshot["settings"] {
+            result["production_history"] = Value::Null;
+        } else {
+            result["production_history"]["states"] = json!(&h.states[..=h.cursor]);
+        }
+    }
+    Ok(result)
+}
 pub(crate) fn run(service: &ImportService, value: Value) -> Result<String, ApiError> {
     let scope = value["scope"]
         .as_str()
@@ -313,6 +343,7 @@ pub(crate) fn run(service: &ImportService, value: Value) -> Result<String, ApiEr
     let source = service.source(&publication.source_id, publication.revision)?;
     if value["action"] == "restore_toggles" {
         let mut history = value["history"].clone();
+        validate_history(&history)?;
         let cursor = history["cursor"]
             .as_u64()
             .ok_or_else(|| invalid("规则历史无效"))? as usize;
@@ -328,17 +359,24 @@ pub(crate) fn run(service: &ImportService, value: Value) -> Result<String, ApiEr
         }
         let expected = &entry[if undo { "after" } else { "before" }];
         let current = json!({"settings":value["publication"]["settings"],"effective_history":value["effective_history"],"production_history":value["production_history"]});
-        if current != *expected {
+        if applied_snapshot(&current, &value["base"], &source)?
+            != applied_snapshot(expected, &value["base"], &source)?
+        {
             return Err(invalid("规则之后还有修改，请先撤销后续修改"));
         }
         let next = entry[if undo { "before" } else { "after" }].clone();
+        history["states"][index][if undo { "after" } else { "before" }] = current;
         let mut request = value["publication"].clone();
         request["settings"] = next["settings"].clone();
         let effective = &next["effective_history"];
         if !effective.is_null() {
             let h: crate::effective_draft::History = decode(effective)?;
             h.validate(&source)?;
-            request["post_edits"] = json!(h.current().request);
+            request["post_edits"] = if h.current().request.is_empty() {
+                Value::Null
+            } else {
+                json!(h.current().request)
+            };
         } else {
             request["post_edits"] = Value::Null;
         }

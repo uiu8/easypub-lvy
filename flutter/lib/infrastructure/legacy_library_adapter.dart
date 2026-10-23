@@ -1,3 +1,4 @@
+import '../infrastructure/import_profile.dart';
 import '../application/library_check_batch.dart';
 import '../application/parallel_books.dart';
 import '../application/workspace_leave_service.dart';
@@ -261,7 +262,8 @@ class LegacyLibraryAdapter
   bool get hasUnsavedChanges => _autosaveStarted
       ? workspaceSave.value.phase != WorkspaceSavePhase.saved
       : (_books.value.isNotEmpty || _backend.savedProjectIdentity != null) &&
-            _backend.savedProjectIdentity != _backend.projectIdentity;
+            (_backend.savedProjectIdentity == null ||
+                _backend.savedProjectIdentity != _backend.projectIdentity);
   @override
   String get workspaceIdentity => _backend.projectIdentity;
   @override
@@ -940,7 +942,14 @@ class LegacyLibraryAdapter
     );
   }
 
-  void _refresh() {
+  final _summaries = <String, BookSummary>{};
+
+  void _refresh({Set<String>? bookIds}) => ImportProfile.measure(
+    'library_refresh',
+    () => _refreshMeasured(bookIds ?? _backend.changedBookIds),
+  );
+
+  void _refreshMeasured(Set<String>? bookIds) {
     // Progress has its own task/history listeners and never changes a book or
     // workspace draft. Avoid rebuilding every book and scheduling a save.
     if (_backend.taskNotification) return;
@@ -963,8 +972,16 @@ class LegacyLibraryAdapter
       _favorites.value = List.unmodifiable(_backend.shelf.favoriteFolders);
     }
     final next = [
-      for (final b in _backend.shelf.books.where((b) => !b.isDemo)) _summary(b),
+      for (final b in _backend.shelf.books.where((b) => !b.isDemo))
+        if (bookIds != null &&
+            !bookIds.contains(b.id) &&
+            _summaries.containsKey(b.id))
+          _summaries[b.id]!
+        else
+          _summaries[b.id] = _summary(b),
     ];
+    final liveIds = next.map((b) => b.id).toSet();
+    _summaries.removeWhere((id, _) => !liveIds.contains(id));
     final before = _books.value;
     if (next.length != before.length ||
         Iterable.generate(next.length).any((i) {
@@ -1009,6 +1026,10 @@ class LegacyLibraryAdapter
     _cancelled = false;
     _importing.value = true;
     final results = <ImportOutcome>[];
+    // 批次期间不能移除/替换书库；路径只规范化一次，成功导入后更新集合。
+    final knownPaths = _books.value
+        .map((b) => folderImportPathKey(b.path))
+        .toSet();
     // 同时处理的书（V38，LIB-115）：前面几本解析的同时，后面的已开始读取；导入后的检查也几本同时进行。
     final parallel = parallelBooks(_backend.globalConfiguration);
     final checks = ConcurrencyLimit(parallel);
@@ -1017,9 +1038,7 @@ class LegacyLibraryAdapter
     void prefetchAhead(int from) {
       while (prefetched < paths.length && prefetched < from + parallel) {
         final path = paths[prefetched++];
-        final known = _books.value.any(
-          (b) => folderImportPathKey(b.path) == folderImportPathKey(path),
-        );
+        final known = knownPaths.contains(folderImportPathKey(path));
         if (!known) _backend.prefetchImport(path);
       }
     }
@@ -1028,18 +1047,19 @@ class LegacyLibraryAdapter
       for (final (index, path) in paths.indexed) {
         if (_cancelled || _disposed) break;
         if (parallel > 1) prefetchAhead(index);
-        if (skipExisting &&
-            _books.value.any(
-              (b) => folderImportPathKey(b.path) == folderImportPathKey(path),
-            )) {
+        final pathKey = folderImportPathKey(path);
+        final existed = knownPaths.contains(pathKey);
+        if (skipExisting && existed) {
           results.add(ImportOutcome(path, true, '已在书库，保留现有草稿', skipped: true));
           continue;
         }
-        final existed = _books.value.any(
-          (b) => folderImportPathKey(b.path) == folderImportPathKey(path),
+        final succeeded = await ImportProfile.measureAsync(
+          'backend_import',
+          () => _backend.importBookOutcome(path),
         );
-        final succeeded = await _backend.importBookOutcome(path);
+        ImportProfile.book(_books.value.length);
         if (_disposed) break;
+        if (succeeded) knownPaths.add(pathKey);
         results.add(
           ImportOutcome(
             path,
@@ -1052,17 +1072,17 @@ class LegacyLibraryAdapter
             _backend.globalConfiguration['check_after_import'] != false) {
           final id = _backend.currentId;
           _checking.add(id);
-          _refresh();
+          _refresh(bookIds: {id});
           Future<void> inspect() async {
             final session = openChecks(id);
             try {
-              await session.inspect();
+              await ImportProfile.measureAsync('check', session.inspect);
             } catch (_) {
               // Import success is independent of analysis; the user can retry checks.
             } finally {
               session.dispose();
               _checking.remove(id);
-              if (!_disposed) _refresh();
+              if (!_disposed) _refresh(bookIds: {id});
             }
           }
 

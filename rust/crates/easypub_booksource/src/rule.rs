@@ -278,16 +278,7 @@ fn is_rule(inner: &str) -> bool {
 
 /// 展开 `@get:{键}`、`{{…}}`、`$1`，返回 (展开后的文字, 是否含模板)。含模板时结果就是这段文字。
 fn expand(host: &dyn Host, rule: &str, input: &Node) -> (String, bool) {
-    let mut text = rule.to_owned();
-    let mut templated = false;
-    while let Some(start) = text.to_ascii_lowercase().find("@get:{") {
-        let Some(len) = text[start + 6..].find('}') else {
-            break;
-        };
-        let key = text[start + 6..start + 6 + len].to_owned();
-        text.replace_range(start..start + 7 + len, &host.var(key.trim()));
-        templated = true;
-    }
+    let (mut text, mut templated) = expand_variables(host, rule);
     if text.contains("{{") {
         let mut out = String::new();
         let mut rest = text.as_str();
@@ -333,8 +324,28 @@ fn expand(host: &dyn Host, rule: &str, input: &Node) -> (String, bool) {
     (text, templated)
 }
 
+pub(crate) fn expand_variables(host: &dyn Host, rule: &str) -> (String, bool) {
+    let mut out = String::new();
+    let mut rest = rule;
+    let mut changed = false;
+    while let Some(start) = rest.to_ascii_lowercase().find("@get:{") {
+        let Some(end) = rest[start + 6..].find('}') else {
+            break;
+        };
+        out.push_str(&rest[..start]);
+        out.push_str(&host.var(rest[start + 6..start + 6 + end].trim()));
+        rest = &rest[start + 7 + end..];
+        changed = true;
+    }
+    out.push_str(rest);
+    (out, changed)
+}
+
 /// 找与 `{{` 配对的 `}}`（跳过内层的花括号与字符串）。
 fn find_close(text: &str) -> Option<usize> {
+    if !is_rule(text) {
+        return crate::script_scan::template_end(text);
+    }
     let (mut depth, mut quote) = (0i32, None);
     let bytes = text.as_bytes();
     let mut i = 0;
@@ -368,8 +379,24 @@ struct Replace {
     first: bool,
 }
 
+/// 模板内部的 ## 是数据/脚本，不是净化后缀；CSS 引号内的 ## 也不拆。
+fn replacement_start(rule: &str) -> Option<usize> {
+    let mut offset = 0;
+    while let Some(start) = rule[offset..].find("{{") {
+        let start = offset + start;
+        let prefix = split_top(&rule[offset..start], "##");
+        if prefix.len() > 1 {
+            return Some(offset + prefix[0].len());
+        }
+        let end = find_close(&rule[start + 2..])?;
+        offset = start + 2 + end + 2;
+    }
+    let parts = split_top(&rule[offset..], "##");
+    (parts.len() > 1).then(|| offset + parts[0].len())
+}
+
 fn split_replace(rule: &str) -> (&str, Option<Replace>) {
-    let Some(at) = rule.find("##") else {
+    let Some(at) = replacement_start(rule) else {
         return (rule, None);
     };
     let base = &rule[..at];
@@ -378,12 +405,6 @@ fn split_replace(rule: &str) -> (&str, Option<Replace>) {
     let regex = parts[0];
     let with = parts.get(1).copied().unwrap_or("");
     let first = parts.len() >= 3;
-    // 末尾 `###`：split 得到的最后一段是 "#"。
-    let with = if first {
-        with
-    } else {
-        with.strip_suffix('#').unwrap_or(with)
-    };
     let replace = pattern::compile(regex).map(|pattern| Replace {
         pattern,
         with: with.to_owned(),
@@ -404,20 +425,22 @@ impl Replace {
 
 /// 一个规则段（不含 JS），`list` 为真时取列表。
 fn run_seg(host: &dyn Host, rule: &str, input: &Node, list: bool) -> Vec<Node> {
-    let (rule, templated) = expand(host, rule, input);
+    let at = replacement_start(rule).unwrap_or(rule.len());
+    let input_only = rule[..at].trim().is_empty();
+    let (base, base_template) = expand(host, &rule[..at], input);
+    let (suffix, suffix_template) = expand(host, &rule[at..], input);
+    let templated = base_template || suffix_template;
+    let rule = format!("{base}{suffix}");
     if templated {
-        let (_, replace) = split_replace(&rule);
+        let (_, replace) = split_replace(&suffix);
         // 模板结果就是文字（模板里的规则已在上面取值）；整段的 ## 已在模板之外时仍然生效。
         let text = match &replace {
             // 模板之外没有规则（如 `##…{{chapter.title}}…`）时，净化的是输入文字本身。
-            Some(r) if !list => {
-                let base = rule.split("##").next().unwrap_or("");
-                r.apply(&if base.trim().is_empty() {
-                    input.text()
-                } else {
-                    base.to_owned()
-                })
-            }
+            Some(r) if !list => r.apply(&if input_only {
+                input.text()
+            } else {
+                base.to_owned()
+            }),
             _ => rule.clone(),
         };
         return vec![Node::Text(text)];
@@ -452,7 +475,7 @@ fn run_seg(host: &dyn Host, rule: &str, input: &Node, list: bool) -> Vec<Node> {
             }
             return if op == "%%" {
                 let mut out = Vec::new();
-                for i in 0..lists.first().map_or(0, Vec::len) {
+                for i in 0..lists.iter().map(Vec::len).max().unwrap_or(0) {
                     for values in &lists {
                         if let Some(v) = values.get(i) {
                             out.push(v.clone());
@@ -640,6 +663,8 @@ fn run(host: &dyn Host, rule: &str, input: &Node, list: bool, join: bool) -> Vec
 
 /// 只展开规则类模板（`{{$.x}}`、`{{@@…}}` 等），脚本本身的花括号不动。
 fn expand_rule_templates(host: &dyn Host, code: &str, input: &Node) -> String {
+    let expanded = expand_variables(host, code).0;
+    let code = expanded.as_str();
     if !code.contains("{{") {
         return code.to_owned();
     }

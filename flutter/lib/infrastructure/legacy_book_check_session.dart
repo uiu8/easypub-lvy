@@ -11,6 +11,7 @@ import '../application/library_service.dart' show BookPendingSummary;
 import '../application/chapter_service.dart';
 import '../prototype/prototype_state.dart';
 import 'check_report_cache.dart';
+import 'atomic_file.dart';
 import 'legacy_cleanup_session.dart';
 import 'legacy_chapter_session.dart';
 import 'legacy_resource_session.dart';
@@ -487,13 +488,13 @@ class LegacyBookCheckSession extends ChangeNotifier
       final file = cacheFile(backend, guard);
       if (file != null) {
         await file.parent.create(recursive: true);
-        await file.writeAsString(jsonEncode(report.toJson()), flush: true);
+        await writeAtomicText(file, jsonEncode(report.toJson()));
       }
     } catch (_) {
       /* Cache persistence does not change the diagnosis. */
     }
     validate();
-    backend.change(() {});
+    backend.change(() {}, bookIds: {bookId});
     return report;
   }
 }

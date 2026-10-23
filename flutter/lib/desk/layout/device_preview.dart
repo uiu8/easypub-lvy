@@ -655,9 +655,13 @@ class PreviewPiece {
     this.indent = true,
     this.initial = false,
     this.kind = '',
+    this.image,
   });
   final String text;
   final bool title, indent;
+
+  /// 正文插图（R5-01）；不为空时这一块只画图和图注。
+  final PreviewImage? image;
 
   /// 系统提示 `system`、诗句 `verse`、署名 `by`（V50，LAY-121/122）；普通段为空。
   final String kind;
@@ -667,6 +671,86 @@ class PreviewPiece {
 }
 
 final _initialLetter = RegExp(r'^[\p{L}\p{N}]', unicode: true);
+
+/// 小预览里的正文插图（R5-01），与成品 CSS 一致：随正文的按原尺寸、超出版心才缩小
+/// （`max-width: 100%`），上下各留 1em；整页的铺满宽度并单独占一页。保持原比例；
+/// 读不出的图画虚线框和文件名。只是近似，成品以真机预览为准。
+class PreviewImage {
+  const PreviewImage(
+    this.name, {
+    this.pixels,
+    this.naturalWidth,
+    this.layout = 'inline',
+    this.caption = '',
+  });
+  final String name, layout, caption;
+  final ui.Image? pixels;
+
+  /// 原图宽度（像素）；[pixels] 可能是缩小后解码的。
+  final double? naturalWidth;
+  bool get fullPage => layout == 'full_page';
+}
+
+/// 随正文插图上下的 1em 外边距里，段后间距以外还要多留的部分。
+double _figureExtra(PreviewImage image, PreviewStyle style) => image.fullPage
+    ? 0
+    : math.max(0, (style.body.fontSize ?? 16) - style.paragraphSpacing);
+
+TextPainter _captionPainter(
+  PreviewImage image,
+  PreviewStyle style,
+  double width,
+  Locale? locale,
+) => TextPainter(
+  text: TextSpan(
+    text: image.pixels == null && image.caption.isEmpty
+        ? image.name
+        : image.caption,
+    style: style.body.copyWith(fontSize: (style.body.fontSize ?? 16) * .8),
+  ),
+  textAlign: TextAlign.center,
+  textDirection: TextDirection.ltr,
+  textScaler: TextScaler.noScaling,
+  locale: locale,
+)..layout(maxWidth: width);
+
+/// 插图块的图框（不含图注），高度不超过 [height] 减去图注。
+Rect _imageRect(
+  PreviewImage image,
+  double width,
+  double height,
+  double caption,
+) {
+  final px = image.pixels;
+  final ratio = px == null || px.width == 0 ? .5 : px.height / px.width;
+  var w = image.fullPage || px == null
+      ? width
+      : math.min(width, image.naturalWidth ?? px.width.toDouble());
+  var h = w * ratio;
+  final room = math.max(20.0, height - caption);
+  if (h > room) {
+    h = room;
+    w = h / ratio;
+  }
+  return Rect.fromLTWH((width - w) / 2, 0, w, h);
+}
+
+/// 插图块的总高度：图、图注与两者之间的间距。
+double _imageHeight(
+  PreviewImage image,
+  PreviewStyle style,
+  double width,
+  double height,
+  Locale? locale,
+) {
+  final caption = _captionPainter(image, style, width, locale);
+  final text = caption.plainText.isEmpty ? 0.0 : caption.height + 4;
+  caption.dispose();
+  final extra = _figureExtra(image, style);
+  return _imageRect(image, width, height - 2 * extra, text).height +
+      text +
+      2 * extra;
+}
 
 /// 预览的排版参数（逻辑像素）。
 class PreviewStyle {
@@ -836,6 +920,9 @@ List<List<PreviewPiece>> paginatePreview({
   required PreviewStyle style,
   required Size page,
   Locale? locale,
+
+  /// 正文插图（R5-01）：键是插在第几段之后（0 起），-1 表示紧接标题。
+  Map<int, List<PreviewImage>> images = const {},
 }) {
   final width = math.max(40.0, page.width - style.padding.horizontal);
   final height = math.max(40.0, page.height - style.padding.vertical);
@@ -850,9 +937,16 @@ List<List<PreviewPiece>> paginatePreview({
 
   // 章首段落（V49，LAY-119）：标题后与场景分隔后的第一段不缩进，可放大首字。
   final blocks = [PreviewPiece(title, title: true)];
+  void addImages(int after) {
+    for (final image in images[after] ?? const <PreviewImage>[]) {
+      blocks.add(PreviewPiece('', indent: false, kind: 'image', image: image));
+    }
+  }
+
+  addImages(-1);
   var pending = style.firstParagraph != 'normal';
   var previous = '';
-  for (final p in paragraphs) {
+  for (final (index, p) in paragraphs.indexed) {
     final scene = style.sceneBreak != 'off' && isSceneBreak(p);
     // 系统提示与诗词（V50，LAY-121/122）：署名只接在诗句之后。
     final kind = style.systemBlock != 'off' && isSystemLine(p)
@@ -880,8 +974,20 @@ List<List<PreviewPiece>> paginatePreview({
     } else if (p.trim().isNotEmpty) {
       pending = false;
     }
+    addImages(index);
   }
   for (final block in blocks) {
+    final image = block.image;
+    if (image != null) {
+      // 整页插图前后都换页；放不下的随正文插图挪到下一页。
+      if (image.fullPage) flush();
+      final h = _imageHeight(image, style, width, height, locale);
+      if (h > remaining && current.isNotEmpty) flush();
+      current.add(block);
+      remaining -= h + style.paragraphSpacing;
+      if (image.fullPage) flush();
+      continue;
+    }
     var piece = block;
     final gap = block.title ? style.titleGap : style.paragraphSpacing;
     for (var guard = 0; guard < 2000; guard++) {
@@ -1064,6 +1170,11 @@ class PreviewPage extends StatelessWidget {
   ]) {
     var y = 0.0;
     for (final (i, piece) in pieces.indexed) {
+      if (piece.image != null) {
+        y += _imageHeight(piece.image!, style, width, double.infinity, locale);
+        if (i < pieces.length - 1) y += style.paragraphSpacing;
+        continue;
+      }
       final painter = _painter(piece, style, width, locale);
       y += painter.height;
       if (piece.title) {
@@ -1079,7 +1190,9 @@ class PreviewPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: pieces.map((p) => p.text).join('\n'),
+    label: pieces
+        .map((p) => p.image == null ? p.text : '插图：${p.image!.name}')
+        .join('\n'),
     child: ClipRect(
       child: CustomPaint(
         size: size,
@@ -1103,6 +1216,12 @@ class _PagePainter extends CustomPainter {
     var y = style.padding.top;
     double? boxTop;
     for (final (i, piece) in pieces.indexed) {
+      final image = piece.image;
+      if (image != null) {
+        y += _paintImage(canvas, image, style.padding.left, y, width, size);
+        if (i < pieces.length - 1) y += style.paragraphSpacing;
+        continue;
+      }
       final painter = _painter(piece, style, width, locale);
       final head = style.headImage;
       if (piece.title && head != null && head.width > 0) {
@@ -1158,6 +1277,56 @@ class _PagePainter extends CustomPainter {
         y += piece.title ? style.titleGap : style.paragraphSpacing;
       }
     }
+  }
+
+  /// 画一张插图和图注，返回占用的高度（R5-01）。
+  double _paintImage(
+    Canvas canvas,
+    PreviewImage image,
+    double left,
+    double top,
+    double width,
+    Size size,
+  ) {
+    final caption = _captionPainter(image, style, width, locale);
+    final text = caption.plainText.isEmpty ? 0.0 : caption.height + 4;
+    final extra = _figureExtra(image, style);
+    final box = _imageRect(
+      image,
+      width,
+      size.height - style.padding.vertical - 2 * extra,
+      text,
+    ).shift(Offset(left, top + extra));
+    final px = image.pixels;
+    if (px != null) {
+      canvas.drawImageRect(
+        px,
+        Rect.fromLTWH(0, 0, px.width.toDouble(), px.height.toDouble()),
+        box,
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+    } else {
+      // 读不出的图：虚线框，图注位置写文件名。
+      final ink = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = (style.body.color ?? const Color(0xFF333333)).withValues(
+          alpha: .45,
+        );
+      for (var x = box.left; x < box.right; x += 8) {
+        final end = math.min(x + 4, box.right);
+        canvas.drawLine(Offset(x, box.top), Offset(end, box.top), ink);
+        canvas.drawLine(Offset(x, box.bottom), Offset(end, box.bottom), ink);
+      }
+      for (var y = box.top; y < box.bottom; y += 8) {
+        final end = math.min(y + 4, box.bottom);
+        canvas.drawLine(Offset(box.left, y), Offset(box.left, end), ink);
+        canvas.drawLine(Offset(box.right, y), Offset(box.right, end), ink);
+      }
+    }
+    if (text > 0) caption.paint(canvas, Offset(left, box.bottom + 4));
+    caption.dispose();
+    return box.height + text + 2 * extra;
   }
 
   @override

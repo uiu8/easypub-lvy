@@ -81,6 +81,7 @@ extension _BookSourceSources on _BookSourcePageState {
   }
 
   Future<void> _login(BuildContext context, Map<String, dynamic> source) async {
+    final id = '${source['id']}';
     try {
       final info =
           await api!.call('source.loginInfo', {'id': source['id']}) as Map;
@@ -90,57 +91,163 @@ extension _BookSourceSources on _BookSourcePageState {
           for (final f in ui)
             if (f is Map && f['type'] != 'button') Map<String, dynamic>.from(f),
         ];
+        // 登录界面按钮（阅读 loginUi 的 button，LIB-216）：按序号让插件执行书源自带的动作。
+        final buttons = [
+          for (final (i, f) in ui.indexed)
+            if (f is Map && f['type'] == 'button') (i, '${f['name']}'),
+        ];
         final controllers = {
           for (final f in fields) '${f['name']}': TextEditingController(),
         };
         if (!context.mounted) return;
-        final ok = await showDialog<bool>(
+        int? running;
+        String? actionMessage;
+        loginDialogSource = id;
+        loginNotice.value = null;
+        final choice = await showDialog<String>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: Text('登录 ${source['name']}'),
-            content: SizedBox(
-              width: 380,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final f in fields)
-                    TextField(
-                      controller: controllers['${f['name']}'],
-                      obscureText: f['type'] == 'password',
-                      decoration: InputDecoration(labelText: '${f['name']}'),
+          builder: (context) => StatefulBuilder(
+            builder: (context, change) {
+              Future<void> runAction(int index) async {
+                loginNotice.value = null;
+                change(() {
+                  running = index;
+                  actionMessage = null;
+                });
+                try {
+                  await _enableInteractions(id);
+                  final r = await api!.call('source.loginAction', {
+                    'id': id,
+                    'index': index,
+                    if (fields.isNotEmpty)
+                      'info': {
+                        for (final e in controllers.entries)
+                          e.key: e.value.text,
+                      },
+                  }) as Map;
+                  actionMessage = '${r['message']}';
+                } catch (e) {
+                  actionMessage = '没有执行：$e';
+                }
+                if (context.mounted) change(() => running = null);
+              }
+
+              return DeskAlert(
+                title: Text('登录 ${source['name']}'),
+                content: SizedBox(
+                  width: 380,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final f in fields)
+                        TextField(
+                          controller: controllers['${f['name']}'],
+                          obscureText: f['type'] == 'password',
+                          decoration: InputDecoration(
+                            labelText: '${f['name']}',
+                          ),
+                        ),
+                      if (buttons.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final (i, name) in buttons)
+                              DeskButton(
+                                name,
+                                key: ValueKey('booksource-login-action-$i'),
+                                busy: running == i,
+                                onPressed: running == null
+                                    ? () => runAction(i)
+                                    : null,
+                              ),
+                          ],
+                        ),
+                      ],
+                      ValueListenableBuilder<String?>(
+                        valueListenable: loginNotice,
+                        builder: (_, notice, _) {
+                          final text = notice ?? actionMessage;
+                          return text == null
+                              ? const SizedBox.shrink()
+                              : Padding(
+                                  padding: const EdgeInsets.only(top: 10),
+                                  child: DeskNote(
+                                    text,
+                                    key: const ValueKey(
+                                      'booksource-login-notice',
+                                    ),
+                                  ),
+                                );
+                        },
+                      ),
+                      if (fields.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        const DeskText(
+                          '登录信息用当前 Windows 账户加密保存在本机，只有这个书源能读取；再次登录会覆盖之前保存的内容。',
+                          size: 12,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                actions: [
+                  if (fields.isNotEmpty)
+                    DeskButton(
+                      '忘记已保存的登录信息',
+                      key: const ValueKey('booksource-login-forget'),
+                      quiet: true,
+                      onPressed: () => Navigator.pop(context, 'forget'),
                     ),
-                  const SizedBox(height: 10),
-                  const DeskText('填写的信息只在本次运行里使用，不保存到文件。', size: 12),
+                  DeskButton(
+                    fields.isEmpty ? '关闭' : '取消',
+                    quiet: fields.isNotEmpty,
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  if (fields.isNotEmpty)
+                    DeskButton(
+                      '登录',
+                      primary: true,
+                      onPressed: () => Navigator.pop(context, 'login'),
+                    ),
                 ],
-              ),
-            ),
-            actions: [
-              DeskButton(
-                '取消',
-                quiet: true,
-                onPressed: () => Navigator.pop(context, false),
-              ),
-              DeskButton(
-                '登录',
-                primary: true,
-                onPressed: () => Navigator.pop(context, true),
-              ),
-            ],
+              );
+            },
           ),
         );
-        if (ok != true) return;
-        final r = await api!.call('source.login', {
-          'id': source['id'],
-          'info': {for (final e in controllers.entries) e.key: e.value.text},
-        }) as Map;
-        sourceMessage = '${r['message']}';
+        loginDialogSource = null;
+        if (choice == 'forget') {
+          try {
+            await api!.call('source.loginData.clear', {'id': id});
+            sourceMessage = '已清除保存在本机的登录信息；网站上的登录状态（Cookie）不受影响。';
+          } catch (e) {
+            sourceMessage = '没有清除登录信息：$e';
+          }
+        } else if (choice == 'login') {
+          final info = {
+            for (final e in controllers.entries) e.key: e.value.text,
+          };
+          // 书源脚本登录时可能用 upLoginData() 取回本次填写的字段（LIB-212）。
+          loginDrafts[id] = info;
+          await _enableInteractions(id);
+          final r =
+              await api!.call('source.login', {'id': id, 'info': info}) as Map;
+          sourceMessage = '${r['message']}';
+        } else {
+          return;
+        }
       } else {
         update(() => sourceMessage = '已打开登录网页：在窗口里登录，完成后关闭窗口。');
-        final r = await api!.call('source.login', {'id': source['id']}) as Map;
+        await _enableInteractions(id);
+        final r = await api!.call('source.login', {'id': id}) as Map;
         sourceMessage = '${r['message']}';
       }
     } catch (e) {
       sourceMessage = '登录没有完成：$e';
+    } finally {
+      loginDrafts.remove(id);
     }
     if (mounted) update(() {});
   }
@@ -253,6 +360,42 @@ extension _BookSourceSources on _BookSourcePageState {
     });
   }
 
+  /// “去验证”（LIB-279）：单源交互式校验，插件自己弹出验证网页；每次用新的 checkId。
+  /// 结果作为新的一次校验写入，关窗或取消记为验证未完成，不把旧失败改成通过。
+  Future<void> _verifySource(String id) async {
+    if (verifying.containsKey(id) || api == null) return;
+    final checkId = 'verify-${DateTime.now().microsecondsSinceEpoch}';
+    await _enableInteractions(id);
+    update(() => verifying[id] = checkId);
+    try {
+      await api!.call('sources.check', {
+        'ids': [id],
+        'interactive': true,
+        'checkId': checkId,
+        if (checkKeyword.text.trim().isNotEmpty)
+          'key': checkKeyword.text.trim(),
+      });
+      await _loadSources();
+    } catch (e) {
+      if (mounted) update(() => checkStatus = '$e');
+    } finally {
+      if (mounted && verifying[id] == checkId) {
+        update(() => verifying.remove(id));
+      }
+    }
+  }
+
+  /// 取消只是发出信号，原请求收尾后由 [_verifySource] 清掉状态。
+  Future<void> _cancelVerify(String id) async {
+    final checkId = verifying[id];
+    if (checkId == null) return;
+    try {
+      await api!.call('sources.check.cancel', {'checkId': checkId});
+    } catch (_) {
+      // 任务已结束：原请求会自己收尾。
+    }
+  }
+
   Future<void> _removeSources(List<String> ids) async {
     if (ids.isEmpty ||
         !await _confirm('删除书源', '确认删除这 ${ids.length} 个书源？已下载的书会保留。')) {
@@ -283,6 +426,77 @@ extension _BookSourceSources on _BookSourcePageState {
     if (action != null) {
       await _sourceAction('sources.dedupe', {'action': action});
     }
+  }
+
+  /// 书源详情里的“最近一次校验”（V102）：结果、停在哪步、原因、校验词、兼容提示。
+  Widget _lastCheck(Map<String, dynamic> source) {
+    final d = context.desk;
+    final check = source['check'] as Map?;
+    final warnings = List<String>.from(source['staticWarnings'] as List? ?? []);
+    final stage = const {
+      'engine': '脚本初始化',
+      'search': '搜索',
+      'detail': '详情',
+      'toc': '目录',
+      'content': '正文',
+    }[check?['stage']];
+    final attempts = (check?['searchAttempts'] as num?)?.toInt() ?? 0;
+    final origin = _keywordOrigins[check?['keywordOrigin']];
+    final rows = <(String, String)>[
+      (
+        '结果',
+        check == null
+            ? '还没有校验'
+            : check['ok'] == true
+            ? '通过'
+            : '未通过${stage == null ? '' : ' · 停在$stage'}',
+      ),
+      if (check?['ok'] == false && _checkReason(check).isNotEmpty)
+        ('原因', _checkReason(check)),
+      if (origin != null)
+        ('校验词', '$origin${attempts > 1 ? '，共试了 $attempts 次' : ''}'),
+      if (check?['ok'] == true && check?['chars'] != null)
+        ('内容', '目录 ${check?['chapters']} 章，抽查正文 ${check?['chars']} 字'),
+      if (warnings.isNotEmpty && source['supported'] == true)
+        ('兼容提示', '${warnings.join('；')}（静态扫描，未必执行）'),
+    ];
+    return Padding(
+      key: const ValueKey('booksource-last-check'),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const DeskText('最近一次校验', bold: true, size: 13),
+          const SizedBox(height: 4),
+          for (final (k, v) in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 72,
+                    child: DeskText(k, size: 12, color: d.ink2),
+                  ),
+                  Expanded(child: DeskText(v, size: 12)),
+                ],
+              ),
+            ),
+          if (check?['ok'] == false &&
+              (source['cause'] ?? check?['cause']) == 'verification' &&
+              !verifying.containsKey('${source['id']}'))
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: DeskButton(
+                '去验证',
+                key: const ValueKey('booksource-last-check-verify'),
+                icon: Icons.verified_user_outlined,
+                onPressed: () => _verifySource('${source['id']}'),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _sourceDetail(Map<String, dynamic> source) async {
@@ -316,6 +530,7 @@ extension _BookSourceSources on _BookSourcePageState {
                     '建议并发：${(detail['learned'] as Map?)?['safeLimit'] ?? '尚未学习'} · 最近限流时间：${(detail['learned'] as Map?)?['lastThrottleAt'] ?? '暂无'}',
                     size: 12,
                   ),
+                  _lastCheck(source),
                   for (final warning in detail['warnings'] as List? ?? [])
                     DeskNote('$warning'),
                   DeskButton(
@@ -350,12 +565,23 @@ extension _BookSourceSources on _BookSourcePageState {
               onPressed: () => Navigator.pop(dialog),
             ),
             DeskButton(
+              _isFavorite('${source['id']}') ? '取消收藏' : '收藏',
+              key: const ValueKey('booksource-detail-favorite'),
+              quiet: true,
+              onPressed: () {
+                Navigator.pop(dialog);
+                _toggleFavorite('${source['id']}');
+              },
+            ),
+            DeskButton(
               '用这个书源单独搜索',
               onPressed: () {
                 Navigator.pop(dialog);
                 update(() {
-                  sourceOnly = '${source['id']}';
-                  searchScope = '';
+                  pickedSources
+                    ..clear()
+                    ..add('${source['id']}');
+                  searchScope = 'pick';
                   tab = 'search';
                 });
               },
@@ -416,125 +642,60 @@ extension _BookSourceSources on _BookSourcePageState {
     return shown;
   }
 
-  Widget _sourcesTab(BuildContext context) {
+  /// 工具条菜单：菜单项沿用原来按钮的 Key，测试与快捷操作仍能找到它们。
+  Widget _menu(
+    String label,
+    List<(Key?, String, VoidCallback?)> items, {
+    Key? key,
+    IconData? icon,
+  }) {
     final d = context.desk;
-    final shown = _shownSources();
-    final groups = <String, List<Map<String, dynamic>>>{};
-    for (final source in shown) {
-      final keys = settings.groupBy == 'file'
-          ? ['${source['file'] ?? '旧版导入'}']
-          : _sourceGroups(source);
-      for (final key in keys.isEmpty ? ['未分组'] : keys) {
-        (groups[key] ??= []).add(source);
-      }
-    }
-    final rows = <Widget>[];
-    for (final entry in groups.entries) {
-      final name = entry.key, items = entry.value;
-      final collapsedKey = '${settings.groupBy}:$name';
-      final collapsed = settings.collapsed.contains(collapsedKey);
-      final ids = items.map((s) => '${s['id']}').toList();
-      final ok = items.where((s) => (s['check'] as Map?)?['ok'] == true).length;
-      final failed = items
-          .where((s) => (s['check'] as Map?)?['ok'] == false)
-          .length;
-      rows.add(
-        Container(
-          key: ValueKey('booksource-group-$name'),
-          color: d.surface,
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    key: ValueKey('booksource-collapse-$name'),
-                    tooltip: collapsed ? '展开来源' : '收起来源',
-                    icon: Icon(
-                      collapsed ? Icons.chevron_right : Icons.expand_more,
-                    ),
-                    onPressed: () => _saveSettings(() {
-                      if (collapsed) {
-                        settings.collapsed.remove(collapsedKey);
-                      } else {
-                        settings.collapsed.add(collapsedKey);
-                      }
-                    }),
-                  ),
-                  Expanded(
-                    child: DeskText(
-                      '${settings.groupBy == 'file' ? _sourceFileName(name) : name} · ${items.length} 个'
-                      ' · 可用 $ok / 失效 $failed / 未测 ${items.length - ok - failed}',
-                      bold: true,
-                      lines: 2,
-                    ),
-                  ),
-                ],
-              ),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: [
-                  DeskButton('整组置顶', quiet: true, onPressed: () => _pin(ids)),
-                  DeskButton(
-                    '整组置底',
-                    quiet: true,
-                    onPressed: () => _pin(ids, bottom: true),
-                  ),
-                  DeskButton(
-                    '全部启用',
-                    quiet: true,
-                    onPressed: () => _sourceAction('sources.setEnabledMany', {
-                      'ids': ids,
-                      'enabled': true,
-                    }),
-                  ),
-                  DeskButton(
-                    '全部停用',
-                    quiet: true,
-                    onPressed: () => _sourceAction('sources.setEnabledMany', {
-                      'ids': ids,
-                      'enabled': false,
-                    }),
-                  ),
-                  DeskButton(
-                    '测速',
-                    quiet: true,
-                    onPressed: pinging ? null : () => _probe(true, ids),
-                  ),
-                  DeskButton(
-                    '校验',
-                    quiet: true,
-                    onPressed: checking ? null : () => _probe(false, ids),
-                  ),
-                  if (settings.groupBy == 'file' && name.startsWith('http'))
-                    DeskButton(
-                      '从网址更新',
-                      quiet: true,
-                      onPressed: () => _subscriptionPreview(name),
-                    ),
-                  DeskButton(
-                    settings.groupBy == 'file' ? '删除整个文件' : '删除这组',
-                    quiet: true,
-                    onPressed: () => _removeSources(ids),
-                  ),
-                ],
-              ),
-            ],
+    return DeskMenuButton<int>(
+      key: key,
+      tooltip: label,
+      onSelected: (i) => items[i].$3?.call(),
+      itemBuilder: (_) => [
+        for (final (i, item) in items.indexed)
+          PopupMenuItem<int>(
+            key: item.$1,
+            value: i,
+            enabled: item.$3 != null,
+            child: Text(item.$2),
           ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border.all(color: d.line),
+          borderRadius: BorderRadius.circular(8),
+          color: d.surface,
         ),
-      );
-      if (!collapsed) {
-        for (final source in items) {
-          rows.add(_dragSourceRow(source, name));
-        }
-      }
-    }
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 16, color: d.ink2),
+              const SizedBox(width: 6),
+            ],
+            DeskText(label, size: 13),
+            const SizedBox(width: 4),
+            Icon(Icons.expand_more, size: 16, color: d.ink2),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 中间的书源列表（R1c）：树显示时搜索框在树里，否则在这里；行按“文件 → 分组”两级分节。
+  Widget _sourceList(BuildContext context, {required bool withSearch}) {
+    final d = context.desk;
+    final shown = _shownSources().where(_inSourceNode).toList();
+    final rows = _sourceRows(shown);
     final failedIds = sources
         .where((s) => (s['check'] as Map?)?['ok'] == false)
         .map((s) => '${s['id']}')
         .toList();
+    final activeFilters = sourceTags.length + (recommendedOnly ? 1 : 0);
     return Padding(
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -545,88 +706,89 @@ extension _BookSourceSources on _BookSourcePageState {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              DeskButton(
-                '导入书源文件…',
-                key: const ValueKey('booksource-import'),
-                icon: Icons.file_open_outlined,
-                onPressed: _importFile,
+              _menu(
+                '导入',
+                [
+                  (const ValueKey('booksource-import'), '导入书源文件…', _importFile),
+                  (
+                    const ValueKey('booksource-import-url'),
+                    '从网址导入…',
+                    importingSource ? null : () => _importUrl(context),
+                  ),
+                  (
+                    const ValueKey('booksource-fqnovel'),
+                    '接入本机 FQNovel…',
+                    _fqnovel,
+                  ),
+                  (
+                    const ValueKey('booksource-subscriptions'),
+                    '订阅与更新…',
+                    _subscriptions,
+                  ),
+                ],
+                key: const ValueKey('booksource-menu-import'),
+                icon: Icons.file_download_outlined,
               ),
-              DeskButton(
-                '从网址导入…',
-                key: const ValueKey('booksource-import-url'),
-                quiet: true,
-                busy: importingSource,
-                onPressed: importingSource ? null : () => _importUrl(context),
+              _menu(
+                '检查',
+                [
+                  (
+                    const ValueKey('booksource-ping'),
+                    '测速全部（只测能否连上）',
+                    pinging ? null : () => _probe(true),
+                  ),
+                  (
+                    const ValueKey('booksource-check'),
+                    '校验全部（搜索到正文走一遍）',
+                    checking ? null : () => _probe(false),
+                  ),
+                ],
+                key: const ValueKey('booksource-menu-check'),
+                icon: Icons.speed,
               ),
-              DeskButton(
-                '测速书源',
-                key: const ValueKey('booksource-ping'),
-                quiet: true,
-                busy: pinging,
-                onPressed: pinging ? null : () => _probe(true),
+              _menu(
+                '维护',
+                [
+                  (const ValueKey('booksource-dedupe'), '清理重复…', _dedupe),
+                  (
+                    const ValueKey('booksource-disable-failed'),
+                    '停用未通过校验的（${failedIds.length}）',
+                    failedIds.isEmpty
+                        ? null
+                        : () => _sourceAction('sources.setEnabled', {
+                            'ids': failedIds,
+                            'enabled': false,
+                          }, message: '已停用 ${failedIds.length} 个校验失败的书源。'),
+                  ),
+                  (
+                    const ValueKey('booksource-delete-failed'),
+                    '删除未通过校验的（${failedIds.length}）…',
+                    failedIds.isEmpty ? null : () => _removeSources(failedIds),
+                  ),
+                  (
+                    const ValueKey('booksource-unsupported-ranking'),
+                    '不支持的写法排行',
+                    _unsupportedRanking,
+                  ),
+                ],
+                key: const ValueKey('booksource-menu-maintain'),
+                icon: Icons.build_outlined,
               ),
-              DeskButton(
-                '订阅与更新',
-                key: const ValueKey('booksource-subscriptions'),
-                quiet: true,
-                onPressed: _subscriptions,
-              ),
-              DeskButton(
-                '不支持的写法排行',
-                key: const ValueKey('booksource-unsupported-ranking'),
-                quiet: true,
-                onPressed: _unsupportedRanking,
-              ),
-              DeskButton(
-                '校验书源',
-                key: const ValueKey('booksource-check'),
-                quiet: true,
-                busy: checking,
-                onPressed: checking ? null : () => _probe(false),
-              ),
-              DeskButton(
-                '清理重复',
-                key: const ValueKey('booksource-dedupe'),
-                quiet: true,
-                onPressed: _dedupe,
-              ),
-              if (failedIds.isNotEmpty) ...[
-                DeskButton(
-                  '停用失效的',
-                  key: const ValueKey('booksource-disable-failed'),
-                  quiet: true,
-                  onPressed: () => _sourceAction('sources.setEnabled', {
-                    'ids': failedIds,
-                    'enabled': false,
-                  }, message: '已停用 ${failedIds.length} 个校验失败的书源。'),
+              if (pinging || checking)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                DeskButton(
-                  '删除失效的',
-                  key: const ValueKey('booksource-delete-failed'),
-                  quiet: true,
-                  onPressed: () => _removeSources(failedIds),
-                ),
-              ],
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Wrap(
-            spacing: 10,
+            spacing: 8,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              SizedBox(
-                width: 210,
-                child: TextField(
-                  key: const ValueKey('booksource-filter'),
-                  controller: sourceFilter,
-                  decoration: const InputDecoration(
-                    hintText: '名称 / 网址 / 分组',
-                    isDense: true,
-                  ),
-                  onChanged: (_) => update(() {}),
-                ),
-              ),
+              if (withSearch) SizedBox(width: 220, child: _sourceSearchField()),
               SizedBox(
                 width: 140,
                 child: DeskChoice<String>(
@@ -635,7 +797,7 @@ extension _BookSourceSources on _BookSourcePageState {
                     for (final e in {
                       'all': '全部状态',
                       'ok': '可用',
-                      'failed': '失效',
+                      'failed': '未通过校验',
                       'untested': '未测',
                       'webview': 'WebView',
                       'login': '需登录',
@@ -649,12 +811,12 @@ extension _BookSourceSources on _BookSourcePageState {
                 ),
               ),
               SizedBox(
-                width: 140,
+                width: 150,
                 child: DeskChoice<String>(
                   value: sourceSort,
                   items: [
                     for (final e in {
-                      'manual': '自定顺序（可拖动）',
+                      'manual': '自定顺序',
                       'rating': '评分与权重',
                       'import': '导入顺序',
                       'speed': '按速度',
@@ -667,7 +829,7 @@ extension _BookSourceSources on _BookSourcePageState {
                 ),
               ),
               SizedBox(
-                width: 150,
+                width: 130,
                 child: DeskChoice<String>(
                   value: settings.groupBy,
                   items: const [
@@ -678,26 +840,57 @@ extension _BookSourceSources on _BookSourcePageState {
                       _saveSettings(() => settings.groupBy = v ?? 'file'),
                 ),
               ),
-              SizedBox(
-                width: 190,
-                child: TextField(
-                  controller: checkKeyword,
-                  decoration: const InputDecoration(
-                    hintText: '校验词（留空按书源）',
-                    isDense: true,
-                  ),
-                ),
+              DeskButton(
+                activeFilters == 0 ? '筛选' : '筛选 · $activeFilters',
+                key: const ValueKey('booksource-filters-toggle'),
+                icon: Icons.filter_list,
+                quiet: !showSourceFilters,
+                onPressed: () =>
+                    update(() => showSourceFilters = !showSourceFilters),
               ),
             ],
           ),
-          _sourceFilters(),
-          if (sourceMessage != null) DeskNote(sourceMessage!),
+          if (showSourceFilters)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: _sourceFilters(),
+            )
+          else if (activeFilters > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final tag in sourceTags)
+                    InputChip(
+                      label: Text(tag),
+                      onDeleted: () => update(() => sourceTags.remove(tag)),
+                    ),
+                  if (recommendedOnly)
+                    InputChip(
+                      label: const Text('推荐下载源'),
+                      onDeleted: () => update(() => recommendedOnly = false),
+                    ),
+                ],
+              ),
+            ),
+          if (sourceMessage != null) ...[
+            const SizedBox(height: 8),
+            DeskNote(sourceMessage!),
+          ],
           if (checkStatus != null)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: DeskText(checkStatus!, size: 12, color: d.ink2),
             ),
-          if (rows.isEmpty) const DeskNote('没有符合条件的书源。'),
+          const SizedBox(height: 8),
+          if (rows.isEmpty)
+            DeskNote(
+              sources.isEmpty
+                  ? '还没有书源。点“导入”选择阅读 JSON、单文件 JS 或 so-novel JSON，或从网址导入。'
+                  : '没有符合条件的书源。',
+            ),
           Expanded(
             child: ListView.builder(
               itemCount: rows.length,
@@ -705,6 +898,108 @@ extension _BookSourceSources on _BookSourcePageState {
             ),
           ),
           _selectionBar(shown),
+        ],
+      ),
+    );
+  }
+
+  /// 分组标题：一行统计，组操作收进“⋯”。“失效”改称“未通过”——可能是网络问题，不一定是书源坏了。
+  Widget _groupHeader(String name, List<Map<String, dynamic>> items) {
+    final d = context.desk;
+    final collapsedKey = '${settings.groupBy}:$name';
+    final collapsed = settings.collapsed.contains(collapsedKey);
+    final ids = items.map((s) => '${s['id']}').toList();
+    final ok = items.where((s) => (s['check'] as Map?)?['ok'] == true).length;
+    final failed = items
+        .where((s) => (s['check'] as Map?)?['ok'] == false)
+        .length;
+    final enabled = items.where((s) => s['enabled'] == true).length;
+    return Padding(
+      key: ValueKey('booksource-group-$name'),
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Row(
+        children: [
+          IconButton(
+            key: ValueKey('booksource-collapse-$name'),
+            tooltip: collapsed ? '展开' : '收起',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              collapsed ? Icons.chevron_right : Icons.expand_more,
+              size: 20,
+            ),
+            onPressed: () => _saveSettings(() {
+              if (collapsed) {
+                settings.collapsed.remove(collapsedKey);
+              } else {
+                settings.collapsed.add(collapsedKey);
+              }
+            }),
+          ),
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: DeskText(
+                    settings.groupBy == 'file' ? _sourceFileName(name) : name,
+                    bold: true,
+                    lines: 1,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                DeskText(
+                  '${items.length} 个 · 启用 $enabled · 可用 $ok · 未通过 $failed · 未测 ${items.length - ok - failed}',
+                  size: 12,
+                  color: d.ink2,
+                ),
+              ],
+            ),
+          ),
+          DeskMenuButton<VoidCallback>(
+            key: ValueKey('booksource-group-menu-$name'),
+            tooltip: '这一组的操作',
+            icon: const Icon(Icons.more_horiz, size: 20),
+            onSelected: (f) => f(),
+            itemBuilder: (_) => [
+              PopupMenuItem(value: () => _pin(ids), child: const Text('整组置顶')),
+              PopupMenuItem(
+                value: () => _pin(ids, bottom: true),
+                child: const Text('整组置底'),
+              ),
+              PopupMenuItem(
+                value: () => _sourceAction('sources.setEnabledMany', {
+                  'ids': ids,
+                  'enabled': true,
+                }),
+                child: const Text('全部启用'),
+              ),
+              PopupMenuItem(
+                value: () => _sourceAction('sources.setEnabledMany', {
+                  'ids': ids,
+                  'enabled': false,
+                }),
+                child: const Text('全部停用'),
+              ),
+              PopupMenuItem(
+                enabled: !pinging,
+                value: () => _probe(true, ids),
+                child: const Text('测速这一组'),
+              ),
+              PopupMenuItem(
+                enabled: !checking,
+                value: () => _probe(false, ids),
+                child: const Text('校验这一组'),
+              ),
+              if (settings.groupBy == 'file' && name.startsWith('http'))
+                PopupMenuItem(
+                  value: () => _subscriptionPreview(name),
+                  child: const Text('从网址更新…'),
+                ),
+              PopupMenuItem(
+                value: () => _removeSources(ids),
+                child: Text(settings.groupBy == 'file' ? '删除整个文件…' : '删除这组…'),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -789,7 +1084,7 @@ extension _BookSourceSources on _BookSourcePageState {
             quiet: true,
             onPressed: !any ? null : () => _removeSources(chosen),
           ),
-          PopupMenuButton<String>(
+          DeskMenuButton<String>(
             key: const ValueKey('booksource-more'),
             enabled: any,
             tooltip: '更多操作',
@@ -831,7 +1126,18 @@ extension _BookSourceSources on _BookSourcePageState {
             ],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: DeskText('更多 ▾', size: 13, color: any ? d.ink : d.ink3),
+              // R1：用图标代替“▾”文字（缺字时会显示成方框）。
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DeskText('更多', size: 13, color: any ? d.ink : d.ink3),
+                  Icon(
+                    Icons.expand_more_rounded,
+                    size: 16,
+                    color: any ? d.ink2 : d.ink3,
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -839,8 +1145,11 @@ extension _BookSourceSources on _BookSourcePageState {
     );
   }
 
+  /// 书源一行：状态圆点（绿可用、黄慢、红未通过、灰未测）、名称与至多两个标签、
+  /// 速度、启用开关、“⋯”菜单；需要登录的书源保留“登录”按钮。
   Widget _sourceRow(Map<String, dynamic> s, String group) {
     final d = context.desk;
+    final id = '${s['id']}';
     final check = s['check'] as Map?, health = s['health'] as Map?;
     final ping = s['ping'] as Map?;
     final stage = const {
@@ -851,135 +1160,248 @@ extension _BookSourceSources on _BookSourcePageState {
       'content': '正文',
     }[check?['stage']];
     final ms = (check?['ms'] as num?)?.toInt();
-    final reasons = List<String>.from(s['reasons'] as List? ?? []);
-    final tone = check?['ok'] == false
-        ? Tone.pen
-        : ms == null
-        ? Tone.info
-        : ms < 1500
-        ? Tone.ok
-        : ms < 4000
-        ? Tone.warn
-        : Tone.pen;
-    final tile = ListTile(
-      key: ValueKey('booksource-source-$group-${s['id']}'),
-      dense: true,
-      leading: Checkbox(
-        key: ValueKey('booksource-source-select-${s['id']}'),
-        value: selectedSources.contains('${s['id']}'),
-        onChanged: (v) => update(() {
-          if (v == true) {
-            selectedSources.add('${s['id']}');
-          } else {
-            selectedSources.remove('${s['id']}');
-          }
-        }),
-      ),
-      title: Wrap(
-        spacing: 6,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          if (s['pinned'] == true)
-            const Tooltip(
-              message: '已置顶',
-              child: Icon(Icons.push_pin, size: 16),
-            ),
-          DeskText('${s['name']}', bold: true, lines: 1),
-          for (final tag in s['tags'] as List? ?? [])
-            DeskTag('$tag', Tone.info),
-          if (s['supported'] != true)
-            const DeskTag('不能用', Tone.warn)
-          else if (s['webView'] == true)
-            const DeskTag('网页', Tone.info),
-          if (s['duplicate'] == true) const DeskTag('重复', Tone.warn),
-          if (s['updated'] == true) const DeskTag('已更新', Tone.accent),
-          if (check != null)
-            Tooltip(
-              message:
-                  '最近 20 次：${(health?['ms'] as List? ?? []).join(' / ')} ms',
-              child: DeskTag(
-                check['ok'] == true ? '可用 ${ms ?? 0}ms' : '未通过校验',
-                tone,
-              ),
-            ),
-          if (ping != null)
-            DeskTag(
-              ping['ok'] == true ? '可连接 ${ping['ms']}ms' : '连接失败',
-              ping['ok'] == true ? Tone.info : Tone.warn,
-            ),
-        ],
-      ),
-      subtitle: DeskText(
-        [
-          if (reasons.isNotEmpty) reasons.join('；') else '${s['group'] ?? ''}',
-          if (check?['ok'] == false)
-            '校验${stage == null ? '' : '（$stage）'}：${check?['error'] ?? ''}${_sourceCauses.containsKey(s['cause'] ?? check?['cause']) ? ' · ${_sourceCauses[s['cause'] ?? check?['cause']]}' : ''}',
-          if (check?['ok'] == true && check?['chars'] != null)
-            '目录 ${check?['chapters']} 章，抽查正文 ${check?['chars']} 字',
-          if (health?['lastError'] != null &&
-              '${health?['lastError']}'.isNotEmpty)
-            '${health?['lastError']}',
-        ].where((t) => t.isNotEmpty).join(' · '),
-        size: 12,
-        color: d.ink2,
-        lines: 2,
-      ),
-      onTap: () => _sourceDetail(s),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            key: ValueKey('booksource-pin-${s['id']}'),
-            tooltip: s['pinned'] == true ? '取消置顶' : '置顶书源',
-            icon: Icon(
-              s['pinned'] == true ? Icons.push_pin : Icons.push_pin_outlined,
-              size: 18,
-            ),
-            onPressed: () => _pin(['${s['id']}'], pinned: s['pinned'] != true),
-          ),
-          IconButton(
-            tooltip: '置底书源',
-            icon: const Icon(Icons.vertical_align_bottom, size: 18),
-            onPressed: () => _pin(['${s['id']}'], bottom: true),
-          ),
-          if (s['login'] == true && s['supported'] == true)
-            DeskButton(
-              '登录',
-              key: ValueKey('booksource-login-${s['id']}'),
-              quiet: true,
-              onPressed: () => _login(context, s),
-            ),
-          Switch(
-            value: s['enabled'] == true,
-            onChanged: s['supported'] != true
-                ? null
-                : (v) => _sourceAction('sources.setEnabled', {
-                    'ids': [s['id']],
-                    'enabled': v,
-                  }),
-          ),
-          IconButton(
-            tooltip: '删除书源',
-            icon: const Icon(Icons.delete_outline, size: 18),
-            onPressed: () => _removeSources(['${s['id']}']),
-          ),
-        ],
-      ),
-    );
-    // 每个书源一张圆角卡片，选中时换底色（参考轻悦时光的书源列表）。
+    // 静态告警只是提示（V102 A）：能试跑的书源不再标“不能用”，从说明里分出来单独写。
+    final warnings = List<String>.from(s['staticWarnings'] as List? ?? []);
+    final reasons = List<String>.from(s['reasons'] as List? ?? [])
+        .where((r) => s['supported'] != true || !warnings.contains(r))
+        .toList();
+    final failed = check?['ok'] == false;
+    final verifyingNow = verifying.containsKey(id);
+    final needsVerify =
+        failed && (s['cause'] ?? check?['cause']) == 'verification';
+    final dot = failed
+        ? d.pen
+        : check?['ok'] == true
+        ? (ms != null && ms >= 4000 ? d.warn : d.add)
+        : d.ink3;
+    final tags = <(String, Tone)>[
+      if (s['supported'] != true) ('不能用', Tone.warn),
+      if (s['supported'] == true && warnings.isNotEmpty) ('兼容提示', Tone.info),
+      if (s['duplicate'] == true) ('重复', Tone.warn),
+      if (s['updated'] == true) ('已更新', Tone.accent),
+      for (final tag in s['tags'] as List? ?? []) ('$tag', Tone.info),
+      if (s['supported'] == true && s['webView'] == true) ('网页', Tone.info),
+    ];
+    final speed = failed
+        ? '未通过校验'
+        : check?['ok'] == true
+        ? '${((ms ?? 0) / 1000).toStringAsFixed(ms != null && ms < 10000 ? 2 : 1)}s'
+        : ping?['ok'] == true
+        ? '可连接 ${ping?['ms']}ms'
+        : '未测';
+    final detail = verifyingNow
+        ? '正在验证，请在弹出的网页里完成；最多等 5 分钟'
+        : [
+            if (reasons.isNotEmpty) reasons.join('；'),
+            if (failed)
+              '${_checkReason(check).isEmpty ? '校验没通过${stage == null ? '' : '（$stage）'}' : '校验${stage == null ? '' : '（$stage）'}：${_checkReason(check)}'}${!_hasSpecificReason(check) && _sourceCauses.containsKey(s['cause'] ?? check?['cause']) ? ' · ${_sourceCauses[s['cause'] ?? check?['cause']]}' : ''}',
+            if (!failed && s['supported'] == true && warnings.isNotEmpty)
+              '可能用到未支持的写法，校验时才知道是否真的用到',
+            if (check?['ok'] == true && check?['chars'] != null)
+              '目录 ${check?['chapters']} 章，抽查正文 ${check?['chars']} 字',
+            if (health?['lastError'] != null &&
+                '${health?['lastError']}'.isNotEmpty)
+              '${health?['lastError']}',
+          ].where((t) => t.isNotEmpty).join(' · ');
+    final selectedRow = selectedSources.contains(id);
+    final focused = focusedSource == id && sourceInspectorShown;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Material(
-        color: selectedSources.contains('${s['id']}')
-            ? d.accentSoft
-            : d.surface,
+        color: selectedRow ? d.accentSoft : d.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: BorderSide(color: d.line),
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: focused ? d.accent : d.line,
+            width: focused ? 1.4 : 1,
+          ),
         ),
         clipBehavior: Clip.antiAlias,
-        child: tile,
+        child: InkWell(
+          key: ValueKey('booksource-source-$group-$id'),
+          onTap: () => sourceInspectorShown
+              ? update(() => focusedSource = id)
+              : _sourceDetail(s),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            child: Row(
+              children: [
+                Checkbox(
+                  key: ValueKey('booksource-source-select-$id'),
+                  value: selectedRow,
+                  onChanged: (v) => update(() {
+                    if (v == true) {
+                      selectedSources.add(id);
+                    } else {
+                      selectedSources.remove(id);
+                    }
+                  }),
+                ),
+                Tooltip(
+                  message: failed
+                      ? '未通过校验'
+                      : check?['ok'] == true
+                      ? '可用'
+                      : '未校验',
+                  child: Container(
+                    width: 9,
+                    height: 9,
+                    decoration: BoxDecoration(
+                      color: s['enabled'] == true ? dot : null,
+                      border: Border.all(color: dot, width: 1.5),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          if (s['pinned'] == true) ...[
+                            Icon(Icons.push_pin, size: 14, color: d.ink2),
+                            const SizedBox(width: 4),
+                          ],
+                          Flexible(
+                            child: DeskText(
+                              '${s['name']}',
+                              bold: true,
+                              lines: 1,
+                            ),
+                          ),
+                          for (final t in tags.take(2)) ...[
+                            const SizedBox(width: 6),
+                            DeskTag(t.$1, t.$2),
+                          ],
+                          if (tags.length > 2) ...[
+                            const SizedBox(width: 6),
+                            Tooltip(
+                              message: tags.map((t) => t.$1).join('、'),
+                              child: DeskTag('+${tags.length - 2}', Tone.info),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (detail.isNotEmpty)
+                        Tooltip(
+                          message: [
+                            detail,
+                            if (warnings.isNotEmpty)
+                              '兼容提示（静态扫描，未必执行）：\n${warnings.join('\n')}',
+                          ].join('\n'),
+                          child: DeskText(
+                            detail,
+                            size: 12,
+                            color: d.ink2,
+                            lines: 1,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (verifyingNow) ...[
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 6),
+                  DeskButton(
+                    '取消',
+                    key: ValueKey('booksource-verify-cancel-$id'),
+                    quiet: true,
+                    onPressed: () => _cancelVerify(id),
+                  ),
+                ] else if (needsVerify)
+                  DeskButton(
+                    '去验证',
+                    key: ValueKey('booksource-verify-$id'),
+                    quiet: true,
+                    tooltip: '弹出这个书源的网页，完成人工验证后重新校验',
+                    onPressed: () => _verifySource(id),
+                  ),
+                IconButton(
+                  key: ValueKey('booksource-favorite-$id'),
+                  tooltip: _isFavorite(id) ? '取消收藏' : '收藏',
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    _isFavorite(id)
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    size: 19,
+                    color: _isFavorite(id) ? d.warn : d.ink3,
+                  ),
+                  onPressed: () => _toggleFavorite(id),
+                ),
+                const SizedBox(width: 4),
+                Tooltip(
+                  message:
+                      '最近 20 次：${(health?['ms'] as List? ?? []).join(' / ')} ms',
+                  child: DeskText(
+                    speed,
+                    size: 12,
+                    color: failed ? d.pen : d.ink2,
+                  ),
+                ),
+                if (s['login'] == true && s['supported'] == true)
+                  DeskButton(
+                    '登录',
+                    key: ValueKey('booksource-login-$id'),
+                    quiet: true,
+                    onPressed: () => _login(context, s),
+                  ),
+                Switch(
+                  value: s['enabled'] == true,
+                  onChanged: s['supported'] != true
+                      ? null
+                      : (v) => _sourceAction('sources.setEnabled', {
+                          'ids': [s['id']],
+                          'enabled': v,
+                        }),
+                ),
+                DeskMenuButton<VoidCallback>(
+                  key: ValueKey('booksource-row-menu-$id'),
+                  tooltip: '更多操作',
+                  icon: const Icon(Icons.more_horiz, size: 20),
+                  onSelected: (f) => f(),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      key: ValueKey('booksource-pin-$id'),
+                      value: () => _pin([id], pinned: s['pinned'] != true),
+                      child: Text(s['pinned'] == true ? '取消置顶' : '置顶'),
+                    ),
+                    PopupMenuItem(
+                      key: ValueKey('booksource-bottom-$id'),
+                      value: () => _pin([id], bottom: true),
+                      child: const Text('置底'),
+                    ),
+                    PopupMenuItem(
+                      enabled: !pinging,
+                      value: () => _probe(true, [id]),
+                      child: const Text('测速'),
+                    ),
+                    PopupMenuItem(
+                      enabled: !checking,
+                      value: () => _probe(false, [id]),
+                      child: const Text('校验'),
+                    ),
+                    PopupMenuItem(
+                      value: () => _sourceDetail(s),
+                      child: const Text('详情、评分与下载参数…'),
+                    ),
+                    PopupMenuItem(
+                      value: () => _removeSources([id]),
+                      child: const Text('删除…'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

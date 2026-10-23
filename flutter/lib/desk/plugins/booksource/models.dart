@@ -43,6 +43,9 @@ class BookSourceSettings {
       filterTitle = true,
       removePagePrompts = true;
   String groupBy = 'file';
+
+  /// 下载格式（LIB-215）：txt 只存 TXT；epub 另按全局默认排版生成 EPUB。
+  String downloadFormat = 'txt';
   String resultSort = 'overall';
   bool onlyPriority = false, multiSource = true;
   int maxAlternates = 2;
@@ -50,6 +53,21 @@ class BookSourceSettings {
   /// 书架检查更新时同时检查几本；换源补章时同时尝试几个书源。
   int updateConcurrency = 2, alternateConcurrency = 2;
   final Set<String> collapsed = {};
+
+  /// 最近搜索（R1c）：最近的在前，最多 8 条，空的搜索页上可以点着再搜。
+  final List<String> recentSearches = [];
+
+  /// 收藏的书源 ID（LIB-219）；只存在书源页设置里。
+  final Set<String> favoriteSources = {};
+
+  void rememberSearch(String query) {
+    recentSearches
+      ..remove(query)
+      ..insert(0, query);
+    if (recentSearches.length > 8) {
+      recentSearches.removeRange(8, recentSearches.length);
+    }
+  }
 
   static BookSourceSettings load(String path) {
     try {
@@ -97,9 +115,16 @@ class BookSourceSettings {
         ..quick = j['quick'] == true
         ..filterTitle = j['filterTitle'] != false
         ..removePagePrompts = j['removePagePrompts'] != false
-        ..groupBy = j['groupBy'] == 'group' ? 'group' : 'file';
+        ..groupBy = j['groupBy'] == 'group' ? 'group' : 'file'
+        ..downloadFormat = j['downloadFormat'] == 'epub' ? 'epub' : 'txt';
       settings.collapsed.addAll(
         (j['collapsed'] as List? ?? []).map((e) => '$e'),
+      );
+      settings.favoriteSources.addAll(
+        (j['favoriteSources'] as List? ?? []).map((e) => '$e'),
+      );
+      settings.recentSearches.addAll(
+        (j['recentSearches'] as List? ?? []).map((e) => '$e').take(8),
       );
       return settings;
     } catch (_) {
@@ -122,6 +147,8 @@ class BookSourceSettings {
             'alternateConcurrency': alternateConcurrency,
             'threads': threads,
             'autoImport': autoImport,
+            'downloadFormat': downloadFormat,
+            'favoriteSources': favoriteSources.toList(),
             'fill': fill,
             'maxBooks': maxBooks,
             'searchConcurrency': searchConcurrency,
@@ -134,6 +161,7 @@ class BookSourceSettings {
             'removePagePrompts': removePagePrompts,
             'groupBy': groupBy,
             'collapsed': collapsed.toList(),
+            'recentSearches': recentSearches,
           }),
         );
     } catch (_) {}
@@ -148,6 +176,10 @@ class DownloadTask {
   String? path, error;
   List<Map<String, dynamic>> failures = [];
   bool finished = false, cancelled = false, imported = false;
+
+  /// 生成 EPUB（LIB-215）：进行中、已生成、失败原因。
+  bool epubBusy = false, epubDone = false;
+  String? epubError;
   bool outputPreserved = false;
   String status = 'running';
   double speed = 0;
@@ -157,6 +189,9 @@ class DownloadTask {
   String? libraryKey;
   int sourceCount = 1;
   List<Map<String, dynamic>> chapters = [];
+
+  /// 速度采样（章/秒，R1c）：每次进度记一个，最多 40 个，下载卡片画速度曲线用。
+  final List<double> speeds = [];
 
   void applyProgress(Map p) {
     sourceCount = (p['sourceCount'] as num? ?? 1).toInt();
@@ -170,6 +205,10 @@ class DownloadTask {
     total = (p['total'] as num? ?? 0).toInt();
     failed = (p['failed'] as num? ?? 0).toInt();
     speed = (p['speed'] as num? ?? 0).toDouble();
+    if (speed > 0) {
+      speeds.add(speed);
+      if (speeds.length > 40) speeds.removeAt(0);
+    }
     eta = (p['eta'] as num?)?.toInt();
     concurrency = (p['concurrency'] as num? ?? 0).toInt();
     retrying = (p['retrying'] as num? ?? 0).toInt();

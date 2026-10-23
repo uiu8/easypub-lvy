@@ -152,6 +152,7 @@ class _NetworkDialogState extends State<_NetworkDialog> {
                 hintText: '域名或 IP，逗号分隔；example.com 包含其子域名',
               ),
             ),
+            const SizedBox(height: 14),
             TextField(
               key: const ValueKey('network-timeout'),
               controller: timeout,
@@ -168,11 +169,13 @@ class _NetworkDialogState extends State<_NetworkDialog> {
               enabled: !busy,
               decoration: const InputDecoration(labelText: '测试网址'),
             ),
+            const SizedBox(height: 10),
             DeskButton(
               busy ? '正在检测…' : '对比直连与当前选择',
               key: const ValueKey('network-test'),
               onPressed: busy ? null : () => run('test'),
             ),
+            const SizedBox(height: 6),
             const DeskText('测试不保存设置，仅读取少量响应；每条路径最多等待 20 秒。', size: 12),
             for (final result in samples)
               Padding(

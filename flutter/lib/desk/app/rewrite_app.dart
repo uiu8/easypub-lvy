@@ -20,6 +20,7 @@ import '../layout/global_layout_presets_panel.dart';
 import '../resources/resources_page.dart';
 import '../../infrastructure/native_preset_picker.dart';
 import '../../infrastructure/native_cover_picker.dart';
+import '../metadata/cover_drop.dart' show bindSidecarCover;
 import '../../infrastructure/native_conversion_desktop.dart';
 import '../../application/conversion_desktop.dart';
 import '../../application/conversion_service.dart';
@@ -36,6 +37,7 @@ import 'package:flutter/services.dart';
 import '../conversion/conversion_page.dart';
 import '../conversion/conversion_draft_persistence.dart';
 import '../conversion/quick_conversion_dialog.dart';
+import 'download_epub.dart';
 import '../conversion/tasks_page.dart';
 import '../conversion/output_history_page.dart';
 import '../conversion/output_reveal.dart';
@@ -64,6 +66,8 @@ import '../cleanup/cleanup_page.dart';
 import '../rules/rules_page.dart';
 import '../../application/rule_catalog_service.dart';
 import '../settings/settings_page.dart';
+import '../settings/settings_index.dart';
+import '../../application/chapter_service.dart' show ChapterNode;
 import '../../application/settings_service.dart';
 import '../../application/app_update_service.dart';
 import 'update_prompt.dart';
@@ -342,6 +346,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
   }
 
   void routeAccepted() {
+    rememberPage(router.routerDelegate.currentConfiguration.uri);
     final segments =
         router.routerDelegate.currentConfiguration.uri.pathSegments;
     if (segments.length > 1 &&
@@ -473,7 +478,10 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
       conversionDraft.reviewing.value = false;
       outputMessage = '';
     } catch (e) {
-      outputMessage = deskErrorText(e, '输出格式设置失败，请重试。');
+      outputMessage = deskErrorText(
+        e,
+        '没能读取转换默认设置，输出格式仍是原来的。可以再点一次，或到“转换”页的默认设置里查看。',
+      );
     } finally {
       preparingOutput = false;
       conversionDraft.changed();
@@ -498,7 +506,10 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
       }
       outputMessage = '';
     } catch (e) {
-      outputMessage = deskErrorText(e, '输出位置设置失败，请重试。');
+      outputMessage = deskErrorText(
+        e,
+        '没能改用这个输出位置，仍按原来的位置输出。可以再选一次，或到“转换”页的输出位置里设置。',
+      );
     }
     conversionDraft.changed();
   }
@@ -582,6 +593,15 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
       return true;
     });
   }
+
+  /// 书源下载为 EPUB（LIB-215），见 download_epub.dart。
+  Future<DownloadEpubResult> exportDownloadedEpub(String path) =>
+      exportDownloadAsEpub(
+        library: widget.library,
+        session: conversion,
+        path: path,
+        conversionBusy: quickActivity.value,
+      );
 
   Future<void> quickConvert(BuildContext context, {String? bookId}) async {
     if (quickActivity.value || conversion.busy) return;
@@ -709,6 +729,9 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
   );
 
   var libraryView = LibraryViewState();
+
+  /// 左侧导航栏是否展开（G-084）：默认窄栏，本次运行内记住。
+  final navExpanded = ValueNotifier<bool>(false);
   final checkViews = <String, CheckViewState>{};
   final chapterViews = <String, ChapterViewState>{};
   ChapterViewState chaptersView(String bookId) {
@@ -769,6 +792,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     autoImportResume?.dispose();
+    navExpanded.dispose();
     updates?.dispose();
     lifecycle?.workspaceGeneration.removeListener(workspaceReplaced);
     appearanceSettings?.snapshot.removeListener(appearanceChanged);

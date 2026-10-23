@@ -1,10 +1,67 @@
-//! 导入时的静态检查：书源能否由本引擎执行，不能时给出原因（显示给用户）。
-//! “能执行”只表示规则与脚本本引擎都认识，不表示网站现在可访问。
+//! 书源静态能力提示；文字源准入与实际运行结果独立于提示。
 use crate::source::BookSource;
 use serde::Serialize;
 
+/// 静态检查和运行时 Java 导入共同使用的已实现类清单。
+pub(crate) const JAVA_CLASSES: &[&str] = &[
+    "org.jsoup.Jsoup",
+    "okhttp3.Request",
+    "okhttp3.OkHttpClient",
+    "cn.hutool.crypto.digest.DigestUtil",
+    "java.lang.String",
+    "java.lang.System",
+    "java.lang.Thread",
+    "java.util.ArrayList",
+    "java.nio.charset.Charset",
+    "java.nio.ByteBuffer",
+    "java.util.Arrays",
+    "java.util.Base64",
+    "android.util.Base64",
+    "android.text.TextUtils",
+    "android.webkit.CookieManager",
+    "java.security.MessageDigest",
+    "java.security.SecureRandom",
+    "java.security.KeyFactory",
+    "java.security.Signature",
+    "java.security.spec.X509EncodedKeySpec",
+    "java.security.spec.PKCS8EncodedKeySpec",
+    "java.util.UUID",
+    "javax.crypto.spec.SecretKeySpec",
+    "javax.crypto.spec.IvParameterSpec",
+    "javax.crypto.spec.GCMParameterSpec",
+    "javax.crypto.Cipher",
+    "javax.crypto.Mac",
+    "java.math.BigInteger",
+    "java.io.ByteArrayInputStream",
+    "java.io.ByteArrayOutputStream",
+    "java.io.InputStreamReader",
+    "java.io.BufferedReader",
+    "java.util.zip.GZIPInputStream",
+    "java.util.zip.GZIPOutputStream",
+    "java.net.URL",
+];
+
 /// prelude.js 里提供的 java.* 函数。
-const JAVA_FUNCTIONS: &[&str] = &[
+pub(crate) const JAVA_FUNCTIONS: &[&str] = &[
+    "refreshExplore",
+    "searchBook",
+    "open",
+    "ruleUrl",
+    "ajaxTestAll",
+    "copyText",
+    "openUrl",
+    "openWeb",
+    "showReadingBrowser",
+    "startBrowserDp",
+    "deviceID",
+    "getUserAgent",
+    "sleep",
+    "base64Decoder",
+    "getStrResponse",
+    "clearCookie",
+    "getVerificationCode",
+    "upLoginData",
+    "reLoginView",
     "HMacBase64",
     "HMacHex",
     "aesBase64DecodeToString",
@@ -21,6 +78,13 @@ const JAVA_FUNCTIONS: &[&str] = &[
     "bytesToStr",
     "connect",
     "createSymmetricCrypto",
+    "createAsymmetricCrypto",
+    "createSign",
+    "queryTTF",
+    "queryBase64TTF",
+    "replaceFont",
+    "downloadFile",
+    "readTxtFile",
     "desBase64DecodeToString",
     "desDecodeToString",
     "desEncodeToBase64String",
@@ -74,6 +138,10 @@ const JAVA_FUNCTIONS: &[&str] = &[
 ];
 /// 需要 WebView 的写法。
 const WEB_VIEW: &[&str] = &[
+    "java.openUrl",
+    "java.openWeb",
+    "java.showReadingBrowser",
+    "java.startBrowserDp",
     "java.webView",
     "webViewGetSource",
     "startBrowserAwait",
@@ -136,29 +204,81 @@ pub fn needs_web_view(source: &BookSource) -> bool {
     !source.html.trim().is_empty()
         || WEB_VIEW.iter().any(|w| blob.contains(w))
         || !BookSource::rule(&source.rule_content, "webJs").is_empty()
+        || [&source.search_url, &source.explore_url].iter().any(|url| {
+            crate::engine::split_options(url).1.is_some_and(|options| {
+                ["webJs", "sourceRegex"].iter().any(|key| {
+                    options
+                        .get(*key)
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|v| !v.trim().is_empty())
+                }) || options.get("webView").is_some_and(|v| {
+                    !matches!(v, serde_json::Value::Null | serde_json::Value::Bool(false))
+                        && v.as_str() != Some("")
+                })
+            })
+        })
 }
 
 // 书源说明、名称、分组和历史检查结果不是可执行代码。
-fn execution_blob(source: &BookSource) -> String {
-    serde_json::json!([
-        source.header,
-        source.login_url,
-        source.login_ui,
-        source.login_check_js,
-        source.cover_decode_js,
-        source.js_lib,
-        source.main_js,
-        source.login_action,
-        source.explore_url,
-        source.search_url,
-        source.rule_search,
-        source.rule_explore,
-        source.rule_book_info,
-        source.rule_toc,
-        source.rule_content,
-    ])
-    .to_string()
-    .replace("\\\"", "\"")
+pub(crate) fn execution_blob(source: &BookSource) -> String {
+    let mut out = String::new();
+    for script in [
+        &source.js_lib,
+        &source.main_js,
+        &source.login_check_js,
+        &source.cover_decode_js,
+        &source.login_action,
+    ] {
+        out.push_str(&crate::script_scan::code(script));
+        out.push('\n');
+    }
+    fn visit(value: &serde_json::Value, out: &mut String) {
+        match value {
+            serde_json::Value::String(text) => {
+                out.push_str(&crate::script_scan::fragments(text));
+                out.push('\n');
+            }
+            serde_json::Value::Array(items) => {
+                for item in items {
+                    visit(item, out);
+                }
+            }
+            serde_json::Value::Object(items) => {
+                for (key, item) in items {
+                    if matches!(key.as_str(), "webJs" | "js" | "bodyJs" | "callBackJs") {
+                        if let Some(text) = item.as_str() {
+                            out.push_str(&crate::script_scan::code(text));
+                            out.push('\n');
+                        }
+                    } else {
+                        visit(item, out);
+                    }
+                }
+            }
+            _ => (),
+        }
+    }
+    visit(
+        &serde_json::json!([
+            source.header,
+            source.login_url,
+            source.login_ui,
+            source.explore_url,
+            source.search_url,
+            source.rule_search,
+            source.rule_explore,
+            source.rule_book_info,
+            source.rule_toc,
+            source.rule_content
+        ]),
+        &mut out,
+    );
+    out
+}
+
+/// 静态能力提示不是运行准入；非文字源仍不执行。
+pub fn can_run(source: &BookSource) -> bool {
+    source.book_source_type == 0
 }
 
 pub fn web_view_supported() -> bool {
@@ -183,15 +303,75 @@ pub fn check(source: &BookSource) -> Vec<Problem> {
     if !web_view_supported() && needs_web_view(source) {
         problems.push(Problem::NeedsWebView);
     }
-    for word in ["android.", "java.io.", "javax.", "JavaAdapter"] {
-        if blob.contains(word) {
+    // 仿 Java 仅放行已实现的具体类，绝不把 java.io/java.security 整个包放行。
+    let mut executable = blob
+        .replace("\"android.article.news\"", "\"\"")
+        .replace("'android.article.news'", "''")
+        .replace("android.article.news", "app_package_name");
+    // Android 子域名是网络地址，不是 android.* 类；只去掉 HTTP URL 的 authority。
+    static ORIGIN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    executable = ORIGIN
+        .get_or_init(|| regex::Regex::new(r"https?://[A-Za-z0-9.-]+(?::[0-9]+)?").unwrap())
+        .replace_all(&executable, "supported_origin")
+        .into_owned();
+    static CLASSES: std::sync::OnceLock<Vec<regex::Regex>> = std::sync::OnceLock::new();
+    for pattern in CLASSES.get_or_init(|| {
+        JAVA_CLASSES
+            .iter()
+            .map(|class| regex::Regex::new(&format!(r"\b{}\b", regex::escape(class))).unwrap())
+            .collect()
+    }) {
+        executable = pattern
+            .replace_all(&executable, "supported_class")
+            .into_owned();
+    }
+    // 只放行字面量导入调用中的已实现包；包外任意类引用仍按原规则检查。
+    static IMPORTS: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    executable = IMPORTS
+        .get_or_init(|| {
+            regex::Regex::new(r"\b(?:importPackage|JavaImporter)\s*\(([^()]*)\)").unwrap()
+        })
+        .replace_all(&executable, |c: &regex::Captures<'_>| {
+            let args = c[1]
+                .replace(r"\n", " ")
+                .replace(r"\r", " ")
+                .replace(r"\t", " ");
+            let known = args.split(',').all(|arg| {
+                let arg = arg.trim().strip_prefix("Packages.").unwrap_or(arg.trim());
+                arg == "supported_class"
+                    || JAVA_CLASSES.iter().any(|class| {
+                        class
+                            .rsplit_once('.')
+                            .is_some_and(|(package, _)| package == arg)
+                    })
+            });
+            if known {
+                "supported_import".to_owned()
+            } else {
+                c[0].to_owned()
+            }
+        })
+        .into_owned();
+    for word in [
+        "android.",
+        "java.io.",
+        "javax.",
+        "JavaAdapter",
+        "java.nio.file",
+        "java.lang.Runtime",
+        "java.lang.ProcessBuilder",
+        "java.lang.Class",
+        "java.lang.reflect",
+        "java.lang.ClassLoader",
+    ] {
+        if executable.contains(word) {
             problems.push(Problem::JavaOnly(word.trim_end_matches('.').to_owned()));
             break;
         }
     }
     let re = regex::Regex::new(r"\bjava\.([A-Za-z_][A-Za-z0-9_]*)").unwrap();
     let mut unknown: Vec<String> = re
-        .captures_iter(&blob)
+        .captures_iter(&executable)
         .map(|c| c[1].to_owned())
         .filter(|f| !JAVA_FUNCTIONS.contains(&f.as_str()))
         .collect();
@@ -205,6 +385,207 @@ pub fn check(source: &BookSource) -> Vec<Problem> {
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn implemented_package_imports_do_not_allow_other_java_classes() {
+        let source = |code: &str| BookSource {
+            search_url: "/search".into(),
+            js_lib: code.into(),
+            rule_content: serde_json::from_value(serde_json::json!({"content":"#c@text"})).unwrap(),
+            ..Default::default()
+        };
+        for code in [
+            "importPackage(Packages.java.lang,\nPackages.javax.crypto.spec,Packages.javax.crypto,Packages.java.util);",
+            "with(new JavaImporter(java.io,javax.crypto.spec)){new SecretKeySpec([], 'AES');}",
+            "importClass(java.security.MessageDigest);",
+        ] {
+            assert!(check(&source(code)).is_empty());
+        }
+        for code in [
+            "importPackage(java.io);new java.io.File('private')",
+            "new JavaImporter(java.nio.file)",
+            "importPackage(java.security.interfaces)",
+            "java.io.FileInputStream('private')",
+        ] {
+            assert_eq!(cause(&check(&source(code))), Some("unsupported"));
+        }
+    }
+
+    #[test]
+    #[ignore = "只读用户指定合集，仅输出分类数字"]
+    fn v97_c_classification_comparison() {
+        let names = [
+            "deviceID",
+            "getUserAgent",
+            "sleep",
+            "base64Decoder",
+            "getStrResponse",
+            "clearCookie",
+            "getVerificationCode",
+            "upLoginData",
+            "reLoginView",
+        ];
+        let selected = std::env::var("EASYPUB_V97_C_FUNCTIONS").ok();
+        let names: Vec<&str> = selected
+            .as_deref()
+            .map(|s| s.split(',').collect())
+            .unwrap_or_else(|| names.to_vec());
+        let pattern = regex::Regex::new(r"\bjava\.([A-Za-z_][A-Za-z0-9_]*)").unwrap();
+        let mut reports = Vec::new();
+        for (index, path) in std::env::var("EASYPUB_V97_INPUTS")
+            .unwrap()
+            .split(';')
+            .enumerate()
+        {
+            let input = std::fs::read(path).unwrap();
+            let text = std::str::from_utf8(&input)
+                .unwrap()
+                .trim_start_matches('\u{feff}');
+            let (sources, _) = crate::source::import(text).unwrap();
+            let mut before: BTreeMap<&str, usize> = names.iter().map(|n| (*n, 0)).collect();
+            let mut after = before.clone();
+            let (mut before_sources, mut after_sources) = (0, 0);
+            for source in &sources {
+                let problems = check(source);
+                let blob = execution_blob(source);
+                let hits: std::collections::BTreeSet<_> = pattern
+                    .captures_iter(&blob)
+                    .map(|c| c[1].to_owned())
+                    .filter(|n| names.contains(&n.as_str()))
+                    .collect();
+                for name in &hits {
+                    *before.get_mut(name.as_str()).unwrap() += 1;
+                }
+                for problem in &problems {
+                    if let Problem::UnknownFunction(name) = problem
+                        && let Some(count) = after.get_mut(name.as_str())
+                    {
+                        *count += 1;
+                    }
+                }
+                before_sources += usize::from(!problems.is_empty() || !hits.is_empty());
+                after_sources += usize::from(!problems.is_empty());
+            }
+            // 只恢复本轮指定函数的 UnknownFunction，其他检查与当前版本相同。历史报告保持冻结。
+            reports.push(serde_json::json!({"input_index":index,"total":sources.len(),"before_unknown":before,"after_unknown":after,"before_problem_sources":before_sources,"after_problem_sources":after_sources}));
+            assert_eq!(std::fs::read(path).unwrap(), input);
+        }
+        std::fs::write(
+            std::env::var("EASYPUB_V97_REPORT").unwrap(),
+            serde_json::to_vec_pretty(&reports).unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn concrete_classes_keep_forbidden_names_rejected() {
+        let source = |code: &str| BookSource {
+            search_url: "/search".into(),
+            js_lib: code.into(),
+            rule_content: serde_json::from_value(serde_json::json!({"content":"#c@text"})).unwrap(),
+            ..Default::default()
+        };
+        assert!(check(&source("var packageName='android.article.news';new Packages.java.io.ByteArrayOutputStream();javax.crypto.Cipher.getInstance('AES/CBC/PKCS5Padding');")).is_empty());
+        assert!(
+            check(&source(
+                "java.ajax('https://android.example.invalid/search')"
+            ))
+            .is_empty()
+        );
+        assert!(!check(&source("android.graphics.BitmapFactory.decodeStream(null)")).is_empty());
+        for code in [
+            "new java.io.File('fake')",
+            "new java.io.FileInputStream('fake')",
+            "java.nio.file.Files.readAllBytes('fake')",
+            "java.lang.Class.forName('fake')",
+            "java.lang.Runtime.getRuntime()",
+            "new java.lang.ClassLoader()",
+        ] {
+            assert_eq!(cause(&check(&source(code))), Some("unsupported"));
+        }
+    }
+
+    #[test]
+    #[ignore = "只读私有合集和内存夹具；显式指定路径，仅写统计"]
+    fn v97_private_syntax_comparison() {
+        use serde_json::json;
+        let inputs = std::env::var("EASYPUB_V97_INPUTS").expect("指定输入路径列表");
+        let mut reports = Vec::new();
+        let re = regex::Regex::new(r"\bjava\.([A-Za-z_][A-Za-z0-9_]*)").unwrap();
+        for (index, path) in inputs.split(';').enumerate() {
+            let raw = std::fs::read(path).expect("读取失败");
+            let (sources, skipped) =
+                crate::source::import(&String::from_utf8_lossy(&raw)).expect("合集解析失败");
+            let mut before = BTreeMap::<String, usize>::new();
+            let mut after = BTreeMap::<String, usize>::new();
+            let mut private = Vec::new();
+            for source in &sources {
+                let blob = execution_blob(source);
+                for word in ["android.", "java.io.", "javax.", "JavaAdapter"] {
+                    if blob.contains(word) {
+                        *before
+                            .entry(format!("java-only {}", word.trim_end_matches('.')))
+                            .or_default() += 1;
+                        break;
+                    }
+                }
+                let unknown: std::collections::BTreeSet<_> = re
+                    .captures_iter(&blob)
+                    .map(|c| c[1].to_owned())
+                    .filter(|f| !JAVA_FUNCTIONS.contains(&f.as_str()))
+                    .collect();
+                for f in unknown {
+                    *before.entry(format!("unknown java.{f}")).or_default() += 1;
+                }
+                for p in check(source) {
+                    let name = match p {
+                        Problem::JavaOnly(w) => format!("java-only {w}"),
+                        Problem::UnknownFunction(f) => format!("unknown java.{f}"),
+                        _ => continue,
+                    };
+                    *after.entry(name).or_default() += 1;
+                }
+                if source.book_source_name.contains("番茄")
+                    && source.book_source_name.to_uppercase().contains("APP")
+                    && !source.js_lib.is_empty()
+                {
+                    let ctx = crate::control::Context {
+                        pure_compute: true,
+                        ..Default::default()
+                    };
+                    let _guard = ctx.enter();
+                    let engine = crate::engine::Engine::new(crate::engine::SourceRt::new(
+                        BookSource::default(),
+                    ))
+                    .unwrap();
+                    let result = engine.run(|s| s.eval_js(&source.js_lib, &[]));
+                    let vectors = engine.run(|s| {
+                        s.eval_js_string(
+                            &format!(
+                                "{}\n{}",
+                                source.js_lib,
+                                include_str!("java_private_vectors.js")
+                            ),
+                            &[],
+                        )
+                    });
+                    let stage = engine
+                        .run(|s| {
+                            s.eval_js_string("String(Number(globalThis.__private_stage)||0)", &[])
+                        })
+                        .unwrap_or_default();
+                    private.push(json!({"js_bytes":source.js_lib.len(),"initialization_ok":result.is_ok(),"failure_cause":result.err().and_then(|e|crate::control::ErrorKind::classify(&e).cause()),"algorithm_vectors_ok":vectors.as_deref()==Ok("private-vectors-ok"),"algorithm_stage":stage.parse::<u32>().unwrap_or(0),"algorithm_failure_cause":vectors.err().and_then(|e|crate::control::ErrorKind::classify(&e).cause()),"network_allowed":false,"remaining_problems":check(source).iter().map(Problem::message).collect::<Vec<_>>()}));
+                }
+            }
+            assert_eq!(raw, std::fs::read(path).unwrap(), "输入必须保持不变");
+            reports.push(json!({"input_index":index,"total":sources.len(),"skipped":skipped,"before":before,"after":after,"private_app_initialization":private}));
+        }
+        std::fs::write(
+            std::env::var("EASYPUB_V97_REPORT").unwrap(),
+            serde_json::to_vec_pretty(&reports).unwrap(),
+        )
+        .unwrap();
+    }
 
     /// 用户样本统计（不进仓库）：`EASYPUB_BOOKSOURCE_SAMPLE=文件 cargo test -p easypub_booksource sample_support -- --ignored --nocapture`
     #[test]

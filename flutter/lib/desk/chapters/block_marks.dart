@@ -142,34 +142,38 @@ class _RolesDialogState extends State<_RolesDialog> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        DropdownButton<String?>(
-                          key: ValueKey(('inset-role', i)),
-                          value: roles[i],
-                          isDense: true,
-                          items: [
-                            DropdownMenuItem(
-                              value: null,
-                              child: Text(
-                                '自动（${insetRoleLabels[i < auto.length ? auto[i] : 'body'] ?? '正文'}）',
-                                style: ui(12.5, c: d.ink2),
-                              ),
-                            ),
-                            for (final r in allowed)
+                        // R3-07：编辑台的选择框（原为 Material 下拉）。
+                        SizedBox(
+                          width: 168,
+                          child: DeskChoice<String?>(
+                            key: ValueKey(('inset-role', i)),
+                            value: roles[i],
+                            compact: true,
+                            items: [
                               DropdownMenuItem(
-                                value: r,
+                                value: null,
                                 child: Text(
-                                  insetRoleLabels[r]!,
-                                  style: ui(12.5, c: d.ink),
+                                  '自动（${insetRoleLabels[i < auto.length ? auto[i] : 'body'] ?? '正文'}）',
+                                  style: ui(12.5, c: d.ink2),
                                 ),
                               ),
-                          ],
-                          onChanged: (v) => setState(() {
-                            if (v == null) {
-                              roles.remove(i);
-                            } else {
-                              roles[i] = v;
-                            }
-                          }),
+                              for (final r in allowed)
+                                DropdownMenuItem(
+                                  value: r,
+                                  child: Text(
+                                    insetRoleLabels[r]!,
+                                    style: ui(12.5, c: d.ink),
+                                  ),
+                                ),
+                            ],
+                            onChanged: (v) => setState(() {
+                              if (v == null) {
+                                roles.remove(i);
+                              } else {
+                                roles[i] = v;
+                              }
+                            }),
+                          ),
                         ),
                       ],
                     ),

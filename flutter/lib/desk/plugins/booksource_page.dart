@@ -2,8 +2,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../application/plugin_host.dart';
 import '../controls/controls.dart';
@@ -22,6 +24,10 @@ part 'booksource/management.dart';
 part 'booksource/network.dart';
 part 'booksource/subscriptions.dart';
 part 'booksource/result_order.dart';
+part 'booksource/source_panes.dart';
+part 'booksource/interactions.dart';
+part 'booksource/fqnovel.dart';
+part 'booksource/favorites.dart';
 
 class BookSourcePage extends StatefulWidget {
   const BookSourcePage({
@@ -31,6 +37,7 @@ class BookSourcePage extends StatefulWidget {
     required this.chooseFolder,
     required this.chooseSourceFile,
     required this.importToLibrary,
+    this.exportEpub,
     this.openFolder,
     this.openPlugins,
   });
@@ -41,6 +48,10 @@ class BookSourcePage extends StatefulWidget {
 
   /// 把下载好的 TXT 加入书库，返回失败原因（成功为 null）。
   final Future<String?> Function(String path) importToLibrary;
+
+  /// 把下载好的 TXT 加入书库并按全局默认排版生成 EPUB（LIB-215）；不提供时不显示 EPUB 选项。
+  final Future<({bool imported, String? error})> Function(String path)?
+  exportEpub;
   final void Function(String path)? openFolder;
   final VoidCallback? openPlugins;
 
@@ -65,8 +76,11 @@ class _BookSourcePageState extends State<BookSourcePage> {
   final query = TextEditingController();
   bool searching = false;
   String searchStatus = '';
-  String? activeSearchId, sourceOnly;
+  String? activeSearchId;
+
+  /// 搜索范围：'' 全部；'f:文件'；'g:分组'；'fav' 收藏的书源；'pick' 选中的书源（pickedSources）。
   String searchScope = '';
+  final Set<String> pickedSources = {};
   bool includeSkippedOnce = false, batchBusy = false;
   final Set<String> selectedBooks = {};
   List<Map<String, dynamic>> results = [];
@@ -94,6 +108,18 @@ class _BookSourcePageState extends State<BookSourcePage> {
   final Set<String> sourceTags = {};
   bool recommendedOnly = false, enriching = false;
 
+  // 书源页的标签筛选是否展开。
+  bool showSourceFilters = false;
+
+  // 书源页三栏（R1c）：树选中的节点、树里展开的文件、检查面板里的书源、检查面板是否显示。
+  String sourceNode = '';
+  final Set<String> treeOpen = {};
+  String? focusedSource;
+  bool sourceInspectorShown = false;
+
+  // 书架上展开了多条下载记录的书（书名 + 作者）。
+  final Set<String> shelfExpanded = {};
+
   // 下载
   final List<DownloadTask> tasks = [];
   final Set<String> importing = {};
@@ -101,6 +127,9 @@ class _BookSourcePageState extends State<BookSourcePage> {
   // 书源校验与书架
   String? checkStatus;
   bool checking = false;
+
+  /// 正在“去验证”（单源交互式校验）的书源：书源 ID → 本轮 checkId（LIB-279）。
+  final Map<String, String> verifying = {};
   List<Map<String, dynamic>> shelf = [];
   bool shelfBusy = false;
   String? shelfMessage;
@@ -115,6 +144,16 @@ class _BookSourcePageState extends State<BookSourcePage> {
 
   /// 上次定时检查的时间（秒）；0 表示还没检查过。
   int autoCheckLast = 0;
+
+  // 书源交互（V97）：已启用交互的书源、等待回复的弹窗、后端已关闭的请求、登录中提交的字段。
+  final Set<String> interactionSources = {};
+  final Map<String, BuildContext> interactionDialogs = {};
+  final Set<String> interactionClosed = {};
+  final Map<String, Map<String, String>> loginDrafts = {};
+
+  // 登录框打开时，书源脚本的提示（如切换模式后的 longToast）显示在登录框里。
+  String? loginDialogSource;
+  final loginNotice = ValueNotifier<String?>(null);
 
   @override
   void initState() {
@@ -138,6 +177,8 @@ class _BookSourcePageState extends State<BookSourcePage> {
 
   @override
   void dispose() {
+    _disableInteractions();
+    loginNotice.dispose();
     sub?.cancel();
     searchRefresh?.cancel();
     query.dispose();
@@ -151,6 +192,10 @@ class _BookSourcePageState extends State<BookSourcePage> {
   void _onEvent(Map<String, dynamic> e) {
     if (!mounted) return;
     switch (e['event']) {
+      case 'source.interaction':
+        _onInteraction(e);
+      case 'source.interaction.closed':
+        _onInteractionClosed(e);
       case 'search.progress':
       case 'search.result':
         if (e['searchId'] != null && e['searchId'] != activeSearchId) return;
@@ -231,7 +276,12 @@ class _BookSourcePageState extends State<BookSourcePage> {
             t.applyResult(e['result'] as Map);
           }
         });
-        if (t.path != null && settings.autoImport && !t.cancelled) _import(t);
+        if (t.path == null || t.cancelled) return;
+        if (settings.downloadFormat == 'epub' && widget.exportEpub != null) {
+          _exportEpub(t);
+        } else if (settings.autoImport) {
+          _import(t);
+        }
     }
   }
 
@@ -276,34 +326,138 @@ class _BookSourcePageState extends State<BookSourcePage> {
             'settings' => _settingsTab(context),
             _ => _searchTab(context),
           };
+    // R1c：页签改为左侧竖排导航（带数量与书源健康概况），内容区占满右侧。
     return DeskPageFrame(
-      header: DeskPageHeader(
+      header: const DeskPageHeader(
         title: '书源下载',
         subtitle: '按你导入的书源搜索并下载，内容版权归原网站与作者。',
-        actions: [
-          DeskSegmented<String>(
-            key: const ValueKey('booksource-tabs'),
-            value: tab,
-            options: {
-              'search': '搜索',
-              'shelf': '书架',
-              'sources':
-                  '书源 ${sources.where((s) => s['enabled'] == true).length}/${sources.length}',
-              'downloads': tasks.isEmpty
-                  ? '下载'
-                  : '下载 ${tasks.where((t) => !t.finished).length}',
-              'settings': '设置',
-            },
-            onChanged: api == null
-                ? null
-                : (v) {
-                    setState(() => tab = v);
-                    if (v == 'shelf') _loadShelf();
-                  },
-          ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _nav(context),
+          Expanded(child: body),
         ],
       ),
-      child: body,
+    );
+  }
+
+  Widget _nav(BuildContext context) {
+    final d = context.desk;
+    final running = tasks.where((t) => !t.finished).length;
+    final ok = sources.where((s) => (s['check'] as Map?)?['ok'] == true).length;
+    final failed = sources
+        .where((s) => (s['check'] as Map?)?['ok'] == false)
+        .length;
+    final entries = [
+      ('search', '搜索', Icons.search_rounded, null),
+      ('shelf', '书架', Icons.auto_stories_outlined, null),
+      (
+        'sources',
+        '书源 ${sources.where((s) => s['enabled'] == true).length}/${sources.length}',
+        Icons.extension_outlined,
+        null,
+      ),
+      (
+        'downloads',
+        tasks.isEmpty ? '下载' : '下载 $running',
+        Icons.download_rounded,
+        running > 0 ? d.accent : null,
+      ),
+      ('settings', '设置', Icons.tune_rounded, null),
+    ];
+    return Container(
+      key: const ValueKey('booksource-tabs'),
+      width: 148,
+      padding: const EdgeInsets.fromLTRB(10, 14, 10, 14),
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: d.line)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (id, label, icon, badge) in entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Material(
+                color: tab == id ? d.accentSoft : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  key: ValueKey('booksource-tab-$id'),
+                  onTap: api == null
+                      ? null
+                      : () {
+                          setState(() => tab = id);
+                          if (id == 'shelf') _loadShelf();
+                        },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 9,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          icon,
+                          size: 18,
+                          color: tab == id ? d.accent : d.ink2,
+                        ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: ui(
+                              13,
+                              w: tab == id ? 650 : 500,
+                              c: badge ?? (tab == id ? d.ink : d.ink2),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          const Spacer(),
+          if (sources.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('书源健康', style: ui(11, w: 600, c: d.ink3)),
+                  const SizedBox(height: 6),
+                  for (final (label, count, color) in [
+                    ('可用', ok, d.add),
+                    ('未通过', failed, d.pen),
+                    ('未测', sources.length - ok - failed, d.ink3),
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text('$label $count', style: ui(11.5, c: d.ink2)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

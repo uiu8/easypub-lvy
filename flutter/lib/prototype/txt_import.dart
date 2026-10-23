@@ -1,3 +1,5 @@
+import '../infrastructure/import_profile.dart';
+
 import 'dart:io';
 import 'dart:convert';
 
@@ -47,13 +49,23 @@ String bookFormatForPath(String path) {
   };
 }
 
-Future<ImportedTxt> readTxt(String path, bool Function() cancelled) async {
+Future<ImportedTxt> readTxt(String path, bool Function() cancelled) =>
+    ImportProfile.measureAsync(
+      'native_import',
+      () => _readTxtMeasured(path, cancelled),
+    );
+
+Future<ImportedTxt> _readTxtMeasured(
+  String path,
+  bool Function() cancelled,
+) async {
   final file = File(path.trim());
   if (!file.isAbsolute || !path.toLowerCase().endsWith('.txt')) {
     throw const FormatException('请选择 TXT 文件的完整路径。');
   }
   final id = await startImport(path: file.path, ruleId: 'builtin-heading-v1');
   var cancellationSent = false;
+  var pollMilliseconds = 4;
   while (true) {
     if (cancelled() && !cancellationSent) {
       await cancelJobText(jobId: id);
@@ -112,7 +124,12 @@ Future<ImportedTxt> readTxt(String path, bool Function() cancelled) async {
             : '文件读取失败，请检查文件权限和内容。',
       );
     }
-    await Future<void>.delayed(const Duration(milliseconds: 60));
+    // 小文件通常几毫秒内完成，先短等；长任务退避到原来的 60ms 上限。
+    await ImportProfile.measureAsync(
+      'poll_wait',
+      () => Future<void>.delayed(Duration(milliseconds: pollMilliseconds)),
+    );
+    pollMilliseconds = (pollMilliseconds * 2).clamp(4, 60);
   }
 }
 

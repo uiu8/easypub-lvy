@@ -6,6 +6,7 @@ import '../errors.dart';
 import '../../application/resource_service.dart';
 import '../../application/book_information_service.dart';
 import '../controls/controls.dart';
+import '../dialogs.dart' show DeskDialog;
 import '../tokens.dart';
 
 class ResourceRelinkDialog extends StatefulWidget {
@@ -113,236 +114,195 @@ class _ResourceRelinkDialogState extends State<ResourceRelinkDialog> {
   @override
   Widget build(BuildContext context) {
     final unavailable = rows.where((r) => r.image == null).length;
-    return PopScope(
-      canPop: !busy,
-      child: Dialog(
-        backgroundColor: context.desk.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: SizedBox(
-          width: 680,
-          height: 496,
-          child: Padding(
-            padding: const EdgeInsets.all(26),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    // 编辑台弹窗（R5-03）：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
+    return DeskDialog(
+      title: '重新定位资源',
+      closeTooltip: '关闭',
+      width: 680,
+      height: 496,
+      busy: busy,
+      escapeCloses: true,
+      onClose: () => Navigator.pop(context, false),
+      footerLeft: Row(
+        children: [
+          DeskButton(
+            '取消',
+            quiet: true,
+            onPressed: busy ? null : () => Navigator.pop(context, false),
+          ),
+          if (plan != null)
+            DeskButton(
+              '返回选择',
+              quiet: true,
+              onPressed: busy ? null : () => setState(() => plan = null),
+            ),
+        ],
+      ),
+      actions: [
+        DeskButton(
+          plan == null ? '预览并确认' : '确认重新定位',
+          primary: true,
+          onPressed: busy
+              ? null
+              : plan == null
+              ? preview
+              : apply,
+        ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: context.desk.warnSoft,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: DeskText('重新定位资源', size: 22, bold: true),
-                    ),
-                    IconButton(
-                      tooltip: '关闭',
-                      onPressed: busy
-                          ? null
-                          : () => Navigator.pop(context, false),
-                      icon: const Icon(Icons.close, size: 20),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xffFCF3DE),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
+                Icon(Icons.info_outline, color: context.desk.warn, size: 18),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
-                        Icons.info_outline,
-                        color: Color(0xffA46D13),
-                        size: 18,
+                      DeskText(
+                        unavailable > 0
+                            ? '$unavailable 个资源的原路径不可访问或无法读取'
+                            : '重新定位 ${rows.length} 个图片引用',
+                        bold: true,
+                        color: context.desk.warn,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            DeskText(
-                              unavailable > 0
-                                  ? '$unavailable 个资源的原路径不可访问或无法读取'
-                                  : '重新定位 ${rows.length} 个图片引用',
-                              bold: true,
-                              color: const Color(0xffA46D13),
-                            ),
-                            const DeskText(
-                              '以文件名与可用指纹比对；内容不同或无法比对时，需要明确确认。',
-                              size: 12,
-                              color: Color(0xffA46D13),
-                            ),
-                          ],
-                        ),
+                      DeskText(
+                        '以文件名与可用指纹比对；内容不同或无法比对时，需要明确确认。',
+                        size: 12,
+                        color: context.desk.warn,
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                if (plan == null)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            DeskText(
-                              '新资源文件夹',
-                              size: 12,
-                              color: context.desk.ink2,
-                            ),
-                            const SizedBox(height: 5),
-                            TextField(
-                              controller: folder,
-                              enabled: !busy,
-                              onChanged: (_) => setState(() {
-                                paths = {};
-                                matches = {};
-                              }),
-                              onSubmitted: (_) => run(scan),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      DeskButton(
-                        '浏览文件夹',
-                        icon: Icons.folder_open,
-                        onPressed: busy ? null : chooseFolder,
-                      ),
-                    ],
-                  )
-                else
-                  DeskText(
-                    '确认以下新路径。图注、顺序和原稿位置保留；原文件不变。',
-                    size: 12,
-                    color: context.desk.ink2,
-                  ),
-                const SizedBox(height: 16),
-                Container(
-                  color: context.desk.canvas,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  child: cells([
-                    DeskText('资源', size: 12, color: context.desk.ink2),
-                    DeskText('匹配结果', size: 12, color: context.desk.ink2),
-                    DeskText('处理', size: 12, color: context.desk.ink2),
-                  ]),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: rows.length,
-                    itemBuilder: (_, i) {
-                      final row = rows[i];
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: context.desk.line),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            cells([
-                              Tooltip(
-                                message: row.path,
-                                child: DeskText(row.name, bold: true, lines: 1),
-                              ),
-                              DeskText(
-                                matchText(row),
-                                size: 12,
-                                color: context.desk.ink2,
-                              ),
-                              Tooltip(
-                                message: '为此资源单独浏览图片',
-                                child: InkWell(
-                                  onTap: busy || plan != null
-                                      ? null
-                                      : () => run(() async {
-                                          final path = await widget.pickImage();
-                                          if (!mounted || path == null) return;
-                                          final checked = await widget.session
-                                              .inspectRelink({row.index: path});
-                                          if (mounted) {
-                                            setState(() {
-                                              paths = {
-                                                ...paths,
-                                                row.index: path,
-                                              };
-                                              matches = {
-                                                ...matches,
-                                                ...checked,
-                                              };
-                                            });
-                                          }
-                                        }),
-                                  child: DeskText(
-                                    treatment(row),
-                                    size: 12,
-                                    color: context.desk.ink2,
-                                  ),
-                                ),
-                              ),
-                            ]),
-                            if (plan != null &&
-                                paths.containsKey(row.index)) ...[
-                              const SizedBox(height: 6),
-                              SelectableText(
-                                '→ ${paths[row.index]}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: context.desk.ink2,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                if (error.isNotEmpty) DeskText(error, size: 12),
-                const Divider(height: 32),
-                Row(
-                  children: [
-                    DeskButton(
-                      '取消',
-                      quiet: true,
-                      onPressed: busy
-                          ? null
-                          : () => Navigator.pop(context, false),
-                    ),
-                    if (plan != null)
-                      DeskButton(
-                        '返回选择',
-                        quiet: true,
-                        onPressed: busy
-                            ? null
-                            : () => setState(() => plan = null),
-                      ),
-                    const Spacer(),
-                    DeskButton(
-                      plan == null ? '预览并确认' : '确认重新定位',
-                      primary: true,
-                      onPressed: busy
-                          ? null
-                          : plan == null
-                          ? preview
-                          : apply,
-                    ),
-                  ],
                 ),
               ],
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+          if (plan == null)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DeskText('新资源文件夹', size: 12, color: context.desk.ink2),
+                      const SizedBox(height: 5),
+                      TextField(
+                        controller: folder,
+                        enabled: !busy,
+                        onChanged: (_) => setState(() {
+                          paths = {};
+                          matches = {};
+                        }),
+                        onSubmitted: (_) => run(scan),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                DeskButton(
+                  '浏览文件夹',
+                  icon: Icons.folder_open,
+                  onPressed: busy ? null : chooseFolder,
+                ),
+              ],
+            )
+          else
+            DeskText(
+              '确认以下新路径。图注、顺序和原稿位置保留；原文件不变。',
+              size: 12,
+              color: context.desk.ink2,
+            ),
+          const SizedBox(height: 16),
+          Container(
+            color: context.desk.canvas,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: cells([
+              DeskText('资源', size: 12, color: context.desk.ink2),
+              DeskText('匹配结果', size: 12, color: context.desk.ink2),
+              DeskText('处理', size: 12, color: context.desk.ink2),
+            ]),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: rows.length,
+              itemBuilder: (_, i) {
+                final row = rows[i];
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: context.desk.line),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      cells([
+                        Tooltip(
+                          message: row.path,
+                          child: DeskText(row.name, bold: true, lines: 1),
+                        ),
+                        DeskText(
+                          matchText(row),
+                          size: 12,
+                          color: context.desk.ink2,
+                        ),
+                        Tooltip(
+                          message: '为此资源单独浏览图片',
+                          child: InkWell(
+                            onTap: busy || plan != null
+                                ? null
+                                : () => run(() async {
+                                    final path = await widget.pickImage();
+                                    if (!mounted || path == null) return;
+                                    final checked = await widget.session
+                                        .inspectRelink({row.index: path});
+                                    if (mounted) {
+                                      setState(() {
+                                        paths = {...paths, row.index: path};
+                                        matches = {...matches, ...checked};
+                                      });
+                                    }
+                                  }),
+                            child: DeskText(
+                              treatment(row),
+                              size: 12,
+                              color: context.desk.ink2,
+                            ),
+                          ),
+                        ),
+                      ]),
+                      if (plan != null && paths.containsKey(row.index)) ...[
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          '→ ${paths[row.index]}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.desk.ink2,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          if (error.isNotEmpty) DeskText(error, size: 12),
+        ],
       ),
     );
   }

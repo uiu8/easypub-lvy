@@ -89,9 +89,18 @@ class ResourceLocation {
     this.nodeId,
     this.nodeOffset,
     this.heading,
-    this.message,
-  );
+    this.message, {
+    this.outputLine,
+  });
   final String? nodeId;
   final int? nodeOffset;
   final String heading, message;
+
+  /// 插在成品文本第几行之后；未定位或需要重新定位时为空（R5-01）。
+  final int? outputLine;
+}
+
+/// 一次读出全部插图的位置（R5-01、R5-05）：排版预览按它放图，资源页按它写章节与段落。
+abstract interface class ResourceLocator {
+  Future<List<ResourceLocation>> locateAll();
 }

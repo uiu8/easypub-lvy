@@ -367,8 +367,7 @@ pub fn record(
         return Err("一次录制只能指定一个书源".into());
     }
     let source = sources.remove(0);
-    let problems = crate::support::check(&source);
-    if !problems.is_empty() {
+    if !crate::support::can_run(&source) {
         return Err("插件不支持的写法，样本未录制".into());
     }
     let tape = Arc::new(Tape::default());

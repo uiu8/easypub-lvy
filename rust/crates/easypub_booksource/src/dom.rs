@@ -93,7 +93,15 @@ fn own_texts(node: NodeRef<'_, DomNode>) -> Vec<String> {
 }
 
 pub fn own_text(node: NodeRef<'_, DomNode>) -> String {
-    normalize(&own_texts(node).join(" "))
+    let mut out = String::new();
+    for child in node.children() {
+        match child.value() {
+            DomNode::Text(text) => out.push_str(text),
+            DomNode::Element(element) if element.name() == "br" => out.push(' '),
+            _ => (),
+        }
+    }
+    normalize(&out)
 }
 
 pub fn text_nodes(node: NodeRef<'_, DomNode>) -> String {

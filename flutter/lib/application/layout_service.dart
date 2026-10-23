@@ -2,7 +2,7 @@ import 'book_information_service.dart';
 
 const layoutNumbers = <String, String>{
   'font_size': '字号',
-  'fullwidth_indent': '段首全角空格数（0为关闭）',
+  'fullwidth_indent': '段首全角空格',
   'line_height': '行距',
   'paragraph_indent': '首行缩进',
   'paragraph_spacing': '段后间距',

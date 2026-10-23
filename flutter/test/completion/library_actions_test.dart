@@ -278,7 +278,13 @@ void main() {
       expect(library.selection.value.selected, {other.id});
       await t.tap(find.byTooltip('书籍操作：${book.title}'));
       await t.pumpAndSettle();
-      await t.tap(find.text('文本清理').last);
+      // R1 起书籍操作菜单是编辑台菜单，在打开的面板里找条目。
+      await t.tap(
+        find.descendant(
+          of: find.byKey(deskMenuPanelKey),
+          matching: find.text('文本清理'),
+        ),
+      );
       await t.pumpAndSettle();
       expect(find.text('opened:${book.id}:cleanup'), findsOneWidget);
       expect(library.selection.value.current, book.id);

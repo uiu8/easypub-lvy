@@ -189,7 +189,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     } catch (e) {
       if (mounted && ticket == generation) {
         setState(() {
-          error = deskErrorText(e, '正文读取失败，请重试。');
+          error = deskErrorText(e, '正文没有读出来：原稿可能被移动或占用。在书库用“刷新来源”核对原稿位置。');
           failedOffset = offset;
         });
       }

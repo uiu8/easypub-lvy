@@ -209,16 +209,19 @@ void main() {
       router.go('/');
       await t.pumpAndSettle();
       expect(t.widget<TextField>(search()).controller!.text, 'BoOk');
-      // 1.3 倍字号下书架变窄（V84b 有左栏），格式等筛选收进“筛选”菜单；核对菜单记着的值。
-      expect(
-        find.byWidgetPredicate(
-          (w) =>
-              w is DeskCommandMenu<String> &&
-              (w.tooltip ?? '').startsWith('筛选：') &&
-              w.tooltip!.contains('TXT'),
-        ),
-        findsOneWidget,
+      // 1.3 倍字号下筛选可能收进“筛选”菜单（V84b），也可能整行放得下（V94 左栏开关移出筛选行）；
+      // 两种情况都核对记着的格式。
+      final menuKeepsTxt = find.byWidgetPredicate(
+        (w) =>
+            w is DeskCommandMenu<String> &&
+            (w.tooltip ?? '').startsWith('筛选：') &&
+            w.tooltip!.contains('TXT'),
       );
+      final rowKeepsTxt = find.descendant(
+        of: find.byType(DeskFilter<String>),
+        matching: find.text('TXT'),
+      );
+      expect(menuKeepsTxt.evaluate().length + rowKeepsTxt.evaluate().length, 1);
       await t.runAsync(() async {
         expect(
           (await library.openProject('$root/view.easypub.json')).succeeded,

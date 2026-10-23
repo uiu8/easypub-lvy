@@ -25,6 +25,8 @@ percent-encoding = "=2.3.2"
 fancy-regex = "=0.19.2"
 # JS 引擎：QuickJS-NG。
 rquickjs = "=0.14.0"
+# JS 词法分析用于能力提示与语料统计，不执行用户脚本。
+ress = "=0.11.7"
 # 书源 JS 里的哈希与加解密（与 sha2 0.10 同一代 digest / cipher）。
 md-5 = "=0.10.6"
 sha1 = "=0.10.6"
@@ -35,8 +37,14 @@ ecb = { version = "=0.1.2", features = ["alloc", "block-padding"] }
 cipher = { version = "=0.4.4", features = ["alloc", "block-padding"] }
 zhconv = "=0.4.2"
 cookie_store = "=0.22.1"
+flate2 = "=1.1.10"
+ring = "=0.17.14"
+aws-lc-sys = { version = "=0.45.0", features = ["prebuilt-nasm"] }
+ttf-parser = { version = "=0.25.1", default-features = false, features = ["std"] }
+tempfile = "=3.27.0"
 
 [target."cfg(windows)".dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
 windows-registry = "=0.6.1"
 # WebView 书源：调用系统自带的 WebView2。
 webview2-com = "=0.39.1"

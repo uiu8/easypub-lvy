@@ -145,7 +145,12 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
       await operation(ticket);
     } catch (e) {
       if (mounted && ticket == generation) {
-        setState(() => message = deskErrorText(e, '章节操作失败：$e'));
+        setState(
+          () => message = deskErrorText(
+            e,
+            '章节没有改成：书稿可能已在别处变化。重新打开本章后再试，已有内容不受影响。',
+          ),
+        );
       }
     } finally {
       if (mounted && ticket == generation) setState(() => busy = false);
@@ -1010,6 +1015,14 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
                     ? 1
                     : 0,
                 options: {0: '正文', 1: '问题', 2: tight ? '记录' : '变更记录'},
+                // R3-03（CH-001）：问题页签带全书未处理的问题数；读取失败写“!”，
+                // 不把失败当成没有问题。
+                badges: {
+                  if (issueStatus == 'error')
+                    1: '!'
+                  else if ((issueMap?.open ?? 0) > 0)
+                    1: '${issueMap!.open}',
+                },
                 onChanged: tab,
               ),
             ),

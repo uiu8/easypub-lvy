@@ -1,6 +1,7 @@
 // 编辑台标题栏（G-001–004、G-022、G-030、G-062）：标识、面包屑、命令搜索、
 // 保存状态、项目菜单与窗口按钮。拖动空白处移动窗口；关闭先走离开保护。
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../tokens.dart';
@@ -27,6 +28,22 @@ class DeskTitleBar extends StatefulWidget {
 class _DeskTitleBarState extends State<DeskTitleBar> with WindowListener {
   bool maximized = false;
   bool closing = false;
+
+  /// 原生窗口底色跟随主题（用户反馈最大化时边缘闪黑）：窗口变大、Flutter 还没画出
+  /// 新尺寸的一帧时，新露出的区域用这个颜色填充（windows/runner/flutter_window.cpp）。
+  static const _window = MethodChannel('easypub/window');
+  static Color? _background;
+  void syncBackground(Color color) {
+    if (color == _background) return;
+    _background = color;
+    _window
+        .invokeMethod<void>('setBackground', color.toARGB32())
+        .catchError(
+          // 测试与没有原生通道的环境里忽略。
+          (_) {},
+        );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +86,7 @@ class _DeskTitleBarState extends State<DeskTitleBar> with WindowListener {
   @override
   Widget build(BuildContext context) {
     final d = context.desk;
+    syncBackground(d.canvas);
     final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.5);
     final width = MediaQuery.sizeOf(context).width / scale;
     final narrow = width < 1120;
@@ -90,18 +108,14 @@ class _DeskTitleBarState extends State<DeskTitleBar> with WindowListener {
                 Row(
                   children: [
                     const SizedBox(width: 14),
-                    Container(
-                      width: 20,
-                      height: 20,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: d.accent,
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                      child: Text(
-                        'E',
-                        style: serif(12, w: 700, c: d.accentInk),
-                      ),
+                    // 程序图标（旧书，灰色）与 Windows 图标同一张图。
+                    Image.asset(
+                      'assets/app_icon.png',
+                      key: const ValueKey('desk-app-icon'),
+                      width: 22,
+                      height: 22,
+                      filterQuality: FilterQuality.medium,
+                      semanticLabel: 'EasyPub',
                     ),
                     const SizedBox(width: 10),
                     if (widget.crumbs != null)

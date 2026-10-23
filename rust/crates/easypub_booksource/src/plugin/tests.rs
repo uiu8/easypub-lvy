@@ -197,6 +197,122 @@ fn v88_storage_stream_queue_and_legacy_rebuild() {
         .unwrap();
     assert_eq!(before["check"]["ok"], false);
     assert_eq!(before["check"]["stage"], "content");
+    // V103：显式单源交互、独立校验记录、重叠拒绝及取消。
+    for params in [
+        json!({"interactive":true}),
+        json!({"interactive":true,"ids":[base,check_id],"checkId":"bad"}),
+        json!({"interactive":true,"ids":["missing"],"checkId":"bad"}),
+        json!({"interactive":true,"ids":[base]}),
+    ] {
+        assert!(handle("sources.check", &params).is_err());
+    }
+    let first = handle(
+        "sources.check",
+        &json!({"ids":[base],"interactive":true,"checkId":"fixture-success"}),
+    )
+    .unwrap();
+    assert_eq!(first["ok"], 1);
+    assert_eq!(first["cancelled"], false);
+    assert!(
+        TEST_EVENTS
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|e| e["event"] == "check.result"
+                && e["checkId"] == "fixture-success"
+                && e["interactive"] == true
+                && e["ok"] == true)
+    );
+    let mut looping: BookSource = serde_json::from_value(rules.clone()).unwrap();
+    looping.book_source_url = format!("{base}#cancel-check");
+    looping.main_js = "java.toast('ready'); while(true){}".into();
+    let loop_id = looping.id().to_owned();
+    state().sources.push((looping, true));
+    let entered = Arc::new(AtomicBool::new(false));
+    let ready = entered.clone();
+    *runtime(&loop_id)
+        .unwrap()
+        .services
+        .interaction
+        .lock()
+        .unwrap() = Some(Arc::new(move |_, _| {
+        assert!(crate::control::current().interactive);
+        ready.store(true, Ordering::Relaxed);
+        Ok(true.into())
+    }));
+    let target = loop_id.clone();
+    let running = std::thread::spawn(move || {
+        handle(
+            "sources.check",
+            &json!({"ids":[target],"interactive":true,"checkId":"fixture-cancel"}),
+        )
+    });
+    wait_until(|| entered.load(Ordering::Relaxed));
+    assert!(
+        handle(
+            "sources.check",
+            &json!({"ids":[loop_id],"checkId":"overlap"})
+        )
+        .is_err()
+    );
+    assert!(
+        handle(
+            "sources.check",
+            &json!({"ids":[base],"checkId":"fixture-cancel"})
+        )
+        .is_err()
+    );
+    assert_eq!(
+        handle("sources.check.cancel", &json!({"checkId":"fixture-cancel"})).unwrap()["cancelled"],
+        true
+    );
+    let cancelled = running.join().unwrap().unwrap();
+    assert_eq!(cancelled["cancelled"], true);
+    assert_eq!(cancelled["ok"], 0);
+    let cancelled_record = state()
+        .sources
+        .iter()
+        .find(|(s, _)| s.id() == loop_id)
+        .unwrap()
+        .0
+        .meta
+        .check
+        .clone()
+        .unwrap();
+    assert_eq!(cancelled_record["checkId"], "fixture-cancel");
+    assert_eq!(cancelled_record["cancelled"], true);
+    assert_eq!(cancelled_record["error"], "已取消");
+    assert_eq!(
+        handle("sources.check.cancel", &json!({"checkId":"fixture-cancel"})).unwrap()["cancelled"],
+        false
+    );
+    handle(
+        "sources.check",
+        &json!({"ids":[check_id],"interactive":true,"checkId":"fixture-recheck"}),
+    )
+    .unwrap();
+    assert_eq!(
+        state()
+            .sources
+            .iter()
+            .find(|(s, _)| s.id() == check_id)
+            .unwrap()
+            .0
+            .meta
+            .check
+            .as_ref()
+            .unwrap()["checkId"],
+        "fixture-recheck"
+    );
+    // 后续原测速断言以新一轮失败记录为基线，保留先前记录对象不改写。
+    assert_ne!(before["check"]["checkId"], "fixture-recheck");
+    let before = handle("sources.list", &json!({})).unwrap();
+    let before = before
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == check_id)
+        .unwrap();
     handle("sources.ping", &json!({"ids":[check_id]})).unwrap();
     let after = handle("sources.list", &json!({})).unwrap();
     let after = after
@@ -221,6 +337,12 @@ fn v88_storage_stream_queue_and_legacy_rebuild() {
     assert_eq!(records.len(), 1);
     let path = PathBuf::from(records[0]["path"].as_str().unwrap());
     assert!(path.is_file());
+    // 单独清除下载记录（LIB-223）：只删这一条记录，文件与书架记录不动。
+    assert!(handle("queue.remove", &json!({"taskId":"no-such-task"})).is_err());
+    handle("queue.remove", &json!({"taskId":id})).unwrap();
+    assert!(state().queue.iter().all(|t| t.id != id));
+    assert!(path.is_file());
+    assert_eq!(load_library().len(), 1);
     let cache = download::cache_dir(&options.folder, &book);
     let dirty = "第1章 起点\n在路上，他四下\n第1章 起点\n看了看。";
     std::fs::write(cache.join("00000.txt"), dirty).unwrap();
@@ -336,7 +458,91 @@ fn v88_storage_stream_queue_and_legacy_rebuild() {
     library::auto_due();
     assert!(TEST_EVENTS.lock().unwrap().is_empty());
     queue::shutdown();
+    fqnovel::tests::subscription_fixture();
+    explore_refresh_rejects_stale_results();
+    interactions::tests::reply_is_scoped_single_use_and_timeout_cleans_up();
+    login_buttons_run_source_action();
     std::fs::remove_dir_all(root).unwrap();
+}
+
+fn explore_refresh_rejects_stale_results() {
+    let entered = Arc::new(AtomicBool::new(false));
+    let release = Arc::new(AtomicBool::new(false));
+    let waiting = entered.clone();
+    let released = release.clone();
+    let (base, _) = crate::tests::serve(move |_| {
+        waiting.store(true, Ordering::SeqCst);
+        let until = Instant::now() + Duration::from_secs(5);
+        while !released.load(Ordering::SeqCst) && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        crate::tests::html("<li><a href='/b'>发现夹具</a></li>")
+    });
+    let source: BookSource = serde_json::from_value(json!({"bookSourceUrl":base,"ruleExplore":{"bookList":"li","name":"a@text","bookUrl":"a@href"}})).unwrap();
+    state().sources.push((source, true));
+    let rt = runtime(&base).unwrap();
+    // 旧界面默认只接首批三种交互；新能力必须显式协商。
+    handle(
+        "source.interaction.enable",
+        &json!({"id":base,"enabled":true}),
+    )
+    .unwrap();
+    for kind in ["book_search", "login_open"] {
+        assert!(
+            rt.services
+                .request(kind, json!({}))
+                .unwrap_err()
+                .contains("尚未连接")
+        );
+    }
+    handle(
+        "source.interaction.enable",
+        &json!({"id":base,"enabled":true,"capabilities":["book_search","login_open"]}),
+    )
+    .unwrap();
+    assert!(
+        rt.services
+            .request("notice", json!({"text":"fixture"}))
+            .is_err()
+    );
+    assert!(
+        handle(
+            "source.interaction.enable",
+            &json!({"id":base,"enabled":true,"capabilities":["unknown"]})
+        )
+        .is_err()
+    );
+    *rt.services.interaction.lock().unwrap() = Some(Arc::new(|kind, _| {
+        assert_eq!(kind, "explore_refresh");
+        Ok(json!(true))
+    }));
+    let target = base.clone();
+    let worker = std::thread::spawn(move || {
+        handle(
+            "source.explore",
+            &json!({"id":target,"url":target,"page":1}),
+        )
+    });
+    wait_until(|| entered.load(Ordering::SeqCst));
+    assert!(rt.services.action("explore_refresh", json!({})).unwrap());
+    release.store(true, Ordering::SeqCst);
+    let stale = worker.join().unwrap().unwrap();
+    assert_eq!(stale["stale"], true);
+    assert_eq!(stale["books"], json!([]));
+    assert_eq!(stale["current_revision"], 1);
+    let fresh = handle("source.explore", &json!({"id":base,"url":base,"page":1})).unwrap();
+    assert_eq!(fresh["stale"], false);
+    assert_eq!(fresh["books"][0]["name"], "发现夹具");
+    assert_eq!(
+        handle("source.exploreRevision", &json!({"id":base})).unwrap()["revision"],
+        1
+    );
+    assert!(handle("source.explore", &json!({"id":base,"url":base,"page":0})).is_err());
+    handle(
+        "source.interaction.enable",
+        &json!({"id":base,"enabled":false}),
+    )
+    .unwrap();
 }
 
 /// V91：导入偏好（名称 / 分组覆盖、新书源位置）对文件导入生效，并持久化。
@@ -432,4 +638,30 @@ fn import_options_keep_user_fields_and_place_new_sources(base: &str, root: &std:
         handle("sources.importOptions.get", &json!({})).unwrap()["position"],
         "bottom"
     );
+}
+
+/// 登录界面按钮（阅读 loginUi 的 button）：按序号执行书源自带的 action，可调用 loginUrl 里的函数；不接受任意脚本。
+fn login_buttons_run_source_action() {
+    let id = "https://login-buttons.invalid";
+    let ui = json!([
+        {"name":"切换模式","type":"button","action":"fqCycle()"},
+        {"name":"账号","type":"text"}
+    ])
+    .to_string();
+    let source: BookSource = serde_json::from_value(json!({
+        "bookSourceUrl": id,
+        "loginUrl": "function fqCycle(){var n=Number(String(source.getVariable()||'mode-0').split('-')[1])||0;source.setVariable('mode-'+(n+1));}",
+        "loginUi": ui
+    }))
+    .unwrap();
+    state().sources.push((source, true));
+    let rt = runtime(id).unwrap();
+    let r = handle("source.loginAction", &json!({"id":id,"index":0})).unwrap();
+    assert_eq!(r["message"], "已执行“切换模式”");
+    assert_eq!(*rt.variable.lock().unwrap(), "mode-1");
+    handle("source.loginAction", &json!({"id":id,"index":0})).unwrap();
+    assert_eq!(*rt.variable.lock().unwrap(), "mode-2");
+    assert!(handle("source.loginAction", &json!({"id":id,"index":1})).is_err());
+    assert!(handle("source.loginAction", &json!({"id":id,"index":7})).is_err());
+    assert!(handle("source.loginAction", &json!({"id":id,"action":"fqCycle()"})).is_err());
 }

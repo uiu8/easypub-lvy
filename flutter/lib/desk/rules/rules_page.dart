@@ -302,9 +302,9 @@ class _RulesPageState extends State<RulesPage> {
         '统计失败：${deskErrorReason(state.reason ?? '') ?? '请稍后重试'}',
         Tone.pen,
       ),
+      // R3-06：只写本书多少行、多少节；耗时与是否用了缓存放进悬停提示。
       RuleStatisticsPhase.completed when r != null => (
-        '已统计：${r.lineCount} 行 · ${r.chapterCount} 个分节 · '
-            '用时 ${r.elapsedMilliseconds.round()} 毫秒${r.cacheHit ? '（缓存）' : ''}',
+        '已统计本书 ${r.lineCount} 行、${r.chapterCount} 节',
         Tone.ok,
       ),
       _ => ('尚未统计', Tone.neutral),
@@ -318,7 +318,13 @@ class _RulesPageState extends State<RulesPage> {
         Flexible(
           child: KeyedSubtree(
             key: const ValueKey('rules-status'),
-            child: DeskTag(text, tone),
+            child: phase == RuleStatisticsPhase.completed && r != null
+                ? Tooltip(
+                    message:
+                        '用时 ${r.elapsedMilliseconds.round()} 毫秒${r.cacheHit ? '，用的是上次的统计结果（书稿和设置都没变）' : ''}',
+                    child: DeskTag(text, tone),
+                  )
+                : DeskTag(text, tone),
           ),
         ),
         const SizedBox(width: 6),

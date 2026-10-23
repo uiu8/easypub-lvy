@@ -268,24 +268,52 @@ class _BookOverviewState extends State<BookOverviewPage> {
       ],
     ],
   );
+
+  /// 卷、章、字数并成书籍信息里的一行（R2-06），不再各占一大格把制作进度挤到下面。
   Widget statistic(String field, String label) {
     final d = context.desk;
-    return Container(
+    return Text.rich(
       key: ValueKey('overview-stat-$field'),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: d.sunken,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      TextSpan(
         children: [
-          Text('${metrics[field] ?? '…'}', style: ui(22, w: 680, c: d.ink)),
-          const SizedBox(height: 2),
-          Text(label, style: ui(12, c: d.ink2)),
+          TextSpan(
+            text: '${metrics[field] ?? '…'}',
+            style: mono(15, w: 650, c: d.ink),
+          ),
+          TextSpan(
+            text: ' $label',
+            style: ui(12.5, c: d.ink2),
+          ),
         ],
       ),
     );
+  }
+
+  /// 书籍信息里的小标签（R2-05）：只有能点的才有下划线与指针，不再像按钮。
+  Widget tag(String text, {VoidCallback? onTap, String? tooltip, Key? key}) {
+    final d = context.desk;
+    final body = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: onTap == null ? d.sunken : d.accentSoft,
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Text(
+        text,
+        style: ui(
+          12,
+          w: onTap == null ? 500 : 600,
+          c: onTap == null ? d.ink2 : d.accent,
+        ),
+      ),
+    );
+    final child = onTap == null
+        ? body
+        : MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(onTap: onTap, child: body),
+          );
+    return Tooltip(key: key, message: tooltip ?? '', child: child);
   }
 
   @override
@@ -338,14 +366,35 @@ class _BookOverviewState extends State<BookOverviewPage> {
                 const SizedBox(height: 6),
                 BookAuthorText(book.author, size: 14),
                 const SizedBox(height: 10),
+                Tooltip(
+                  message: '正文字数是有效稿去除标题、空白后的字符数，包含标点',
+                  child: Wrap(
+                    spacing: 10,
+                    children: [
+                      statistic('volumes', '卷 ·'),
+                      statistic('chapters', '章 ·'),
+                      statistic('characters', '字'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Chip(label: Text(language.isEmpty ? '语言未设置' : language)),
-                    Chip(label: Text(book.format)),
-                    const Chip(label: Text('当前草稿')),
+                    tag(
+                      language.isEmpty ? '语言未设置' : language,
+                      key: const ValueKey('overview-language'),
+                      tooltip: language.isEmpty
+                          ? '到书籍信息里设置语言（影响 Kindle 字体与断行）'
+                          : '书籍语言',
+                      onTap: language.isEmpty
+                          ? () => open('information')
+                          : null,
+                    ),
+                    tag(book.format, tooltip: '原稿格式'),
+                    tag('当前草稿', tooltip: '概览显示的是当前草稿，原稿不会被修改'),
                     link(
                       '编辑书籍信息 →',
                       () => open('information'),
@@ -377,28 +426,6 @@ class _BookOverviewState extends State<BookOverviewPage> {
             );
           },
         ),
-      );
-      final statistics = LayoutBuilder(
-        builder: (context, bounds) {
-          final cards = [
-            statistic('volumes', '卷'),
-            statistic('chapters', '章'),
-            Tooltip(
-              message: '有效稿去除标题、空白后的字符数，包含标点',
-              child: statistic('characters', '正文字符'),
-            ),
-          ];
-          if (bounds.maxWidth < 430) return stack(cards);
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < cards.length; i++) ...[
-                if (i > 0) const SizedBox(width: 12),
-                Expanded(child: cards[i]),
-              ],
-            ],
-          );
-        },
       );
       final checkedAt = latest?.checkedAt;
       final progress = card(
@@ -561,7 +588,6 @@ class _BookOverviewState extends State<BookOverviewPage> {
         builder: (context, bounds) {
           final left = stack([
             metadata,
-            statistics,
             if (metricsError.isNotEmpty)
               DeskButton('统计读取失败，重试', onPressed: loadMetrics),
             progress,

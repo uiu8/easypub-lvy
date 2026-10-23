@@ -1,3 +1,5 @@
+import '../infrastructure/import_profile.dart';
+
 import 'dart:convert';
 
 import 'legacy_rule_catalog_service.dart';
@@ -12,6 +14,7 @@ import 'package:flutter/foundation.dart';
 
 import '../application/change_history_service.dart';
 import '../application/book_information_service.dart';
+import '../application/cleanup_service.dart' show cleanupLabel;
 import '../application/layout_service.dart';
 import '../prototype/prototype_state.dart';
 
@@ -91,7 +94,10 @@ class LegacyChangeHistoryService
   /// 工作区整体替换期间暂停登记，替换完成后由 [resetTimeObservation] 重新建立基线。
   bool observing = true;
 
-  void _observeTimes() {
+  void _observeTimes() =>
+      ImportProfile.measure('history_observe', _observeTimesMeasured);
+
+  void _observeTimesMeasured() {
     if (!observing || backend.taskNotification) return;
     _stampAll(initial: false);
   }
@@ -278,6 +284,65 @@ class LegacyChangeHistoryService
 
   String metadataValue(Object? value) => value == '' ? '已清空' : summary(value);
 
+  /// R4-01：文本清理记录存的是采用的清理方案（规则、范围、保留与排除的行），
+  /// 没有存改了多少处，所以说明里只写方案本身，不写处数。
+  static List<Map<String, dynamic>> cleanupSteps(Object? state) {
+    if (state is! Map) return const [];
+    final raw = (state['pipeline'] ?? state['rules']) as List? ?? const [];
+    return [
+      for (final step in raw)
+        if (step is Map)
+          step.cast<String, dynamic>()
+        else
+          {'kind': step.toString()},
+    ];
+  }
+
+  static String cleanupTitle(Object? state) {
+    final steps = cleanupSteps(state);
+    return steps.isEmpty ? '采用文本清理' : '采用文本清理 · ${steps.length} 条规则';
+  }
+
+  static List<(String, String)> cleanupSummary(Object? state) {
+    final steps = cleanupSteps(state);
+    if (steps.isEmpty) {
+      return const [
+        ('清理规则', '未清理（使用原稿）'),
+        ('范围', '—'),
+        ('保留原文', '—'),
+        ('提示候选', '—'),
+      ];
+    }
+    final s = state as Map;
+    final on = [
+      for (final step in steps)
+        if (step['enabled'] != false) cleanupLabel(step),
+    ];
+    final off = [
+      for (final step in steps)
+        if (step['enabled'] == false) cleanupLabel(step),
+    ];
+    final start = s['start_line'], end = s['end_line'];
+    final kept =
+        ((s['skip_lines'] as List?)?.length ?? 0) +
+        ((s['step_exclusions'] as List?)?.length ?? 0);
+    final removed = (s['remove_lines'] as List?)?.length ?? 0;
+    return [
+      (
+        '清理规则',
+        '${on.isEmpty ? '没有启用的规则' : on.join('、')}${off.isEmpty ? '' : '；已停用：${off.join('、')}'}',
+      ),
+      (
+        '范围',
+        start == null && end == null
+            ? '全部源行'
+            : '源行 ${start ?? 1}–${end ?? '末尾'}',
+      ),
+      ('保留原文', kept == 0 ? '无' : '$kept 处按原文保留'),
+      ('提示候选', removed == 0 ? '没有排除' : '排除 $removed 行'),
+    ];
+  }
+
   @override
   List<ChangeRecord> records(String bookId) {
     final cached = _recordsCache[bookId];
@@ -365,6 +430,8 @@ class LegacyChangeHistoryService
               ? '规则开关'
               : recognition
               ? '重新识别章节'
+              : domain == '文本清理'
+              ? cleanupTitle(list[i])
               : '修改$category',
           i,
           i <= cursor,
@@ -505,6 +572,19 @@ class LegacyChangeHistoryService
     }
 
     compare(list[record.version - 1], list[record.version], '', 0);
+    if (record.domain == '文本清理') {
+      final before = cleanupSummary(list[record.version - 1]);
+      final after = cleanupSummary(list[record.version]);
+      return ChangeDetail(
+        record,
+        [
+          for (var i = 0; i < after.length; i++)
+            ChangedField(after[i].$1, before[i].$2, after[i].$2),
+        ],
+        guard,
+        technical: fields,
+      );
+    }
     return ChangeDetail(record, fields, guard);
   }
 

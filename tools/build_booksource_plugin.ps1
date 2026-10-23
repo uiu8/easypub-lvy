@@ -18,7 +18,7 @@ try {
         id = 'booksource'
         name = '书源下载'
         version = $version
-        description = '导入阅读、so-novel 和轻悦 HTML 文字书源，搜索并下载为 TXT。支持网络代理与连接诊断；HTML / WebView 源使用系统 WebView2。'
+        description = '导入常见格式的 JSON、单文件 JS 与 HTML 文字书源，搜索并下载为 TXT。支持网络代理与连接诊断；网页类书源使用系统自带的网页组件。'
         executable = 'easypub_plugin_booksource.exe'
         sha256 = $hash
         protocol = 1

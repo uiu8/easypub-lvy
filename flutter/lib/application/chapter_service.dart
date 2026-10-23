@@ -52,11 +52,15 @@ class ChapterBodyRow {
     this.lineOffset,
     this.selectable, {
     this.nextCharOffset,
+    this.outputLine,
   });
   final String text;
   final int lineOffset;
   final bool selectable;
   final int? nextCharOffset;
+
+  /// 这一行在成品文本里的行号；排版小预览按它放插图（R5-01）。
+  final int? outputLine;
 }
 
 abstract interface class ChapterBodyContinuationSession {

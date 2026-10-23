@@ -185,7 +185,8 @@ void main() {
     await until(t, () => find.byType(CatalogSourceDialog).evaluate().isEmpty);
     await t.pumpAndSettle();
     expect(find.byType(CatalogQuickIdentityDialog), findsNothing);
-    expect(find.text('读取后核对书名、作者和章节目录'), findsOneWidget);
+    // R3-05：停在参考目录的空状态（说明与来源列表）。
+    expect(find.byKey(const ValueKey('catalog-empty')), findsOneWidget);
     expect(t.takeException(), isNull);
   });
 
@@ -271,9 +272,10 @@ void main() {
     Future<void> menu(String label) async {
       await t.tap(find.text('更多'));
       await t.pumpAndSettle();
+      // R1 起菜单条目是编辑台自己的行（不再是 PopupMenuItem），在打开的菜单面板里找。
       await t.tap(
         find.descendant(
-          of: find.byWidgetPredicate((w) => w is PopupMenuItem<String>),
+          of: find.byKey(deskMenuPanelKey),
           matching: find.text(label),
         ),
       );

@@ -33,19 +33,36 @@ pub struct SourceRt {
     /// `source.getVariable/setVariable`。
     pub variable: Mutex<String>,
     pub cache: Mutex<HashMap<String, String>>,
-    /// 登录界面填写的信息（JSON 文字），只在内存里。
+    /// 登录界面填写的信息（JSON 文字）；插件宿主使用 DPAPI 持久化。
     pub login_info: Mutex<Option<String>>,
+    pub services: crate::compat_services::Services,
     pub flights: crate::singleflight::Flights,
     pub html_document: Mutex<Option<String>>,
 }
 
 impl SourceRt {
+    pub fn set_login_info(&self, value: String) -> Result<(), String> {
+        if value.len() > 65536
+            || !serde_json::from_str::<Value>(&value).is_ok_and(|v| v.is_object())
+        {
+            return Err("登录数据必须为不超过 64KiB 的对象".into());
+        }
+        let mut info = self.login_info.lock().unwrap();
+        if let Some(dir) = self.services.data_dir.lock().unwrap().as_ref() {
+            crate::login_store::save(dir, self.source.id(), &value)?;
+        }
+        *info = Some(value);
+        Ok(())
+    }
     pub fn new(source: BookSource) -> Arc<Self> {
         let rate = Rate::parse(&source.concurrent_rate);
         let headers = static_headers(&source.header);
         let mut net = Net::new(rate, headers);
         net.crawl = source.meta.crawl.clone();
         net.respond_time = source.respond_time;
+        net.fqnovel = source.meta.file.ends_with("/book-source/fqnovel.json")
+            && reqwest::Url::parse(source.base_url())
+                .is_ok_and(|u| crate::network_config::local(&u));
         Arc::new(Self {
             net,
             source,
@@ -53,6 +70,7 @@ impl SourceRt {
             variable: Mutex::default(),
             cache: Mutex::default(),
             login_info: Mutex::default(),
+            services: Default::default(),
             flights: Default::default(),
             html_document: Default::default(),
         })
@@ -86,6 +104,7 @@ pub struct State {
     pub content: Node,
     pub base_url: String,
     pub redirect_url: String,
+    pub rule_url: String,
     pub vars: HashMap<String, String>,
     pub book: Value,
     pub chapter: Value,
@@ -98,6 +117,8 @@ pub struct State {
     pub batch_urls: std::collections::HashSet<String>,
     pub batch_content: HashMap<String, String>,
     native_error: Option<String>,
+    /// 本次操作里第一个规则脚本错误（已脱敏）。列表结果为空时用它说明原因。
+    pub script_error: Option<String>,
     objects_dirty: bool,
 }
 impl Default for State {
@@ -106,6 +127,7 @@ impl Default for State {
             content: Node::Text(String::new()),
             base_url: String::new(),
             redirect_url: String::new(),
+            rule_url: String::new(),
             vars: HashMap::new(),
             book: json!({}),
             chapter: json!({}),
@@ -118,6 +140,7 @@ impl Default for State {
             batch_urls: Default::default(),
             batch_content: Default::default(),
             native_error: None,
+            script_error: None,
             objects_dirty: true,
         }
     }
@@ -127,6 +150,7 @@ pub struct Inner {
     pub rt: Arc<SourceRt>,
     pub st: RefCell<State>,
     deadline: Rc<Cell<Option<Instant>>>,
+    files: RefCell<crate::temp_files::Store>,
 }
 
 pub struct Engine {
@@ -142,6 +166,9 @@ pub struct Scope<'a, 'js> {
 
 impl Engine {
     pub fn new(rt: Arc<SourceRt>) -> Result<Self, String> {
+        if !crate::support::can_run(&rt.source) {
+            return Err("暂只支持文字书源".into());
+        }
         let runtime = Runtime::new().map_err(|e| e.to_string())?;
         runtime.set_memory_limit(512 * 1024 * 1024);
         runtime.set_max_stack_size(8 * 1024 * 1024);
@@ -156,6 +183,7 @@ impl Engine {
             rt,
             st: RefCell::default(),
             deadline,
+            files: RefCell::default(),
         });
         let weak: Weak<Inner> = Rc::downgrade(&inner);
         context.with(|ctx| -> Result<(), String> {
@@ -167,7 +195,26 @@ impl Engine {
                     };
                     let scope = Scope { inner: &inner, ctx };
                     let args: Vec<Value> = serde_json::from_str(&args).unwrap_or_default();
-                    match scope.op(&op, &args) {
+                    let started = Instant::now();
+                    let result = scope.op(&op, &args);
+                    // 用户输入及显式等待不消耗 JS 的计算预算；Context 总期限仍生效。
+                    if matches!(
+                        op.as_str(),
+                        "sleep"
+                            | "verificationCode"
+                            | "loginUpdate"
+                            | "loginRefresh"
+                            | "notice"
+                            | "clipboard"
+                            | "exploreRefresh"
+                            | "bookSearch"
+                            | "loginOpen"
+                            | "browser"
+                    ) && let Some(deadline) = inner.deadline.get()
+                    {
+                        inner.deadline.set(Some(deadline + started.elapsed()));
+                    }
+                    match result {
                         Ok(v) => json!({ "v": v }).to_string(),
                         Err(e) => {
                             scope.inner.st.borrow_mut().native_error =
@@ -182,6 +229,18 @@ impl Engine {
                 .set("__ep", native)
                 .map_err(|e| e.to_string())?;
             sloppy::<()>(&ctx, PRELUDE).map_err(|e| js_error(&ctx, e))?;
+            sloppy::<()>(&ctx, include_str!("java_compat.js")).map_err(|e| js_error(&ctx, e))?;
+            sloppy::<()>(&ctx, include_str!("rsa_compat.js")).map_err(|e| js_error(&ctx, e))?;
+            sloppy::<()>(
+                &ctx,
+                format!(
+                    "({})({})",
+                    include_str!("java_imports.js"),
+                    serde_json::to_string(crate::support::JAVA_CLASSES).unwrap()
+                ),
+            )
+            .map_err(|e| js_error(&ctx, e))?;
+            sloppy::<()>(&ctx, include_str!("font_compat.js")).map_err(|e| js_error(&ctx, e))?;
             let source = serde_json::to_string(&inner.rt.source).unwrap_or_else(|_| "{}".into());
             sloppy::<()>(
                 &ctx,
@@ -204,7 +263,7 @@ impl Engine {
             context,
             _runtime: runtime,
         };
-        engine.run(|s| s.load_js_lib());
+        engine.run(|s| s.load_js_lib())?;
         Ok(engine)
     }
 
@@ -238,10 +297,73 @@ fn sloppy<'js, V: rquickjs::FromJs<'js>>(
     ctx.eval_with_options(code, options)
 }
 
+/// 书源脚本异常里可以显示给用户的部分（纯函数，便于测试）。不满足条件时返回 None，由调用方用固定文字。
+pub(crate) fn safe_script_message(name: &str, message: &str, secrets: &[String]) -> Option<String> {
+    let message = message.trim();
+    let ident = |s: &str| {
+        !s.is_empty()
+            && s.len() <= 48
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$' || c == '.')
+            && !s.starts_with(|c: char| c.is_ascii_digit())
+    };
+    match name {
+        "ReferenceError" => {
+            let id = message.strip_suffix(" is not defined")?;
+            return ident(id).then(|| format!("书源用到了尚不支持的函数或变量：{id}"));
+        }
+        "SyntaxError" => return Some("书源规则脚本语法错误".into()),
+        "TypeError" => {
+            let property = message
+                .strip_prefix("cannot read property '")
+                .and_then(|r| r.split_once('\''))
+                .map(|(p, _)| p);
+            return Some(match property {
+                Some(p) if ident(p) => {
+                    format!("书源规则脚本读取 {p} 时数据为空")
+                }
+                _ if message.ends_with("is not a function") || message == "not a function" => {
+                    "书源规则脚本调用的值不是函数".into()
+                }
+                _ => "书源规则脚本类型错误".into(),
+            });
+        }
+        _ => {}
+    }
+    // 书源自己抛出的提示：短、含中文、没有网址或长串字母数字，也不含已知敏感值。
+    let cjk = message
+        .chars()
+        .filter(|c| ('\u{4e00}'..='\u{9fff}').contains(c))
+        .count();
+    let mut run = 0usize;
+    let long_token = message.chars().any(|c| {
+        run = if c.is_ascii_alphanumeric() || "+/_-.".contains(c) {
+            run + 1
+        } else {
+            0
+        };
+        run > 16
+    });
+    let unsafe_text = message.chars().count() > 80
+        || cjk < 2
+        || long_token
+        || [
+            "://", "=", "&", "%", "{", "Bearer", "Cookie", "cookie", "token",
+        ]
+        .iter()
+        .any(|m| message.contains(m))
+        || secrets.iter().any(|s| message.contains(s.trim()));
+    (!unsafe_text).then(|| format!("书源提示：{message}"))
+}
+
 fn js_error(ctx: &Ctx<'_>, error: rquickjs::Error) -> String {
     if matches!(error, rquickjs::Error::Exception) {
         // 第三方脚本可以 throw Cookie 或登录表单，错误文本不能越过凭据边界。
         let _ = ctx.catch();
+        // 初始化也会触发中断；保留宿主取消/总期限，不读取脚本异常中的敏感内容。
+        if let Err(reason) = crate::control::current().check() {
+            return reason;
+        }
         return "书源 JS 执行失败".into();
     }
     error.to_string()
@@ -315,6 +437,7 @@ impl Host for Scope<'_, '_> {
             Ok(v) => v,
             Err(e) => {
                 self.log(format!("JS 出错：{e}"));
+                self.inner.st.borrow_mut().script_error.get_or_insert(e);
                 Vec::new()
             }
         }
@@ -359,19 +482,28 @@ impl<'js> Scope<'_, 'js> {
         &self.inner.rt.net
     }
 
-    fn load_js_lib(&self) {
+    fn load_js_lib(&self) -> Result<(), String> {
         let lib = self.source().js_lib.trim().to_owned();
         if lib.is_empty() {
-            return;
+            return Ok(());
         }
         // `{"名称":"网址"}` 形式：逐个下载后执行；否则整段是 JS。
         let code = match serde_json::from_str::<Value>(&lib) {
-            Ok(Value::Object(map)) => map
-                .values()
-                .filter_map(Value::as_str)
-                .filter_map(|url| self.fetch_plain(url).ok().map(|r| r.text))
-                .collect::<Vec<_>>()
-                .join("\n;\n"),
+            Ok(Value::Object(map)) => {
+                let mut libraries = Vec::with_capacity(map.len());
+                for value in map.values() {
+                    let url = value.as_str().ok_or("外部 JS 库规则地址必须是字符串")?;
+                    let response = self.fetch_plain(url).map_err(|error| {
+                        // 不回显库名、地址、凭据或服务器正文，保留固定诊断原因。
+                        let reason = crate::network_failure::code(&error)
+                            .map(crate::network_failure::label)
+                            .unwrap_or_else(|| crate::probe::reason(&error));
+                        format!("外部 JS 库下载失败：{reason}")
+                    })?;
+                    libraries.push(response.text);
+                }
+                libraries.join("\n;\n")
+            }
             _ => lib,
         };
         self.inner.deadline.set(Some(Instant::now() + JS_TIMEOUT));
@@ -379,8 +511,15 @@ impl<'js> Scope<'_, 'js> {
         self.inner.deadline.set(None);
         if let Err(e) = result {
             let msg = js_error(&self.ctx, e);
-            self.log(format!("jsLib 出错：{msg}"));
+            return Err(self
+                .inner
+                .st
+                .borrow_mut()
+                .native_error
+                .take()
+                .unwrap_or(msg));
         }
+        Ok(())
     }
 
     // ---------- JS ----------
@@ -409,6 +548,46 @@ impl<'js> Scope<'_, 'js> {
     }
 
     fn js_to_nodes(&self, v: JsValue<'js>) -> Vec<Node> {
+        let v = if v.is_object() && !v.is_array() {
+            self.ctx
+                .globals()
+                .get::<_, Function>("__java_list_array")
+                .ok()
+                .and_then(|f| f.call::<_, Option<JsValue>>((v.clone(),)).ok().flatten())
+                .unwrap_or(v)
+        } else {
+            v
+        };
+        // Jsoup 的元素不是 HTML 字符串：后续 href/text 规则必须以该元素为起点。
+        if let Some(array) = v.as_array() {
+            return array
+                .iter::<JsValue>()
+                .filter_map(Result::ok)
+                .filter_map(|item| {
+                    self.js_element(&item).or_else(|| {
+                        let text = self
+                            .ctx
+                            .json_stringify(item)
+                            .ok()
+                            .flatten()?
+                            .to_string()
+                            .ok()?;
+                        let value: Value = serde_json::from_str(&text).ok()?;
+                        match value {
+                            Value::Null => None,
+                            Value::String(s) => Some(Node::Text(s)),
+                            Value::Bool(_) | Value::Number(_) => {
+                                Some(Node::Text(value.to_string()))
+                            }
+                            other => Some(Node::Json(other)),
+                        }
+                    })
+                })
+                .collect();
+        }
+        if let Some(element) = self.js_element(&v) {
+            return vec![element];
+        }
         if v.is_undefined() || v.is_null() {
             return Vec::new();
         }
@@ -435,6 +614,23 @@ impl<'js> Scope<'_, 'js> {
             Value::Array(items) => items.into_iter().filter_map(one).collect(),
             other => one(other).into_iter().collect(),
         }
+    }
+
+    fn js_element(&self, value: &JsValue<'js>) -> Option<Node> {
+        if !value.is_object() {
+            return None;
+        }
+        let read: Function = self.ctx.globals().get("__jsoup_html").ok()?;
+        let html: Option<String> = read.call((value.clone(),)).ok()?;
+        let html = html?;
+        let (doc, id) = jsoup_root(&html);
+        Some(Node::Elem(
+            Rc::new(crate::node::Document {
+                html: doc,
+                source: html,
+            }),
+            id,
+        ))
     }
 
     fn set_globals(&self, input: &[Node], code: &str) -> Result<(), String> {
@@ -508,6 +704,38 @@ impl<'js> Scope<'_, 'js> {
     }
 
     pub fn eval_js(&self, code: &str, input: &[Node]) -> Result<Vec<Node>, String> {
+        // java.getString 等桥接可再次执行 JS；它们注入的上下文不能覆盖外层规则。
+        let globals = self.ctx.globals();
+        let saved = if self.inner.deadline.get().is_some() {
+            [
+                "result",
+                "baseUrl",
+                "key",
+                "page",
+                "title",
+                "src",
+                "nextChapterUrl",
+                "book",
+                "chapter",
+            ]
+            .into_iter()
+            .map(|name| globals.get::<_, JsValue>(name).map(|value| (name, value)))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+        } else {
+            Vec::new()
+        };
+        let result = self.eval_js_inner(code, input);
+        if !saved.is_empty() {
+            self.inner.st.borrow_mut().objects_dirty = true;
+            for (name, value) in saved {
+                globals.set(name, value).map_err(|e| e.to_string())?;
+            }
+        }
+        result
+    }
+
+    fn eval_js_inner(&self, code: &str, input: &[Node]) -> Result<Vec<Node>, String> {
         self.set_globals(input, code)?;
         let run: Function = self.ctx.globals().get("__run").map_err(|e| e.to_string())?;
         // 嵌套调用时只由最外层设置期限。
@@ -530,7 +758,7 @@ impl<'js> Scope<'_, 'js> {
         match out {
             Ok(v) => Ok(self.js_to_nodes(v)),
             Err(e) => {
-                let msg = js_error(&self.ctx, e);
+                let msg = self.script_exception(e);
                 if let Some(native) = self.inner.st.borrow_mut().native_error.take() {
                     return Err(native);
                 }
@@ -542,6 +770,68 @@ impl<'js> Scope<'_, 'js> {
                 })
             }
         }
+    }
+
+    /// 脚本异常的安全描述：只给出未定义的函数名、读取失败的属性名，或不含凭据形态的书源中文提示；
+    /// 其余一律是固定文字。已知的 Cookie、请求头、登录字段与书源变量值出现时也不显示。
+    fn script_exception(&self, error: rquickjs::Error) -> String {
+        const FALLBACK: &str = "书源 JS 执行失败";
+        if !matches!(error, rquickjs::Error::Exception) {
+            return error.to_string();
+        }
+        let value = self.ctx.catch();
+        if self
+            .ctx
+            .globals()
+            .get::<_, Function>("__is_json_parse_error")
+            .and_then(|check| check.call::<_, bool>((value.clone(),)))
+            .unwrap_or(false)
+        {
+            return "规则 JSON 数据解析失败".into();
+        }
+        let (name, message) = if let Some(object) = value.as_object() {
+            (
+                object
+                    .get::<_, Option<String>>("name")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default(),
+                object
+                    .get::<_, Option<String>>("message")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default(),
+            )
+        } else if let Some(text) = value.as_string() {
+            (String::new(), text.to_string().unwrap_or_default())
+        } else {
+            return FALLBACK.into();
+        };
+        safe_script_message(&name, &message, &self.secrets()).unwrap_or_else(|| FALLBACK.into())
+    }
+
+    /// 本书源已知的敏感值：Cookie、请求头、登录字段、书源变量。
+    fn secrets(&self) -> Vec<String> {
+        let rt = &self.inner.rt;
+        let mut out: Vec<String> = rt
+            .net
+            .cookies
+            .lock()
+            .unwrap()
+            .iter_any()
+            .map(|c| c.value().to_owned())
+            .collect();
+        out.extend(rt.net.headers.iter().map(|(_, v)| v.clone()));
+        if let Some(info) = rt.login_info.lock().unwrap().as_deref()
+            && let Ok(Value::Object(map)) = serde_json::from_str::<Value>(info)
+        {
+            out.extend(map.values().filter_map(|v| v.as_str().map(str::to_owned)));
+        }
+        out.push(rt.variable.lock().unwrap().clone());
+        out.extend(rt.vars.lock().unwrap().values().cloned());
+        out.extend(self.inner.st.borrow().vars.values().cloned());
+        out.retain(|s| s.trim().chars().count() >= 4);
+        out
     }
 
     pub fn eval_js_string(&self, code: &str, input: &[Node]) -> Result<String, String> {
@@ -564,11 +854,23 @@ impl<'js> Scope<'_, 'js> {
     /// 改了 book / chapter 后，下次执行 JS 前重建这两个对象。
     pub fn set_book(&self, book: Value) {
         let mut st = self.inner.st.borrow_mut();
+        st.vars = book
+            .get("ruleVariables")
+            .cloned()
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default();
         st.book = book;
         st.objects_dirty = true;
     }
     pub fn set_chapter(&self, chapter: Value) {
         let mut st = self.inner.st.borrow_mut();
+        if let Some(vars) = chapter
+            .get("ruleVariables")
+            .cloned()
+            .and_then(|v| serde_json::from_value::<HashMap<String, String>>(v).ok())
+        {
+            st.vars.extend(vars);
+        }
         st.title = chapter
             .get("title")
             .and_then(Value::as_str)
@@ -643,7 +945,29 @@ impl<'js> Scope<'_, 'js> {
 
     /// 按阅读的网址规则得到请求：JS 段、`<页1,页2>`、`{{}}`、`网址,{选项}`。
     pub fn analyze_url(&self, rule: &str) -> Result<UrlSpec, String> {
-        let mut text = self.url_js(rule.trim())?;
+        let previous = std::mem::replace(&mut self.inner.st.borrow_mut().rule_url, rule.to_owned());
+        let result = self.analyze_url_inner(rule);
+        self.inner.st.borrow_mut().rule_url = previous;
+        result
+    }
+
+    fn analyze_url_inner(&self, rule: &str) -> Result<UrlSpec, String> {
+        if crate::data_url::matches(rule.trim())
+            && !(rule
+                .split_once(',')
+                .is_some_and(|(meta, _)| meta.to_ascii_lowercase().ends_with(";base64"))
+                && split_options(rule).1.is_some())
+        {
+            return Ok(UrlSpec {
+                request: Request {
+                    url: rule.trim().to_owned(),
+                    method: "GET".into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        }
+        let mut text = rule::expand_variables(self, &self.url_js(rule.trim())?).0;
         let (key, page) = {
             let st = self.inner.st.borrow();
             (st.key.clone(), st.page)
@@ -664,7 +988,7 @@ impl<'js> Scope<'_, 'js> {
             let mut out = String::new();
             let mut rest = text.as_str();
             while let Some(start) = rest.find("{{") {
-                let Some(end) = rest[start + 2..].find("}}") else {
+                let Some(end) = crate::script_scan::template_end(&rest[start + 2..]) else {
                     break;
                 };
                 out.push_str(&rest[..start]);
@@ -722,6 +1046,10 @@ impl<'js> Scope<'_, 'js> {
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .to_owned();
+            spec.request.source_regex = get("sourceRegex")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned);
             spec.kind = get("type").and_then(Value::as_str).unwrap_or("").to_owned();
             spec.request.proxy = get("proxy").map(crate::jsonpath::value_text);
             spec.request.insecure = get("insecure") == Some(&Value::Bool(true));
@@ -796,7 +1124,10 @@ impl<'js> Scope<'_, 'js> {
             if !before.is_empty() {
                 result = before.replace("@result", &result);
             }
-            result = self.eval_js_string(&code, &[Node::Text(result.clone())])?;
+            result = self.eval_js_string(
+                &rule::expand_variables(self, &code).0,
+                &[Node::Text(result.clone())],
+            )?;
             rest = next;
             if rest.is_empty() {
                 break;
@@ -864,13 +1195,21 @@ impl<'js> Scope<'_, 'js> {
     pub fn fetch(&self, rule: &str) -> Result<Response, String> {
         crate::control::current().check()?;
         let spec = self.analyze_url(rule)?;
-        self.log(format!("请求 {} {}", spec.request.method, spec.request.url));
-        let response = self.fetch_spec(&spec)?;
-        if response.status >= 400 {
-            return Err(format!("网站返回 {}", response.status));
+        self.fetch_analyzed(&spec)
+    }
+
+    pub(crate) fn fetch_analyzed(&self, spec: &UrlSpec) -> Result<Response, String> {
+        if crate::data_url::matches(&spec.request.url) {
+            self.log("读取内嵌内容");
+        } else {
+            self.log(format!("请求 {} {}", spec.request.method, spec.request.url));
         }
+        let response = self.fetch_spec(spec)?;
         if crate::webview::is_challenge_response(&response) {
             return Err("需要网页验证".into());
+        }
+        if response.status >= 400 {
+            return Err(format!("网站返回 {}", response.status));
         }
         self.set_content(Node::page(response.text.clone()), Some(&response.url));
         self.inner.st.borrow_mut().base_url = spec.request.url.clone();
@@ -878,10 +1217,35 @@ impl<'js> Scope<'_, 'js> {
     }
 
     pub fn fetch_spec(&self, spec: &UrlSpec) -> Result<Response, String> {
-        if spec.web_view {
+        // 阅读的 type 选项要求原始字节的十六进制文本，优先于网页渲染。
+        // 保留 body 字节，供字节数组/内存流调用继续使用。
+        if !spec.kind.trim().is_empty() {
+            if crate::data_url::matches(&spec.request.url) {
+                return crate::data_url::response(&spec.request, true);
+            }
+            let mut response = self.net().fetch(&spec.request).map_err(|e| e.0)?;
+            response.text = hex::encode(&response.body);
+            return Ok(response);
+        }
+        if crate::data_url::matches(&spec.request.url) {
+            if spec.web_view {
+                return Err("内嵌内容不支持 WebView 执行".into());
+            }
+            return crate::data_url::response(&spec.request, false);
+        }
+        if spec.web_view || !spec.web_js.trim().is_empty() || spec.request.source_regex.is_some() {
             return crate::webview::load(self, &spec.request, &spec.web_js);
         }
-        let response = self.net().fetch(&spec.request).map_err(|e| e.0)?;
+        let mut request = spec.request.clone();
+        request.capture_challenge = true;
+        let response = self.net().fetch(&request).map_err(|e| e.0)?;
+        // 明确的启用 JS 空壳只自动重放 GET；不根据搜索空列表猜测需要浏览器。
+        if crate::webview::supported()
+            && spec.request.method.eq_ignore_ascii_case("GET")
+            && crate::webview::needs_javascript(&response)
+        {
+            return crate::webview::load(self, &spec.request, &spec.web_js);
+        }
         // 普通请求被人机验证拦下：打开验证窗口让用户完成，拿到 Cookie 后重试。
         if crate::webview::supported()
             && crate::control::current().interactive
@@ -901,7 +1265,7 @@ impl<'js> Scope<'_, 'js> {
                     self.source().book_source_name.trim()
                 ),
             )?;
-            let retry = self.net().fetch(&spec.request).map_err(|e| e.0)?;
+            let retry = self.net().fetch(&request).map_err(|e| e.0)?;
             if !crate::webview::is_challenge_response(&retry) {
                 return Ok(retry);
             }
@@ -913,6 +1277,19 @@ impl<'js> Scope<'_, 'js> {
                 text: out.text,
                 ..Default::default()
             });
+        }
+        if !spec.request.inspect_error_status && crate::webview::is_challenge_response(&response) {
+            return Err("需要网页验证".into());
+        }
+        if self
+            .source()
+            .meta
+            .file
+            .ends_with("/book-source/fqnovel.json")
+            && reqwest::Url::parse(&response.url).is_ok_and(|u| crate::network_config::local(&u))
+            && let Some(message) = crate::plugin::fqnovel::response_error(&response)
+        {
+            return Err(message.into());
         }
         Ok(response)
     }
@@ -930,7 +1307,38 @@ impl<'js> Scope<'_, 'js> {
 
     fn op(&self, op: &str, args: &[Value]) -> Result<Value, String> {
         let st = &self.inner.st;
+        if crate::control::current().pure_compute
+            && !matches!(
+                op,
+                "javaCompat"
+                    | "fontData"
+                    | "base64Encode"
+                    | "base64Decode"
+                    | "base64DecodeBytes"
+                    | "hexDecode"
+                    | "hexEncode"
+                    | "strToBytes"
+                    | "bytesToStr"
+                    | "digest"
+                    | "digestBase64"
+                    | "hmac"
+                    | "crypto"
+                    | "uuid"
+                    | "encodeURI"
+                    | "decodeURI"
+            )
+        {
+            return Err("离线算法验证不支持外部或状态操作".into());
+        }
         Ok(match op {
+            "bookReverseToc" => {
+                let mut st = self.inner.st.borrow_mut();
+                if let Some(value) = args.first().and_then(Value::as_bool) {
+                    st.book["reverseToc"] = Value::Bool(value);
+                    st.objects_dirty = true;
+                }
+                Value::Bool(st.book["reverseToc"].as_bool().unwrap_or(false))
+            }
             "cacheContent" => {
                 let target = arg(args, 0);
                 let url = target
@@ -948,6 +1356,55 @@ impl<'js> Scope<'_, 'js> {
                 state.batch_content.insert(url.to_owned(), s(args, 1));
                 Value::Null
             }
+            "bookSearch" | "loginOpen" => {
+                let text = |index: usize, required: bool| -> Result<Value, String> {
+                    match arg(args, index) {
+                        Value::Null if !required => Ok(Value::Null),
+                        Value::String(v)
+                            if v.len() <= 4096 && (!required || !v.trim().is_empty()) =>
+                        {
+                            Ok(Value::String(v.clone()))
+                        }
+                        _ => Err("书源导航参数无效或超过限制".into()),
+                    }
+                };
+                let (kind, payload) = if op == "bookSearch" {
+                    (
+                        "book_search",
+                        json!({"keyword":text(0,true)?,"scope":text(1,false)?,"source_id":text(2,false)?}),
+                    )
+                } else {
+                    ("login_open", json!({"source_id":text(0,false)?}))
+                };
+                Value::Bool(self.inner.rt.services.action(kind, payload)?)
+            }
+            "notice" | "clipboard" => {
+                let text = s(args, 0);
+                let limit = if op == "notice" { 4096 } else { 16384 };
+                if text.len() > limit {
+                    return Err("书源界面文字超过限制".into());
+                }
+                if op == "notice" && !self.inner.rt.services.connected() {
+                    self.log("书源请求提示，但界面尚未连接提示事件");
+                    Value::Bool(false)
+                } else {
+                    let kind = if op == "notice" {
+                        "notice"
+                    } else {
+                        "clipboard"
+                    };
+                    Value::Bool(self.inner.rt.services.action(
+                        kind,
+                        json!({"text":text,"long":arg(args,1).as_bool().unwrap_or(false)}),
+                    )?)
+                }
+            }
+            "exploreRefresh" => Value::Bool(
+                self.inner
+                    .rt
+                    .services
+                    .action("explore_refresh", json!({}))?,
+            ),
             "log" => {
                 self.log(s(args, 0));
                 Value::Null
@@ -957,6 +1414,74 @@ impl<'js> Scope<'_, 'js> {
                 Value::Null
             }
             "varGet" => Value::String(self.var(&s(args, 0))),
+            "ruleUrl" => Value::String(st.borrow().rule_url.clone()),
+            "ajaxTestAll" => {
+                let urls = arg(args, 0).as_array().ok_or("ajaxTestAll 需要地址数组")?;
+                let timeout = arg(args, 1)
+                    .as_u64()
+                    .filter(|n| (1..=30_000).contains(n))
+                    .ok_or("ajaxTestAll 超时须为 1–30000 毫秒")?;
+                if urls.len() > 32 || arg(args, 2) == &Value::Bool(true) {
+                    return Err("ajaxTestAll 最多 32 个地址且不支持跳过书源限速".into());
+                }
+                let specs = urls
+                    .iter()
+                    .map(|v| {
+                        let spec =
+                            self.analyze_url(v.as_str().ok_or("ajaxTestAll 地址须为字符串")?)?;
+                        if spec.web_view {
+                            return Err("ajaxTestAll 不支持 WebView".to_owned());
+                        }
+                        if !spec.request.url.starts_with("http://")
+                            && !spec.request.url.starts_with("https://")
+                        {
+                            return Err("ajaxTestAll 仅支持 HTTP/HTTPS".to_owned());
+                        }
+                        Ok(spec)
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+                let mut results = Vec::new();
+                let parent = crate::control::current();
+                let net = self.net();
+                for batch in specs.chunks(8) {
+                    parent.check()?;
+                    let values = std::thread::scope(|scope| {
+                        let handles = batch.iter().map(|spec| {
+                            let mut context = parent.clone();
+                            scope.spawn(move || {
+                                let start = Instant::now();
+                                let deadline = start + Duration::from_millis(timeout);
+                                context.deadline = Some(context.deadline.map_or(deadline, |d| d.min(deadline)));
+                                context.interactive = false;
+                                let _guard = context.enter();
+                                let mut request = spec.request.clone();
+                                request.inspect_error_status = true;
+                                match net.fetch(&request) {
+                                    Ok(response) => {
+                                        let mut value = response_json(&response);
+                                        value["callTime"] = json!(start.elapsed().as_millis() as u64);
+                                        value
+                                    }
+                                    Err(error) => {
+                                        let time = if Instant::now() >= deadline {-1}
+                                            else if error.0.contains("超时") {-2}
+                                            else if error.0.contains("DNS") {-3}
+                                            else {-7};
+                                        json!({"body":"","code":0,"url":request.url,"headers":{},"callTime":time})
+                                    }
+                                }
+                            })
+                        }).collect::<Vec<_>>();
+                        handles
+                            .into_iter()
+                            .map(|h| h.join().map_err(|_| "ajaxTestAll 请求执行失败".to_owned()))
+                            .collect::<Result<Vec<_>, _>>()
+                    })?;
+                    parent.check()?;
+                    results.extend(values);
+                }
+                Value::Array(results)
+            }
             "sourcePut" => {
                 self.inner
                     .rt
@@ -1052,6 +1577,59 @@ impl<'js> Scope<'_, 'js> {
                 };
                 response_json(&self.net().fetch_no_redirect(&request).map_err(|e| e.0)?)
             }
+            // java.net.URL.openConnection 子集（V97）：只允许 HTTP/HTTPS 与常见方法，二进制请求体，
+            // 走与 java.ajax 相同的网络通道；跟随重定向，4xx/5xx 交给脚本按响应码读错误流。
+            "httpConnect" => {
+                let spec = arg(args, 0);
+                let url = self.absolute(spec["url"].as_str().unwrap_or(""));
+                let parsed = reqwest::Url::parse(&url).map_err(|_| "连接网址无效")?;
+                if !matches!(parsed.scheme(), "http" | "https") {
+                    return Err("连接只支持 http/https".into());
+                }
+                let method = spec["method"]
+                    .as_str()
+                    .unwrap_or("GET")
+                    .to_ascii_uppercase();
+                if !matches!(method.as_str(), "GET" | "POST" | "PUT" | "DELETE" | "HEAD") {
+                    return Err("不支持的请求方法".into());
+                }
+                let headers = match &spec["headers"] {
+                    Value::Object(m) => m
+                        .iter()
+                        .map(|(k, v)| (k.clone(), crate::jsonpath::value_text(v)))
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                let body = match &spec["body"] {
+                    Value::Null => None,
+                    other => Some(bytes_arg(other)),
+                };
+                let response = self
+                    .net()
+                    .fetch(&Request {
+                        url,
+                        method,
+                        body,
+                        headers,
+                        inspect_error_status: true,
+                        max_body: Some(4 << 20),
+                        ..Default::default()
+                    })
+                    .map_err(|e| e.0)?;
+                let gzip = response.body.starts_with(&[0x1f, 0x8b]);
+                let headers: serde_json::Map<String, Value> = response
+                    .headers
+                    .iter()
+                    .map(|(k, v)| (k.to_ascii_lowercase(), Value::String(v.clone())))
+                    // 网络层已自动解压时去掉 Content-Encoding，脚本不会再解一次。
+                    .filter(|(k, v)| {
+                        k != "content-encoding"
+                            || gzip
+                            || !v.as_str().unwrap_or("").contains("gzip")
+                    })
+                    .collect();
+                json!({"code": response.status, "headers": headers, "body": bytes_value(&response.body)})
+            }
             "getString" | "getStringList" => {
                 let rule = s(args, 0);
                 let node = opt(args, 1)
@@ -1089,12 +1667,62 @@ impl<'js> Scope<'_, 'js> {
                     percent_encoding::percent_decode_str(&s(args, 0).replace('+', " ")).collect();
                 Value::String(charset_decode(&bytes, opt(args, 1).as_deref()))
             }
+            "javaCompat" => crate::java_compat::call(args)?,
+            "downloadFile" => {
+                crate::control::current().check()?;
+                let limit = self.inner.files.borrow().capacity()?;
+                let url = arg(args, 0).as_str().ok_or("下载网址须为字符串")?;
+                let mut spec = self.analyze_url(url).map_err(|_| "临时文件下载规则无效")?;
+                let parsed =
+                    reqwest::Url::parse(&spec.request.url).map_err(|_| "临时文件网址无效")?;
+                if !matches!(parsed.scheme(), "http" | "https") || spec.web_view {
+                    return Err("临时文件仅支持 HTTP/HTTPS 下载".into());
+                }
+                spec.request.max_body = Some(limit);
+                let response = self.net().fetch(&spec.request).map_err(|_| {
+                    crate::control::current()
+                        .check()
+                        .err()
+                        .unwrap_or_else(|| "临时文件下载失败".into())
+                })?;
+                if !(200..300).contains(&response.status) {
+                    return Err("临时文件下载状态异常".into());
+                }
+                json!(self.inner.files.borrow_mut().put(&response.body)?)
+            }
+            "readTxtFile" => json!(self.inner.files.borrow_mut().read(
+                arg(args, 0).as_str().ok_or("临时文件标识须为字符串")?,
+                arg(args, 1).as_str().unwrap_or("UTF-8")
+            )?),
+            "fontData" => crate::font_compat::query(&crate::font_compat::decode(arg(args, 0))?)?,
+            "fontUrl" => {
+                let url = s(args, 0);
+                let parsed = reqwest::Url::parse(&url).map_err(|_| "字体网址无效")?;
+                if !matches!(parsed.scheme(), "http" | "https") {
+                    return Err("字体仅支持 HTTP/HTTPS".into());
+                }
+                let mut spec = self.analyze_url(&url).map_err(|_| "字体请求规则无效")?;
+                if spec.web_view {
+                    return Err("字体请求不支持 WebView".into());
+                }
+                spec.request.max_body = Some(crate::font_compat::MAX_FONT);
+                let response = self
+                    .net()
+                    .fetch(&spec.request)
+                    .map_err(|_| "字体请求失败")?;
+                if !(200..300).contains(&response.status) {
+                    return Err("字体请求状态异常".into());
+                }
+                crate::font_compat::query(&response.body)?
+            }
             "base64Encode" => Value::String(crypto::b64(&bytes_arg(arg(args, 0)))),
             "base64Decode" => {
-                let bytes = crypto::unb64(&s(args, 0)).unwrap_or_default();
+                let bytes = crypto::unb64(&s(args, 0)).ok_or("Base64 数据无效")?;
                 Value::String(charset_decode(&bytes, opt(args, 1).as_deref()))
             }
-            "base64DecodeBytes" => bytes_value(&crypto::unb64(&s(args, 0)).unwrap_or_default()),
+            "base64DecodeBytes" => {
+                bytes_value(&crypto::unb64(&s(args, 0)).ok_or("Base64 数据无效")?)
+            }
             "hexDecode" => {
                 let bytes = hex::decode(s(args, 0).trim()).map_err(|_| "不是十六进制")?;
                 if s(args, 1) == "bytes" {
@@ -1176,6 +1804,56 @@ impl<'js> Scope<'_, 'js> {
             "htmlFormat" => Value::String(text::html_to_text(&s(args, 0))),
             "uuid" => Value::String(uuid()),
             "userAgent" => Value::String(net::DEFAULT_UA.into()),
+            "deviceID" => Value::String(self.inner.rt.services.device_id()?),
+            "sleep" => {
+                let ms = arg(args, 0)
+                    .as_u64()
+                    .filter(|n| *n <= 30_000)
+                    .ok_or("sleep 只支持 0 到 30000 的整数毫秒")?;
+                crate::control::current().wait(Duration::from_millis(ms))?;
+                Value::Null
+            }
+            "strResponse" => {
+                if s(args, 0).trim().is_empty() {
+                    return Err("getStrResponse 需要网址参数".into());
+                }
+                let mut spec = self.analyze_url(&s(args, 0))?;
+                if spec.web_view {
+                    return Err("getStrResponse 暂不支持 WebView 响应".into());
+                }
+                spec.request.inspect_error_status = true;
+                response_json(&self.net().fetch(&spec.request).map_err(|e| e.0)?)
+            }
+            "cookieClear" => {
+                let target = opt(args, 0).unwrap_or_else(|| self.source().base_url().to_owned());
+                let url = reqwest::Url::parse(&self.absolute(&target)).map_err(|_| "网址无效")?;
+                if !matches!(url.scheme(), "http" | "https") {
+                    return Err("只支持 HTTP/HTTPS".into());
+                }
+                self.net().remove_cookies(url.as_str());
+                Value::Null
+            }
+            "loginUpdate" => {
+                let value = if arg(args, 0).is_null() {
+                    self.inner.rt.services.request("login_data", json!({}))?
+                } else {
+                    arg(args, 0).clone()
+                };
+                let value = if let Value::String(text) = value {
+                    serde_json::from_str(&text).map_err(|_| "登录数据必须为 JSON 对象")?
+                } else {
+                    value
+                };
+                if !value.is_object() || value.to_string().len() > 65536 {
+                    return Err("登录数据必须为不超过 64KiB 的对象".into());
+                }
+                self.inner.rt.set_login_info(value.to_string())?;
+                Value::Null
+            }
+            "loginRefresh" => {
+                self.inner.rt.services.request("login_refresh", json!({}))?;
+                Value::Null
+            }
             "cookieGet" => {
                 let url =
                     reqwest::Url::parse(&self.absolute(&s(args, 0))).map_err(|_| "网址无效")?;
@@ -1199,6 +1877,16 @@ impl<'js> Scope<'_, 'js> {
             "cookieSet" => {
                 self.net()
                     .set_cookie(&self.absolute(&s(args, 0)), &s(args, 1));
+                Value::Null
+            }
+            "cookieSetResponse" => {
+                let url =
+                    reqwest::Url::parse(&self.absolute(&s(args, 0))).map_err(|_| "网址无效")?;
+                if !matches!(url.scheme(), "http" | "https") {
+                    return Err("Cookie 仅支持 HTTP / HTTPS 网址".into());
+                }
+                // Android setCookie 接收一条 Set-Cookie，属性不是其他 Cookie 名值对。
+                let _ = self.net().cookies.lock().unwrap().parse(&s(args, 1), &url);
                 Value::Null
             }
             "cookieRemove" => {
@@ -1233,6 +1921,12 @@ impl<'js> Scope<'_, 'js> {
             "browser" => {
                 // java.startBrowser / startBrowserAwait：显示网页让用户操作，关窗口后返回当前页面。
                 let url = self.absolute(&s(args, 0));
+                if !crate::webview::web_url(&url) {
+                    return Err(crate::webview::NOT_WEB.into());
+                }
+                if !crate::control::current().interactive {
+                    return Err("当前任务不允许打开网页窗口".into());
+                }
                 let title = opt(args, 1).unwrap_or_else(|| "请在网页中完成操作".into());
                 let out = crate::webview::execute_with(
                     self,
@@ -1246,7 +1940,46 @@ impl<'js> Scope<'_, 'js> {
                 json!({ "body": out.text, "code": 200, "url": out.url, "headers": {} })
             }
             "verificationCode" => {
-                // java.getVerificationCode(图片网址)：显示图片，用户输入后关闭窗口。
+                if self.inner.rt.services.connected() {
+                    let url = reqwest::Url::parse(&self.absolute(&s(args, 0)))
+                        .map_err(|_| "验证码网址无效")?;
+                    if !matches!(url.scheme(), "http" | "https") {
+                        return Err("验证码只支持 HTTP/HTTPS 图片".into());
+                    }
+                    let image = self
+                        .net()
+                        .fetch(&Request {
+                            url: url.to_string(),
+                            method: "GET".into(),
+                            headers: self.source_headers(),
+                            max_body: Some(1024 * 1024),
+                            ..Default::default()
+                        })
+                        .map_err(|e| e.0)?;
+                    let mime = image
+                        .header("content-type")
+                        .unwrap_or("")
+                        .split(';')
+                        .next()
+                        .unwrap_or("")
+                        .trim();
+                    if !matches!(
+                        mime,
+                        "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+                    ) {
+                        return Err("验证码响应不是支持的图片".into());
+                    }
+                    let answer = self.inner.rt.services.request(
+                        "verification",
+                        json!({"mime":mime,"image_base64":crypto::b64(&image.body)}),
+                    )?;
+                    let text = answer
+                        .as_str()
+                        .filter(|s| !s.trim().is_empty() && s.len() <= 1024)
+                        .ok_or("验证码输入无效")?;
+                    return Ok(Value::String(text.trim().to_owned()));
+                }
+                // 未协商事件交互的旧界面继续使用已有 WebView。
                 let url = self.absolute(&s(args, 0));
                 let html = format!(
                     "<meta charset=utf-8><body style='font:16px sans-serif;padding:24px'><p>请输入图片里的验证码，然后关闭窗口：</p><img src=\"{}\" style='max-width:90%'><p><input id=c autofocus style='font-size:20px'></p></body>",
@@ -1263,6 +1996,13 @@ impl<'js> Scope<'_, 'js> {
                 )?;
                 Value::String(out.text.trim().to_owned())
             }
+            "webViewGetSource" => Value::String(crate::webview::run_source(
+                self,
+                opt(args, 0),
+                opt(args, 1),
+                opt(args, 2),
+                s(args, 3),
+            )?),
             "webView" => Value::String(crate::webview::run(
                 self,
                 opt(args, 0),

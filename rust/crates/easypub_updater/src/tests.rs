@@ -14,6 +14,48 @@ fn temp(name: &str) -> PathBuf {
     fs::create_dir_all(&dir).unwrap();
     dir
 }
+#[test]
+fn process_exit_between_journal_and_move_recovers() {
+    const ENV: &str = "EASYPUB_UPDATER_CRASH_TEST";
+    if let Some(root) = std::env::var_os(ENV) {
+        let app = PathBuf::from(root).join("app");
+        swap_with(
+            &app,
+            &app.join(".update/staging"),
+            &app.join(".update/backup-new"),
+            &app.join(".update/journal.json"),
+            |step| {
+                if step == 2 {
+                    std::process::exit(73);
+                }
+                Ok(())
+            },
+        )
+        .unwrap();
+        panic!("没有命中中断点");
+    }
+    let root = temp("process-exit");
+    let app = root.join("app");
+    old_app(&app);
+    new_package(&app.join(".update/staging"));
+    let before = listing(&app);
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "tests::process_exit_between_journal_and_move_recovers",
+        ])
+        .env(ENV, &root)
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(73));
+    let journal = app.join(".update/journal.json");
+    assert!(recover(&journal));
+    assert_eq!(listing(&app), before);
+    fs::write(&journal, b"{incomplete").unwrap();
+    assert!(!recover(&journal));
+    assert_eq!(fs::read(&journal).unwrap(), b"{incomplete");
+    fs::remove_dir_all(root).unwrap();
+}
 
 fn manifest() -> Manifest {
     Manifest {
@@ -269,6 +311,35 @@ fn interrupted_replacement_is_undone_from_the_journal() {
     assert!(recover(&journal));
     assert_eq!(listing(&app), before);
     assert!(!recover(&journal), "日志已清除");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn recovery_can_resume_after_a_destination_conflict() {
+    let root = temp("recover-retry");
+    let (app, staging) = (root.join("app"), root.join("app/.update/staging"));
+    old_app(&app);
+    new_package(&staging);
+    let before = listing(&app);
+    let backup = app.join(".update/backup-new");
+    fs::create_dir_all(&backup).unwrap();
+    let moves = vec![
+        (app.join("a.dll"), backup.join("a.dll")),
+        (app.join(APP_EXE), backup.join(APP_EXE)),
+        (staging.join(APP_EXE), app.join(APP_EXE)),
+    ];
+    for (from, to) in &moves {
+        fs::rename(from, to).unwrap();
+    }
+    let journal = app.join(".update/journal.json");
+    save_journal(&Journal { moves }, &journal).unwrap();
+    // 已撤回两步后，第三步发现用户新文件；保留它和剩余日志。
+    fs::write(app.join("a.dll"), "external").unwrap();
+    assert!(!recover(&journal));
+    assert_eq!(fs::read_to_string(app.join("a.dll")).unwrap(), "external");
+    fs::remove_file(app.join("a.dll")).unwrap();
+    assert!(recover(&journal));
+    assert_eq!(listing(&app), before);
     fs::remove_dir_all(root).unwrap();
 }
 

@@ -19,7 +19,9 @@ class LegacyChapterRulesSession implements ChapterRulesSession {
     } on api.ApiError catch (error) {
       final detail =
           jsonDecode(await api.describeApiError(error: error)) as Map;
-      throw FormatException(detail['next_action'] ?? '规则操作未完成，请检查表达式。');
+      throw FormatException(
+        '${detail['next_action'] ?? '规则操作未完成'}。请检查规则表达式，重新读取本书后预览。',
+      );
     }
   }
 
@@ -38,7 +40,9 @@ class LegacyChapterRulesSession implements ChapterRulesSession {
     final defaults =
         backend.globalConfiguration['recognition_defaults'] as Map? ??
         await builtin();
-    final tree = hasBook ? await backend.manuscript.effectiveTree(bookId!, 0) : null;
+    final tree = hasBook
+        ? await backend.manuscript.effectiveTree(bookId!, 0)
+        : null;
     final activeRules =
         tree?['recognition_rules'] ??
         (hasBook ? {...await builtin(), 'origin': 'legacy'} : defaults);
@@ -70,9 +74,7 @@ class LegacyChapterRulesSession implements ChapterRulesSession {
     required bool preserveDecisions,
   }) async {
     final id = bookId!;
-    final book = backend.shelf.books.firstWhere(
-      (b) => b.id == id && !b.isDemo,
-    );
+    final book = backend.shelf.books.firstWhere((b) => b.id == id && !b.isDemo);
     final guard = backend.publicationContext(id);
     final result = await request({
       'op': 'preview',
@@ -115,7 +117,7 @@ class LegacyChapterRulesSession implements ChapterRulesSession {
     if (!await backend.saveGlobalConfigurationPatch({
       'recognition_defaults': rules,
     })) {
-      throw const FormatException('导入默认保存失败，请重试。');
+      throw const FormatException('导入默认规则未能保存，请检查设置目录权限、磁盘空间及文件占用后重试。');
     }
   }
 
@@ -124,7 +126,7 @@ class LegacyChapterRulesSession implements ChapterRulesSession {
     if (!await backend.saveGlobalConfigurationPatch({
       'recognition_presets': presets,
     })) {
-      throw const FormatException('规则预设保存失败。');
+      throw const FormatException('规则预设未能保存，请检查设置目录权限、磁盘空间及文件占用后重试。');
     }
     backend.change(() => backend.manuscript.recognitionPresets = presets);
   }

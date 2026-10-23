@@ -131,14 +131,19 @@ extension _BookSourceShelf on _BookSourcePageState {
 
   Widget _shelfTab(BuildContext context) {
     final d = context.desk;
+    // 同一本书（书名 + 作者）的多条下载记录合成一组。
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final r in shelf) {
+      final book = r['book'] as Map;
+      (groups['${book['name']}\n${book['author'] ?? ''}'] ??= []).add(r);
+    }
+    final updates = shelf.where(_hasShelfUpdate).length;
     return Padding(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Wrap(
-            spacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          Row(
             children: [
               DeskButton(
                 '检查更新',
@@ -147,24 +152,23 @@ extension _BookSourceShelf on _BookSourcePageState {
                 busy: shelfBusy,
                 onPressed: shelfBusy || shelf.isEmpty ? null : _checkShelf,
               ),
+              const SizedBox(width: 8),
               DeskButton(
-                '全部追更',
+                updates == 0 ? '全部追更' : '全部追更（$updates）',
                 key: const ValueKey('booksource-shelf-update-all'),
-                quiet: true,
-                onPressed: shelfBusy || !shelf.any(_hasShelfUpdate)
-                    ? null
-                    : _updateAll,
+                primary: updates > 0,
+                quiet: updates == 0,
+                onPressed: shelfBusy || updates == 0 ? null : _updateAll,
               ),
-              DeskText(
-                '更新时复用未变章节，只补新增或修改；失败时保留原 TXT。',
-                size: 12,
-                color: d.ink2,
-              ),
-              DeskText(
-                key: const ValueKey('booksource-shelf-auto'),
-                _autoCheckLabel(),
-                size: 12,
-                color: d.ink2,
+              const Spacer(),
+              Tooltip(
+                message: '更新时复用未变章节，只补新增或修改；失败时保留原 TXT。',
+                child: DeskText(
+                  key: const ValueKey('booksource-shelf-auto'),
+                  _autoCheckLabel(),
+                  size: 12,
+                  color: d.ink2,
+                ),
               ),
             ],
           ),
@@ -173,92 +177,195 @@ extension _BookSourceShelf on _BookSourcePageState {
             DeskNote(shelfMessage!),
           ],
           const SizedBox(height: 8),
-          if (shelf.isEmpty) const DeskNote('还没有下载过的书。'),
           Expanded(
-            child: ListView(
-              children: [
-                for (final r in shelf)
-                  ListTile(
-                    key: ValueKey('booksource-shelf-${r['key']}'),
-                    dense: true,
-                    title: Row(
-                      children: [
-                        Flexible(
-                          child: DeskText(
-                            '${(r['book'] as Map)['name']}',
-                            bold: true,
-                            lines: 1,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        if (_hasShelfUpdate(r))
-                          DeskTag(_catalogSummary(r), Tone.accent),
-                      ],
-                    ),
-                    subtitle: DeskText(
-                      [
-                        '${(r['book'] as Map)['author'] ?? ''}',
-                        '${r['sourceName']}',
-                        '${r['chapters']} 章',
-                        if ('${r['latestOnline'] ?? r['latest'] ?? ''}'
-                            .isNotEmpty)
-                          '最新：${r['latestOnline'] ?? r['latest']}',
-                        if (r['checkError'] != null) '检查失败：${r['checkError']}',
-                      ].where((x) => x.isNotEmpty).join(' · '),
-                      size: 12,
+            child: shelf.isEmpty
+                ? Center(
+                    child: DeskText(
+                      '还没有下载过的书。在“搜索”里找书并下载后会出现在这里。',
                       color: d.ink2,
-                      lines: 2,
                     ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        DeskButton(
-                          '章节来源',
-                          quiet: true,
-                          onPressed: () => _provenance(r),
-                        ),
-                        DeskButton(
-                          '重新整理',
-                          key: ValueKey('booksource-rebuild-${r['key']}'),
-                          quiet: true,
-                          onPressed: shelfBusy
-                              ? null
-                              : () => _rebuild('${r['key']}'),
-                        ),
-                        DeskButton(
-                          _hasShelfUpdate(r) ? '更新' : '重新下载',
-                          key: ValueKey('booksource-shelf-update-${r['key']}'),
-                          quiet: true,
-                          onPressed: () => _updateBook(r),
-                        ),
-                        if (widget.openFolder != null)
-                          IconButton(
-                            tooltip: '打开文件夹',
-                            icon: const Icon(
-                              Icons.folder_open_outlined,
-                              size: 18,
-                            ),
-                            onPressed: () => widget.openFolder!('${r['path']}'),
-                          ),
-                        IconButton(
-                          tooltip: '删除记录与缓存（TXT 保留）',
-                          icon: const Icon(Icons.delete_outline, size: 18),
-                          onPressed: () async {
-                            await api!.call('library.remove', {
-                              'key': r['key'],
-                              'deleteCache': true,
-                            });
-                            await _loadShelf();
-                          },
-                        ),
-                      ],
-                    ),
+                  )
+                : ListView(
+                    children: [
+                      for (final g in groups.entries)
+                        _shelfGroup(g.key, g.value),
+                    ],
                   ),
-              ],
-            ),
           ),
         ],
       ),
     );
   }
+
+  Widget _shelfGroup(String key, List<Map<String, dynamic>> records) {
+    final d = context.desk;
+    final book = records.first['book'] as Map;
+    final name = '${book['name']}';
+    final added = records
+        .map((r) => (r['newChapters'] as num? ?? 0).toInt())
+        .fold(0, (a, b) => a > b ? a : b);
+    final changed = records.any(_hasShelfUpdate);
+    final single = records.length == 1;
+    final expanded = single || shelfExpanded.contains(key);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Material(
+        color: d.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: d.line),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: single
+                  ? null
+                  : () => update(() {
+                      if (!shelfExpanded.remove(key)) shelfExpanded.add(key);
+                    }),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 48,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: d.sunken,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: d.line),
+                      ),
+                      child: DeskText(
+                        name.isEmpty ? '?' : name.characters.first,
+                        size: 16,
+                        color: d.ink2,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: DeskText(name, bold: true, lines: 1),
+                              ),
+                              if (changed) ...[
+                                const SizedBox(width: 8),
+                                DeskTag(
+                                  added > 0 ? '+$added 新章' : '目录有变化',
+                                  Tone.ok,
+                                ),
+                              ],
+                            ],
+                          ),
+                          DeskText(
+                            [
+                              if ('${book['author'] ?? ''}'.isNotEmpty)
+                                '${book['author']}',
+                              '${records.first['chapters']} 章',
+                              if (!single)
+                                '${records.length} 个下载记录（${records.map((r) => r['sourceName']).join('、')}）',
+                            ].join(' · '),
+                            size: 12,
+                            color: d.ink2,
+                            lines: 1,
+                          ),
+                          if (single) _shelfRecordLine(records.first),
+                        ],
+                      ),
+                    ),
+                    if (single)
+                      ..._shelfActions(records.first)
+                    else
+                      Icon(
+                        expanded ? Icons.expand_less : Icons.expand_more,
+                        color: d.ink2,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            if (!single && expanded)
+              for (final r in records)
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: d.line)),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(60, 6, 8, 6),
+                  child: Row(
+                    children: [
+                      Expanded(child: _shelfRecordLine(r)),
+                      ..._shelfActions(r),
+                    ],
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 单条下载记录的说明：书源、最新章节、变化摘要、检查错误。
+  Widget _shelfRecordLine(Map r) {
+    final d = context.desk;
+    return DeskText(
+      [
+        '${r['sourceName']}',
+        if ('${r['latestOnline'] ?? r['latest'] ?? ''}'.isNotEmpty)
+          '最新：${r['latestOnline'] ?? r['latest']}',
+        if (_hasShelfUpdate(r)) _catalogSummary(r),
+        if (r['checkError'] != null) '检查失败：${r['checkError']}',
+      ].where((x) => x.isNotEmpty).join(' · '),
+      size: 12,
+      color: r['checkError'] != null ? d.pen : d.ink2,
+      lines: 2,
+    );
+  }
+
+  /// 主按钮“追更 / 重新下载”，文件夹，其余收进“⋯”。
+  List<Widget> _shelfActions(Map<String, dynamic> r) => [
+    DeskButton(
+      _hasShelfUpdate(r) ? '追更' : '重新下载',
+      key: ValueKey('booksource-shelf-update-${r['key']}'),
+      primary: _hasShelfUpdate(r),
+      quiet: !_hasShelfUpdate(r),
+      onPressed: () => _updateBook(r),
+    ),
+    if (widget.openFolder != null)
+      IconButton(
+        tooltip: '打开文件夹',
+        icon: const Icon(Icons.folder_open_outlined, size: 18),
+        onPressed: () => widget.openFolder!('${r['path']}'),
+      ),
+    DeskMenuButton<VoidCallback>(
+      key: ValueKey('booksource-shelf-menu-${r['key']}'),
+      tooltip: '更多操作',
+      icon: const Icon(Icons.more_horiz, size: 20),
+      onSelected: (f) => f(),
+      itemBuilder: (_) => [
+        PopupMenuItem(value: () => _provenance(r), child: const Text('章节来源')),
+        PopupMenuItem(
+          key: ValueKey('booksource-rebuild-${r['key']}'),
+          enabled: !shelfBusy,
+          value: () => _rebuild('${r['key']}'),
+          child: const Text('不联网重新整理'),
+        ),
+        PopupMenuItem(
+          value: () async {
+            await api!.call('library.remove', {
+              'key': r['key'],
+              'deleteCache': true,
+            });
+            await _loadShelf();
+          },
+          child: const Text('删除记录与缓存（TXT 保留）'),
+        ),
+      ],
+    ),
+  ];
 }

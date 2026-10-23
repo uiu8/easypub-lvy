@@ -35,6 +35,53 @@ fn install(input: &mut Value, result: &Value) {
     };
 }
 #[test]
+fn restore_keeps_undone_edits_but_rejects_applied_edits() {
+    let (service, mut input) = fixture();
+    input["changes"] = json!([{"id":"layout.scene.u002a","enabled":false}]);
+    let preview = call(&service, &input, "preview_toggles").unwrap();
+    input["plan_id"] = preview["plan_id"].clone();
+    let applied = call(&service, &input, "apply_toggles").unwrap();
+    install(&mut input, &applied);
+    let source_id = input["publication"]["source_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let raw = service
+        .effective_structure_text(source_id.clone(), 1, String::new(), String::new(), 0)
+        .unwrap();
+    let tree: Value = serde_json::from_str(&raw).unwrap();
+    let edit = |history: String, command: Value| -> Value {
+        serde_json::from_str(
+            &crate::effective_draft::edit(
+                &service,
+                source_id.clone(),
+                1,
+                input["base"].to_string(),
+                history,
+                command.to_string(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    let renamed = edit(
+        String::new(),
+        json!({"op":"append","action":{"kind":"rename","entry_id":tree["nodes"][0]["entry_id"],"title":"第一章 已编辑"}}),
+    );
+    let undone = edit(renamed["history"].to_string(), json!({"op":"undo"}));
+    input["effective_history"] = renamed["history"].clone();
+    input["undo"] = json!(true);
+    assert!(call(&service, &input, "restore_toggles").is_err());
+    input["effective_history"] = undone["history"].clone();
+    let rollback = call(&service, &input, "restore_toggles").unwrap();
+    install(&mut input, &rollback);
+    assert!(input["effective_history"].is_null());
+    input["undo"] = json!(false);
+    let redo = call(&service, &input, "restore_toggles").unwrap();
+    install(&mut input, &redo);
+    assert_eq!(input["effective_history"], undone["history"]);
+}
+#[test]
 fn groups_preview_apply_undo_atomic_stale_and_global() {
     let (service, mut input) = fixture();
     let original = input.clone();

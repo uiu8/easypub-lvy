@@ -39,6 +39,8 @@ pub struct ChapterTask {
     pub chars: usize,
     pub stub: bool,
     pub timing: Timing,
+    /// 本轮调度所有尝试累计的请求成本；批量请求按共享章节数分摊。
+    pub http_requests: f64,
 }
 #[derive(Clone)]
 struct Job {
@@ -642,6 +644,8 @@ pub fn run(
                                 .min(3);
                             let attempts = w.attempts[&(lane_index, job.i)];
                             let mut state = w.states[&job.i].clone();
+                            state.http_requests +=
+                                t.requests as f64 / if batched { jobs.len() as f64 } else { 1.0 };
                             state.timing = t.clone();
                             state.stub = stub;
                             match result {

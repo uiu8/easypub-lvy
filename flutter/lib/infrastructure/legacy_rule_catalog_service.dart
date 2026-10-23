@@ -177,16 +177,7 @@ class LegacyRuleCatalogService implements RuleCatalogService {
     if (index < 1 || index >= states.length) {
       throw const FormatException('没有可恢复的规则记录。');
     }
-    final entry = states[index] as Map;
-    final expected = entry[undo ? 'after' : 'before'] as Map;
-    final current = {
-      'settings': backend.production.settings(bookId),
-      'effective_history': backend.manuscript.effectiveHistories[bookId],
-      'production_history': backend.production.histories[bookId],
-    };
-    if (!const DeepCollectionEquality().equals(current, expected)) {
-      throw const FormatException('规则之后还有修改，请先撤销后续修改。');
-    }
+    // Rust 校验已应用历史；撤销后留下的重做分支不能误判为仍有修改。
     final result = await _call('restore_toggles', {
       ..._toggleInput('book'),
       'undo': undo,
@@ -201,8 +192,8 @@ class LegacyRuleCatalogService implements RuleCatalogService {
       next['settings'] as Map,
       draft.epubResources,
     );
-    history['cursor'] = (result['history'] as Map)['cursor'];
-    restored.ruleToggleHistory = history;
+    restored.ruleToggleHistory = (result['history'] as Map)
+        .cast<String, dynamic>();
     backend.change(() {
       backend.production.drafts[bookId] = restored;
       final effective = next['effective_history'] as Map?;

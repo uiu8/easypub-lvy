@@ -50,10 +50,14 @@ class DeskSegmented<T> extends StatelessWidget {
     required this.value,
     required this.options,
     this.onChanged,
+    this.badges = const {},
   });
   final T value;
   final Map<T, String> options;
   final ValueChanged<T>? onChanged;
+
+  /// 段名后的小字（R3-03，例如问题数）；“!”表示读取失败，用朱色。
+  final Map<T, String> badges;
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +108,24 @@ class DeskSegmented<T> extends StatelessWidget {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
                   ),
-                  child: Text(entry.value),
+                  child: badges[entry.key] == null
+                      ? Text(entry.value)
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(entry.value),
+                            const SizedBox(width: 4),
+                            Text(
+                              badges[entry.key]!,
+                              key: ValueKey('segment-badge-${entry.key}'),
+                              style: mono(
+                                11,
+                                w: 600,
+                                c: badges[entry.key] == '!' ? d.pen : d.warn,
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
               ),
           ],

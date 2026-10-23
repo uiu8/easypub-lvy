@@ -28,10 +28,17 @@ class ChangedField {
 }
 
 class ChangeDetail {
-  ChangeDetail(this.record, List<ChangedField> fields, this.guard)
-    : fields = List.unmodifiable(fields);
+  ChangeDetail(
+    this.record,
+    List<ChangedField> fields,
+    this.guard, {
+    List<ChangedField> technical = const [],
+  }) : fields = List.unmodifiable(fields),
+       technical = List.unmodifiable(technical);
   final ChangeRecord record;
-  final List<ChangedField> fields;
+
+  /// 给人看的修改前后；[technical] 是逐字段的原始差异，界面默认折叠（R4-01）。
+  final List<ChangedField> fields, technical;
   final String guard;
 }
 

@@ -3,6 +3,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'atomic_file.dart';
+
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as paths;
 
@@ -158,14 +160,14 @@ Future<CheckCacheCleanupResult> cleanCheckReports(
     }
   }
   try {
-    await File('${directory.path}/$_recordName').writeAsString(
+    await writeAtomicText(
+      File('${directory.path}/$_recordName'),
       jsonEncode({
         'at': DateTime.now().toIso8601String(),
         'deleted': deleted,
         'bytes': bytes,
         'skipped': skipped,
       }),
-      flush: true,
     );
   } catch (_) {
     // 清理记录写不进去不影响已删除的结果；结果仍会返回给页面。

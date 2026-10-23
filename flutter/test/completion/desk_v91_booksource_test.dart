@@ -117,6 +117,7 @@ void main() {
     // 导入结果写明位置与分组处理（此时偏好为：最前、覆盖分组）。
     await tester.tap(find.textContaining('书源 '));
     await v89.pump(tester);
+    await v88.menu(tester, 'booksource-menu-import');
     await tester.tap(find.byKey(const ValueKey('booksource-import-url')));
     await v89.pump(tester);
     await tester.enterText(

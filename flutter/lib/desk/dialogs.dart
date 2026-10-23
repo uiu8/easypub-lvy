@@ -2,6 +2,7 @@
 // 弹窗框架、带标签输入、影响说明、行号正文行、翻页条。
 // 忙碌时框架禁止返回键/遮罩关闭，关闭按钮置灰；尺寸随窗口收缩，内容区可滚动。
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'tokens.dart';
 
@@ -19,6 +20,7 @@ class DeskDialog extends StatelessWidget {
     this.busy = false,
     this.onClose,
     this.scrollBody = true,
+    this.escapeCloses = false,
   });
   final String title, closeTooltip;
   final String? subtitle;
@@ -34,6 +36,10 @@ class DeskDialog extends StatelessWidget {
   /// 默认关闭当前路由；忙碌时不可用。
   final VoidCallback? onClose;
 
+  /// 以 `barrierDismissible: false` 打开时 Flutter 不让 Esc 关闭；为 true 时由弹窗自己处理
+  /// Esc（忙碌时除外），与关闭按钮相同（R5-03）。
+  final bool escapeCloses;
+
   @override
   Widget build(BuildContext context) {
     final d = context.desk;
@@ -44,7 +50,8 @@ class DeskDialog extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
       child: child,
     );
-    return PopScope(
+    final close = onClose ?? () => Navigator.pop(context);
+    final dialog = PopScope(
       canPop: !busy,
       child: Dialog(
         backgroundColor: Colors.transparent,
@@ -87,9 +94,7 @@ class DeskDialog extends StatelessWidget {
                       IconButton(
                         tooltip: closeTooltip,
                         visualDensity: VisualDensity.compact,
-                        onPressed: busy
-                            ? null
-                            : onClose ?? () => Navigator.pop(context),
+                        onPressed: busy ? null : close,
                         icon: const Icon(Icons.close_rounded, size: 18),
                       ),
                     ],
@@ -133,6 +138,15 @@ class DeskDialog extends StatelessWidget {
           ),
         ),
       ),
+    );
+    if (!escapeCloses) return dialog;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () {
+          if (!busy) close();
+        },
+      },
+      child: Focus(autofocus: true, child: dialog),
     );
   }
 }

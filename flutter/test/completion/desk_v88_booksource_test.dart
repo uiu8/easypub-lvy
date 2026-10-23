@@ -99,6 +99,14 @@ class V88Api extends v86.FakeApi {
   }
 }
 
+/// V93：书源页的批量、维护等操作收进菜单，先打开菜单再点菜单项。
+Future<void> menu(WidgetTester tester, String key) async {
+  await tester.ensureVisible(find.byKey(ValueKey(key)));
+  await tester.tap(find.byKey(ValueKey(key)));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
 Future<void> open(WidgetTester tester, V88Api api, Directory temp) async {
   tester.view.physicalSize = const Size(1500, 1050);
   tester.view.devicePixelRatio = 1;
@@ -211,6 +219,7 @@ void main() {
       api.requests.lastWhere((r) => r.$1 == 'sources.setEnabledMany').$2['ids'],
       hasLength(2),
     );
+    await menu(tester, 'booksource-menu-check');
     await tester.tap(find.byKey(const ValueKey('booksource-ping')));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('可连接 900ms'), findsOneWidget);
@@ -270,6 +279,7 @@ void main() {
     await open(tester, api, temp);
     await tester.tap(find.text('书架'));
     await tester.pump(const Duration(milliseconds: 300));
+    await menu(tester, 'booksource-shelf-menu-k1');
     await tester.tap(find.byKey(const ValueKey('booksource-rebuild-k1')));
     await tester.pump(const Duration(milliseconds: 300));
     expect(

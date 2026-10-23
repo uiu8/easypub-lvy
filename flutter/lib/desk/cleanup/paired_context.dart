@@ -33,6 +33,9 @@ class _CleanupPairedContextState extends State<CleanupPairedContext> {
   String error = '';
   bool busy = false;
   int generation = 0;
+
+  /// R4-02：所选那一处（第一条 selected 范围）；读完一段后滚到它，不停在上文开头。
+  final selectedRow = GlobalKey();
   @override
   void initState() {
     super.initState();
@@ -51,7 +54,15 @@ class _CleanupPairedContextState extends State<CleanupPairedContext> {
         widget.change,
         offset: offset,
       );
-      if (mounted && generation == ticket) setState(() => page = next);
+      if (mounted && generation == ticket) {
+        setState(() => page = next);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final target = selectedRow.currentContext;
+          if (mounted && target != null) {
+            Scrollable.ensureVisible(target, alignment: .2);
+          }
+        });
+      }
     } catch (e) {
       if (mounted && generation == ticket) {
         setState(() => error = deskErrorText(e, '无法读取清理对照，请重新预览。'));
@@ -155,69 +166,24 @@ class _CleanupPairedContextState extends State<CleanupPairedContext> {
                 border: Border.all(color: d.line),
               ),
               clipBehavior: Clip.antiAlias,
-              child: ListView.builder(
+              // 一段最多 30 个范围，整段建出来（ListView 只建视口附近的行），才能滚到所选那一处。
+              child: SingleChildScrollView(
                 key: ValueKey('cleanup-context-${page?['offset'] ?? 0}'),
-                itemCount: (page?['rows'] as List?)?.length ?? 0,
-                itemBuilder: (_, i) {
-                  final row = (page!['rows'] as List)[i] as Map;
-                  final merged =
-                      row['source_end_line'] != row['source_line'] &&
-                      row['output_line'] == row['output_end_line'] &&
-                      row['after'] != null;
-                  return Container(
-                    decoration: BoxDecoration(
-                      border: Border(bottom: BorderSide(color: d.line)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (row['truncated'] == true)
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: DeskButton(
-                              '查看完整范围',
-                              quiet: true,
-                              onPressed: busy
-                                  ? null
-                                  : () => showDialog<void>(
-                                      context: context,
-                                      builder: (_) => CleanupRegionDialog(
-                                        session: widget.session,
-                                        preview: widget.preview,
-                                        change: widget.change,
-                                        regionLine: row['source_line'] as int,
-                                        showWhitespace: widget.showWhitespace,
-                                      ),
-                                    ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final (i, row)
+                        in ((page?['rows'] as List?) ?? const []).indexed)
+                      contextRow(
+                        i,
+                        row as Map,
+                        i ==
+                            (page!['rows'] as List).indexWhere(
+                              (r) => (r as Map)['selected'] == true,
                             ),
-                          ),
-                        IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              cell(
-                                '原稿 ${row['source_line']}—${row['source_end_line']} 行',
-                                row['before'] as String,
-                                row['selected'] == true,
-                                false,
-                                other: row['after'] as String? ?? '',
-                              ),
-                              cell(
-                                row['after'] == null
-                                    ? '清理后 · 删除'
-                                    : '清理后 ${row['output_line']}—${row['output_end_line']} 行${merged ? ' · 合并' : ''}',
-                                row['after'] as String?,
-                                row['selected'] == true,
-                                true,
-                                other: row['before'] as String,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -251,6 +217,68 @@ class _CleanupPairedContextState extends State<CleanupPairedContext> {
             ],
           ),
       ],
+    );
+  }
+
+  Widget contextRow(int i, Map row, bool first) {
+    final d = context.desk;
+    final merged =
+        row['source_end_line'] != row['source_line'] &&
+        row['output_line'] == row['output_end_line'] &&
+        row['after'] != null;
+    return Container(
+      key: first ? selectedRow : null,
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: d.line)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (row['truncated'] == true)
+            Align(
+              alignment: Alignment.centerRight,
+              child: DeskButton(
+                '查看完整范围',
+                quiet: true,
+                onPressed: busy
+                    ? null
+                    : () => showDialog<void>(
+                        context: context,
+                        builder: (_) => CleanupRegionDialog(
+                          session: widget.session,
+                          preview: widget.preview,
+                          change: widget.change,
+                          regionLine: row['source_line'] as int,
+                          showWhitespace: widget.showWhitespace,
+                        ),
+                      ),
+              ),
+            ),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                cell(
+                  '原稿 ${row['source_line']}—${row['source_end_line']} 行',
+                  row['before'] as String,
+                  row['selected'] == true,
+                  false,
+                  other: row['after'] as String? ?? '',
+                ),
+                cell(
+                  row['after'] == null
+                      ? '清理后 · 删除'
+                      : '清理后 ${row['output_line']}—${row['output_end_line']} 行${merged ? ' · 合并' : ''}',
+                  row['after'] as String?,
+                  row['selected'] == true,
+                  true,
+                  other: row['before'] as String,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

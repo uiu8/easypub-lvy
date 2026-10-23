@@ -2,7 +2,9 @@
 #define RUNNER_FLUTTER_WINDOW_H_
 
 #include <flutter/dart_project.h>
+#include <flutter/encodable_value.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
 
 #include <memory>
 
@@ -28,6 +30,15 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // Window background (user report: edges flashed black when maximizing).
+  // Areas exposed while the window grows are filled with it until Flutter
+  // presents a frame at the new size. Starts as the paper canvas colour; the
+  // UI updates it per theme through the easypub/window channel.
+  HBRUSH background_ = nullptr;
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      window_channel_;
+  void SetBackground(COLORREF color);
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

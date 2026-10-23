@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeSet,
     fs,
+    io::Write,
     path::{Path, PathBuf},
     thread,
     time::Duration,
@@ -219,6 +220,21 @@ struct Journal {
     moves: Vec<(PathBuf, PathBuf)>,
 }
 
+fn save_journal(log: &Journal, journal: &Path) -> Result<(), UpdateError> {
+    let temporary = journal.with_extension("json.tmp");
+    let result = (|| {
+        let mut file = fs::File::create(&temporary)?;
+        file.write_all(&serde_json::to_vec(log).expect("journal"))?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temporary, journal)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result.map_err(|_| UpdateError("update_journal_failed"))
+}
+
 /// 用 [source] 里的内容替换 [app_dir] 的程序文件，旧文件移到 [backup]（不能已存在）。
 /// 每一步先写日志；中途失败时按日志倒序撤回，程序目录恢复原样。
 pub fn swap(
@@ -244,35 +260,42 @@ pub fn swap_with(
     }
     fs::create_dir_all(backup).map_err(|_| UpdateError("update_backup_failed"))?;
     let mut log = Journal::default();
-    let save = |log: &Journal| {
-        fs::write(journal, serde_json::to_vec(log).expect("journal"))
-            .map_err(|_| UpdateError("update_journal_failed"))
-    };
     let mut steps = outgoing
         .iter()
         .map(|n| (app_dir.join(n), backup.join(n)))
         .chain(incoming.iter().map(|n| (source.join(n), app_dir.join(n))))
         .enumerate();
     let result = steps.try_for_each(|(i, (from, to))| {
+        log.moves.push((from.clone(), to.clone()));
+        save_journal(&log, journal)?;
         fail(i).map_err(|_| UpdateError("update_replace_failed"))?;
         rename(&from, &to).map_err(|_| UpdateError("update_replace_failed"))?;
-        log.moves.push((from, to));
-        save(&log)
+        Ok(())
     });
     if let Err(e) = result {
-        undo(&log);
-        let _ = fs::remove_file(journal);
-        let _ = fs::remove_dir(backup);
+        if undo(&mut log, journal) {
+            let _ = fs::remove_file(journal);
+            let _ = fs::remove_dir(backup);
+        }
         return Err(e);
     }
     let _ = fs::remove_file(journal);
     Ok(())
 }
 
-fn undo(log: &Journal) {
-    for (from, to) in log.moves.iter().rev() {
-        let _ = rename(to, from);
+fn undo(log: &mut Journal, journal: &Path) -> bool {
+    while let Some((from, to)) = log.moves.last() {
+        // 未执行的预写记录，或回滚移动后尚未来得及更新日志。
+        if (to.exists() || !from.exists()) && (from.exists() || rename(to, from).is_err()) {
+            return false;
+        }
+        log.moves.pop();
+        // 每撤回一步都持久化进度，避免重试时把已恢复的旧文件当成新版。
+        if save_journal(log, journal).is_err() {
+            return false;
+        }
     }
+    true
 }
 
 /// 更新程序上次中途退出（例如断电）留下的日志：倒序撤回，恢复旧版本。
@@ -280,8 +303,11 @@ pub fn recover(journal: &Path) -> bool {
     let Ok(bytes) = fs::read(journal) else {
         return false;
     };
-    if let Ok(log) = serde_json::from_slice::<Journal>(&bytes) {
-        undo(&log);
+    let Ok(mut log) = serde_json::from_slice::<Journal>(&bytes) else {
+        return false;
+    };
+    if !undo(&mut log, journal) {
+        return false;
     }
     let _ = fs::remove_file(journal);
     true

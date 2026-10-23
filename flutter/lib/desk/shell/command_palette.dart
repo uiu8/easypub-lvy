@@ -60,16 +60,19 @@ class DeskCommand {
 }
 
 /// [recent] 为最近执行命令的 [DeskCommand.key]（最近的在前）；[onRun] 在执行前调用，用于记录。
+/// [more] 是打开后才读取的命令（R1：当前书的章节），读到后并入，不耽误面板打开。
 Future<void> showDeskCommandPalette(
   BuildContext context,
   List<DeskCommand> commands, {
   List<String> recent = const [],
   void Function(DeskCommand command)? onRun,
+  Future<List<DeskCommand>>? more,
 }) async {
   final chosen = await showDialog<DeskCommand>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: .18),
-    builder: (_) => _CommandPalette(commands: commands, recent: recent),
+    builder: (_) =>
+        _CommandPalette(commands: commands, recent: recent, more: more),
   );
   if (chosen == null) return;
   onRun?.call(chosen);
@@ -77,9 +80,14 @@ Future<void> showDeskCommandPalette(
 }
 
 class _CommandPalette extends StatefulWidget {
-  const _CommandPalette({required this.commands, this.recent = const []});
+  const _CommandPalette({
+    required this.commands,
+    this.recent = const [],
+    this.more,
+  });
   final List<DeskCommand> commands;
   final List<String> recent;
+  final Future<List<DeskCommand>>? more;
   @override
   State<_CommandPalette> createState() => _CommandPaletteState();
 }
@@ -88,10 +96,22 @@ class _CommandPaletteState extends State<_CommandPalette> {
   final query = TextEditingController();
   final scroll = ScrollController();
   int index = 0;
+  List<DeskCommand> extra = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.more?.then((value) {
+      if (mounted) setState(() => extra = value);
+    }, onError: (_) {});
+  }
 
   List<DeskCommand> get visible {
     if (query.text.trim().isNotEmpty) {
-      return widget.commands.where((c) => c.matches(query.text)).toList();
+      return [
+        ...widget.commands,
+        ...extra,
+      ].where((c) => c.matches(query.text)).toList();
     }
     final byKey = {for (final c in widget.commands) c.key: c};
     final recent = [for (final k in widget.recent) ?byKey[k]];

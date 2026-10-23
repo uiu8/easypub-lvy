@@ -4,7 +4,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/catalog_service.dart';
-import '../controls/controls.dart' show DeskButton;
+import '../controls/controls.dart' show DeskButton, DeskChoice;
 import '../dialogs.dart';
 import '../tokens.dart';
 import '../widgets.dart';
@@ -270,7 +270,8 @@ class _CatalogAlignmentPanelState extends State<CatalogAlignmentPanel> {
               if (row?.candidates.isNotEmpty == true) ...[
                 const SizedBox(height: 14),
                 const DeskLabel('选择参考章节'),
-                DropdownButtonFormField<String>(
+                // R3-07：编辑台的选择框（原为 Material 下拉）。
+                DeskChoice<String>(
                   key: ValueKey('${row!.line}:${row.chosenId}'),
                   initialValue: row.chosenId,
                   isExpanded: true,

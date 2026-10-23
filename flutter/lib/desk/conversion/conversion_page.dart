@@ -833,7 +833,12 @@ class _ConversionPageState extends State<ConversionPage> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => message = deskErrorText(e, '书稿导入失败，请重试。'));
+        setState(
+          () => message = deskErrorText(
+            e,
+            '书稿没有导入：文件可能不是 TXT / EPUB，或正被其他程序占用。关闭占用后再导入。',
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => picking = false);

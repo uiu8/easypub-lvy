@@ -21,6 +21,8 @@ use std::{
 };
 
 mod enrich;
+pub(crate) mod fqnovel;
+mod interactions;
 mod library;
 mod management;
 mod queue;
@@ -84,10 +86,7 @@ fn save(st: &State) -> Result<(), String> {
         .collect();
     std::fs::create_dir_all(&st.data).map_err(|e| e.to_string())?;
     let path = st.data.join("sources.json");
-    let tmp = path.with_extension("json.part");
-    std::fs::write(&tmp, serde_json::to_vec(&items).unwrap_or_default())
-        .and_then(|_| std::fs::rename(&tmp, &path))
-        .map_err(|e| format!("无法保存书源：{e}"))
+    download::write_atomic(&path, &serde_json::to_vec(&items).unwrap_or_default())
 }
 
 fn load() {
@@ -132,6 +131,8 @@ fn runtime(id: &str) -> Result<Arc<SourceRt>, String> {
     let source = find_source(&st, id).cloned().ok_or("没有这个书源")?;
     let login = !source.login_url.trim().is_empty();
     let rt = SourceRt::new(source);
+    *rt.services.data_dir.lock().unwrap() = Some(st.data.clone());
+    *rt.login_info.lock().unwrap() = crate::login_store::load(&st.data, rt.source.id())?;
     st.runtimes.insert(id.to_owned(), rt.clone());
     drop(st);
     // 有登录的书源：把 WebView 里保存的登录状态（Cookie）带回来。
@@ -156,6 +157,28 @@ fn param<T: serde::de::DeserializeOwned>(params: &Value, key: &str) -> Result<T,
 }
 
 fn handle(method: &str, params: &Value) -> Result<Value, String> {
+    if method == "source.loginData.clear" {
+        let id: String = param(params, "id")?;
+        let st = state();
+        let source = find_source(&st, &id).ok_or("没有这个书源")?;
+        let mut infos: Vec<_> = st
+            .runtimes
+            .values()
+            .filter(|rt| rt.source.id() == source.id())
+            .map(|rt| rt.login_info.lock().unwrap())
+            .collect();
+        crate::login_store::clear(&st.data, source.id())?;
+        for info in &mut infos {
+            **info = None;
+        }
+        return Ok(json!({"ok":true}));
+    }
+    if method.starts_with("source.interaction.") {
+        return interactions::handle(method, params);
+    }
+    if method.starts_with("fqnovel.") {
+        return fqnovel::handle(method, params);
+    }
     if method.starts_with("subscriptions.") {
         return subscriptions::handle(method, params);
     }
@@ -200,6 +223,29 @@ fn handle(method: &str, params: &Value) -> Result<Value, String> {
             )
         }
         "source.login" => login(params),
+        "source.loginAction" => login_action(params),
+        "source.explore" => {
+            let id: String = param(params, "id")?;
+            let url: String = param(params, "url")?;
+            let page = params.get("page").and_then(Value::as_i64).unwrap_or(1);
+            if page < 1 {
+                return Err("发现页码必须大于零".into());
+            }
+            let rt = runtime(&id)?;
+            let revision = rt.services.explore_revision.load(Ordering::SeqCst);
+            let mut context = crate::control::current();
+            context.exploring = true;
+            let _guard = context.enter();
+            let books = Engine::new(rt.clone())?.run(|scope| scope.explore(&url, page))?;
+            let current = rt.services.explore_revision.load(Ordering::SeqCst);
+            Ok(
+                json!({"books":if current == revision { books } else { vec![] },"revision":revision,"current_revision":current,"stale":current != revision}),
+            )
+        }
+        "source.exploreRevision" => {
+            let id: String = param(params, "id")?;
+            Ok(json!({"revision":runtime(&id)?.services.explore_revision.load(Ordering::SeqCst)}))
+        }
         "library.list" => Ok(Value::Array(load_library())),
         "library.check" => check_library(params),
         "library.autoCheck.get" | "library.autoCheck.set" => library::auto_check(method, params),
@@ -265,7 +311,71 @@ fn now_secs() -> u64 {
 }
 
 /// 登录：有登录界面时用填写的信息执行书源的 login()；登录地址是网址时打开网页让用户登录，
-/// 登录状态（Cookie）带回书源。填写的信息只放在内存里，不写文件。
+/// 登录状态（Cookie）带回书源。填写的信息按书源经 DPAPI 加密保存。
+/// 登录界面按钮（阅读 loginUi 的 button）：按序号执行书源自带的 action。
+/// action 是网址时打开登录网页；否则把登录脚本（loginUrl 里的函数）与 action 一起执行。
+/// 界面只传序号和可选的表单字段，不能提交任意脚本。
+fn login_action(params: &Value) -> Result<Value, String> {
+    let id: String = param(params, "id")?;
+    let index: usize = param(params, "index")?;
+    let rt = runtime(&id)?;
+    if !rt.source.main_js.is_empty() {
+        return Err("单文件 JS 的 loginUi / loginAction 暂不支持".into());
+    }
+    let ui: Value = serde_json::from_str(&rt.source.login_ui).map_err(|_| "登录界面定义无效")?;
+    let item = ui
+        .get(index)
+        .filter(|i| i["type"] == "button")
+        .ok_or("没有这个登录按钮")?;
+    let action = item["action"].as_str().unwrap_or("").trim().to_owned();
+    if action.is_empty() {
+        return Err("这个按钮没有设置动作".into());
+    }
+    if let Some(info) = params
+        .get("info")
+        .filter(|v| v.as_object().is_some_and(|m| !m.is_empty()))
+    {
+        rt.set_login_info(info.to_string())?;
+    }
+    let engine = Engine::new(rt.clone())?;
+    if action.starts_with("http://") || action.starts_with("https://") {
+        let name = rt.source.book_source_name.trim().to_owned();
+        engine.run(|s| {
+            crate::webview::execute_with(
+                s,
+                &action,
+                None,
+                None,
+                None,
+                crate::webview::Interactive::Always,
+                format!("EasyPub：{name}，完成后关闭窗口"),
+            )
+            .map(|_| ())
+        })?;
+        return Ok(json!({"ok":true,"message":"网页已关闭"}));
+    }
+    let login = rt.source.login_url.trim();
+    // 与阅读一致：loginUrl 不是网址时整段都是登录脚本（可带 @js: / <js> 前缀）。
+    let login = if login.starts_with("http://")
+        || login.starts_with("https://")
+        || login.starts_with('/')
+    {
+        ""
+    } else {
+        login
+            .trim_start_matches("@js:")
+            .trim_start_matches("<js>")
+            .trim_end_matches("</js>")
+    };
+    let action = action
+        .trim_start_matches("@js:")
+        .trim_start_matches("<js>")
+        .trim_end_matches("</js>");
+    engine.run(|s| s.eval_js(&format!("{login}\n;{action}"), &[]))?;
+    let _logs = engine.take_logs();
+    Ok(json!({"ok":true,"message":format!("已执行“{}”", item["name"].as_str().unwrap_or("按钮"))}))
+}
+
 fn login(params: &Value) -> Result<Value, String> {
     let id: String = param(params, "id")?;
     let rt = runtime(&id)?;
@@ -281,7 +391,7 @@ fn login(params: &Value) -> Result<Value, String> {
         return Err("这个书源没有登录设置".into());
     }
     if let Some(info) = params.get("info").filter(|v| v.is_object()) {
-        *rt.login_info.lock().unwrap() = Some(info.to_string());
+        rt.set_login_info(info.to_string())?;
         let code = url
             .trim_start_matches("@js:")
             .trim_start_matches("<js>")

@@ -145,7 +145,7 @@ fn parsed(text: &str, url: &str) -> Result<Vec<(BookSource, bool)>, String> {
                 imported_at: now_secs(),
                 ..Default::default()
             };
-            let enabled = s.enabled && support::check(&s).is_empty();
+            let enabled = s.enabled && support::can_run(&s);
             Ok((s, enabled))
         })
         .collect()
@@ -280,6 +280,11 @@ fn preview(store: &mut Store, url: &str, text: &str) -> Result<Value, String> {
     Ok(result)
 }
 fn fetch(url: &str) -> Result<String, String> {
+    if reqwest::Url::parse(url)
+        .is_ok_and(|u| u.path() == "/book-source/fqnovel.json" && crate::network_config::local(&u))
+    {
+        return super::fqnovel::fetch_source(url);
+    }
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return std::fs::read_to_string(url)
             .map_err(|_| "无法读取原书源文件，请重新选择文件导入".into());
@@ -511,15 +516,8 @@ pub(super) fn handle(method: &str, params: &Value) -> Result<Value, String> {
                                 ctx.interactive = false;
                                 let _guard = ctx.enter();
                                 let mut check = crate::probe::Check::default();
-                                let key =
-                                    BookSource::rule(&s.rule_search, "checkKeyWord").to_owned();
-                                let result = Engine::new(SourceRt::new(s)).and_then(|e| {
-                                    crate::probe::check(
-                                        &e,
-                                        if key.is_empty() { "我的" } else { &key },
-                                        &mut check,
-                                    )
-                                });
+                                let result = Engine::new(SourceRt::new(s))
+                                    .and_then(|e| crate::probe::check(&e, "", &mut check));
                                 let cause = check.cause.or_else(|| {
                                     result.as_ref().err().and_then(|e| {
                                         crate::control::ErrorKind::classify(e).cause()

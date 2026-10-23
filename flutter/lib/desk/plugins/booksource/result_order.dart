@@ -146,49 +146,6 @@ extension _BookSourceResultOrder on _BookSourcePageState {
     }
   }
 
-  Widget _resultControls() => Wrap(
-    spacing: 8,
-    runSpacing: 4,
-    crossAxisAlignment: WrapCrossAlignment.center,
-    children: [
-      SizedBox(
-        width: 130,
-        child: DeskChoice<String>(
-          key: const ValueKey('booksource-result-sort'),
-          value: settings.resultSort,
-          items: [
-            for (final e in {
-              'overall': '综合排序',
-              'chapters': '章节数',
-              'latest': '最新章节',
-              'sources': '书源数',
-              'speed': '响应速度',
-            }.entries)
-              DropdownMenuItem(value: e.key, child: Text(e.value)),
-          ],
-          onChanged: (v) => _saveSettings(() {
-            settings.resultSort = v ?? 'overall';
-            _orderResults(query.text.trim());
-          }),
-        ),
-      ),
-      _toggle(
-        '只搜优先书源',
-        settings.onlyPriority,
-        (v) => _saveSettings(() => settings.onlyPriority = v),
-        key: const ValueKey('booksource-priority-only'),
-      ),
-      DeskButton(
-        '补全前 10 本章数',
-        key: const ValueKey('booksource-enrich'),
-        quiet: true,
-        busy: enriching,
-        onPressed: searching || enriching || results.isEmpty
-            ? null
-            : _enrichResults,
-      ),
-    ],
-  );
   String _sourceLabel(Map e) {
     final book = e['book'] as Map;
     final n = _num(book['chapterCount']);
