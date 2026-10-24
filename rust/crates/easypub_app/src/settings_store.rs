@@ -544,9 +544,13 @@ pub fn load(directory: &Path) -> Result<Snapshot, ApiError> {
         return Err(invalid());
     }
     expand_batches(directory, &mut record.configuration)?;
+    let retired_check_fields = record.configuration.retired_check_fields();
+    let mut value = serde_json::to_value(&record.configuration).map_err(|_| invalid())?;
+    crate::storage::remap_value(&mut value);
+    record.configuration = serde_json::from_value(value).map_err(|_| invalid())?;
     record.configuration.validate()?;
     Ok(Snapshot {
-        retired_check_fields: record.configuration.retired_check_fields(),
+        retired_check_fields,
         revision,
         token: Some(hash(&bytes)),
         configuration: record.configuration,

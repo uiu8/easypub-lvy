@@ -677,6 +677,9 @@ extension _LayoutPreviewSection on _LayoutPageState {
                           _ => .5,
                         },
                         systemBlock: systemBlockStyle,
+                        systemStyles: systemBlockStyle == 'styled'
+                            ? (systemStyles ?? defaultSystemStyles())
+                            : null,
                         verseBlock: verseBlockStyle,
                         ruleScale: size / 17.6,
                         body: face(size),

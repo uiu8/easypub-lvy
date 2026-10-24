@@ -578,10 +578,8 @@ async fn read_response_observed(
 }
 
 fn cache_path(url: &str) -> Result<PathBuf, ApiError> {
-    let root = std::env::var_os("LOCALAPPDATA").ok_or_else(|| err("cache_unavailable"))?;
-    Ok(PathBuf::from(root)
-        .join("EasyPubRustFlutter/catalog-v1")
-        .join(format!("{}.json", hash(url.as_bytes()))))
+    let root = crate::storage::retain_cache("catalog").map_err(|_| err("cache_unavailable"))?;
+    Ok(root.join(format!("{}.json", hash(url.as_bytes()))))
 }
 fn remember(c: Catalog, cached: bool) -> Result<Value, ApiError> {
     let id = c.id.clone();
@@ -589,14 +587,15 @@ fn remember(c: Catalog, cached: bool) -> Result<Value, ApiError> {
         .get_or_init(Default::default)
         .lock()
         .map_err(|_| err("catalog_busy"))?;
-    if map.len() >= 32 && !map.contains_key(&id)
+    if map.len() >= 32
+        && !map.contains_key(&id)
         && let Some(oldest) = map
             .values()
             .min_by_key(|c| c.fetched_at)
             .map(|c| c.id.clone())
-        {
-            map.remove(&oldest);
-        }
+    {
+        map.remove(&oldest);
+    }
     map.insert(id, c.clone());
     Ok(
         json!({"stage":"candidate", "catalog":c, "from_cache":cached, "identity_confirmed":false,"duplicate_segments":duplicate_segments(&c)}),
@@ -682,9 +681,10 @@ fn acquire_cancellable(
         check_cancelled(token)?;
         let mut cache_saved = false;
         if let Some(parent) = path.parent()
-            && std::fs::create_dir_all(parent).is_ok() {
-                cache_saved = std::fs::write(&path, serde_json::to_vec(&c).unwrap()).is_ok();
-            }
+            && std::fs::create_dir_all(parent).is_ok()
+        {
+            cache_saved = std::fs::write(&path, serde_json::to_vec(&c).unwrap()).is_ok();
+        }
         check_cancelled(token)?;
         let mut result = remember(c, false)?;
         result["cache_saved"] = json!(cache_saved);
@@ -1155,9 +1155,10 @@ fn build_relocation(
     if let Some(&(last_line, _)) = chapter_lines.last()
         && ranges.iter().skip(last_line + 1).any(|&(a, b)| {
             volumes.contains(&key(&text[a..b])) || volume_re.is_match(text[a..b].trim())
-        }) {
-            return Err(err("volume_intro_requires_review"));
-        }
+        })
+    {
+        return Err(err("volume_intro_requires_review"));
+    }
     original.sort_by_key(|p| p.start);
     for (i, piece) in original.iter_mut().enumerate() {
         piece.end = boundaries.get(i + 1).copied().unwrap_or(text.len());

@@ -189,6 +189,7 @@ pub(crate) fn calculate(
         .collect();
     // 清理统计只改 cleanup.* 行，识别与排版统计只改各自的行：两组同时算，再按前缀合并（V83）。
     let mut cleanup_stats = stats.clone();
+    let mut layout_lines = layout::LayoutLines::new();
     let (cleaned, others) = std::thread::scope(|scope| {
         let cleaned = scope
             .spawn(|| cleanup::collect(&view, &pipeline, &locations, &mut cleanup_stats, cancel));
@@ -196,7 +197,14 @@ pub(crate) fn calculate(
             recognition::collect(&view, &locations, &mut stats, cancel)?;
             recognition::collect_checks(&view, &locations, &mut stats, cancel)?;
             checkpoint(cancel)?;
-            layout::collect(&book, &settings, &locations, &mut stats, cancel)
+            layout::collect(
+                &book,
+                &settings,
+                &locations,
+                &mut stats,
+                Some(&mut layout_lines),
+                cancel,
+            )
         })();
         (cleaned.join().expect("cleanup statistics"), others)
     });
@@ -252,7 +260,8 @@ pub(crate) fn calculate(
         json!({"schema":1,"read_only":true,"content_id":digest(book.text.as_bytes()),
         "source_id":source.summary().source_id,"revision":source.summary().revision,
         "byte_length":book.text.len(),"line_count":locations.lines.len(),"chapter_count":book.tree.nodes.len(),
-        "elapsed_ms":started.elapsed().as_secs_f64()*1000.0,"rules":stats.into_values().collect::<Vec<_>>() }),
+        "elapsed_ms":started.elapsed().as_secs_f64()*1000.0,"rules":stats.into_values().collect::<Vec<_>>(),
+        "layout_lines":layout_lines }),
     )
 }
 

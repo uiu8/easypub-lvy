@@ -23,7 +23,7 @@ fn layout_stats(
         r.affects.clear();
         r.invalid_count = 0;
     }
-    layout::collect(book, settings, &locations, &mut stats, cancel)?;
+    layout::collect(book, settings, &locations, &mut stats, None, cancel)?;
     Ok(stats)
 }
 pub(super) fn collect(

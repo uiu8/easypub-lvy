@@ -24,6 +24,12 @@ import '../../application/crash_log_service.dart';
 import '../errors.dart';
 import '../controls/controls.dart';
 import 'settings_index.dart';
+import 'storage_settings.dart';
+import '../../application/storage_settings_service.dart';
+
+import 'dart:io';
+
+import 'package:window_manager/window_manager.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -646,6 +652,32 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 12),
       ],
     ];
+  }
+
+  /// 存储位置搬家后重启（V104）：先走离开保护，再启动新进程并关闭本窗口。
+  Future<String?> _restartForStorage() async {
+    final library = widget.library, picker = widget.picker;
+    if (library != null &&
+        picker != null &&
+        !await confirmWorkspaceLeave(
+          context,
+          library,
+          picker,
+          action: '重启软件，让新的数据位置生效',
+        )) {
+      return '已取消重启。';
+    }
+    try {
+      await Process.start(
+        Platform.resolvedExecutable,
+        const [],
+        mode: ProcessStartMode.detached,
+      );
+    } catch (_) {
+      return '没能自动重新打开软件，请手动关闭后再打开。';
+    }
+    await windowManager.destroy();
+    return null;
   }
 
   Future<void> _backupSettings() async {
@@ -1791,6 +1823,23 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     ]),
     5 => section('数据与迁移', [
+      // 存储位置（V104，SET-108–112）：生产入口初始化过存储布局时才有。
+      if (widget.library case final StorageSettingsService storage
+          when storage.storageAvailable) ...[
+        groupTitle('存储位置', '软件数据、缓存和图片放在哪里。软件数据搬家要重启后生效，原位置的数据保留；缓存可以按类清理。'),
+        StorageSettingsGroup(
+          service: storage,
+          chooseFolder: () async => widget.picker?.chooseFolder(),
+          restart: _restartForStorage,
+          bookTitle: (id) =>
+              widget.library!.books.value
+                  .where((b) => b.id == id)
+                  .firstOrNull
+                  ?.title ??
+              id,
+        ),
+        const SizedBox(height: 18),
+      ],
       groupTitle('配置与项目备份', '备份偏好与规则；原稿和成品由各自文件夹保存。'),
       Row(
         children: [

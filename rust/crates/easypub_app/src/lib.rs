@@ -4,10 +4,10 @@ pub mod sessions;
 pub mod transaction;
 
 pub mod catalog;
-pub mod collections;
 mod catalog_repair;
 pub mod cleanup_batch;
 pub mod cleanup_draft;
+pub mod collections;
 pub mod manual_draft;
 pub mod project;
 
@@ -103,3 +103,5 @@ pub mod kfx_package;
 #[cfg(test)]
 mod perf_samples_tests;
 mod repair_copy;
+
+pub mod storage;

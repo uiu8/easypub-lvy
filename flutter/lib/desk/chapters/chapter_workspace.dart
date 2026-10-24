@@ -12,6 +12,7 @@ import '../../application/manual_note_service.dart';
 import '../../application/chapter_rules_service.dart';
 import '../../application/chapter_service.dart';
 import '../../application/library_service.dart';
+import '../../application/rule_catalog_service.dart';
 import '../../application/workspace_autosave_service.dart';
 import '../controls/action_groups.dart';
 import '../controls/controls.dart';
@@ -30,6 +31,7 @@ import '../history/change_history_page.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 import 'block_marks.dart';
+import 'layout_view.dart';
 import 'note_marks.dart';
 import 'manuscript.dart';
 import 'outline.dart';
@@ -91,6 +93,31 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     ),
     _ => null,
   };
+
+  /// 排版视图（V104，LAY-149）：打开时才创建，统计整本书的识别结果；关掉时释放。
+  ChapterLayoutView? layoutView;
+
+  void setLayoutMode(bool on) {
+    setState(() {
+      view.layoutView = on;
+      if (on) {
+        layoutView ??= ChapterLayoutView(
+          rules: widget.library as RuleCatalogLibrary,
+          library: widget.library,
+          bookId: widget.bookId,
+        );
+      } else {
+        layoutView?.dispose();
+        layoutView = null;
+        marks?.clearSelection();
+      }
+    });
+    // 正文整块重建：从当前读到的行重新读入，停在原来的位置。
+    if (page != null && selected != null) {
+      read(page!.offset, bodyOffset: continuousOffset ?? body?.offset ?? 0);
+    }
+  }
+
   ChapterPage? page;
   ChapterBody? body;
   ChapterNode? selected;
@@ -117,6 +144,14 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     visitedIssues = showIssues;
     visitedHistory = showHistory;
     continuousScroll = explicitTarget ? 0 : view.bodyScrollOffset;
+    // 上次停在排版视图时照旧打开（V104）。
+    if (view.layoutView && widget.library is RuleCatalogLibrary) {
+      layoutView = ChapterLayoutView(
+        rules: widget.library as RuleCatalogLibrary,
+        library: widget.library,
+        bookId: widget.bookId,
+      );
+    }
     read(
       explicitTarget ? widget.initialOffset : view.offset,
       bodyOffset: explicitTarget ? widget.initialBodyOffset : view.bodyOffset,
@@ -128,6 +163,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     generation++;
     marks?.dispose();
     noteMarks?.dispose();
+    layoutView?.dispose();
     treeSearchFocus.dispose();
     super.dispose();
   }
@@ -744,15 +780,21 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
   Widget manuscript() => selected == null || page == null || body == null
       ? const Center(child: CircularProgressIndicator())
       : ChapterManuscript(
+          // 切换原文与排版视图时整块重建（选字区域随之增减），阅读位置照常记住。
           key: ValueKey((
             'chapter-reader',
             selected!.id,
             page!.guard,
             body!.offset,
+            layoutView != null,
           )),
           session: session,
           marks: marks,
           noteMarks: noteMarks,
+          layout: layoutView,
+          onLayoutMode: widget.library is RuleCatalogLibrary
+              ? setLayoutMode
+              : null,
           page: page!,
           node: selected!,
           initialBody: body,

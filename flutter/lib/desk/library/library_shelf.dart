@@ -10,6 +10,8 @@ extension _LibraryShelf on _LibraryPageState {
     return Draggable<LibraryBookDrag>(
       data: LibraryBookDrag(ids),
       maxSimultaneousDrags: checked ? 1 : 0,
+      onDragStarted: () => update(() => bookDragging = true),
+      onDragEnd: (_) => update(() => bookDragging = false),
       dragAnchorStrategy: pointerDragAnchorStrategy,
       feedback: Material(
         color: d.surface,
@@ -32,7 +34,10 @@ extension _LibraryShelf on _LibraryPageState {
                 style: ui(12.5, w: 600, c: d.ink),
               ),
               const SizedBox(width: 8),
-              Text('拖到左侧收藏夹', style: ui(11.5, c: d.ink3)),
+              Text(
+                folderMode ? '拖到收藏夹上' : '拖到左侧收藏夹',
+                style: ui(11.5, c: d.ink3),
+              ),
             ],
           ),
         ),

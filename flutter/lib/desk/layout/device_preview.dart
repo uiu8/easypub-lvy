@@ -13,6 +13,7 @@ import '../../application/layout_service.dart'
         isVerseAttribution,
         isVerseLine,
         sceneBreakText;
+import 'system_block_look.dart';
 
 class KindleDevice {
   const KindleDevice(
@@ -656,9 +657,21 @@ class PreviewPiece {
     this.initial = false,
     this.kind = '',
     this.image,
+    this.role = '',
+    this.runStart = false,
+    this.runEnd = false,
+    this.heading = false,
   });
   final String text;
   final bool title, indent;
+
+  /// 系统提示分类样式（V104，LAY-146）：单行 `note` 或面板 `panel`；不是分类样式时为空。
+  /// 一段连续的系统提示从 [runStart] 到 [runEnd]；跨页切开时前半段不收尾、后半段不起头。
+  final String role;
+  final bool runStart, runEnd;
+
+  /// 面板的标题行。
+  final bool heading;
 
   /// 正文插图（R5-01）；不为空时这一块只画图和图注。
   final PreviewImage? image;
@@ -770,10 +783,14 @@ class PreviewStyle {
     this.verseBlock = 'off',
     this.headImage,
     this.headFraction = .5,
+    this.systemStyles,
   });
 
   /// 系统提示与诗词样式（V50，LAY-121/122），见 `systemBlockStyles`、`verseBlockStyles`。
   final String systemBlock, verseBlock;
+
+  /// “分类样式”下单行提示与面板的样式参数（V104，LAY-146）：`{note: {...}, panel: {...}}`。
+  final Map? systemStyles;
 
   /// 统一章首图（V54，LAY-124）：画在章标题上方，宽度为版心的 [headFraction]，保持原比例。
   final ui.Image? headImage;
@@ -830,6 +847,40 @@ class PreviewStyle {
   }
 }
 
+/// 这一段系统提示的分类样式；不是分类样式时为空。
+SystemBlockLook? _look(PreviewPiece piece, PreviewStyle style) {
+  if (piece.role.isEmpty) return null;
+  final values = style.systemStyles?[piece.role];
+  if (values is! Map) return null;
+  return SystemBlockLook(values, style.body.fontSize ?? 16, style.ruleScale);
+}
+
+/// 分类样式的系统提示在文字上方、下方多占的高度（块的外边距、边框、内边距，标题行的内边距与线）。
+/// 块的外边距与相邻段落的段间距按 CSS 外边距折叠取较大者。
+(double, double) _blockExtra(PreviewPiece piece, PreviewStyle style) {
+  final look = _look(piece, style);
+  if (look == null) return (0, 0);
+  final margin = math.max(0.0, look.margin - style.paragraphSpacing);
+  final shadedTitle = piece.heading && look.title == 'shaded';
+  var before = 0.0, after = 0.0;
+  if (piece.runStart) {
+    before += margin + look.top + (shadedTitle ? 0 : look.pad);
+  }
+  if (piece.heading) {
+    before += look.titlePad;
+    after += look.titlePad + look.titleRule + look.titleGap;
+  }
+  if (piece.runEnd) after += look.pad + look.bottom + margin;
+  return (before, after);
+}
+
+/// 一段之后到下一段的间距：同一段系统提示里的行之间没有段间距。
+double _gapAfter(PreviewPiece piece, PreviewStyle style) => piece.title
+    ? style.titleGap
+    : piece.role.isNotEmpty && !piece.runEnd && _look(piece, style) != null
+    ? 0
+    : style.paragraphSpacing;
+
 TextSpan _span(PreviewPiece piece, PreviewStyle style) {
   if (piece.title && style.heading?.twoLine == true) {
     final end = chapterLabelEnd(piece.text);
@@ -852,6 +903,28 @@ TextSpan _span(PreviewPiece piece, PreviewStyle style) {
         letterSpacing: (style.body.fontSize ?? 16) * .2,
       ),
       text: sceneBreakText(style.sceneBreak, piece.text),
+    );
+  }
+  final look = _look(piece, style);
+  if (look != null) {
+    final base = style.body.copyWith(
+      fontSize: look.fontEm,
+      fontWeight: look.bold || piece.heading ? FontWeight.bold : null,
+    );
+    final key = look.keyBold && !piece.heading
+        ? systemKeyEnd(piece.text)
+        : null;
+    return TextSpan(
+      style: base,
+      children: key == null
+          ? [TextSpan(text: piece.text)]
+          : [
+              TextSpan(
+                text: piece.text.substring(0, key),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              TextSpan(text: piece.text.substring(key)),
+            ],
     );
   }
   final initial = piece.initial && _initialLetter.hasMatch(piece.text);
@@ -888,10 +961,13 @@ TextPainter _painter(
 ]) {
   final scene =
       !piece.title && style.sceneBreak != 'off' && isSceneBreak(piece.text);
+  final look = _look(piece, style);
   final painter = TextPainter(
     text: _span(piece, style),
-    textAlign: piece.title || scene
+    textAlign: piece.title || scene || look?.center == true
         ? TextAlign.center
+        : look != null
+        ? TextAlign.start
         : piece.kind == 'by'
         ? TextAlign.right
         : piece.kind == 'verse' && style.verseBlock == 'center'
@@ -909,7 +985,12 @@ TextPainter _painter(
       ),
     ]);
   }
-  painter.layout(maxWidth: width);
+  // 分类样式的系统提示：文字在边框与左右内边距以内排。
+  painter.layout(
+    maxWidth: look == null
+        ? width
+        : math.max(20.0, width - look.left - look.right - 2 * look.side),
+  );
   return painter;
 }
 
@@ -944,14 +1025,27 @@ List<List<PreviewPiece>> paginatePreview({
   }
 
   addImages(-1);
+  final styled = style.systemBlock == 'styled' && style.systemStyles != null;
   var pending = style.firstParagraph != 'normal';
   var previous = '';
   for (final (index, p) in paragraphs.indexed) {
     final scene = style.sceneBreak != 'off' && isSceneBreak(p);
     // 系统提示与诗词（V50，LAY-121/122）：署名只接在诗句之后。
-    final kind = style.systemBlock != 'off' && isSystemLine(p)
+    // 分类样式下单独一行的“叮！”并入紧跟的系统提示（与 Rust 相同）。
+    final ding =
+        styled &&
+        isDingLine(p) &&
+        index + 1 < paragraphs.length &&
+        isSystemLine(paragraphs[index + 1]);
+    final kind = style.systemBlock != 'off' && (isSystemLine(p) || ding)
         ? 'system'
-        : style.verseBlock != 'off' && isVerseLine(p)
+        // 诗句要成联：前一行是诗句，或后一行是诗句或署名（与 Rust 相同，单独一行不算）。
+        : style.verseBlock != 'off' &&
+              isVerseLine(p) &&
+              (previous == 'verse' ||
+                  (index + 1 < paragraphs.length &&
+                      (isVerseLine(paragraphs[index + 1]) ||
+                          isVerseAttribution(paragraphs[index + 1]))))
         ? 'verse'
         : previous == 'verse' && isVerseAttribution(p)
         ? 'by'
@@ -976,6 +1070,7 @@ List<List<PreviewPiece>> paginatePreview({
     }
     addImages(index);
   }
+  if (styled) _markSystemRuns(blocks, style);
   for (final block in blocks) {
     final image = block.image;
     if (image != null) {
@@ -989,11 +1084,14 @@ List<List<PreviewPiece>> paginatePreview({
       continue;
     }
     var piece = block;
-    final gap = block.title ? style.titleGap : style.paragraphSpacing;
+    final gap = _gapAfter(block, style);
     for (var guard = 0; guard < 2000; guard++) {
       final painter = _painter(piece, style, width, locale);
+      final (before, after) = _blockExtra(piece, style);
       final h =
           painter.height +
+          before +
+          after +
           (piece.title
               ? style.titleBefore + style.titleAfter + style.headHeight(width)
               : 0);
@@ -1005,7 +1103,7 @@ List<List<PreviewPiece>> paginatePreview({
       }
       final metrics = painter.computeLineMetrics();
       var fit = 0;
-      var used = 0.0;
+      var used = before;
       for (final m in metrics) {
         if (used + m.height > remaining) break;
         used += m.height;
@@ -1027,7 +1125,7 @@ List<List<PreviewPiece>> paginatePreview({
       final end = painter
           .getLineBoundary(
             painter.getPositionForOffset(
-              Offset(0, used - metrics[fit - 1].height / 2),
+              Offset(0, used - before - metrics[fit - 1].height / 2),
             ),
           )
           .end;
@@ -1039,16 +1137,67 @@ List<List<PreviewPiece>> paginatePreview({
           indent: piece.indent,
           initial: piece.initial,
           kind: piece.kind,
+          role: piece.role,
+          runStart: piece.runStart,
+          heading: piece.heading,
         ),
       );
       flush();
       final rest = piece.text.substring(cut);
       if (rest.trim().isEmpty) break;
-      piece = PreviewPiece(rest, indent: false, kind: piece.kind);
+      piece = PreviewPiece(
+        rest,
+        indent: false,
+        kind: piece.kind,
+        role: piece.role,
+        runEnd: piece.runEnd,
+      );
     }
   }
   flush();
   return pages.isEmpty ? [<PreviewPiece>[]] : pages;
+}
+
+/// 分类样式（V104，LAY-146）：连续的系统提示合成一段，一行为单行提示、多行为面板（与 Rust 按行数
+/// 的规则相同）；面板首行是“叮！”或够短且不含冒号时作标题；按样式去掉【】。
+void _markSystemRuns(List<PreviewPiece> blocks, PreviewStyle style) {
+  var i = 0;
+  while (i < blocks.length) {
+    if (blocks[i].kind != 'system' || blocks[i].image != null) {
+      i++;
+      continue;
+    }
+    var end = i;
+    while (end + 1 < blocks.length && blocks[end + 1].kind == 'system') {
+      end++;
+    }
+    final role = end > i ? 'panel' : 'note';
+    final values = style.systemStyles?[role];
+    final look = values is Map
+        ? SystemBlockLook(values, style.body.fontSize ?? 16, style.ruleScale)
+        : null;
+    final first = blocks[i].text;
+    final titled =
+        role == 'panel' &&
+        look != null &&
+        look.title != 'none' &&
+        (isDingLine(first) || isSystemTitle(first));
+    for (var k = i; k <= end; k++) {
+      final text = blocks[k].text;
+      blocks[k] = PreviewPiece(
+        look?.removeBrackets == true || (titled && k == i)
+            ? stripSystemBrackets(text)
+            : text,
+        indent: false,
+        kind: 'system',
+        role: role,
+        runStart: k == i,
+        runEnd: k == end,
+        heading: titled && k == i,
+      );
+    }
+    i = end + 1;
+  }
 }
 
 /// 章节标题样式的缩略图（V36，LAY-117）：与小预览同一套画法，标题下画两条灰线代表正文。
@@ -1176,14 +1325,13 @@ class PreviewPage extends StatelessWidget {
         continue;
       }
       final painter = _painter(piece, style, width, locale);
-      y += painter.height;
+      final (before, after) = _blockExtra(piece, style);
+      y += painter.height + before + after;
       if (piece.title) {
         y += style.titleBefore + style.titleAfter + style.headHeight(width);
       }
       painter.dispose();
-      if (i < pieces.length - 1) {
-        y += piece.title ? style.titleGap : style.paragraphSpacing;
-      }
+      if (i < pieces.length - 1) y += _gapAfter(piece, style);
     }
     return y;
   }
@@ -1236,7 +1384,15 @@ class _PagePainter extends CustomPainter {
         y += style.headHeight(width);
       }
       if (piece.title) y += style.titleBefore;
-      // 分类样式（V77）在小预览里按加框近似。
+      final look = _look(piece, style);
+      if (look != null) {
+        // 分类样式（V104，LAY-146）：照成品 CSS 画底色、边框、标题行，再画文字。
+        y = _paintStyled(canvas, piece, look, painter, y, width);
+        painter.dispose();
+        if (i < pieces.length - 1) y += _gapAfter(piece, style);
+        continue;
+      }
+      // “加框”（V50）；分类样式缺参数时也按加框画。
       final boxed =
           piece.kind == 'system' &&
           (style.systemBlock == 'box' || style.systemBlock == 'styled');
@@ -1277,6 +1433,101 @@ class _PagePainter extends CustomPainter {
         y += piece.title ? style.titleGap : style.paragraphSpacing;
       }
     }
+  }
+
+  /// 画一行分类样式的系统提示，返回画完后的纵坐标（含块的下边距）。
+  double _paintStyled(
+    Canvas canvas,
+    PreviewPiece piece,
+    SystemBlockLook look,
+    TextPainter painter,
+    double y,
+    double width,
+  ) {
+    final ink = style.body.color ?? const Color(0xFF333333);
+    final left = style.padding.left, right = left + width;
+    final margin = math.max(0.0, look.margin - style.paragraphSpacing);
+    final shadedTitle = piece.heading && look.title == 'shaded';
+    if (piece.runStart) y += margin;
+    final top = y;
+    if (piece.runStart) y += look.top + (shadedTitle ? 0 : look.pad);
+    final titleTop = y;
+    y += look.titlePad;
+    final textTop = y;
+    y += painter.height;
+    var bottom = y;
+    if (piece.heading) bottom += look.titlePad + look.titleRule + look.titleGap;
+    if (piece.runEnd) bottom += look.pad + look.bottom;
+    final shade = look.shade;
+    if (shade != null) {
+      canvas.drawRect(
+        Rect.fromLTRB(left, top, right, bottom),
+        Paint()..color = shade,
+      );
+    }
+    if (shadedTitle) {
+      canvas.drawRect(
+        Rect.fromLTRB(
+          left + look.left,
+          titleTop,
+          right - look.right,
+          y + look.titlePad,
+        ),
+        Paint()..color = const Color(0xFFE4E4E4),
+      );
+    }
+    void rule(Offset a, Offset b, double w) {
+      if (w <= 0) return;
+      final paint = Paint()
+        ..color = ink
+        ..strokeWidth = look.doubleLine ? math.max(1.0, w / 3) : w;
+      if (!look.doubleLine) {
+        canvas.drawLine(a, b, paint);
+        return;
+      }
+      // 双线：两条细线，中间留一条细线宽的空隙。
+      final step = (w - paint.strokeWidth) / 2;
+      final normal = a.dx == b.dx ? Offset(step, 0) : Offset(0, step);
+      canvas.drawLine(a - normal, b - normal, paint);
+      canvas.drawLine(a + normal, b + normal, paint);
+    }
+
+    if (look.left > 0) {
+      final x = left + look.left / 2;
+      rule(Offset(x, top), Offset(x, bottom), look.left);
+    }
+    if (look.right > 0) {
+      final x = right - look.right / 2;
+      rule(Offset(x, top), Offset(x, bottom), look.right);
+    }
+    if (piece.runStart && look.top > 0) {
+      rule(
+        Offset(left, top + look.top / 2),
+        Offset(right, top + look.top / 2),
+        look.top,
+      );
+    }
+    if (piece.runEnd && look.bottom > 0) {
+      final b = bottom - look.bottom / 2;
+      rule(Offset(left, b), Offset(right, b), look.bottom);
+    }
+    if (piece.heading && look.titleRule > 0) {
+      final b = y + look.titlePad + look.titleRule / 2;
+      canvas.drawLine(
+        Offset(left + look.left, b),
+        Offset(right - look.right, b),
+        Paint()
+          ..color = ink
+          ..strokeWidth = look.titleRule,
+      );
+    }
+    final inner = width - look.left - look.right - 2 * look.side;
+    final dx = look.center ? (inner - painter.width) / 2 : 0.0;
+    painter.paint(
+      canvas,
+      Offset(left + look.left + look.side + math.max(0.0, dx), textTop),
+    );
+    return piece.runEnd ? bottom + margin : bottom;
   }
 
   /// 画一张插图和图注，返回占用的高度（R5-01）。

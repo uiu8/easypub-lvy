@@ -233,9 +233,12 @@ class DeskHelp extends StatelessWidget {
 
 /// 小标签：语义色浅底 + 等宽小字（新增 / 移除 / 待核对等）。中性时用凹底次墨。
 class DeskTag extends StatelessWidget {
-  const DeskTag(this.text, this.tone, {super.key});
+  const DeskTag(this.text, this.tone, {super.key, this.singleLine = false});
   final String text;
   final Tone tone;
+
+  /// 放不下时单行省略，而不是折行（宽度由外层限制）。
+  final bool singleLine;
   @override
   Widget build(BuildContext context) {
     final d = context.desk;
@@ -246,7 +249,12 @@ class DeskTag extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(5),
       ),
-      child: Text(text, style: ui(11, c: fg, w: 600)),
+      child: Text(
+        text,
+        maxLines: singleLine ? 1 : null,
+        overflow: singleLine ? TextOverflow.ellipsis : null,
+        style: ui(11, c: fg, w: 600),
+      ),
     );
   }
 }

@@ -285,13 +285,7 @@ fn listing(sources: &[Source]) -> Value {
     })).collect::<Vec<_>>()})
 }
 pub(super) fn execute(request: &Value, token: &CancellationToken) -> Result<Value, ApiError> {
-    let root =
-        std::env::var_os("LOCALAPPDATA").ok_or_else(|| err("book_source_store_unavailable"))?;
-    execute_at(
-        request,
-        token,
-        &PathBuf::from(root).join("EasyPubRustFlutter/book-sources-v1"),
-    )
+    execute_at(request, token, &crate::storage::path("book_sources"))
 }
 fn execute_at(request: &Value, token: &CancellationToken, root: &Path) -> Result<Value, ApiError> {
     check_cancelled(token)?;

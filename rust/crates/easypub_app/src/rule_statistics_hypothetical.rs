@@ -153,7 +153,7 @@ pub(super) fn collect(
         let mut simulated = empty(template);
         match batch {
             Batch::Layout(candidate) => {
-                layout::collect(book, candidate, loc, &mut simulated, cancel)?;
+                layout::collect(book, candidate, loc, &mut simulated, None, cancel)?;
             }
             Batch::Recognition(rules, is_check) => {
                 let mut candidate = book.clone();

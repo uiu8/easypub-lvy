@@ -460,7 +460,19 @@ class _TasksPageState extends State<TasksPage> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    DeskTag(taskStatusLabel(item), t),
+                    // 失败时状态是“失败：详情”，可能很长：限宽单行省略，
+                    // 悬停看全文，不把标题挤出行外。
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 160),
+                      child: Tooltip(
+                        message: taskStatusLabel(item),
+                        child: DeskTag(
+                          taskStatusLabel(item),
+                          t,
+                          singleLine: true,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 if (item.running) ...[

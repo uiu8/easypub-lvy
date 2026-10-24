@@ -278,6 +278,20 @@ class BlockMarkController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 排版视图里拖选（V104，LAY-150）：从 [from] 行拖到 [to] 行，选中两端之间的整行。
+  void selectRange(String entry, int from, int to) {
+    if (busy) return;
+    pending = null;
+    pendingKind = null;
+    pendingVariant = null;
+    error = '';
+    entryId = entry;
+    anchor = from;
+    first = from < to ? from : to;
+    last = from < to ? to : from;
+    notifyListeners();
+  }
+
   void _clearSelection() {
     entryId = anchor = first = last = null;
     pending = null;

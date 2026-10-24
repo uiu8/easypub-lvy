@@ -62,9 +62,8 @@ mod windows {
     }
     impl Store {
         fn current() -> Result<Self> {
-            let root = std::env::var_os("LOCALAPPDATA").ok_or("credential_storage_unavailable")?;
             Ok(Self {
-                path: PathBuf::from(root).join("EasyPubRustFlutter/credentials-v1/qidian.dpapi"),
+                path: crate::storage::path("credentials").join("qidian.dpapi"),
             })
         }
         fn saved(&self) -> Result<bool> {

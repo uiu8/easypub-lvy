@@ -16,11 +16,16 @@ fn render_insets(
     crate::insets::plan(&book.text, &book.tree.nodes, &owned, chat, rules)
 }
 
+/// 按当前设置逐行识别出的块（V104，LAY-148）：章节编号 → [本节正文行号, 类别, CSS 类, 是否手工标注]。
+/// 只列系统提示、诗词、聊天记录与场景；章节页的排版视图据此标出各行，与正文生成用同一套判断。
+pub(super) type LayoutLines = BTreeMap<String, Vec<(u32, &'static str, &'static str, bool)>>;
+
 pub(super) fn collect(
     book: &EffectiveBook,
     settings: &Settings,
     loc: &Locations<'_>,
     stats: &mut Statistics,
+    mut lines: Option<&mut LayoutLines>,
     cancel: &AtomicBool,
 ) -> Result<(), ApiError> {
     for (id, enabled) in [
@@ -281,6 +286,19 @@ pub(super) fn collect(
             None
         };
         let heading = node.is_some_and(|n| n.role != Role::Body);
+        if let (Some(out), Some((kind, css))) = (lines.as_deref_mut(), current) {
+            let at = loc.byte(start);
+            if at["heading"] == false {
+                out.entry(at["entry_id"].as_str().unwrap_or("$prefix").to_owned())
+                    .or_default()
+                    .push((
+                        at["first_line"].as_u64().unwrap_or(0) as u32,
+                        kind,
+                        css,
+                        annotation.is_some(),
+                    ));
+            }
+        }
         let scene = annotation.is_none()
             && node.is_none()
             && !current_notes.has_line(start)

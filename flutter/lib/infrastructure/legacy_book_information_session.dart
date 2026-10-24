@@ -1,3 +1,5 @@
+import '../application/storage_locations.dart';
+
 import 'dart:io';
 
 import '../src/rust/api.dart' as api;
@@ -56,7 +58,10 @@ class LegacyBookInformationSession implements BookInformationSession {
       throw const FormatException('生成封面大小不符合限制。');
     }
     final root = Directory(
-      '${backend.settingsDirectory ?? '${Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path}/EasyPub-RustFlutter/settings'}/generated-covers',
+      await StorageLocations.retain(
+        'generated_covers',
+        settingsDirectory: backend.settingsDirectory,
+      ),
     );
     await root.create(recursive: true);
     final directory = await root.createTemp('cover-');
@@ -136,9 +141,31 @@ class LegacyBookInformationSession implements BookInformationSession {
   ) async {
     fresh();
     final ticket = ++generation;
+    final copied = jsonDecode(jsonEncode(change)) as Map<String, dynamic>;
+    final fields = copied['fields'] as Map?;
+    final cover = fields?['cover_path'];
+    if (cover is Map && cover['op'] == 'set' && cover['value'] is String) {
+      cover['value'] = await StorageLocations.copyImage(
+        cover['value'] as String,
+      );
+    }
+    final illustrations = fields?['illustrations'];
+    if (illustrations is Map &&
+        illustrations['op'] == 'set' &&
+        illustrations['value'] is List) {
+      for (final item in illustrations['value'] as List) {
+        if (item is Map && item['path'] is String) {
+          item['path'] = await StorageLocations.copyImage(
+            item['path'] as String,
+          );
+        }
+      }
+    }
+    fresh();
+    if (ticket != generation) throw const FormatException('预览已取消或被替代。');
     pending = null;
     exposed = null;
-    final result = await backend.production.previewChanges({bookId: change});
+    final result = await backend.production.previewChanges({bookId: copied});
     fresh();
     if (ticket != generation) throw const FormatException('预览已取消或被替代。');
     final row = (result.result['items'] as List).single as Map;

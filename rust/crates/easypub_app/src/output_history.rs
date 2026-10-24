@@ -552,11 +552,15 @@ pub fn clean_completed(directory: &Path, record: &Record) -> Result<(), ApiError
 }
 
 fn clean_conversion_work(receipt: &Value, output: &Path, format: &str) -> Result<(), ApiError> {
-    let workspace = std::env::var_os("LOCALAPPDATA")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
-        .join("EasyPubPlusPlus")
-        .join("conversion-work");
+    let parent = receipt
+        .get("conversion_directory")
+        .and_then(Value::as_str)
+        .and_then(|s| Path::new(s).parent())
+        .and_then(|p| p.canonicalize().ok());
+    let workspace = crate::storage::cache_paths("conversion_work")
+        .into_iter()
+        .find(|p| parent.is_some() && p.canonicalize().ok() == parent)
+        .unwrap_or_else(|| crate::storage::path("conversion_work"));
     clean_conversion_work_in(receipt, output, format, &workspace)
 }
 fn clean_conversion_work_in(

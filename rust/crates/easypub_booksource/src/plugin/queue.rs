@@ -70,8 +70,9 @@ fn changed() {
 pub(super) fn load() {
     let mut st = state();
     if let Ok(bytes) = std::fs::read(st.data.join("tasks.json"))
-        && let Ok(value) = serde_json::from_slice::<Value>(&bytes)
+        && let Ok(mut value) = serde_json::from_slice::<Value>(&bytes)
     {
+        remap_storage_paths(&mut value);
         st.max_books = value["maxBooks"].as_u64().unwrap_or(2).clamp(1, 4) as usize;
         st.next_task = value["nextTask"].as_u64().unwrap_or(0);
         st.queue = serde_json::from_value(value["tasks"].clone()).unwrap_or_default();

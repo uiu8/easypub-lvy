@@ -97,6 +97,18 @@ class RuleStatisticsSnapshot {
       rules = Map.unmodifiable({
         for (final r in (v['rules'] as List).cast<Map>())
           r['id'] as String: RuleStatistic.fromJson(r),
+      }),
+      layoutLines = Map.unmodifiable({
+        for (final e in (v['layout_lines'] as Map? ?? const {}).entries)
+          e.key as String: List<LayoutLine>.unmodifiable([
+            for (final r in (e.value as List).cast<List>())
+              LayoutLine(
+                r[0] as int,
+                r[1] as String,
+                r[2] as String,
+                r[3] == true,
+              ),
+          ]),
       });
   final String contentId, configFingerprint;
   final bool cacheHit;
@@ -105,6 +117,18 @@ class RuleStatisticsSnapshot {
   final double elapsedMilliseconds;
   final int byteLength, lineCount, chapterCount;
   final Map<String, RuleStatistic> rules;
+
+  /// 按当前设置逐行识别出的块（V104，LAY-148）：章节编号 → 各行。
+  final Map<String, List<LayoutLine>> layoutLines;
+}
+
+/// 一行的识别结果（V104，LAY-148）：本节正文行号（从 1 开始）、类别（system、verse、chat、inset、
+/// 手工标注的 letter、quote 等）、成品里的 CSS 类（如 verse-by），以及是否来自手工标注。
+class LayoutLine {
+  const LayoutLine(this.line, this.kind, this.css, this.manual);
+  final int line;
+  final String kind, css;
+  final bool manual;
 }
 
 enum RuleStatisticsPhase {

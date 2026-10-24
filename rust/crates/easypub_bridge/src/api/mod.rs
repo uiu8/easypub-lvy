@@ -165,7 +165,7 @@ pub fn duplicate_blocks_text(
 pub fn describe_api_error(error: &ApiError) -> String {
     serde_json::json!({"error": format!("{:?}", error.code), "operation": error.operation,
         "next_action":error.next_action,"retryable":error.retryable})
-        .to_string()
+    .to_string()
 }
 /// 同步版本：界面在 catch 里直接把错误换成具体原因，不必改成异步（V15 错误对照表）。
 #[flutter_rust_bridge::frb(sync)]
@@ -468,4 +468,9 @@ pub fn inspect_legacy_settings_text(path: String) -> Result<String, ApiError> {
             "retry_legacy_read",
         )
     })
+}
+
+/// V104 存储位置与受控迁移接口。
+pub fn storage_text(request_json: String) -> String {
+    easypub_app::storage::request(request_json)
 }

@@ -379,5 +379,9 @@ Future<String> captureCleanupPresetText({
 Future<String> inspectLegacySettingsText({required String path}) =>
     RustLib.instance.api.crateApiInspectLegacySettingsText(path: path);
 
+/// V104 存储位置与受控迁移接口。
+Future<String> storageText({required String requestJson}) =>
+    RustLib.instance.api.crateApiStorageText(requestJson: requestJson);
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ApiError>>
 abstract class ApiError implements RustOpaqueInterface {}

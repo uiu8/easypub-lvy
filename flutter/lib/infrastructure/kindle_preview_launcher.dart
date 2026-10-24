@@ -1,3 +1,5 @@
+import '../application/storage_locations.dart';
+
 // 真机预览组件的查找与启动（V30，LAY-108）：组件在发布包 plugins/kindle-preview/，
 // 用系统 Edge 以应用窗口（无地址栏）打开，使用单独的配置目录，不碰用户自己的 Edge 资料。
 import 'dart:io';
@@ -56,10 +58,7 @@ class SystemKindlePreviewHost implements KindlePreviewHost {
 
   @override
   Future<void> launch(String edge, Uri url) async {
-    final profile = Directory(
-      '${Directory.systemTemp.path}${Platform.pathSeparator}'
-      'EasyPub-kindle-preview-edge',
-    );
+    final profile = Directory(StorageLocations.directory('kindle_preview'));
     await Process.start(edge, [
       '--app=$url',
       '--user-data-dir=${profile.path}',

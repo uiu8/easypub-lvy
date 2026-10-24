@@ -7,11 +7,13 @@ import '../errors.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import '../../application/chapter_service.dart';
+import '../../application/rule_catalog_service.dart';
 import '../grain.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 import 'block_marks.dart';
 import 'issue_marks.dart';
+import 'layout_view.dart';
 import 'note_marks.dart';
 
 class ChapterManuscript extends StatefulWidget {
@@ -33,7 +35,15 @@ class ChapterManuscript extends StatefulWidget {
     this.issuesTruncated = false,
     this.marks,
     this.noteMarks,
+    this.layout,
+    this.onLayoutMode,
   });
+
+  /// 排版视图（V104，LAY-149）：不为空时正文按排版设置显示识别结果，可拖选几行标注；不能选字复制。
+  final ChapterLayoutView? layout;
+
+  /// 页眉“原文 | 排版”切换；书库不提供识别结果时为空，不显示切换。
+  final ValueChanged<bool>? onLayoutMode;
 
   /// 手工标注（V53，LAY-123）；书库不提供标注能力时为空，行号栏不可点。
   final BlockMarkController? marks;
@@ -88,6 +98,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     scroll.addListener(onScroll);
     widget.marks?.addListener(onMarks);
     widget.noteMarks?.addListener(onMarks);
+    widget.layout?.addListener(onMarks);
     reset();
   }
 
@@ -105,6 +116,10 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     if (oldWidget.noteMarks != widget.noteMarks) {
       oldWidget.noteMarks?.removeListener(onMarks);
       widget.noteMarks?.addListener(onMarks);
+    }
+    if (oldWidget.layout != widget.layout) {
+      oldWidget.layout?.removeListener(onMarks);
+      widget.layout?.addListener(onMarks);
     }
     if (oldWidget.node.id != widget.node.id ||
         oldWidget.page.guard != widget.page.guard ||
@@ -420,6 +435,9 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     final noteTags = noteLines[line + 1] ?? const <NoteLineTag>[];
     final lineText = row?.text ?? body.lines[index];
     final notes = widget.showNotes ? _notes[absolute] : null;
+    final layout = widget.layout;
+    final auto = layout == null ? null : layoutLines[line + 1];
+    final inBlock = systemRoles.containsKey(line + 1);
     final flagged = _notes[absolute];
     final flag = flagged == null
         ? null
@@ -431,7 +449,8 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
           ).$1;
     final text = Container(
       key: lineKeys.putIfAbsent(line, GlobalKey.new),
-      margin: const EdgeInsets.only(bottom: 2),
+      // 排版视图里同一块系统提示的各行紧挨着，边框和底色连成一片。
+      margin: EdgeInsets.only(bottom: inBlock ? 0 : 2),
       decoration: focused || chosen
           ? BoxDecoration(
               color: d.accentSoft,
@@ -486,11 +505,21 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
               ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  padding: EdgeInsets.symmetric(vertical: inBlock ? 0 : 2),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if ((mark != null && mark.first) || noteTags.isNotEmpty)
+                      if (layout != null)
+                        LayoutLineText(
+                          key: ValueKey(('body-line', widget.node.id, line)),
+                          text: lineText,
+                          line: layoutLines[line + 1],
+                          role: systemRoles[line + 1],
+                          view: layout,
+                          style: serif(16, c: d.ink, h: 1.9),
+                        )
+                      else if ((mark != null && mark.first) ||
+                          noteTags.isNotEmpty)
                         Text.rich(
                           TextSpan(
                             text: lineText,
@@ -559,8 +588,49 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
               ),
             ],
           ),
+          // 排版视图：行号旁色条，手工标注与自动识别颜色不同；悬停时右上角出标签（V104）。
+          if (layout != null && (mark != null || auto != null))
+            Positioned(
+              left: gutter - 8,
+              top: 2,
+              bottom: 2,
+              width: 3,
+              child: DecoratedBox(
+                key: ValueKey(('layout-bar', entry, line + 1)),
+                decoration: BoxDecoration(
+                  color: layoutBarColor(d, manual: mark != null),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          if (layout != null && (mark != null || auto != null))
+            Positioned(
+              right: 0,
+              top: 0,
+              child: ValueListenableBuilder<int?>(
+                valueListenable: hoverLine,
+                builder: (context, hover, child) =>
+                    hover == line ? child! : const SizedBox.shrink(),
+                child: mark != null
+                    ? BlockTag(
+                        controller: marks!,
+                        view: mark.view,
+                        lines: lineRange(
+                          mark.view.firstLine!,
+                          mark.view.lastLine!,
+                        ),
+                      )
+                    : LayoutAutoTag(
+                        key: ValueKey(('layout-tag', entry, line + 1)),
+                        label: layoutLineLabel(auto!, systemRoles[line + 1]),
+                        onTap: marks == null
+                            ? null
+                            : () => selectBlock(line + 1),
+                      ),
+              ),
+            ),
           // 手工标注的括号叠在行号栏右侧，上下与本行等高（V53）。
-          if (mark != null)
+          if (mark != null && layout == null)
             Positioned(
               left: gutter - 10,
               top: 0,
@@ -570,7 +640,34 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
         ],
       ),
     );
-    final bar = chosen && marks!.last == line + 1
+    final shown = layout == null || marks == null
+        ? text
+        : MouseRegion(
+            onEnter: (_) => hoverLine.value = line,
+            onExit: (_) {
+              if (hoverLine.value == line) hoverLine.value = null;
+            },
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () =>
+                  marks.tapLine(entry, line + 1, extend: blockMarkExtending()),
+              onPanStart: (_) {
+                dragAnchor = line + 1;
+                marks.selectRange(entry, line + 1, line + 1);
+              },
+              onPanUpdate: (details) {
+                final to = lineAt(details.globalPosition);
+                if (dragAnchor != null && to != null) {
+                  marks.selectRange(entry, dragAnchor!, to + 1);
+                }
+              },
+              onPanEnd: (_) => setState(() => dragAnchor = null),
+              onPanCancel: () => setState(() => dragAnchor = null),
+              child: text,
+            ),
+          );
+    // 拖选途中不出工具条，免得它把下面的行挤开；松手后再出。
+    final bar = chosen && marks!.last == line + 1 && dragAnchor == null
         ? Padding(
             padding: EdgeInsets.only(left: gutter),
             child: BlockMarkBar(
@@ -582,11 +679,11 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
             ),
           )
         : null;
-    if (notes == null && bar == null) return text;
+    if (notes == null && bar == null) return shown;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        text,
+        shown,
         ?bar,
         if (notes != null)
           Padding(
@@ -608,6 +705,80 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
 
   /// 本节每行所属的手工标注；每次构建时按最新列表计算。
   Map<int, BlockMarkLine> markLines = const {};
+
+  /// 排版视图（V104）：本节每行的识别结果、系统提示所属的块，悬停中的行，拖选起点。
+  Map<int, LayoutLine> layoutLines = const {};
+  Map<int, SystemRole> systemRoles = const {};
+  final hoverLine = ValueNotifier<int?>(null);
+  int? dragAnchor;
+
+  /// 拖选时指针所在的行（本节内从 0 开始）；不在任何行上时为空。
+  int? lineAt(Offset global) {
+    for (final entry in lineKeys.entries) {
+      final box = entry.value.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.attached) continue;
+      final top = box.localToGlobal(Offset.zero).dy;
+      if (global.dy >= top && global.dy < top + box.size.height) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
+  /// 点自动识别标签：选中这一块连续的同类行，弹出标注工具条。
+  void selectBlock(int line) {
+    final marks = widget.marks;
+    final kind = layoutLines[line]?.kind;
+    if (marks == null || kind == null) return;
+    var (a, b) = (line, line);
+    while (layoutLines[a - 1]?.kind == kind && markLines[a - 1] == null) {
+      a--;
+    }
+    while (layoutLines[b + 1]?.kind == kind && markLines[b + 1] == null) {
+      b++;
+    }
+    marks.selectRange(widget.node.id, a, b);
+  }
+
+  /// 页眉：本节识别到的数量与“原文 | 排版”切换（V104，LAY-149）。
+  Widget layoutHeader(Desk d) {
+    final layout = widget.layout;
+    final counts = layout?.counts(layoutLines, markLines);
+    final phase = layout?.state.phase;
+    return Container(
+      key: const ValueKey('chapter-layout-header'),
+      padding: const EdgeInsets.fromLTRB(16, 6, 12, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              layout == null
+                  ? ''
+                  : counts == null || layout.state.result == null
+                  ? phase == RuleStatisticsPhase.failed
+                        ? '暂时识别不出本章的系统提示与诗词。'
+                        : '正在识别本章的系统提示与诗词…'
+                  : '本章 系统提示 ${counts.system} · 诗词 ${counts.verse}'
+                        '${counts.manual > 0 ? ' · 手工标注 ${counts.manual}' : ''}'
+                        '　拖选几行可标注；排版视图只看和标注，改字请切回原文',
+              key: const ValueKey('chapter-layout-counts'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: ui(12, c: d.ink3),
+            ),
+          ),
+          KeyedSubtree(
+            key: const ValueKey('chapter-layout-mode'),
+            child: DeskSegmented<bool>(
+              value: layout != null,
+              options: const {false: '原文', true: '排版'},
+              onChanged: (v) => widget.onLayoutMode!(v),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   /// 本节每行的手工注释标签（V62）；每次构建时按最新列表计算。
   Map<int, List<NoteLineTag>> noteLines = const {};
@@ -697,6 +868,8 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     generation++;
     widget.marks?.removeListener(onMarks);
     widget.noteMarks?.removeListener(onMarks);
+    widget.layout?.removeListener(onMarks);
+    hoverLine.dispose();
     scroll.removeListener(onScroll);
     scroll.dispose();
     super.dispose();
@@ -714,9 +887,17 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     if (blocks.isNotEmpty) groupNotes(blocks.values.first);
     markLines = widget.marks?.linesFor(widget.node.id) ?? const {};
     noteLines = widget.noteMarks?.tagsFor(widget.node.id) ?? const {};
+    final layout = widget.layout;
+    layoutLines = layout?.linesFor(widget.node.id) ?? const {};
+    systemRoles = layout == null
+        ? const {}
+        : layout.systemRoles(layoutLines, markLines, {
+            for (final (line, text) in loadedLines()) line: text,
+          });
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (widget.onLayoutMode != null) layoutHeader(d),
         if (widget.marks != null) BlockInvalidBanner(controller: widget.marks!),
         if (widget.noteMarks != null)
           NoteInvalidBanner(controller: widget.noteMarks!),
@@ -790,7 +971,9 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
                         ),
                         Positioned.fill(
                           top: 14,
-                          child: SelectionArea(
+                          // 排版视图里拖动用来选行标注，不再选字复制。
+                          child: _MaybeSelectable(
+                            selectable: layout == null,
                             child: Container(
                               key: viewport,
                               child: ScrollConfiguration(
@@ -840,4 +1023,13 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
       ],
     );
   }
+}
+
+class _MaybeSelectable extends StatelessWidget {
+  const _MaybeSelectable({required this.selectable, required this.child});
+  final bool selectable;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) =>
+      selectable ? SelectionArea(child: child) : child;
 }

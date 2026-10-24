@@ -40,6 +40,7 @@ import '../layout/book_batch_dialog.dart';
 
 part 'library_header.dart';
 part 'library_filters.dart';
+part 'library_folders.dart';
 part 'library_selection.dart';
 part 'library_shelf.dart';
 
@@ -165,6 +166,14 @@ class _LibraryPageState extends State<LibraryPage> {
   String scope = '', sort = 'default';
   bool descending = false;
   final collectionKeys = <String, GlobalKey>{};
+
+  /// 收藏夹模式（V104）：书库顶层是收藏夹文件夹，点进去看书；不在收藏夹里的书归入“未分类”。
+  bool folders = false;
+  String folderOrder = 'custom';
+  final folderKeys = <String, GlobalKey>{};
+
+  /// 正在拖动勾选的书：收藏夹模式里路径行据此列出可放入的收藏夹。
+  bool bookDragging = false;
   String? fileHoverCollection;
   BookCollectionService? get collectionService =>
       widget.library is BookCollectionService
@@ -197,6 +206,8 @@ class _LibraryPageState extends State<LibraryPage> {
     view.sort = sort;
     view.descending = descending;
     view.compact = compact;
+    view.folders = folders;
+    view.folderOrder = folderOrder;
     view.rangeAnchor = rangeAnchor;
     if (!_restore && scroll.hasClients && _visible.isNotEmpty) {
       final row = scroll.offset / _extent;
@@ -327,6 +338,8 @@ class _LibraryPageState extends State<LibraryPage> {
       filter = '全部书稿';
     }
     compact = view?.compact ?? false;
+    folders = view?.folders ?? false;
+    folderOrder = view?.folderOrder ?? 'custom';
     rangeAnchor = view?.rangeAnchor;
     scroll.addListener(rememberView);
     widget.library.selection.addListener(selectionChanged);
@@ -722,7 +735,7 @@ class _LibraryPageState extends State<LibraryPage> {
 
   /// 外部文件拖到了哪个收藏夹行上（按行的屏幕位置判断）。
   String? collectionAt(Offset global) {
-    for (final entry in collectionKeys.entries) {
+    for (final entry in (folderMode ? folderKeys : collectionKeys).entries) {
       final box = entry.value.currentContext?.findRenderObject() as RenderBox?;
       if (box == null || !box.attached) continue;
       final local = box.globalToLocal(global);
@@ -877,7 +890,7 @@ class _LibraryPageState extends State<LibraryPage> {
                           Text(
                             '文件直接导入；文件夹先扫描确认。原文件始终保留。'
                             '\n图片拖到某本书上松开，可设为它的封面（先预览再保存）。'
-                            '${collectionService == null ? '' : '\n拖到左侧某个收藏夹上松开，导入后加入该收藏夹。'}',
+                            '${collectionService == null ? '' : '\n拖到${folderMode ? '' : '左侧'}某个收藏夹上松开，导入后加入该收藏夹。'}',
                             textAlign: TextAlign.center,
                             style: ui(12.5, c: d.ink2, h: 1.6),
                           ),
@@ -964,6 +977,7 @@ class _LibraryPageState extends State<LibraryPage> {
   /// 左栏不展开且有收藏夹或类别时，筛选行显示“显示范围”下拉（筛选收成菜单时放进菜单）。
   bool get scopeChoice =>
       collectionService != null &&
+      !folderMode &&
       !railListsScope &&
       (collectionService!.collections.value.isNotEmpty ||
           scope.isNotEmpty ||
@@ -988,8 +1002,10 @@ class _LibraryPageState extends State<LibraryPage> {
             // 左栏优先于详情栏（V84b）：书库区域宽 ≥700 就有左栏（可收起）；
             // 扣掉左栏后仍 ≥820 才放详情栏，书架至少留约 530，筛选放不下一行时收成菜单。
             // 书库为空时只有导入引导，不出左栏和开关。
+            // 收藏夹模式不出左栏：收藏夹就在书架上（V104）。
             railAvailable =
                 collectionService != null &&
+                !folderMode &&
                 frame.maxWidth >= 520 &&
                 widget.library.books.value.isNotEmpty;
             railShown = railAvailable;
@@ -1040,7 +1056,9 @@ class _LibraryPageState extends State<LibraryPage> {
                       if (books.isEmpty) {
                         return withFilters(emptyLibrary(importing));
                       }
-                      final visible = filtered(books);
+                      final visible = folderTop
+                          ? const <BookSummary>[]
+                          : filtered(books);
                       _visible = visible;
                       if (compact) {
                         _extent = rowExtent(context);
@@ -1053,12 +1071,16 @@ class _LibraryPageState extends State<LibraryPage> {
                       final list = Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          if (folderMode && scope.isNotEmpty)
+                            folderCrumb(visible.length),
                           if (visible.isNotEmpty && compact) columnHeader(),
                           Expanded(
                             child: Stack(
                               children: [
                                 Positioned.fill(
-                                  child: visible.isEmpty
+                                  child: folderTop
+                                      ? folderGrid(filtered(books))
+                                      : visible.isEmpty
                                       ? Center(
                                           child: Column(
                                             mainAxisSize: MainAxisSize.min,

@@ -573,7 +573,7 @@ extension _LayoutParagraphSection on _LayoutPageState {
         '面板首行短且没有冒号时作标题，“键：值”的键名可加粗，成品里可去掉【】。'
         '“编辑…”可逐项调整并另存为“我的样式”（所有书可用）；更自由的写法是在附加 CSS 里用公开类名 '
         '.blk-note、.blk-panel、.blk-panel-title、.blk-key、.system-line。'
-        '原文不改；同时用于 EPUB、AZW3、MOBI、KFX。小预览里分类样式按加框近似显示，以真机预览为准。',
+        '原文不改；同时用于 EPUB、AZW3、MOBI、KFX。小预览按所选样式画出单行提示与面板，只是近似，以真机预览为准（Kindle 上 AZW3 不显示底色，KFX 可能不显示边框）。下方是本书按已保存的设置识别到的数量，“查看位置”逐处列出。',
         key: ValueKey('layout-help-system_block_style'),
       ),
       current: systemBlockStyle == 'styled'
@@ -602,6 +602,11 @@ extension _LayoutParagraphSection on _LayoutPageState {
             presets('panel', '多行面板', panel, panelPresetNames),
           ],
           if (systemBlockStyle != 'off') systemPatternControls(),
+          if (widget.library is RuleCatalogLibrary)
+            RecognitionCounts(
+              library: widget.library as RuleCatalogLibrary,
+              bookId: widget.bookId,
+            ),
         ],
       ),
     );

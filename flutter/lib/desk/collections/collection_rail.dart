@@ -21,6 +21,13 @@ class LibraryBookDrag {
 String collectionScope(String id) => 'c:$id';
 String categoryScope(String category) => 'k:$category';
 
+/// 收藏夹模式里的“未分类”（V104）：不在任何收藏夹里的书。
+const unfiledScope = 'u:';
+
+/// 这本书是否不在任何收藏夹里。
+bool unfiledBook(BookSummary book, List<BookCollection> collections) =>
+    !collections.any((c) => c.books.contains(book.id));
+
 /// 按显示范围筛书。
 bool inLibraryScope(
   BookSummary book,
@@ -32,6 +39,7 @@ bool inLibraryScope(
     return c?.books.contains(book.id) ?? true;
   }
   if (scope.startsWith('k:')) return book.category == scope.substring(2);
+  if (scope == unfiledScope) return unfiledBook(book, collections);
   return true;
 }
 
@@ -44,6 +52,7 @@ String scopeLabel(String scope, List<BookCollection> collections) {
   if (scope.startsWith('k:')) {
     return scope.length == 2 ? '未分类' : '类别 · ${scope.substring(2)}';
   }
+  if (scope == unfiledScope) return '不在收藏夹的书';
   return '全部书稿';
 }
 
@@ -486,7 +495,51 @@ class _CollectionRow extends StatelessWidget {
   final bool selected, fileHover;
   final VoidCallback onTap, onDeleted;
 
-  Future<void> delete(BuildContext context) async {
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<LibraryBookDrag>(
+      onAcceptWithDetails: (details) =>
+          joinCollection(context, service, collection.id, details.data.ids),
+      builder: (context, candidates, _) => Tooltip(
+        message: collection.hasTemplate
+            ? '预设：${[for (final e in collection.template.entries)
+                    if (e.value['op'] != 'keep') '${collectionTemplateFields[e.key]}${e.value['op'] == 'clear' ? '清空' : '=${e.value['value']}'}'].join('，')}'
+                  '${collection.autoApply ? '\n加入后直接套用' : '\n加入时先预览'}'
+            : '把勾选的书拖到这里加入',
+        waitDuration: const Duration(milliseconds: 600),
+        child: _Row(
+          key: ValueKey('library-collection-${collection.id}'),
+          icon: collection.hasTemplate
+              ? Icons.bookmarks_outlined
+              : Icons.bookmark_border_rounded,
+          label: collection.name,
+          count: count,
+          selected: selected,
+          highlight: candidates.isNotEmpty || fileHover,
+          onTap: onTap,
+          trailing: collectionMenu(
+            context,
+            service,
+            collection,
+            count: count,
+            onDeleted: onDeleted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 收藏夹的“…”菜单：改名与预设、按预设更新成员、删除（左栏与收藏夹模式共用）。
+Widget collectionMenu(
+  BuildContext context,
+  BookCollectionService service,
+  BookCollection collection, {
+  required int count,
+  required VoidCallback onDeleted,
+}) {
+  final d = context.desk;
+  Future<void> delete() async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => DeskAlert(
@@ -512,77 +565,43 @@ class _CollectionRow extends StatelessWidget {
     onDeleted();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final d = context.desk;
-    return DragTarget<LibraryBookDrag>(
-      onAcceptWithDetails: (details) =>
-          joinCollection(context, service, collection.id, details.data.ids),
-      builder: (context, candidates, _) => Tooltip(
-        message: collection.hasTemplate
-            ? '预设：${[for (final e in collection.template.entries)
-                    if (e.value['op'] != 'keep') '${collectionTemplateFields[e.key]}${e.value['op'] == 'clear' ? '清空' : '=${e.value['value']}'}'].join('，')}'
-                  '${collection.autoApply ? '\n加入后直接套用' : '\n加入时先预览'}'
-            : '把勾选的书拖到这里加入',
-        waitDuration: const Duration(milliseconds: 600),
-        child: _Row(
-          key: ValueKey('library-collection-${collection.id}'),
-          icon: collection.hasTemplate
-              ? Icons.bookmarks_outlined
-              : Icons.bookmark_border_rounded,
-          label: collection.name,
-          count: count,
-          selected: selected,
-          highlight: candidates.isNotEmpty || fileHover,
-          onTap: onTap,
-          trailing: DeskCommandMenu<String>(
-            tooltip: '收藏夹操作：${collection.name}',
-            icon: Icon(Icons.more_horiz, size: 17, color: d.ink3),
-            onSelected: (action) async {
-              switch (action) {
-                case 'edit':
-                  await showCollectionEditor(
-                    context,
-                    service,
-                    existing: collection,
-                  );
-                case 'apply':
-                  final books = collection.books;
-                  await applyCollectionTemplate(
-                    context,
-                    service,
-                    collection,
-                    books,
-                    auto: false,
-                  );
-                case 'delete':
-                  await delete(context);
-              }
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                height: 36,
-                value: 'edit',
-                child: Text('重命名与预设信息…'),
-              ),
-              PopupMenuItem(
-                height: 36,
-                value: 'apply',
-                enabled: collection.hasTemplate && count > 0,
-                child: const Text('按预设信息更新全部成员…'),
-              ),
-              const PopupMenuItem(
-                height: 36,
-                value: 'delete',
-                child: Text('删除收藏夹'),
-              ),
-            ],
-          ),
-        ),
+  return DeskCommandMenu<String>(
+    tooltip: '收藏夹操作：${collection.name}',
+    icon: Icon(Icons.more_horiz, size: 17, color: d.ink3),
+    onSelected: (action) async {
+      switch (action) {
+        case 'edit':
+          await showCollectionEditor(context, service, existing: collection);
+        case 'apply':
+          await applyCollectionTemplate(
+            context,
+            service,
+            collection,
+            collection.books,
+            auto: false,
+          );
+        case 'delete':
+          await delete();
+      }
+    },
+    itemBuilder: (_) => [
+      const PopupMenuItem(height: 36, value: 'edit', child: Text('重命名与预设信息…')),
+      PopupMenuItem(
+        height: 36,
+        value: 'apply',
+        enabled: collection.hasTemplate && count > 0,
+        child: const Text('按预设信息更新全部成员…'),
       ),
-    );
-  }
+      const PopupMenuItem(height: 36, value: 'delete', child: Text('删除收藏夹')),
+    ],
+  );
 }
+
+/// 新建收藏夹（左栏与收藏夹模式共用）；返回新建的收藏夹。
+Future<BookCollection?> createCollection(
+  BuildContext context,
+  BookCollectionService service,
+) => showCollectionEditor(context, service);
 
 /// 选择一个收藏夹（或新建）；返回收藏夹 id。
 Future<String?> pickCollection(

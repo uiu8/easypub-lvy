@@ -1,3 +1,5 @@
+import 'storage_locations.dart';
+
 // 插件系统（V86）：插件是独立进程，放在插件目录里，每个插件一个子文件夹：
 //   plugin.json  {"id","name","version","description","executable","sha256","permissions":[…],"protocol":1}
 //   可执行文件
@@ -80,12 +82,9 @@ class PluginEntry {
 
 class PluginRegistry {
   PluginRegistry({List<String>? roots, String? userRoot, String? dataRoot})
-    : userRoot = userRoot ?? _appData('plugins'),
-      dataRoot = dataRoot ?? _appData('plugin-data'),
+    : userRoot = userRoot ?? StorageLocations.directory('plugins'),
+      dataRoot = dataRoot ?? StorageLocations.directory('plugin_data'),
       _extraRoots = roots ?? _defaultRoots();
-
-  static String _appData(String name) =>
-      '${Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path}${Platform.pathSeparator}EasyPub-RustFlutter${Platform.pathSeparator}$name';
 
   static List<String> _defaultRoots() => [
     ?Platform.environment['EASYPUB_PLUGIN_DIR'],
@@ -98,6 +97,25 @@ class PluginRegistry {
   final List<String> _extraRoots;
   final ValueNotifier<int> changes = ValueNotifier(0);
   final Map<String, PluginClient> _clients = {};
+  bool storageSuspended = false;
+  final Map<String, Future<PluginClient>> _starting = {};
+
+  Future<void> stopForStorage() async {
+    storageSuspended = true;
+    await Future.wait(
+      _starting.values.toList().map((f) async {
+        try {
+          await f;
+        } catch (_) {}
+      }),
+    );
+    try {
+      await closeAll();
+    } catch (_) {
+      storageSuspended = false;
+      throw const StorageException('storage_plugins_running');
+    }
+  }
 
   File get _stateFile => File('$dataRoot${Platform.pathSeparator}plugins.json');
 
@@ -176,6 +194,7 @@ class PluginRegistry {
   }
 
   Future<void> setEnabled(String id, bool enabled) async {
+    if (storageSuspended) throw const PluginError('storage_plugins_suspended');
     final state = _state();
     (state['enabled'] ??= <String, dynamic>{})[id] = enabled;
     await _stateFile.parent.create(recursive: true);
@@ -186,6 +205,7 @@ class PluginRegistry {
 
   /// 从文件夹安装：复制到用户插件目录（同标识的旧版本被替换），默认停用。
   Future<PluginEntry> installFromFolder(String folder) async {
+    if (storageSuspended) throw const PluginError('storage_plugins_suspended');
     final m = PluginManifest.read(Directory(folder));
     if (m == null) throw const PluginError('这个文件夹里没有有效的 plugin.json');
     final problem = _problem(m, fresh: true);
@@ -206,6 +226,7 @@ class PluginRegistry {
   }
 
   Future<void> uninstall(String id) async {
+    if (storageSuspended) throw const PluginError('storage_plugins_suspended');
     await _clients.remove(id)?.close();
     final target = Directory('$userRoot${Platform.pathSeparator}$id');
     if (target.existsSync()) await target.delete(recursive: true);
@@ -216,16 +237,33 @@ class PluginRegistry {
 
   /// 启动（或复用）插件进程。
   Future<PluginClient> client(String id) async {
+    if (storageSuspended) throw const PluginError('storage_plugins_suspended');
     final existing = _clients[id];
     if (existing != null && !existing.closed) return existing;
+    final pending = _starting[id];
+    if (pending != null) return pending;
     final entry = find(id, fresh: true);
     if (entry == null) throw const PluginError('没有安装这个插件');
     if (!entry.enabled) throw const PluginError('插件已停用，请在设置的“插件”里启用');
     if (entry.problem != null) throw PluginError(entry.problem!);
+    final starting = _startClient(entry, id);
+    _starting[id] = starting;
+    try {
+      return await starting;
+    } finally {
+      _starting.remove(id);
+    }
+  }
+
+  Future<PluginClient> _startClient(PluginEntry entry, String id) async {
     final client = await PluginClient.start(
       entry.manifest.executablePath,
       dataDirectory(id),
     );
+    if (storageSuspended) {
+      await client.close();
+      throw const PluginError('storage_plugins_suspended');
+    }
     _clients[id] = client;
     return client;
   }
@@ -257,7 +295,15 @@ class PluginClient {
 
   static Future<PluginClient> start(String executable, String dataDir) async {
     await Directory(dataDir).create(recursive: true);
-    final process = await Process.start(executable, ['--data', dataDir]);
+    final process = await Process.start(
+      executable,
+      ['--data', dataDir],
+      environment: {
+        'EASYPUB_STORAGE_ALIASES': jsonEncode(
+          StorageLocations.layout['aliases'] ?? [],
+        ),
+      },
+    );
     return PluginClient._(process);
   }
 
@@ -313,11 +359,15 @@ class PluginClient {
   }
 
   Future<void> close() async {
-    if (closed) return;
+    if (closed) {
+      await _process.exitCode.timeout(const Duration(seconds: 5));
+      return;
+    }
     try {
       await call('exit').timeout(const Duration(seconds: 2));
     } catch (_) {}
     closed = true;
     _process.kill();
+    await _process.exitCode.timeout(const Duration(seconds: 5));
   }
 }

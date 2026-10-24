@@ -31,6 +31,8 @@ import 'layout_presets_dialog.dart';
 import 'block_style_editor.dart';
 import 'inset_rule_dialog.dart';
 import 'inset_style_editor.dart';
+import 'recognition_counts.dart';
+import '../../application/rule_catalog_service.dart';
 import '../../application/settings_service.dart';
 
 part 'layout_page_text.dart';

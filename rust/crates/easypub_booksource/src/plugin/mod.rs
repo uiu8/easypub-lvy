@@ -499,3 +499,34 @@ pub fn run() {
         });
     }
 }
+
+/// 宿主搬家后的路径映射，仅用于本地下载记录和队列，不改书源脚本或凭据。
+fn remap_storage_paths(value: &mut Value) {
+    let aliases: Vec<(PathBuf, PathBuf)> = std::env::var("EASYPUB_STORAGE_ALIASES")
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    fn visit(v: &mut Value, aliases: &[(PathBuf, PathBuf)]) {
+        match v {
+            Value::String(s) => {
+                for (old, new) in aliases {
+                    if let Ok(relative) = std::path::Path::new(s).strip_prefix(old) {
+                        *s = new.join(relative).to_string_lossy().into_owned();
+                    }
+                }
+            }
+            Value::Array(a) => {
+                for item in a {
+                    visit(item, aliases)
+                }
+            }
+            Value::Object(m) => {
+                for item in m.values_mut() {
+                    visit(item, aliases)
+                }
+            }
+            _ => (),
+        }
+    }
+    visit(value, &aliases);
+}

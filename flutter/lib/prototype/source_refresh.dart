@@ -384,7 +384,10 @@ extension SourceRefreshOperations on PrototypeState {
       if (updateImages) row['epub_resources'] = p.source.resourceReport;
       candidate['current_path'] = source.path;
       final root = Directory(
-        '${settingsDirectory ?? '${Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path}/EasyPub-RustFlutter/settings'}/source-recovery',
+        StorageLocations.directory(
+          'source_recovery',
+          settingsDirectory: settingsDirectory,
+        ),
       );
       await root.create(recursive: true);
       final folder = await root.createTemp('refresh-');

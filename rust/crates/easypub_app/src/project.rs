@@ -628,7 +628,9 @@ pub fn open(service: &ImportService, path: &str) -> Result<String, ApiError> {
     if data.len() > MAX_PROJECT_BYTES {
         return Err(invalid());
     }
-    let mut project: Project = serde_json::from_slice(&data).map_err(|_| invalid())?;
+    let mut value: serde_json::Value = serde_json::from_slice(&data).map_err(|_| invalid())?;
+    crate::storage::remap_value(&mut value);
+    let mut project: Project = serde_json::from_value(value).map_err(|_| invalid())?;
     crate::source_project::resolve(&mut project, project_path(path)?)?;
     crate::checkpoint_project::resolve(&mut project, project_path(path)?)?;
     project.validate()?;

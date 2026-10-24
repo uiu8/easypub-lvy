@@ -113,7 +113,11 @@ extension _LibraryFilters on _LibraryPageState {
     // 再窄时（V84b）格式、状态、仅看已勾选与显示范围收进一个“筛选”菜单。
     // 左栏开关 V94 移到标题行最左，筛选行不再给它留位置。
     const railToggle = 0;
-    final full = 464 + railToggle + (scopeChoice ? 150 : 0);
+    final full =
+        464 +
+        railToggle +
+        (scopeChoice ? 150 : 0) +
+        (collectionService != null ? 40 : 0);
     final compactFilters = width - 46 < (200 + full) * scale;
     filtersCompact = compactFilters;
     final search = SizedBox(
@@ -257,6 +261,17 @@ extension _LibraryFilters on _LibraryPageState {
               color: sort == 'default' && !descending ? d.ink2 : d.ink,
             ),
           ),
+          if (collectionService != null)
+            IconButton(
+              key: const ValueKey('library-folder-toggle'),
+              tooltip: folderMode ? '切换到平铺模式' : '切换到收藏夹模式',
+              isSelected: folderMode,
+              onPressed: toggleFolders,
+              icon: Icon(
+                folderMode ? Icons.folder_rounded : Icons.folder_outlined,
+                color: folderMode ? d.ink : d.ink2,
+              ),
+            ),
           IconButton(
             key: const ValueKey('library-view-toggle'),
             tooltip: compact ? '切换书架视图' : '切换列表视图',
@@ -322,7 +337,7 @@ extension _LibraryFilters on _LibraryPageState {
           option('status:$v', v == '全部书稿' ? '全部状态' : v, filter == v),
         const PopupMenuDivider(),
         option('checked:', '仅看已勾选', onlySelected),
-        if (collectionService != null && !railListsScope) ...[
+        if (collectionService != null && !railListsScope && !folderMode) ...[
           const PopupMenuDivider(),
           heading('显示范围'),
           option('scope:', '全部书稿', scope.isEmpty),

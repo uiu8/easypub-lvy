@@ -1,3 +1,5 @@
+import '../application/storage_locations.dart';
+
 import 'dart:async';
 
 import '../src/rust/api.dart' as api;
@@ -171,11 +173,7 @@ class LegacyConversionSession extends ChangeNotifier
     if (disposed ||
         ticket != generation ||
         !guards.entries.every(
-          (e) =>
-              backend.conversionContext(
-                e.key,
-              ) ==
-              e.value,
+          (e) => backend.conversionContext(e.key) == e.value,
         )) {
       throw const FormatException('书稿已变化或操作已取消，请重新检查。');
     }
@@ -401,10 +399,7 @@ class LegacyConversionSession extends ChangeNotifier
           'engine',
           'language',
         ].every((k) => config[k] is String) ||
-        ![
-          'generate_cover',
-          'run_checks',
-        ].every((k) => config[k] is bool)) {
+        !['generate_cover', 'run_checks'].every((k) => config[k] is bool)) {
       throw const FormatException('旧批次缺少完整原配置，请重新配置转换。');
     }
     final rows = (origin['items'] as List).cast<Map>();
@@ -482,10 +477,7 @@ class LegacyConversionSession extends ChangeNotifier
         )
         .toList();
     this.request = request;
-    guards = {
-      for (final id in ids)
-        id: backend.conversionContext(id),
-    };
+    guards = {for (final id in ids) id: backend.conversionContext(id)};
     busy = true;
     changed();
     try {
@@ -518,9 +510,7 @@ class LegacyConversionSession extends ChangeNotifier
         }
         final frozen = retryItems?[book.id];
         if (frozen != null) {
-          final input = backend.publicationRequest(
-            book.id,
-          );
+          final input = backend.publicationRequest(book.id);
           if (publicationFingerprint(input) != frozen['input_fingerprint']) {
             throw const FormatException('书稿或编辑内容已改变，不能复用原方案；请重新配置并预览。');
           }
@@ -552,7 +542,10 @@ class LegacyConversionSession extends ChangeNotifier
             backend.displayTitle(book),
             backend.authorOf(book),
             Directory(
-              '${backend.settingsDirectory ?? '${Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path}/EasyPub-RustFlutter'}/conversion-covers',
+              await StorageLocations.retain(
+                'conversion_covers',
+                settingsDirectory: backend.settingsDirectory,
+              ),
             ),
           );
           current(ticket);

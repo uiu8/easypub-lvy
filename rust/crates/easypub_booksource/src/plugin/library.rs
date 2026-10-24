@@ -31,7 +31,11 @@ fn library_path() -> PathBuf {
 pub(super) fn load_library() -> Vec<Value> {
     std::fs::read_to_string(library_path())
         .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|mut v| {
+            remap_storage_paths(&mut v);
+            serde_json::from_value(v).ok()
+        })
         .unwrap_or_default()
 }
 

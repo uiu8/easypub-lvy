@@ -1,3 +1,4 @@
+import '../application/storage_locations.dart';
 import '../infrastructure/import_profile.dart';
 
 import 'dart:io';
@@ -146,11 +147,7 @@ Future<ImportedTxt> readBook(String path, bool Function() cancelled) async {
   if (extension != 'epub') {
     throw const FormatException('目前支持 TXT 和 EPUB 文件。');
   }
-  final root = Directory(
-    Platform.environment['LOCALAPPDATA'] == null
-        ? '${Directory.systemTemp.path}${Platform.pathSeparator}easypub-epub-imports'
-        : '${Platform.environment['LOCALAPPDATA']}${Platform.pathSeparator}EasyPub-RustFlutter${Platform.pathSeparator}imports',
-  );
+  final root = Directory(await StorageLocations.retain('imports'));
   final bundle = await EpubImportCache(root: root).read(file, cancelled);
   final imported = await readTxt(bundle.textPath, cancelled);
   return ImportedTxt(

@@ -365,8 +365,12 @@ bool isVerseLine(String line) {
   return a.length == b.length &&
       (a.length == 5 || a.length == 7) &&
       _han.hasMatch(a) &&
-      _han.hasMatch(b);
+      _han.hasMatch(b) &&
+      // V92：含现代白话虚词、代词的不算诗句。
+      !_modernProse.hasMatch(a + b);
 }
+
+final _modernProse = RegExp('[的了们吗呢吧啊呀么很这那没她它您咱]');
 
 /// 紧跟诗句、以“——”开头的短行视为署名（与 Rust 规则一致）。
 bool isVerseAttribution(String line) {

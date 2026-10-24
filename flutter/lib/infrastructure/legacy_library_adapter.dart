@@ -1,3 +1,6 @@
+import '../application/storage_locations.dart';
+import '../application/storage_settings_service.dart';
+import '../application/plugin_host.dart';
 import '../infrastructure/import_profile.dart';
 import '../application/library_check_batch.dart';
 import '../application/parallel_books.dart';
@@ -99,7 +102,8 @@ class LegacyLibraryAdapter
         CheckCacheService,
         CrashLogService,
         BookCollectionService,
-        FolderAutoImportService {
+        FolderAutoImportService,
+        StorageSettingsService {
   // ---------------------------------------------------------------- 书库收藏夹（V84，LIB-118–126）
   // 第一次用到时才建（订阅后端通知）；dispose 只释放已建的，不在释放时新建。
   LegacyCollections? _collections;
@@ -481,6 +485,135 @@ class LegacyLibraryAdapter
   Future<bool> flushWorkspace() async {
     await _backend.outputs.historySaved;
     return !_autosaveStarted ? true : _autosave!.flush();
+  }
+
+  String? _storageMoveJob;
+
+  /// V104：UI 在此调用搬家，不能直接向 native 伪报插件已停。
+  // ---------------------------------------------------------------- 存储位置界面（V104，SET-108–112）
+  @override
+  bool get storageAvailable => StorageLocations.initialized;
+  @override
+  Future<Map<String, dynamic>> storageStatus() =>
+      StorageLocations.request({'op': 'status'});
+  @override
+  Future<Map<String, dynamic>> storageStats() =>
+      StorageLocations.request({'op': 'stats'});
+  @override
+  Future<void> setCacheRoot(String path) =>
+      StorageLocations.configure({'op': 'cache.set', 'path': path});
+  @override
+  Future<void> setImageMode(String mode) =>
+      StorageLocations.configure({'op': 'image.set', 'mode': mode});
+  @override
+  Future<Map<String, dynamic>> cleanCache(List<String> kinds) =>
+      StorageLocations.request({'op': 'cache.clean', 'kinds': kinds});
+
+  @override
+  Future<Map<String, dynamic>> moveStorage(String target) async {
+    final plugins = PluginRegistry.instance;
+    if (hasPendingWork || plugins.storageSuspended) {
+      throw const StorageException('storage_busy');
+    }
+    plugins.storageSuspended = true;
+    _storageMoveJob = null;
+    try {
+      if (!await flushWorkspace()) {
+        throw const StorageException('storage_flush_failed');
+      }
+      await plugins.stopForStorage();
+      if (hasPendingWork) throw const StorageException('storage_busy');
+      final result = await StorageLocations.request({
+        'op': 'move.start',
+        'path': target,
+        'plugins_stopped': true,
+      });
+      _storageMoveJob = result['job_id'] as String;
+      return result;
+    } catch (_) {
+      plugins.storageSuspended = false;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> storageMoveProgress(
+    String jobId, {
+    bool cancel = false,
+  }) async {
+    final result = await StorageLocations.request({
+      'op': cancel ? 'move.cancel' : 'move.poll',
+      'job_id': jobId,
+    });
+    if (_storageMoveJob == jobId &&
+        (result['phase'] == 'failed' || result['phase'] == 'cancelled')) {
+      _storageMoveJob = null;
+      PluginRegistry.instance.storageSuspended = false;
+    }
+    return result;
+  }
+
+  /// 复制成功的图片进入一次制作计划；缺失项保留原路径并逐项返回。
+  @override
+  Future<Map<String, dynamic>> copyReferencedImages() async {
+    if (hasPendingWork) throw const StorageException('storage_busy');
+    final identity = _backend.projectIdentity;
+    final changes = <String, Map<String, dynamic>>{};
+    final missing = <Map<String, dynamic>>[];
+    var copied = 0;
+    for (final book in _backend.shelf.books.where((b) => !b.isDemo)) {
+      final values = _backend.production.settings(book.id);
+      final fields = <String, dynamic>{};
+      Future<String> copy(String original, int index) async {
+        try {
+          final path = await StorageLocations.copyImage(original, force: true);
+          if (path != original) copied++;
+          return path;
+        } catch (_) {
+          missing.add({
+            'book_id': book.id,
+            'index': index,
+            'path': original,
+            'reason': await File(original).exists()
+                ? 'unreadable_or_invalid'
+                : 'missing',
+          });
+          return original;
+        }
+      }
+
+      final cover = values['cover_path'];
+      if (cover is String && cover.isNotEmpty) {
+        final next = await copy(cover, -1);
+        if (next != cover) fields['cover_path'] = {'op': 'set', 'value': next};
+      }
+      final images =
+          (jsonDecode(jsonEncode(values['illustrations'] ?? [])) as List);
+      var changed = false;
+      for (var i = 0; i < images.length; i++) {
+        final item = images[i] as Map;
+        final original = item['path'] as String;
+        item['path'] = await copy(original, i);
+        changed |= item['path'] != original;
+      }
+      if (changed) fields['illustrations'] = {'op': 'set', 'value': images};
+      if (fields.isNotEmpty) {
+        changes[book.id] = {'op': 'patch', 'fields': fields};
+      }
+    }
+    if (hasPendingWork || identity != _backend.projectIdentity) {
+      throw const StorageException('storage_source_changed');
+    }
+    if (changes.isNotEmpty) {
+      final preview = await _backend.production.previewChanges(changes);
+      if (!await _backend.production.confirm(preview)) {
+        throw const StorageException('storage_source_changed');
+      }
+      if (!await flushWorkspace()) {
+        throw const StorageException('storage_flush_failed');
+      }
+    }
+    return {'copied': copied, 'missing': missing};
   }
 
   Future<bool> initializeWorkspace() async {

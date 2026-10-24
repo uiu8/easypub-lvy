@@ -496,3 +496,57 @@ fn hypothetical_catalog_counts_require_a_reference_and_keep_real_locations() {
         false
     );
 }
+
+/// V104（LAY-148）：按当前设置逐行列出系统提示与诗词，行号是本节正文行号，手工标注单独标出；关闭识别时不列。
+#[test]
+fn layout_lines_follow_current_settings_and_mark_manual_blocks() {
+    let source = SourceSnapshot::from_utf8(fixture().into_bytes(), RULE_ID, || false).unwrap();
+    let mut publication = request(&source);
+    let off = calculate(
+        &source,
+        serde_json::from_value(publication.clone()).unwrap(),
+        json!([]),
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    assert_eq!(off["layout_lines"], json!({}));
+
+    publication["settings"]["system_block_style"] = json!("styled");
+    publication["settings"]["verse_block_style"] = json!("center");
+    let text = source.decoded_text();
+    let start = text.find("广告：样书").unwrap();
+    let end = start + text[start..].find('\n').unwrap() + 1;
+    publication["settings"]["block_annotations"] = json!([{"id":"4".repeat(64),"start":start,"end":end,"kind":"quote","fingerprint":digest(&text.as_bytes()[start..end])}]);
+    let on = calculate(
+        &source,
+        serde_json::from_value(publication).unwrap(),
+        json!([]),
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    let lines = on["layout_lines"].as_object().unwrap();
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    let chapter = lines.values().next().unwrap().as_array().unwrap();
+    let rows: Vec<(u64, &str, bool)> = chapter
+        .iter()
+        .map(|r| {
+            (
+                r[0].as_u64().unwrap(),
+                r[1].as_str().unwrap(),
+                r[3].as_bool().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (3, "system", false),
+            (4, "system", false),
+            (5, "verse", false),
+            (6, "verse", false),
+            (7, "verse", false),
+            (10, "quote", true),
+        ]
+    );
+    assert_eq!(chapter[4][2], "verse-by");
+}

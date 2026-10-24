@@ -108,8 +108,12 @@ fn artifacts() -> &'static Mutex<Vec<Artifact>> {
     static CACHE: OnceLock<Mutex<Vec<Artifact>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(Vec::new()))
 }
-pub(crate) fn execute_controlled(source: &SourceSnapshot, request: Request,
-    fault: InjectFault, checkpoint: &dyn Fn(&'static str) -> Result<(), ApiError>) -> Result<Value, ApiError> {
+pub(crate) fn execute_controlled(
+    source: &SourceSnapshot,
+    request: Request,
+    fault: InjectFault,
+    checkpoint: &dyn Fn(&'static str) -> Result<(), ApiError>,
+) -> Result<Value, ApiError> {
     checkpoint("preparing")?;
     if matches!(request.op, Operation::Commit) && (!request.confirmed || request.plan_id.is_none())
     {
@@ -144,7 +148,9 @@ pub(crate) fn execute_controlled(source: &SourceSnapshot, request: Request,
     };
     let reused = cached.is_some();
     let mut passthrough = None;
-    let bytes = if let Some(bytes) = cached { bytes } else {
+    let bytes = if let Some(bytes) = cached {
+        bytes
+    } else {
         let bytes = Arc::new(if let Some(original) = &original {
             let (bytes, report) = crate::epub_passthrough::rebuild(
                 &original.bytes,
@@ -153,11 +159,18 @@ pub(crate) fn execute_controlled(source: &SourceSnapshot, request: Request,
             passthrough = Some(report);
             bytes
         } else {
-            crate::epub::write_controlled(&prepared, Cursor::new(Vec::new()), &|| checkpoint("converting"))?.into_inner()
+            crate::epub::write_controlled(&prepared, Cursor::new(Vec::new()), &|| {
+                checkpoint("converting")
+            })?
+            .into_inner()
         });
         if bytes.len() <= 128 * 1024 * 1024 {
             let mut cache = artifacts().lock().expect("epub artifacts");
-            while !cache.is_empty() && (cache.len() >= 8 || cache.iter().map(|a| a.1.len()).sum::<usize>() + bytes.len() > 128 * 1024 * 1024) {
+            while !cache.is_empty()
+                && (cache.len() >= 8
+                    || cache.iter().map(|a| a.1.len()).sum::<usize>() + bytes.len()
+                        > 128 * 1024 * 1024)
+            {
                 cache.remove(0);
             }
             cache.push((plan_id.clone(), bytes.clone(), Instant::now()));
@@ -196,7 +209,10 @@ pub fn handle(service: &ImportService, request_json: String) -> Result<String, A
     if request_json.len() > 4 * 1024 * 1024 {
         return Err(invalid(ErrorCode::TooLarge, "reduce_export_request"));
     }
-    if serde_json::from_str::<Value>(&request_json).ok().is_some_and(|v| v["op"] == "render_preview") {
+    if serde_json::from_str::<Value>(&request_json)
+        .ok()
+        .is_some_and(|v| v["op"] == "render_preview")
+    {
         return render_preview(service, &request_json);
     }
     let request = parse(&request_json)?;
@@ -204,51 +220,103 @@ pub fn handle(service: &ImportService, request_json: String) -> Result<String, A
     Ok(execute(&source, request, InjectFault::None)?.to_string())
 }
 pub fn parse(request: &str) -> Result<Request, ApiError> {
-    if request.len() > 4 * 1024 * 1024 { return Err(invalid(ErrorCode::TooLarge,"reduce_export_request")); }
-    serde_json::from_str(request).map_err(|_| invalid(ErrorCode::InvalidRule, "review_export_request"))
+    if request.len() > 4 * 1024 * 1024 {
+        return Err(invalid(ErrorCode::TooLarge, "reduce_export_request"));
+    }
+    serde_json::from_str(request)
+        .map_err(|_| invalid(ErrorCode::InvalidRule, "review_export_request"))
 }
 
 fn render_preview(service: &ImportService, request: &str) -> Result<String, ApiError> {
     #[derive(Deserialize)]
-    struct Preview { publication: publication_resources::Request, entry_id: Option<String> }
-    let req: Preview = serde_json::from_str(request).map_err(|_| invalid(ErrorCode::InvalidRule,"review_preview"))?;
-    let source = service.source(&req.publication.source_id,req.publication.revision)?;
-    let prepared = publication_resources::prepare(&source,req.publication)?;
+    struct Preview {
+        publication: publication_resources::Request,
+        entry_id: Option<String>,
+    }
+    let req: Preview = serde_json::from_str(request)
+        .map_err(|_| invalid(ErrorCode::InvalidRule, "review_preview"))?;
+    let source = service.source(&req.publication.source_id, req.publication.revision)?;
+    let prepared = publication_resources::prepare(&source, req.publication)?;
     // 只打包不压缩：随后马上解开（V83）。
-    let bytes = crate::epub::write_unpacked_preview(&prepared,Cursor::new(Vec::new()))?.into_inner();
-    let root = std::env::temp_dir().join("EasyPub-content-preview");
-    let directory = root.join(format!("{}-{}",std::process::id(),time::OffsetDateTime::now_utc().unix_timestamp_nanos()));
-    fs::create_dir_all(&directory).map_err(|_| invalid(ErrorCode::Io,"retry_preview"))?;
-    let focus = req.entry_id.as_deref().and_then(|id| prepared.book().tree.nodes.iter().position(|n|n.entry_id==id));
-    let anchor = focus.map(|i|format!("node-{i}"));
+    let bytes =
+        crate::epub::write_unpacked_preview(&prepared, Cursor::new(Vec::new()))?.into_inner();
+    let root = crate::storage::retain_cache("content_preview")
+        .map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+    let directory = root.join(format!(
+        "{}-{}",
+        std::process::id(),
+        time::OffsetDateTime::now_utc().unix_timestamp_nanos()
+    ));
+    fs::create_dir_all(&directory).map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+    let focus = req.entry_id.as_deref().and_then(|id| {
+        prepared
+            .book()
+            .tree
+            .nodes
+            .iter()
+            .position(|n| n.entry_id == id)
+    });
+    let anchor = focus.map(|i| format!("node-{i}"));
     let mut selected = None;
     let mut documents = Vec::new();
-    let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| invalid(ErrorCode::Internal,"retry_preview"))?;
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
+        .map_err(|_| invalid(ErrorCode::Internal, "retry_preview"))?;
     for i in 0..archive.len() {
-        let mut item = archive.by_index(i).map_err(|_| invalid(ErrorCode::Internal,"retry_preview"))?;
-        let Some(path) = item.enclosed_name() else {continue};
-        let Ok(relative) = path.strip_prefix("EPUB") else {continue};
+        let mut item = archive
+            .by_index(i)
+            .map_err(|_| invalid(ErrorCode::Internal, "retry_preview"))?;
+        let Some(path) = item.enclosed_name() else {
+            continue;
+        };
+        let Ok(relative) = path.strip_prefix("EPUB") else {
+            continue;
+        };
         let target = directory.join(relative);
-        if let Some(parent) = target.parent() {fs::create_dir_all(parent).map_err(|_| invalid(ErrorCode::Io,"retry_preview"))?;}
-        let mut file = File::create(&target).map_err(|_| invalid(ErrorCode::Io,"retry_preview"))?;
-        if relative.extension().is_some_and(|s|s=="xhtml") {
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+        }
+        let mut file =
+            File::create(&target).map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+        if relative.extension().is_some_and(|s| s == "xhtml") {
             let mut text = String::new();
-            item.read_to_string(&mut text).map_err(|_| invalid(ErrorCode::Io,"retry_preview"))?;
+            item.read_to_string(&mut text)
+                .map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
             use std::io::Write;
-            file.write_all(text.as_bytes()).map_err(|_| invalid(ErrorCode::Io,"retry_preview"))?;
-            if anchor.as_ref().is_some_and(|id|text.contains(&format!("id=\"{id}\""))) {selected=Some(target.clone());}
+            file.write_all(text.as_bytes())
+                .map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+            if anchor
+                .as_ref()
+                .is_some_and(|id| text.contains(&format!("id=\"{id}\"")))
+            {
+                selected = Some(target.clone());
+            }
             documents.push(json!({"path":target,"title":relative.to_string_lossy()}));
-        } else { std::io::copy(&mut item,&mut file).map_err(|_| invalid(ErrorCode::Io,"retry_preview"))?; }
+        } else {
+            std::io::copy(&mut item, &mut file)
+                .map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+        }
     }
     let selected = selected.unwrap_or_else(|| {
         let body = directory.join("body.xhtml");
-        if body.is_file() { body } else {
-            documents.iter().find_map(|d| d["path"].as_str().map(std::path::PathBuf::from)).unwrap_or(body)
+        if body.is_file() {
+            body
+        } else {
+            documents
+                .iter()
+                .find_map(|d| d["path"].as_str().map(std::path::PathBuf::from))
+                .unwrap_or(body)
         }
     });
-    let relative = selected.strip_prefix(&directory).map_err(|_| invalid(ErrorCode::Internal,"retry_preview"))?
-        .to_string_lossy().replace('\\',"/");
-    let destination = format!("{}{}",relative,anchor.as_ref().map(|s|format!("#{s}")).unwrap_or_default());
+    let relative = selected
+        .strip_prefix(&directory)
+        .map_err(|_| invalid(ErrorCode::Internal, "retry_preview"))?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let destination = format!(
+        "{}{}",
+        relative,
+        anchor.as_ref().map(|s| format!("#{s}")).unwrap_or_default()
+    );
     let html = directory.join("preview.html");
     fs::write(&html, format!("<!doctype html><html lang=\"zh\"><meta charset=\"utf-8\"><title>{}</title><style>html,body,iframe{{margin:0;width:100%;height:100%;border:0;display:block}}</style><iframe title=\"生成内容预览\" src=\"{}\"></iframe></html>",
         crate::navigation_documents::escaped(&prepared.manifest().title)?,
@@ -256,7 +324,10 @@ fn render_preview(service: &ImportService, request: &str) -> Result<String, ApiE
     // Retain only previews created by this process; never enumerate or remove
     // another application's directory, or a user-supplied output path.
     static PREVIEWS: OnceLock<Mutex<Vec<std::path::PathBuf>>> = OnceLock::new();
-    let mut previews = PREVIEWS.get_or_init(|| Mutex::new(Vec::new())).lock().expect("preview cache");
+    let mut previews = PREVIEWS
+        .get_or_init(|| Mutex::new(Vec::new()))
+        .lock()
+        .expect("preview cache");
     previews.push(directory.clone());
     while previews.len() > 4 {
         let old = previews.remove(0);
@@ -352,10 +423,22 @@ mod tests {
         let preview2 = run(&request2, InjectFault::None).unwrap();
         request2["op"] = json!("commit");
         request2["plan_id"] = preview2["plan_id"].clone();
-        let cancelled = execute_controlled(&source, serde_json::from_value(request2.clone()).unwrap(),
-            InjectFault::None, &|phase| if phase == "checking" {
-                Err(ApiError::new(ErrorCode::Cancelled,"epub_export","retry_export"))
-            } else { Ok(()) });
+        let cancelled = execute_controlled(
+            &source,
+            serde_json::from_value(request2.clone()).unwrap(),
+            InjectFault::None,
+            &|phase| {
+                if phase == "checking" {
+                    Err(ApiError::new(
+                        ErrorCode::Cancelled,
+                        "epub_export",
+                        "retry_export",
+                    ))
+                } else {
+                    Ok(())
+                }
+            },
+        );
         assert_eq!(cancelled.unwrap_err().code, ErrorCode::Cancelled);
         assert!(!dir.join("normal.epub").exists());
         let receipt = run(&request2, InjectFault::None).unwrap();

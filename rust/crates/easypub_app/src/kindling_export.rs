@@ -257,11 +257,7 @@ fn execute_inner(
             "passthrough":passthrough}),
         );
     }
-    let workspace = std::env::var_os("LOCALAPPDATA")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
-        .join("EasyPubPlusPlus")
-        .join("conversion-work");
+    let workspace = crate::storage::retain_cache("conversion_work").map_err(io_error)?;
     fs::create_dir_all(&workspace).map_err(io_error)?;
     let stage = workspace.join(format!(
         ".easypub-kindling-{}-{}",

@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:easypub_desktop/application/library_service.dart';
+import 'package:easypub_desktop/application/storage_locations.dart';
 import 'package:easypub_desktop/desk/app/rewrite_app.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/fonts.dart';
@@ -14,6 +15,7 @@ import 'package:easypub_desktop/desk/plugins/booksource_page.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
 import 'package:easypub_desktop/src/rust/frb_generated.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -54,6 +56,17 @@ String _sampleBook() {
     b.writeln(title);
     for (var p = 0; p < 6; p++) {
       b.writeln('　　这是第$c章的第${p + 1}段正文，山路很长，海风很轻，行人一步一步走向远方。');
+      // V104：第 1 章第 3 段后放一条单行提示、一个面板和一联诗句，排版小预览能看到分类样式。
+      // 放在原稿第 7 行（插图位置）之后，不影响 R5 的插图。
+      if (c == 1 && p == 2) {
+        b.writeln('【叮！检测到隐藏任务】');
+        b.writeln('　　他停下脚步，眼前浮出一行字。');
+        b.writeln('【山门试炼】');
+        b.writeln('【任务：守住山门三日】');
+        b.writeln('【奖励：灵石×100】');
+        b.writeln('青山不语三千载，一剑西来万古寒。');
+        b.writeln('云海无边一叶舟，天风浩荡入青霄。');
+      }
     }
     if (c == 8) b.writeln('第八章我杀这边的人，他们都看着我');
     if (c % 6 == 0) b.writeln('　　这一行的末尾留着几个空格。   ');
@@ -149,6 +162,11 @@ void main() {
       await prepareDeskGrain();
       await Directory(_out!).create(recursive: true);
       final tmp = await Directory.systemTemp.createTemp('desk-atlas-');
+      // V104：存储布局放进临时目录，设置页才显示“存储位置”，也不碰真实的应用目录。
+      await StorageLocations.initialize(
+        local: '${tmp.path}/local',
+        temp: '${tmp.path}/temp',
+      );
       final state = PrototypeState(settingsDirectory: '${tmp.path}/settings');
       library = LegacyLibraryAdapter(backend: state);
       await library.load();
@@ -170,6 +188,16 @@ void main() {
       }
       await library.importFiles(files);
       bookId = library.books.value.firstWhere((b) => b.title == '山海之间').id;
+      // V104：样书的系统提示用分类样式（单行提示条、标题面板）。
+      final styled = await state.production.previewChanges({
+        bookId: {
+          'op': 'patch',
+          'fields': {
+            'system_block_style': {'op': 'set', 'value': 'styled'},
+          },
+        },
+      });
+      await state.production.confirm(styled);
       // R5：给样书一张插图（第 1 章第 2 段之后，原稿第 7 行），资源页和排版预览才有内容。图在测试里画，不用外部文件。
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
@@ -194,8 +222,12 @@ void main() {
         resources.dispose();
       }
     });
-    library.createCollection('武侠');
-    library.createCollection('待读');
+    final wuxia = library.createCollection('武侠');
+    final later = library.createCollection('待读');
+    // V104：收藏夹模式要有成员才看得出封面叠放；留几本不在收藏夹里，归入“未分类”。
+    final ids = [for (final b in library.books.value) b.id];
+    library.addToCollection(wuxia.id, ids.take(3));
+    library.addToCollection(later.id, ids.skip(2).take(2));
     library.selectBook(bookId);
     final book = Uri.encodeComponent(bookId);
     final pages = <(String, String, String)>[
@@ -218,6 +250,7 @@ void main() {
       ('history', '记录', '/history'),
       ('plugins', '插件', '/plugins'),
       ('settings', '设置', '/settings'),
+      ('settings-data', '设置 · 数据与迁移', '/settings?tab=5'),
     ];
     final key = GlobalKey();
     for (final theme in _pick('THEMES', _themes)) {
@@ -281,6 +314,103 @@ void main() {
             }
             t.takeException();
           }
+
+          // V104：章节页排版视图（鼠标停在单行提示上，显示自动识别标签），看完切回原文。
+          router.go('/books/$book/chapters');
+          await settle(t);
+          final chapterOne = find.text('第1章 云涌1');
+          if (chapterOne.evaluate().isNotEmpty) {
+            await t.tap(chapterOne.first);
+            await settle(t);
+          }
+          await cleanupShot('chapters-layout', '章节 · 排版视图', () async {
+            await t.tap(
+              find.descendant(
+                of: find.byKey(const ValueKey('chapter-layout-mode')),
+                matching: find.text('排版'),
+              ),
+            );
+            await settle(t, max: 300);
+            final target = find.textContaining('检测到隐藏任务');
+            if (target.evaluate().isNotEmpty) {
+              final mouse = await t.createGesture(
+                kind: PointerDeviceKind.mouse,
+              );
+              await mouse.addPointer(location: t.getCenter(target.first));
+              await t.pump();
+              await settle(t);
+              await mouse.removePointer();
+            }
+          });
+          final toText = find.descendant(
+            of: find.byKey(const ValueKey('chapter-layout-mode')),
+            matching: find.text('原文'),
+          );
+          if (toText.evaluate().isNotEmpty) {
+            await t.tap(toText);
+            await settle(t);
+          }
+          t.takeException();
+
+          // V104：排版页“段落与识别”：分类样式的小预览与识别数量。
+          router.go('/books/$book/layout');
+          await settle(t);
+          await cleanupShot('layout-paragraph', '排版 · 段落与识别', () async {
+            await t.tap(
+              find.descendant(
+                of: find.byKey(const ValueKey('layout-tabs')),
+                matching: find.text('段落与识别'),
+              ),
+            );
+            await settle(t);
+            final row = find.byKey(
+              const ValueKey('layout-row-system_block_style'),
+            );
+            await t.ensureVisible(row);
+            await t.tap(row);
+            await settle(t);
+          });
+          for (var page = 2; page <= 3; page++) {
+            await cleanupShot(
+              'layout-paragraph-p$page',
+              '排版 · 段落与识别 · 第 $page 页',
+              () async {
+                await t.tap(find.text('下一页'));
+                await settle(t);
+              },
+            );
+          }
+
+          // V104：书库收藏夹模式（顶层与点进一个收藏夹），看完切回平铺。
+          router.go('/');
+          await settle(t);
+          await cleanupShot('library-folders', '书库 · 收藏夹模式', () async {
+            await t.tap(find.byKey(const ValueKey('library-folder-toggle')));
+            await settle(t);
+          });
+          await cleanupShot(
+            'library-folder-inside',
+            '书库 · 收藏夹模式 · 武侠',
+            () async {
+              await t.tap(
+                find.descendant(
+                  of: find.byKey(const ValueKey('library-folder-grid')),
+                  matching: find.text('武侠'),
+                ),
+              );
+              await settle(t);
+            },
+          );
+          if (find
+              .byKey(const ValueKey('library-folder-toggle'))
+              .evaluate()
+              .isNotEmpty) {
+            await t.tap(find.byKey(const ValueKey('library-folder-back')));
+            await settle(t);
+            await t.tap(find.byKey(const ValueKey('library-folder-toggle')));
+            await settle(t);
+          }
+          t.takeException();
 
           router.go('/books/$book/cleanup');
           await settle(t);

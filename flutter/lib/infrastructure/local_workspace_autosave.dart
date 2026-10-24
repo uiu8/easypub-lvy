@@ -1,3 +1,5 @@
+import '../application/storage_locations.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -146,6 +148,10 @@ class LocalWorkspaceAutosave {
           await File(paths.join(snapshot.path, 'workspace.json'))
               .readAsString(),
         ) as Map).cast<String, dynamic>();
+        final remapped = StorageLocations.remap(data) as Map;
+        data
+          ..clear()
+          ..addAll(remapped.cast<String, dynamic>());
         if (data['schema'] != 1) throw const FormatException('未知工作区版本');
         final drafts = (data['drafts'] as Map).cast<String, dynamic>();
         final restoredDrafts = {
