@@ -786,6 +786,121 @@ fn prepare_context_cancellable(
             }
             continue;
         }
+        // V116：合并连续空行按全书习惯判断。先数非空行之间的空行数，最常见的（至少 1）算作这本书
+        // 的段间习惯；只合并超出习惯、又不挨着章节标题或分隔线、也不在全文开头结尾的连续空行。
+        // 一段连续空行合成一处变更（保留习惯数量的空行）。行里含换行（前面步骤合并过）时用原来的逐行做法。
+        if matches!(compiled.rule, Rule::CollapseBlankLines)
+            && !rows
+                .iter()
+                .any(|r| !r.removed && !r.merged && r.text.contains(['\r', '\n']))
+        {
+            let live: Vec<usize> = (0..rows.len())
+                .filter(|&i| !rows[i].removed && !rows[i].merged)
+                .collect();
+            let blank = |i: usize| rows[i].text.trim().is_empty();
+            let mut gaps = std::collections::BTreeMap::<usize, usize>::new();
+            let (mut run, mut seen) = (0usize, false);
+            for &i in &live {
+                if blank(i) {
+                    run += 1;
+                } else {
+                    if seen {
+                        *gaps.entry(run).or_default() += 1;
+                    }
+                    seen = true;
+                    run = 0;
+                }
+            }
+            // 段落太少（不到 20 处间隔）时看不出习惯，按段间不空行处理。
+            let usual = if gaps.values().sum::<usize>() < 20 {
+                0
+            } else {
+                gaps.iter()
+                    .max_by_key(|&(gap, count)| (*count, std::cmp::Reverse(*gap)))
+                    .map_or(0, |(gap, _)| *gap)
+            };
+            // 段间本来不空行的书，标题旁的空行照旧合并（与以前一致）；段间空行的书才把
+            // 标题、分隔线旁多出的空行当作结构保留。
+            let gapped = usual > 0;
+            let usual = usual.max(1);
+            let mut groups: Vec<Vec<usize>> = Vec::new();
+            let mut k = 0;
+            while k < live.len() {
+                if k % 256 == 0 {
+                    checkpoint()?;
+                }
+                if !blank(live[k]) {
+                    k += 1;
+                    continue;
+                }
+                let start = k;
+                while k < live.len() && blank(live[k]) {
+                    k += 1;
+                }
+                if k - start <= usual {
+                    continue;
+                }
+                let neighbours = [start.checked_sub(1).map(|p| live[p]), live.get(k).copied()];
+                let structural = neighbours.iter().any(|n| match n {
+                    None => true,
+                    Some(i) => {
+                        rows[*i].heading || crate::cleanup_text::is_rule_line(&rows[*i].text)
+                    }
+                });
+                if gapped && structural {
+                    continue;
+                }
+                let mut group: Vec<usize> = Vec::new();
+                for &i in &live[start + usual..k] {
+                    let row = &rows[i];
+                    let keep = !row.eligible
+                        || step_excluded(
+                            step_index,
+                            row.source_start as u32 + 1,
+                            row.source_end as u32 + 1,
+                        );
+                    let contiguous = group.last().is_none_or(|&last| last + 1 == i);
+                    if (keep || !contiguous) && !group.is_empty() {
+                        groups.push(std::mem::take(&mut group));
+                    }
+                    if !keep {
+                        group.push(i);
+                    }
+                }
+                if !group.is_empty() {
+                    groups.push(group);
+                }
+            }
+            for group in groups {
+                let first = group[0];
+                let last = *group.last().unwrap();
+                let before: String = group
+                    .iter()
+                    .map(|&i| format!("{}{}", rows[i].text, rows[i].ending))
+                    .collect();
+                record_stage(
+                    &mut stages,
+                    &mut audit_bytes,
+                    &mut output_bytes,
+                    step_index,
+                    first,
+                    rows[last].source_end,
+                    &before,
+                    None,
+                    "duplicate_blank",
+                )?;
+                let end = rows[last].source_end;
+                for &i in &group[1..] {
+                    rows[i].merged = true;
+                }
+                let row = &mut rows[first];
+                row.removed = true;
+                row.source_end = end;
+                row.last_step = step_index;
+                row.reason = "duplicate_blank";
+            }
+            continue;
+        }
         let mut previous_blank = false;
         for (index, row) in rows.iter_mut().enumerate() {
             if index % 256 == 0 {
@@ -2428,6 +2543,59 @@ mod explicit_empty_pipeline_tests {
         )
         .unwrap();
         assert!(ambiguous.ordered_rules().is_err());
+    }
+}
+
+#[cfg(test)]
+mod smart_blank_tests {
+    use super::*;
+    use crate::source::RULE_ID;
+
+    /// V116：段间空一行的书，章节标题与分隔线旁的多个空行是结构，不算；正文中间多出的
+    /// 一段空行合成一处变更，保留一个空行。
+    #[test]
+    fn collapse_follows_the_books_own_gap_and_skips_chapter_boundaries() {
+        let mut raw = String::new();
+        for c in 1..=3 {
+            raw.push_str(&format!("\n\n第{c}章 标题\n\n"));
+            for p in 0..8 {
+                raw.push_str(&format!("　　第{c}章第{p}段。\n\n"));
+            }
+            raw.push_str("\n----------------------------------------\n\n");
+        }
+        // 正文中间多出两个空行（共三个）。
+        raw.push_str("　　尾段一。\n\n\n\n　　尾段二。\n");
+        let source = SourceSnapshot::from_utf8(raw.into_bytes(), RULE_ID, || false).unwrap();
+        let plan = prepare(
+            &source,
+            r#"{"kind":"cleanup","rules":["collapse_blank_lines"]}"#,
+        )
+        .unwrap();
+        assert_eq!(plan.changes.len(), 1, "{}", plan.text);
+        let change = &plan.changes[0];
+        assert!(change.after.is_none());
+        assert_eq!(
+            change.source_end_line - change.source_line,
+            1,
+            "两行空行合成一处"
+        );
+        assert!(plan.text.contains("　　尾段一。\n\n　　尾段二。"));
+        assert!(plan.text.contains("\n\n第2章 标题"));
+    }
+
+    /// 段间不空行的书照旧：两个以上空行合成一个（标题旁也合并），一段连续空行算一处变更。
+    #[test]
+    fn collapse_in_books_without_paragraph_gaps() {
+        let raw = "第1章 开始\n\n\n　　甲。\n　　乙。\n\n\n\n　　丙。\n　　丁。\n";
+        let source = SourceSnapshot::from_utf8(raw.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let plan = prepare(
+            &source,
+            r#"{"kind":"cleanup","rules":["collapse_blank_lines"]}"#,
+        )
+        .unwrap();
+        assert_eq!(plan.changes.len(), 2);
+        assert!(plan.text.starts_with("第1章 开始\n\n　　甲。"));
+        assert!(plan.text.contains("　　乙。\n\n　　丙。"));
     }
 }
 

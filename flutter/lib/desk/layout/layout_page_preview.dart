@@ -145,7 +145,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
         try {
           // 先读原图宽度（随正文插图按原尺寸显示），大图缩到 900 宽再解码。
           final buffer = await dui.ImmutableBuffer.fromUint8List(
-            await File(item.path).readAsBytes(),
+            await readLocalFileBytes(item.path),
           );
           final descriptor = await dui.ImageDescriptor.encoded(buffer);
           natural = descriptor.width.toDouble();

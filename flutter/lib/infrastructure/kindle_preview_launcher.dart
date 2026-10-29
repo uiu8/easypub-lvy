@@ -64,6 +64,13 @@ class SystemKindlePreviewHost implements KindlePreviewHost {
       '--user-data-dir=${profile.path}',
       '--no-first-run',
       '--no-default-browser-check',
+      // V107：这是只显示预览的独立窗口，不同步账号、不装扩展、不下载浏览器组件，
+      // 免得资料目录涨到几百 MB（实测 40 秒内 87 MB → 21 MB）。
+      '--disable-sync',
+      '--disable-extensions',
+      '--disable-features=msImplicitSignin,msEdgeSync',
+      '--disable-background-networking',
+      '--disable-component-update',
       '--window-size=1320,940',
     ], mode: ProcessStartMode.detached);
   }

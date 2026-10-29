@@ -26,11 +26,44 @@ void main() {
     expect(parse('道诡异仙_作者：狐尾的笔（完结）.txt'), ('道诡异仙', '狐尾的笔'));
     expect(parse('凡人修仙传（精校版）作者：忘语.epub'), ('凡人修仙传', '忘语'));
     expect(parse('《三体》作者：刘慈欣 著.txt'), ('三体', '刘慈欣'));
+    // V107：书源插件默认的“书名 - 作者”。
+    expect(parse('诡秘之主 - 爱潜水的乌贼.txt'), ('诡秘之主', '爱潜水的乌贼'));
+    expect(parse('精灵女王审讯录 - 社畜宅宅 (1).txt'), ('精灵女王审讯录', '社畜宅宅'));
+  });
+
+  test('“书名 - 作者”：后半段像分册或章节、分隔不止一处、两边没空格时不猜', () {
+    for (final name in [
+      '斗罗大陆 - 第二部',
+      '三体 - 2',
+      '红楼梦 - 上',
+      '雪中悍刀行 - 卷一',
+      '某某 - 甲 - 乙',
+      '诡秘之主-爱潜水的乌贼',
+    ]) {
+      expect(parse('$name.txt'), (name, ''), reason: name);
+    }
+  });
+
+  test('TXT 开头的“书名 / 作者：”', () {
+    expect(
+      txtHeaderMetadata(
+        '精灵女王审讯录\n作者：社畜宅宅\n\n简介：\n……',
+        r'D:\下载\精灵女王审讯录.txt',
+      )?.author,
+      '社畜宅宅',
+    );
+    expect(
+      txtHeaderMetadata('\uFEFF雾港来信\r\n作者:林岚\r\n', '雾港来信 - 林岚.txt')?.title,
+      '雾港来信',
+    );
+    // 第一行不是文件名开头（正文第一句）、没有“作者：”、只有一行时不用。
+    expect(txtHeaderMetadata('第一章 远行\n作者：某某\n', '雾港来信.txt'), isNull);
+    expect(txtHeaderMetadata('雾港来信\n第一章 远行\n', '雾港来信.txt'), isNull);
+    expect(txtHeaderMetadata('雾港来信', '雾港来信.txt'), isNull);
   });
 
   test('认不出时原样保留文件名，不猜作者', () {
     expect(parse('山海之间.txt'), ('山海之间', ''));
-    expect(parse('诡秘之主 - 爱潜水的乌贼.txt'), ('诡秘之主 - 爱潜水的乌贼', ''));
     // 括号里没有版本字样的不去掉。
     expect(parse('红楼梦（上）作者：曹雪芹.txt'), ('红楼梦（上）', '曹雪芹'));
     // 只有“作者：”没有书名。
@@ -72,15 +105,27 @@ void main() {
 
     const dash = FileNameOptions(mode: 'custom', pattern: '{作者} - {书名}');
     expect(with_('爱潜水的乌贼 - 诡秘之主.txt', dash), ('诡秘之主', '爱潜水的乌贼'));
-    expect(with_('诡秘之主.txt', dash), ('诡秘之主', ''), reason: '不符合格式时不提取');
+    expect(with_('诡秘之主.txt', dash), ('诡秘之主', ''));
+    // 不符合格式时按自动识别（V107）。
+    expect(with_('剑来(烽火戏诸侯).txt', dash), ('剑来', '烽火戏诸侯'));
+    // 多行：按顺序逐行尝试，用第一个符合的。
+    const many = FileNameOptions(
+      mode: 'custom',
+      pattern: '[{*}]{书名}_{作者}\n{作者}：{书名}\n',
+    );
+    expect(many.patterns, ['[{*}]{书名}_{作者}', '{作者}：{书名}']);
+    expect(isValidFileNamePattern(many.pattern), true);
+    expect(with_('[精校]剑来_烽火戏诸侯.txt', many), ('剑来', '烽火戏诸侯'));
+    expect(with_('猫腻：将夜.txt', many), ('将夜', '猫腻'));
+    expect(isValidFileNamePattern('{书名}\n{作者}'), false, reason: '有一行无效就不能用');
     const tagged = FileNameOptions(mode: 'custom', pattern: '[{*}]{书名}_{作者}');
     expect(with_('[精校]剑来_烽火戏诸侯 (1).txt', tagged), ('剑来', '烽火戏诸侯'));
-    // 格式无效（没有书名、两个作者）时不提取。
+    // 格式无效（没有书名、两个作者）时按自动识别。
     for (final bad in ['{作者}', '{书名}{作者}{作者}', '书名']) {
       expect(isValidFileNamePattern(bad), false, reason: bad);
       expect(
         with_('剑来(烽火戏诸侯).txt', FileNameOptions(mode: 'custom', pattern: bad)),
-        ('剑来(烽火戏诸侯)', ''),
+        ('剑来', '烽火戏诸侯'),
       );
     }
     expect(with_('剑来(烽火戏诸侯) (1).txt', const FileNameOptions(mode: 'off')), (
@@ -134,6 +179,16 @@ void main() {
     expect(refresh.incoming['title'], '雾港来信');
     expect(refresh.incoming['author'], '林岚');
 
+    // 书源下载的 TXT：文件名里没有作者，开头写着“书名 / 作者：”（V107）。
+    final downloaded = File('${root.path}/海港夜话.txt')
+      ..writeAsStringSync('海港夜话\n作者：沈舟\n\n\n第一章 远行\n\n　　山路很长。\n');
+    expect(
+      (await library.importFiles([downloaded.path])).single.succeeded,
+      true,
+    );
+    final fromHeader = library.books.value.firstWhere((b) => b.title == '海港夜话');
+    expect(fromHeader.author, '沈舟');
+
     // 改用自定义格式并保留书名里的作者名后，再导入一本。
     await library.savePatch({
       'filename_author_mode': 'custom',
@@ -143,7 +198,9 @@ void main() {
     final second = File('${root.path}/林岚 - 山海之间 (1).txt')
       ..writeAsStringSync('第一章 远行\n山路很长。\n');
     expect((await library.importFiles([second.path])).single.succeeded, true);
-    final added = library.books.value.firstWhere((b) => b.id != book.id);
+    final added = library.books.value.firstWhere(
+      (b) => b.id != book.id && b.id != fromHeader.id,
+    );
     expect(added.title, '林岚 - 山海之间');
     expect(added.author, '林岚');
   });
@@ -225,7 +282,7 @@ void main() {
       '{作者}',
     );
     await t.pump();
-    expect(find.text('需要恰好一个 {书名}，{作者} 最多一个'), findsOneWidget);
+    expect(find.text('每行需要恰好一个 {书名}，{作者} 最多一个'), findsOneWidget);
     expect(
       t
           .widget<DeskButton>(

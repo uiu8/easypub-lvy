@@ -3,7 +3,6 @@
 // 设计：design_review_v37/d3_layout.dart（D3-D）。
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as dui;
 
@@ -14,6 +13,7 @@ import '../errors.dart';
 
 import '../../application/chapter_service.dart';
 import '../../application/kindle_preview_server.dart';
+import '../../application/conversion_desktop.dart' show readLocalFileBytes;
 import '../../application/layout_service.dart';
 import '../../application/library_service.dart';
 import '../../application/resource_service.dart';
@@ -56,6 +56,7 @@ class LayoutPage extends StatefulWidget {
     required this.importCss,
     this.pickImage,
     this.pickStylePack,
+    this.pickStylePackFolder,
     this.pickStylePackDestination,
     this.openCssOnStart = false,
     this.initialTab = 0,
@@ -72,6 +73,9 @@ class LayoutPage extends StatefulWidget {
 
   /// 章节样式包文件（V74，LAY-130）：导入时选 .zip，导出时选保存位置。
   final Future<String?> Function()? pickStylePack;
+
+  /// 选择样式包文件夹（V114）；为 null 时不显示“从文件夹导入”。
+  final Future<String?> Function()? pickStylePackFolder;
   final Future<String?> Function(String name)? pickStylePackDestination;
   final bool openCssOnStart;
 
@@ -742,10 +746,15 @@ class _LayoutPageState extends State<LayoutPage> {
     );
     final draft = (request['values'] as Map?) ?? const {};
     final line = (draft['line_height'] as num?)?.toDouble() ?? 1.2;
-    final m = readerMetrics(choice, bookLineHeight: line);
+    // 书内字号相对 110% 的倍数（只认 %）：真机规则按实际正文字号算行距与版心（V118）。
+    final percent = draft['font_size_unit'] == '%'
+        ? (draft['font_size'] as num?)?.toDouble()
+        : null;
+    final scale = percent == null || percent <= 0 ? 1.0 : percent / 110;
+    final m = readerMetrics(choice, bookScale: scale, bookLineHeight: line);
     return {
       // 校准点是书内字号 110% 时的正文字号；根字号按此还原，书内 % 字号再在其上缩放。
-      'rootPx': m.fontPx / 1.1,
+      'rootPx': m.fontPx / (1.1 * scale),
       'lineRatio': m.lineRatio,
       'padding': {
         'left': m.padding.left,
@@ -755,6 +764,9 @@ class _LayoutPageState extends State<LayoutPage> {
       },
       'measured': m.measured,
       'note': m.note,
+      'tracking': m.tracking,
+      'justify': m.justify,
+      'cssPx': m.cssPx,
     };
   }
 

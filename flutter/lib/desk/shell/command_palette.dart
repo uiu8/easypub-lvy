@@ -70,7 +70,7 @@ Future<void> showDeskCommandPalette(
 }) async {
   final chosen = await showDialog<DeskCommand>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: .18),
+    barrierColor: context.desk.shadowInk.withValues(alpha: .18),
     builder: (_) =>
         _CommandPalette(commands: commands, recent: recent, more: more),
   );

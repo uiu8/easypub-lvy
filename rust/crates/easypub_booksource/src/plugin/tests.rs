@@ -368,6 +368,21 @@ fn v88_storage_stream_queue_and_legacy_rebuild() {
     assert_eq!(listed[1]["enabled"], true);
     handle("sources.dedupe", &json!({"action":"delete"})).unwrap();
     assert_eq!(runtime(&base).unwrap().source.meta.id, listed[1]["id"]);
+    // 重置运行状态（V108）：书源脚本存的变量随运行状态一起丢掉，下次用时是新的。
+    let before = runtime(&base).unwrap();
+    before
+        .vars
+        .lock()
+        .unwrap()
+        .insert("fqPool".into(), "fake-device".into());
+    assert_eq!(
+        handle("source.reset", &json!({"id":base})).unwrap()["cleared"],
+        1
+    );
+    let after = runtime(&base).unwrap();
+    assert!(!Arc::ptr_eq(&before, &after));
+    assert!(after.vars.lock().unwrap().get("fqPool").is_none());
+    assert!(handle("source.reset", &json!({"id":"no-such-source"})).is_err());
     let alt_id = format!("{base}#alternative");
     let mut alt_rules = rules.clone();
     alt_rules["bookSourceUrl"] = json!(alt_id);

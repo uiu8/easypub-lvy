@@ -23,7 +23,9 @@ extension _BookSourceShelf on _BookSourcePageState {
     });
     try {
       final result = await api!.call('library.rebuild', {'key': key}) as Map;
-      final message = '已重新整理并保留备份：${result['backup']}';
+      // 重新整理只改下载的 TXT，不碰书库里的草稿（V111）。
+      final message =
+          '已重新整理并保留备份：${result['backup']}。这本书已在书库时，书库里还是原来的版本，可在书库的书籍菜单里用“刷新来源”采用。';
       update(() {
         shelfMessage = message;
         sourceMessage = message;
@@ -31,8 +33,8 @@ extension _BookSourceShelf on _BookSourcePageState {
       await _loadShelf();
     } catch (e) {
       update(() {
-        shelfMessage = '$e';
-        sourceMessage = '$e';
+        shelfMessage = bookSourceErrorText(e);
+        sourceMessage = bookSourceErrorText(e);
       });
     } finally {
       update(() => shelfBusy = false);
@@ -49,7 +51,7 @@ extension _BookSourceShelf on _BookSourcePageState {
       await _loadQueue();
       update(() => tab = 'downloads');
     } catch (e) {
-      update(() => shelfMessage = '$e');
+      update(() => shelfMessage = bookSourceErrorText(e));
     } finally {
       update(() => shelfBusy = false);
     }
@@ -60,7 +62,7 @@ extension _BookSourceShelf on _BookSourcePageState {
       final list = await api!.call('library.list') as List;
       shelf = [for (final x in list) Map<String, dynamic>.from(x as Map)];
     } catch (e) {
-      shelfMessage = '$e';
+      shelfMessage = bookSourceErrorText(e);
     }
     if (mounted) update(() {});
   }
@@ -89,7 +91,7 @@ extension _BookSourceShelf on _BookSourcePageState {
         if (changed == 0 && errors == 0) '都是最新的。',
       ].join(' ');
     } catch (e) {
-      shelfMessage = '$e';
+      shelfMessage = bookSourceErrorText(e);
     }
     if (mounted) update(() => shelfBusy = false);
   }
@@ -113,7 +115,7 @@ extension _BookSourceShelf on _BookSourcePageState {
         tab = 'downloads';
       });
     } catch (e) {
-      update(() => shelfMessage = '$e');
+      update(() => shelfMessage = bookSourceErrorText(e));
     }
   }
 
@@ -179,11 +181,9 @@ extension _BookSourceShelf on _BookSourcePageState {
           const SizedBox(height: 8),
           Expanded(
             child: shelf.isEmpty
-                ? Center(
-                    child: DeskText(
-                      '还没有下载过的书。在“搜索”里找书并下载后会出现在这里。',
-                      color: d.ink2,
-                    ),
+                ? const DeskEmptyState(
+                    '还没有下载过的书。在“搜索”里找书并下载后会出现在这里。',
+                    icon: Icons.auto_stories_outlined,
                   )
                 : ListView(
                     children: [

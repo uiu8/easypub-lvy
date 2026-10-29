@@ -73,14 +73,14 @@ extension _BookSourceSubscriptions on _BookSourcePageState {
           final rows = failures
               .where((r) => selected.isEmpty || r['cause'] == selected)
               .toList();
-          return AlertDialog(
+          return DeskAlert(
             title: const Text('下载问题分类'),
             content: SizedBox(
               width: 620,
               height: 400,
               child: Column(
                 children: [
-                  DropdownButton<String>(
+                  DeskChoice<String>(
                     value: selected,
                     isExpanded: true,
                     items: [
@@ -112,9 +112,10 @@ extension _BookSourceSubscriptions on _BookSourcePageState {
               ),
             ),
             actions: [
-              TextButton(
+              DeskButton(
+                '关闭',
+                quiet: true,
                 onPressed: () => Navigator.pop(dialog),
-                child: const Text('关闭'),
               ),
             ],
           );
@@ -141,7 +142,7 @@ extension _BookSourceSubscriptions on _BookSourcePageState {
       await showDialog<void>(
         context: context,
         builder: (dialog) => StatefulBuilder(
-          builder: (dialog, change) => AlertDialog(
+          builder: (dialog, change) => DeskAlert(
             title: const Text('确认订阅更新'),
             content: SizedBox(
               width: 650,
@@ -217,7 +218,7 @@ extension _BookSourceSubscriptions on _BookSourcePageState {
                           if (dialog.mounted) {
                             change(() {
                               busy = false;
-                              error = '$e';
+                              error = bookSourceErrorText(e);
                             });
                           }
                         }
@@ -228,7 +229,7 @@ extension _BookSourceSubscriptions on _BookSourcePageState {
         ),
       );
     } catch (e) {
-      if (mounted) update(() => sourceMessage = '$e');
+      if (mounted) update(() => sourceMessage = bookSourceErrorText(e));
     }
   }
 
@@ -263,13 +264,15 @@ extension _BookSourceSubscriptions on _BookSourcePageState {
                   });
                 }
               } catch (e) {
-                if (dialog.mounted) change(() => message = '$e');
+                if (dialog.mounted) {
+                  change(() => message = bookSourceErrorText(e));
+                }
               } finally {
                 if (dialog.mounted) change(() => busy = false);
               }
             }
 
-            return AlertDialog(
+            return DeskAlert(
               title: const Text('订阅与更新'),
               content: SizedBox(
                 width: 720,
@@ -386,34 +389,31 @@ extension _BookSourceSubscriptions on _BookSourcePageState {
                                           final accepted =
                                               await showDialog<bool>(
                                                 context: dialog,
-                                                builder: (confirm) =>
-                                                    AlertDialog(
-                                                      title: const Text(
-                                                        '回退上一版规则？',
-                                                      ),
-                                                      content: const Text(
-                                                        '恢复上一版本的书源规则，保留同地址书源当前的个人设置。',
-                                                      ),
-                                                      actions: [
-                                                        DeskButton(
-                                                          '取消',
-                                                          quiet: true,
-                                                          onPressed: () =>
-                                                              Navigator.pop(
-                                                                confirm,
-                                                                false,
-                                                              ),
-                                                        ),
-                                                        DeskButton(
-                                                          '确认回退',
-                                                          onPressed: () =>
-                                                              Navigator.pop(
-                                                                confirm,
-                                                                true,
-                                                              ),
-                                                        ),
-                                                      ],
+                                                builder: (confirm) => DeskAlert(
+                                                  title: const Text('回退上一版规则？'),
+                                                  content: const Text(
+                                                    '恢复上一版本的书源规则，保留同地址书源当前的个人设置。',
+                                                  ),
+                                                  actions: [
+                                                    DeskButton(
+                                                      '取消',
+                                                      quiet: true,
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                            confirm,
+                                                            false,
+                                                          ),
                                                     ),
+                                                    DeskButton(
+                                                      '确认回退',
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                            confirm,
+                                                            true,
+                                                          ),
+                                                    ),
+                                                  ],
+                                                ),
                                               );
                                           if (accepted != true) return;
                                           await api!.call(
@@ -446,7 +446,7 @@ extension _BookSourceSubscriptions on _BookSourcePageState {
         ),
       );
     } catch (e) {
-      if (mounted) update(() => sourceMessage = '$e');
+      if (mounted) update(() => sourceMessage = bookSourceErrorText(e));
     }
   }
 
@@ -457,7 +457,7 @@ extension _BookSourceSubscriptions on _BookSourcePageState {
       final rows = result['unsupported'] as List? ?? [];
       await showDialog<void>(
         context: context,
-        builder: (dialog) => AlertDialog(
+        builder: (dialog) => DeskAlert(
           title: const Text('不支持的写法排行'),
           content: SizedBox(
             width: 560,
@@ -483,7 +483,7 @@ extension _BookSourceSubscriptions on _BookSourcePageState {
         ),
       );
     } catch (e) {
-      if (mounted) update(() => sourceMessage = '$e');
+      if (mounted) update(() => sourceMessage = bookSourceErrorText(e));
     }
   }
 }

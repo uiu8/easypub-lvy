@@ -348,6 +348,159 @@ fn import(zip_path: &Path, dir: &Path) -> Result<Imported, ApiError> {
     Ok((style, blocks, insets))
 }
 
+/// 从文件夹导入样式包（V114）。文件夹里有 `style.json` 时按样式包格式读取；否则按图片文件名识别：
+/// `header-数字.*` 为章头图（按名称排序，按章轮换），`header-line.*` 为标题下装饰线，
+/// `footer-line.*` 为章末装饰，`cover.*` 为文字封面背景。名称取文件夹名；上一级有
+/// `style-names.json`（文件夹名 → 显示名称）时用其中的名称。图片复制到 [dir] 下按内容命名的子目录。
+fn import_folder(folder: &Path, dir: &Path) -> Result<Imported, ApiError> {
+    let read_file = |name: &str, limit: u64| -> Result<Vec<u8>, ApiError> {
+        let name = if name == "style.json" {
+            name
+        } else {
+            member_name(name)?
+        };
+        let file = fs::File::open(folder.join(name)).map_err(|_| invalid())?;
+        let mut data = Vec::new();
+        file.take(limit + 1)
+            .read_to_end(&mut data)
+            .map_err(|_| invalid())?;
+        if data.len() as u64 > limit {
+            return Err(invalid());
+        }
+        Ok(data)
+    };
+    let mut files: Vec<String> = fs::read_dir(folder)
+        .map_err(|_| invalid())?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| member_name(n).is_ok())
+        .collect();
+    files.sort();
+    let (pack, blocks, insets) = if folder.join("style.json").is_file() {
+        let pack: PackFile =
+            serde_json::from_slice(&read_file("style.json", 64 * 1024)?).map_err(|_| invalid())?;
+        if pack.schema_version != 1 || pack.head_images.len() > MAX_HEAD_IMAGES {
+            return Err(invalid());
+        }
+        if let Some(blocks) = &pack.blocks {
+            blocks.validate()?;
+        }
+        if let Some(insets) = &pack.insets {
+            insets.validate()?;
+        }
+        let blocks = pack.blocks.clone();
+        let insets = pack.insets.clone();
+        (pack, blocks, insets)
+    } else {
+        let image = |n: &&String| {
+            let lower = n.to_ascii_lowercase();
+            [".png", ".jpg", ".jpeg"].iter().any(|e| lower.ends_with(e))
+        };
+        let stem = |n: &str| {
+            n.rsplit_once('.')
+                .map_or(n, |(s, _)| s)
+                .to_ascii_lowercase()
+        };
+        let named = |want: &str| {
+            files
+                .iter()
+                .filter(image)
+                .find(|n| stem(n) == want)
+                .cloned()
+        };
+        let head_images: Vec<String> = files
+            .iter()
+            .filter(image)
+            .filter(|n| {
+                stem(n).strip_prefix("header-").is_some_and(|rest| {
+                    !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit())
+                })
+            })
+            .take(MAX_HEAD_IMAGES)
+            .cloned()
+            .collect();
+        let folder_name = folder
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(invalid)?
+            .to_owned();
+        let display = folder
+            .parent()
+            .and_then(|p| fs::read(p.join("style-names.json")).ok())
+            .filter(|data| data.len() <= 64 * 1024)
+            .and_then(|data| serde_json::from_slice::<serde_json::Map<String, Value>>(&data).ok())
+            .and_then(|names| {
+                names
+                    .get(&folder_name)
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned)
+            })
+            .unwrap_or(folder_name);
+        let pack = PackFile {
+            schema_version: 1,
+            name: display.chars().take(64).collect(),
+            author: String::new(),
+            head_images,
+            title_rule: named("header-line"),
+            chapter_end: named("footer-line"),
+            volume_frame: default_frame(),
+            cover_background: named("cover"),
+            blocks: None,
+            insets: None,
+        };
+        if pack.head_images.is_empty()
+            && pack.title_rule.is_none()
+            && pack.chapter_end.is_none()
+            && pack.cover_background.is_none()
+        {
+            return Err(invalid());
+        }
+        (pack, None, None)
+    };
+    // 按所用图片的内容取目录名：同一文件夹重复导入不重复复制。
+    let mut hasher = Sha256::new();
+    let members: Vec<&String> = pack
+        .head_images
+        .iter()
+        .chain(pack.title_rule.iter())
+        .chain(pack.chapter_end.iter())
+        .chain(pack.cover_background.iter())
+        .collect();
+    let mut loaded = std::collections::BTreeMap::new();
+    for name in &members {
+        let data = read_file(name, MAX_IMAGE_BYTES)?;
+        image::load_from_memory(&data).map_err(|_| invalid())?;
+        hasher.update(name.as_bytes());
+        hasher.update(&data);
+        loaded.insert((*name).clone(), data);
+    }
+    let digest = format!("{:x}", hasher.finalize());
+    let target = dir.join(format!("pack-{}", &digest[..16]));
+    fs::create_dir_all(&target).map_err(|_| io())?;
+    let place = |name: &String| -> Result<String, ApiError> {
+        let path = target.join(name);
+        if !path.exists() {
+            write_new(&path, &loaded[name])?;
+        }
+        path_string(path)
+    };
+    let style = ChapterStyle {
+        name: pack.name.trim().into(),
+        head_images: pack
+            .head_images
+            .iter()
+            .map(place)
+            .collect::<Result<_, _>>()?,
+        title_rule: pack.title_rule.as_ref().map(place).transpose()?,
+        chapter_end: pack.chapter_end.as_ref().map(place).transpose()?,
+        volume_frame: pack.volume_frame,
+        cover_background: pack.cover_background.as_ref().map(place).transpose()?,
+    };
+    style.validate(|_| Ok(()))?;
+    Ok((style, blocks, insets))
+}
+
 fn export(
     style: &ChapterStyle,
     blocks: Option<&crate::block_styles::SystemStyles>,
@@ -450,7 +603,12 @@ pub fn run(value: Value) -> Result<String, ApiError> {
             json!({"style": builtin(id, &absolute("dir")?)?, "blocks": builtin_blocks(id)})
         }
         Some("import") => {
-            let (style, blocks, insets) = import(&absolute("path")?, &absolute("dir")?)?;
+            let path = absolute("path")?;
+            let (style, blocks, insets) = if path.is_dir() {
+                import_folder(&path, &absolute("dir")?)?
+            } else {
+                import(&path, &absolute("dir")?)?
+            };
             json!({"style": style, "blocks": blocks, "insets": insets})
         }
         Some("export") => {
@@ -483,6 +641,80 @@ mod tests {
         ));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// V114：按图片文件名识别的文件夹，以及带 style.json 的文件夹，都能导入。
+    #[test]
+    fn folder_import_by_file_names_and_style_json() {
+        let root = temp("folder");
+        let pack_dir = root.join("wuxia");
+        fs::create_dir_all(&pack_dir).unwrap();
+        let png = |w: u32, h: u32| {
+            let mut out = std::io::Cursor::new(Vec::new());
+            image::DynamicImage::new_rgb8(w, h)
+                .write_to(&mut out, image::ImageFormat::Png)
+                .unwrap();
+            out.into_inner()
+        };
+        for (name, w, h) in [
+            ("header-02.png", 60, 20),
+            ("header-01.png", 60, 20),
+            ("header-line.png", 80, 8),
+            ("footer-line.png", 40, 8),
+            ("cover.png", 30, 40),
+            ("notes.txt", 0, 0),
+        ] {
+            let bytes = if w == 0 { b"x".to_vec() } else { png(w, h) };
+            fs::write(pack_dir.join(name), bytes).unwrap();
+        }
+        fs::write(root.join("style-names.json"), r#"{"wuxia":"武侠"}"#).unwrap();
+        let out = temp("folder-out");
+        let (style, blocks, insets) = import_folder(&pack_dir, &out).unwrap();
+        assert_eq!(style.name, "武侠");
+        assert_eq!(style.head_images.len(), 2);
+        assert!(style.head_images[0].ends_with("header-01.png"));
+        assert!(
+            style
+                .title_rule
+                .as_deref()
+                .unwrap()
+                .ends_with("header-line.png")
+        );
+        assert!(
+            style
+                .chapter_end
+                .as_deref()
+                .unwrap()
+                .ends_with("footer-line.png")
+        );
+        assert!(
+            style
+                .cover_background
+                .as_deref()
+                .unwrap()
+                .ends_with("cover.png")
+        );
+        assert_eq!(style.volume_frame, "none");
+        assert!(blocks.is_none() && insets.is_none());
+        // 重复导入复用同一目录。
+        assert_eq!(import_folder(&pack_dir, &out).unwrap().0, style);
+        // 没有可识别图片的文件夹拒绝导入。
+        let empty = root.join("empty");
+        fs::create_dir_all(&empty).unwrap();
+        assert!(import_folder(&empty, &out).is_err());
+        // 带 style.json 的文件夹按样式包格式读取。
+        let own = root.join("own");
+        fs::create_dir_all(&own).unwrap();
+        fs::write(own.join("a.png"), png(50, 20)).unwrap();
+        fs::write(
+            own.join("style.json"),
+            r#"{"schema_version":1,"name":"自制","head_images":["a.png"],"volume_frame":"double"}"#,
+        )
+        .unwrap();
+        let (own_style, _, _) = import_folder(&own, &out).unwrap();
+        assert_eq!(own_style.name, "自制");
+        assert_eq!(own_style.volume_frame, "double");
+        assert_eq!(own_style.head_images.len(), 1);
     }
 
     #[test]

@@ -229,6 +229,8 @@ void main() {
               'output_directory': '',
               'generate_cover': true,
               'check_before_conversion': false,
+              // V109：概览默认从左栏收起；后面要点左栏的“概览”。
+              'nav_hidden_pages': <String>[],
             })
             .then(
               (v) => saved = v,
@@ -264,7 +266,10 @@ void main() {
         expect(
           state.outputs.tasks.skip(before).every((o) => o.phase == 'complete'),
           true,
-          reason: state.outputs.tasks.skip(before).map((o) => o.phase).join(','),
+          reason: state.outputs.tasks
+              .skip(before)
+              .map((o) => o.phase)
+              .join(','),
         );
         for (final task in state.outputs.tasks.skip(before)) {
           expect(File(task.outputPath).existsSync(), true);
@@ -416,7 +421,9 @@ void main() {
         () =>
             !conversion.session.busy &&
             state.outputs.tasks.length == beforeRepairOutput + 2 &&
-            state.outputs.tasks.skip(beforeRepairOutput).every((o) => o.terminal),
+            state.outputs.tasks
+                .skip(beforeRepairOutput)
+                .every((o) => o.terminal),
       );
       final newTasks = state.outputs.tasks.skip(beforeRepairOutput).toList();
       expect(newTasks.every((o) => o.phase == 'complete'), true);

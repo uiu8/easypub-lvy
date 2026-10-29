@@ -65,10 +65,15 @@ class KindlingJob {
     _notifyIfChanged();
   }
 
+  /// 查询状态的间隔（R6）：先密后疏。小书几毫秒就转完，固定 100ms 会让每本白等一轮；
+  /// 长任务很快退到 100ms，查询次数与原来相当。
+  static const pollDelays = [5, 10, 20, 40, 80];
+
   Future<Map<String, dynamic>> run(Map<String, dynamic> request) async {
     final start = await call({'op': startOperation, 'request': request});
     id = start['job_id'] as int;
     if (_cancelOnStart) await cancel();
+    var polls = 0;
     while (true) {
       Map<String, dynamic> status;
       try {
@@ -101,7 +106,11 @@ class KindlingJob {
         }
         return (status['result'] as Map).cast<String, dynamic>();
       }
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(
+        Duration(
+          milliseconds: polls < pollDelays.length ? pollDelays[polls++] : 100,
+        ),
+      );
     }
   }
 }

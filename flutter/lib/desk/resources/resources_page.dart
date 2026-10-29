@@ -421,7 +421,7 @@ class _ResourcesPageState extends State<ResourcesPage> {
       child: Material(
         color: on ? d.surface : Colors.transparent,
         elevation: on ? 1 : 0,
-        shadowColor: Colors.black.withValues(alpha: .25),
+        shadowColor: d.shadowInk.withValues(alpha: .25),
         borderRadius: BorderRadius.circular(9),
         clipBehavior: Clip.antiAlias,
         child: InkWell(

@@ -289,9 +289,9 @@ class _ResourceRelinkDialogState extends State<ResourceRelinkDialog> {
                         const SizedBox(height: 6),
                         SelectableText(
                           '→ ${paths[row.index]}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: context.desk.ink2,
+                          style: ui(
+                            12,
+                            c: context.desk.ink2,
                           ),
                         ),
                       ],

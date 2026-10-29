@@ -7,14 +7,18 @@ import '../errors.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import '../../application/chapter_service.dart';
+import '../../application/inline_style_service.dart';
 import '../../application/rule_catalog_service.dart';
 import '../grain.dart';
+import '../layout/device_preview.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 import 'block_marks.dart';
+import 'inline_style_marks.dart';
 import 'issue_marks.dart';
 import 'layout_view.dart';
 import 'note_marks.dart';
+import 'style_segments.dart';
 
 class ChapterManuscript extends StatefulWidget {
   const ChapterManuscript({
@@ -35,8 +39,12 @@ class ChapterManuscript extends StatefulWidget {
     this.issuesTruncated = false,
     this.marks,
     this.noteMarks,
+    this.inlineStyles,
     this.layout,
     this.onLayoutMode,
+    this.onLocateLine,
+    this.styleBook,
+    this.onOpenChapter,
   });
 
   /// 排版视图（V104，LAY-149）：不为空时正文按排版设置显示识别结果，可拖选几行标注；不能选字复制。
@@ -45,11 +53,19 @@ class ChapterManuscript extends StatefulWidget {
   /// 页眉“原文 | 排版”切换；书库不提供识别结果时为空，不显示切换。
   final ValueChanged<bool>? onLayoutMode;
 
+  /// 样式片段侧栏（V120，LAY-166）：跳到本节某行（本节正文行号，从 1 开始）；全书各章处数；打开某章。
+  final ValueChanged<int>? onLocateLine;
+  final Future<List<StyleSegmentChapter>> Function()? styleBook;
+  final ValueChanged<String>? onOpenChapter;
+
   /// 手工标注（V53，LAY-123）；书库不提供标注能力时为空，行号栏不可点。
   final BlockMarkController? marks;
 
   /// 手工注释（V62，LAY-128）；书库不提供注释能力时为空。
   final NoteMarkController? noteMarks;
+
+  /// 文字样式（V106，LAY-152）；书库不提供样式能力时为空。排版视图里按样式显示。
+  final InlineStyleController? inlineStyles;
 
   /// 本章问题超过单次上限（200 条）时为真；页眉提示只列出了前 200 条。
   final bool issuesTruncated;
@@ -98,6 +114,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     scroll.addListener(onScroll);
     widget.marks?.addListener(onMarks);
     widget.noteMarks?.addListener(onMarks);
+    widget.inlineStyles?.addListener(onMarks);
     widget.layout?.addListener(onMarks);
     reset();
   }
@@ -116,6 +133,10 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     if (oldWidget.noteMarks != widget.noteMarks) {
       oldWidget.noteMarks?.removeListener(onMarks);
       widget.noteMarks?.addListener(onMarks);
+    }
+    if (oldWidget.inlineStyles != widget.inlineStyles) {
+      oldWidget.inlineStyles?.removeListener(onMarks);
+      widget.inlineStyles?.addListener(onMarks);
     }
     if (oldWidget.layout != widget.layout) {
       oldWidget.layout?.removeListener(onMarks);
@@ -139,6 +160,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     pendingLines.clear();
     lineErrors.clear();
     _notesSource = null;
+    segmentText.clear();
     error = '';
     failedOffset = null;
     initialPositionApplied = false;
@@ -447,10 +469,24 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
                 .map((i) => i.severity)
                 .reduce((a, b) => severityRank(a) <= severityRank(b) ? a : b),
           ).$1;
+    // 排版视图（V120）：这一行在书里的样子，按真机规则画；生成时去掉的空行为空。
+    final page = layout == null ? null : kindle;
+    final piece = page?.piece(
+      lineText,
+      line: layoutLines[line + 1],
+      role: systemRoles[line + 1],
+      styles: inlineStyleRanges(styleLines[line + 1] ?? const []),
+    );
     final text = Container(
       key: lineKeys.putIfAbsent(line, GlobalKey.new),
-      // 排版视图里同一块系统提示的各行紧挨着，边框和底色连成一片。
-      margin: EdgeInsets.only(bottom: inBlock ? 0 : 2),
+      // 排版视图里段间距与书页相同（同一块系统提示的各行之间为零）。
+      margin: EdgeInsets.only(
+        bottom: page == null
+            ? (inBlock ? 0 : 2)
+            : piece == null
+            ? 0
+            : previewGapAfter(piece, page.style) * kindleScale,
+      ),
       decoration: focused || chosen
           ? BoxDecoration(
               color: d.accentSoft,
@@ -475,6 +511,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
                         : SystemMouseCursors.click,
                     child: GestureDetector(
                       key: ValueKey(('line-number', entry, line + 1)),
+                      // 排版视图不显示行号，只留色条的位置，正文更像成书。
                       behavior: HitTestBehavior.opaque,
                       onTap: marks == null
                           ? null
@@ -483,41 +520,82 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
                               line + 1,
                               extend: blockMarkExtending(),
                             ),
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 9, right: 14),
-                        child: Text(
-                          '$absolute',
-                          textAlign: TextAlign.right,
-                          style: mono(
-                            10.5,
-                            c: chosen
-                                ? d.ink
-                                : focused
-                                ? d.ink
-                                : (flag ?? d.ink3),
-                            w: focused || chosen || flag != null ? 600 : 400,
-                          ),
-                        ),
-                      ),
+                      child: layout != null
+                          ? const SizedBox()
+                          : focused
+                          ? Padding(
+                              padding: const EdgeInsets.only(
+                                top: 7.5,
+                                right: 11,
+                              ),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: DeskPill(
+                                  color: d.accent,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4.5,
+                                    vertical: 1.5,
+                                  ),
+                                  Text(
+                                    '$absolute',
+                                    textAlign: TextAlign.right,
+                                    style: mono(
+                                      10.5,
+                                      c: d.accentInk,
+                                      w: 600,
+                                    ).copyWith(height: 1.15),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Padding(
+                              padding: const EdgeInsets.only(top: 9, right: 14),
+                              child: Text(
+                                '$absolute',
+                                textAlign: TextAlign.right,
+                                style: mono(
+                                  10.5,
+                                  c: chosen ? d.ink : (flag ?? d.ink3),
+                                  w: chosen || flag != null ? 600 : 400,
+                                ),
+                              ),
+                            ),
                     ),
                   ),
                 ),
               ),
               Expanded(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: inBlock ? 0 : 2),
+                  padding: EdgeInsets.symmetric(
+                    vertical: inBlock || layout != null ? 0 : 2,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (layout != null)
-                        LayoutLineText(
-                          key: ValueKey(('body-line', widget.node.id, line)),
-                          text: lineText,
-                          line: layoutLines[line + 1],
-                          role: systemRoles[line + 1],
-                          view: layout,
-                          style: serif(16, c: d.ink, h: 1.9),
-                        )
+                      if (page != null)
+                        piece == null
+                            ? const SizedBox.shrink()
+                            : Semantics(
+                                key: ValueKey((
+                                  'body-line',
+                                  widget.node.id,
+                                  line,
+                                )),
+                                label: piece.text,
+                                child: FittedBox(
+                                  fit: BoxFit.fitWidth,
+                                  alignment: Alignment.topLeft,
+                                  child: PreviewPieceView(
+                                    piece: piece,
+                                    style: page.style,
+                                    width: kindleWidth,
+                                    paper: Colors.transparent,
+                                    locale: Localizations.maybeLocaleOf(
+                                      context,
+                                    ),
+                                  ),
+                                ),
+                              )
                       else if ((mark != null && mark.first) ||
                           noteTags.isNotEmpty)
                         Text.rich(
@@ -629,6 +707,14 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
                       ),
               ),
             ),
+          if (focused)
+            Positioned(
+              left: 0,
+              top: 3,
+              bottom: 3,
+              width: 3,
+              child: DeskStripe(d.accent),
+            ),
           // 手工标注的括号叠在行号栏右侧，上下与本行等高（V53）。
           if (mark != null && layout == null)
             Positioned(
@@ -676,6 +762,9 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
               onNote: widget.noteMarks == null || marks.first != marks.last
                   ? null
                   : () => addNote(line + 1, lineText),
+              onStyle: widget.inlineStyles == null
+                  ? null
+                  : () => editStyles(marks.first!, marks.last!),
             ),
           )
         : null;
@@ -745,6 +834,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     final layout = widget.layout;
     final counts = layout?.counts(layoutLines, markLines);
     final phase = layout?.state.phase;
+    final styleCount = styleLines.values.fold(0, (n, l) => n + l.length);
     return Container(
       key: const ValueKey('chapter-layout-header'),
       padding: const EdgeInsets.fromLTRB(16, 6, 12, 0),
@@ -760,7 +850,9 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
                         : '正在识别本章的系统提示与诗词…'
                   : '本章 系统提示 ${counts.system} · 诗词 ${counts.verse}'
                         '${counts.manual > 0 ? ' · 手工标注 ${counts.manual}' : ''}'
-                        '　拖选几行可标注；排版视图只看和标注，改字请切回原文',
+                        '${styleCount > 0 ? ' · 文字样式 $styleCount' : ''}'
+                        '　按 ${kindleShortName(layout.device.device.name)} 字号 ${layout.device.level} 档排（在真机预览里换机型和字号）'
+                        '；拖选几行可标注，改字请切回原文',
               key: const ValueKey('chapter-layout-counts'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -778,6 +870,95 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
         ],
       ),
     );
+  }
+
+  /// 本节每行的文字样式（V106）；每次构建时按最新列表计算。
+  Map<int, List<InlineStyleView>> styleLines = const {};
+
+  /// 给所选几行加、改、删文字样式；几行都要已读入。
+  Future<void> editStyles(int first, int last) async {
+    final styles = widget.inlineStyles;
+    if (styles == null) return;
+    if (last - first + 1 > inlineStyleMaxLines) {
+      styles.report('一次最多给 $inlineStyleMaxLines 行加文字样式，请少选几行。');
+      return;
+    }
+    final lines = loadedLines()
+        .where((l) => l.$1 >= first && l.$1 <= last)
+        .toList();
+    if (lines.length != last - first + 1) {
+      styles.report('所选的行还没有全部读入，请先滚动到这些行。');
+      return;
+    }
+    final done = await showInlineStyleDialog(
+      context,
+      styles,
+      InlineStyleContext(
+        entryId: widget.node.id,
+        lines: lines,
+        lineLabel: lineLabel,
+        title: lineRange(first, last),
+      ),
+    );
+    if (done) widget.marks?.clearSelection();
+  }
+
+  /// 排版视图的书页参数与缩放（视口像素 → 纸面像素），每次排纸面时更新。
+  KindleColumn? kindle;
+  double kindleScale = 1, kindleWidth = 40;
+
+  /// 样式片段侧栏用的原文：还没读入的片段按需另读，只用来显示摘录。
+  final segmentText = <int, String>{};
+  bool segmentReading = false;
+
+  List<StyleSegment> styleSegments() {
+    final loaded = {for (final (line, text) in loadedLines()) line: text};
+    final segments = chapterStyleSegments(
+      layoutLines: layoutLines,
+      roles: systemRoles,
+      markLines: markLines,
+      styleLines: styleLines,
+      noteLines: noteLines,
+      text: (line) => loaded[line] ?? segmentText[line] ?? '',
+      systemStyles: widget.layout?.systemStyles,
+    );
+    final missing = [
+      for (final s in segments)
+        if (s.excerpt.isEmpty &&
+            !loaded.containsKey(s.first) &&
+            !segmentText.containsKey(s.first))
+          s.first,
+    ];
+    if (missing.isNotEmpty && !segmentReading) readSegmentText(missing);
+    return segments;
+  }
+
+  Future<void> readSegmentText(List<int> lines) async {
+    final ticket = generation;
+    segmentReading = true;
+    try {
+      for (final line in lines) {
+        if (segmentText.containsKey(line)) continue;
+        final body = await widget.session.body(
+          widget.page,
+          widget.node.id,
+          line - 1,
+        );
+        if (!mounted || ticket != generation) return;
+        for (var i = 0; i < body.lines.length; i++) {
+          final row = body.rows.isNotEmpty ? body.rows[i] : null;
+          segmentText[row?.lineOffset ?? body.offset + i + 1] =
+              row?.text ?? body.lines[i];
+        }
+        // 读不到的行记成空，不再反复读。
+        segmentText.putIfAbsent(line, () => '');
+      }
+    } catch (_) {
+      // 摘录读不出时只显示行号，片段照常列出。
+    } finally {
+      if (ticket == generation) segmentReading = false;
+      if (mounted && ticket == generation) setState(() {});
+    }
   }
 
   /// 本节每行的手工注释标签（V62）；每次构建时按最新列表计算。
@@ -868,6 +1049,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     generation++;
     widget.marks?.removeListener(onMarks);
     widget.noteMarks?.removeListener(onMarks);
+    widget.inlineStyles?.removeListener(onMarks);
     widget.layout?.removeListener(onMarks);
     hoverLine.dispose();
     scroll.removeListener(onScroll);
@@ -881,12 +1063,10 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) loadVisibleContinuations();
     });
-    final before = blocks.keys.where((v) => v < origin).toList()
-      ..sort((a, b) => b.compareTo(a));
-    final after = blocks.keys.where((v) => v >= origin).toList()..sort();
     if (blocks.isNotEmpty) groupNotes(blocks.values.first);
     markLines = widget.marks?.linesFor(widget.node.id) ?? const {};
     noteLines = widget.noteMarks?.tagsFor(widget.node.id) ?? const {};
+    styleLines = widget.inlineStyles?.stylesFor(widget.node.id) ?? const {};
     final layout = widget.layout;
     layoutLines = layout?.linesFor(widget.node.id) ?? const {};
     systemRoles = layout == null
@@ -901,6 +1081,8 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
         if (widget.marks != null) BlockInvalidBanner(controller: widget.marks!),
         if (widget.noteMarks != null)
           NoteInvalidBanner(controller: widget.noteMarks!),
+        if (widget.inlineStyles != null)
+          InlineStyleInvalidBanner(controller: widget.inlineStyles!),
         if (error.isNotEmpty)
           Container(
             margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -928,101 +1110,142 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
             ),
           ),
         Expanded(
-          child: blocks.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : LayoutBuilder(
-                  builder: (context, c) {
-                    final narrow = c.maxWidth < 700;
-                    final margin = narrow ? 10.0 : 24.0;
-                    final paper = (c.maxWidth - margin * 2).clamp(0.0, 780.0);
-                    final side = (c.maxWidth - paper) / 2;
-                    final gutter = narrow ? 52.0 : 68.0;
-                    final inner = EdgeInsets.fromLTRB(
-                      side + 4,
-                      0,
-                      side + (narrow ? 20 : 44),
-                      0,
-                    );
-                    return Stack(
-                      children: [
-                        Positioned(
-                          left: side,
-                          width: paper,
-                          top: 14,
-                          bottom: 0,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(10),
-                              ),
-                              boxShadow: d.shadow1,
-                            ),
-                            child: ClipRRect(
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(10),
-                              ),
-                              child: PaperGround(
-                                color: d.paper,
-                                strength: d.grain * .5,
-                                child: const SizedBox.expand(),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned.fill(
-                          top: 14,
-                          // 排版视图里拖动用来选行标注，不再选字复制。
-                          child: _MaybeSelectable(
-                            selectable: layout == null,
-                            child: Container(
-                              key: viewport,
-                              child: ScrollConfiguration(
-                                behavior: ScrollConfiguration.of(context)
-                                    .copyWith(scrollbars: false),
-                                child: Scrollbar(
-                                  controller: scroll,
-                                  child: CustomScrollView(
-                                    controller: scroll,
-                                    center: center,
-                                    scrollCacheExtent:
-                                        const ScrollCacheExtent.pixels(600),
-                                    slivers: [
-                                      SliverPadding(
-                                        padding: inner,
-                                        sliver: SliverList(
-                                          delegate: SliverChildBuilderDelegate(
-                                            (_, i) =>
-                                                block(d, before[i], gutter),
-                                            childCount: before.length,
-                                          ),
-                                        ),
-                                      ),
-                                      SliverPadding(
-                                        key: center,
-                                        padding: inner,
-                                        sliver: SliverList(
-                                          delegate: SliverChildBuilderDelegate(
-                                            (_, i) =>
-                                                block(d, after[i], gutter),
-                                            childCount: after.length,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+          child: LayoutBuilder(
+            builder: (context, outer) {
+              final body = paper(d, layout);
+              // 排版视图且够宽时，右侧列出本章套了样式的文字（V120）。
+              if (layout == null || outer.maxWidth < 760) return body;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: body),
+                  SizedBox(
+                    width: 320,
+                    child: StyleSegmentsPanel(
+                      segments: styleSegments(),
+                      lineLabel: lineRange,
+                      currentChapter: widget.node.id,
+                      onLocate: (s) => widget.onLocateLine?.call(s.first),
+                      bookChapters: widget.styleBook,
+                      onChapter: (id) => widget.onOpenChapter?.call(id),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ],
     );
   }
+
+  Widget paper(Desk d, ChapterLayoutView? layout) => blocks.isEmpty
+      ? const Center(child: CircularProgressIndicator())
+      : LayoutBuilder(
+          builder: (context, c) {
+            final before = blocks.keys.where((v) => v < origin).toList()
+              ..sort((a, b) => b.compareTo(a));
+            final after = blocks.keys.where((v) => v >= origin).toList()
+              ..sort();
+            final narrow = c.maxWidth < 700;
+            final margin = narrow ? 10.0 : 24.0;
+            // 排版视图（V120）：按所选机型的版心排（分行、诗句位置同真机），整体放大到纸面宽；
+            // 页边距按真机，色条画在左页边距里。
+            final page = kindle = layout?.column();
+            final paper = (c.maxWidth - margin * 2).clamp(0.0, 780.0);
+            final side = (c.maxWidth - paper) / 2;
+            kindleScale = page == null ? 1 : paper / page.viewport;
+            final gutter = page != null
+                ? page.left * kindleScale
+                : narrow
+                ? 52.0
+                : 68.0;
+            final right = page != null ? page.right * kindleScale : 0.0;
+            kindleWidth = page?.width ?? 40;
+            final inner = page != null
+                ? EdgeInsets.fromLTRB(side, 0, side + right, 0)
+                : EdgeInsets.fromLTRB(
+                    side + 4,
+                    0,
+                    side + (narrow ? 20 : 44),
+                    0,
+                  );
+            return Stack(
+              children: [
+                Positioned(
+                  left: side,
+                  width: paper,
+                  top: 14,
+                  bottom: 0,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(10),
+                      ),
+                      boxShadow: d.shadow1,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(10),
+                      ),
+                      child: PaperGround(
+                        // 排版视图按 Kindle 白纸画，不随软件主题变。
+                        color: page != null ? page.paper : d.paper,
+                        strength: d.grain * .5,
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  top: 14,
+                  // 排版视图里拖动用来选行标注，不再选字复制。
+                  child: _MaybeSelectable(
+                    selectable: layout == null,
+                    child: Container(
+                      key: viewport,
+                      child: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context)
+                            .copyWith(scrollbars: false),
+                        child: Scrollbar(
+                          controller: scroll,
+                          child: CustomScrollView(
+                            controller: scroll,
+                            center: center,
+                            scrollCacheExtent: const ScrollCacheExtent.pixels(
+                              600,
+                            ),
+                            slivers: [
+                              SliverPadding(
+                                padding: inner,
+                                sliver: SliverList(
+                                  delegate: SliverChildBuilderDelegate(
+                                    (_, i) => block(d, before[i], gutter),
+                                    childCount: before.length,
+                                  ),
+                                ),
+                              ),
+                              SliverPadding(
+                                key: center,
+                                padding: inner,
+                                sliver: SliverList(
+                                  delegate: SliverChildBuilderDelegate(
+                                    (_, i) => block(d, after[i], gutter),
+                                    childCount: after.length,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
 }
 
 class _MaybeSelectable extends StatelessWidget {

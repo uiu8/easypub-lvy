@@ -111,7 +111,7 @@ class DeskSaveBadge extends StatelessWidget {
           Text(
             state == DeskSaveState.session
                 ? '这次运行没有开启草稿保存，关闭后不会保留未应用的输入。'
-                : '草稿保存在本机，关闭后再打开可以继续。项目文件的另存与更新在“书稿概览”里。',
+                : '草稿保存在本机，关闭后再打开可以继续。项目文件的打开与另存在顶栏右侧的“项目”菜单里。',
             style: ui(12, c: d.ink3, h: 1.5),
           ),
           if (onTap != null) ...[
@@ -157,7 +157,7 @@ class DeskSaveBadge extends StatelessWidget {
         message: [
           message.isNotEmpty ? message : text,
           '草稿保存在本机，关闭后再打开可以继续。',
-          '项目文件的另存与更新在“书稿概览”中。',
+          '项目文件的打开与另存在顶栏右侧的“项目”菜单里。',
         ].join('\n'),
         child: InkWell(
           key: const ValueKey('desk-save-badge'),

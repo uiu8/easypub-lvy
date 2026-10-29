@@ -97,10 +97,9 @@ void main() {
     expect(find.textContaining('个连续空行）'), findsOneWidget);
     await t.tap(group);
     await t.pump();
-    await t.tap(find.text('逐行'));
-    await until(t, () => group.evaluate().isEmpty);
-    expect(group, findsNothing, reason: '展开后逐行列出');
-    expect(find.text('（删除此行）'), findsWidgets);
+    // V116：后端已把这段空行记成一处，整组保留，不再逐行展开。
+    expect(find.text('保留这些行'), findsOneWidget);
+    expect(find.text('逐行'), findsNothing);
     // 空白标记开关在“⋯”菜单里。
     await t.tap(find.byKey(const ValueKey('cleanup-view-menu')));
     await t.pump(const Duration(milliseconds: 400));

@@ -39,6 +39,14 @@ main { flex: 1; display: flex; min-height: 0; }
 #page-head, #page-foot { position: absolute; left: 0; right: 0; font-size: 9px; color: #3E3C38;
   font-family: "Microsoft YaHei UI", sans-serif; display: flex; justify-content: center; align-items: center; }
 #page-foot { justify-content: space-between; }
+/* 按屏幕像素排版的机型（V118，KPW5）：页脚按真机截图的位置与字号。 */
+#viewport.pixel #page-foot { font-size: calc(30px * var(--ppx, 1)); font-weight: 600; align-items: flex-end;
+  padding-bottom: calc(18px * var(--ppx, 1)); box-sizing: border-box; }
+/* 叠加的真机截图（V118）：盖在预览上、不拦截点击；差异显示时一致处变黑、不一致处显出笔画。 */
+#overlay { position: absolute; left: 0; top: 0; opacity: .5; pointer-events: none; z-index: 5; }
+#overlay.diff { opacity: 1; mix-blend-mode: difference; }
+#overlay[hidden] { display: none; }
+header.bar > button { border: 1px solid var(--line2); border-radius: 6px; background: var(--field); padding: 3px 10px; cursor: pointer; }
 .tap { position: absolute; top: 0; bottom: 0; width: 28%; background: transparent; border: 0; cursor: pointer; }
 #tap-left { left: 0; } #tap-right { right: 0; }
 #dims { font-size: 11.5px; color: var(--muted); }

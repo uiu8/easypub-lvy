@@ -332,33 +332,49 @@ void main() {
   });
 
   group('Kindle 预览校准（LAY-096）', () {
-    test('KPW5 实测档位、推算档位、机型换算与真机校准', () {
+    test('KPW5 真机规则、推算档位与真机校准', () {
       const kpw5 = PreviewDeviceChoice(id: 'kpw5');
+      final device = kindleDevices.firstWhere((d) => d.id == 'kpw5');
+      // V118：KPW5 按屏幕像素排版，视口等于分辨率。
+      expect((device.viewportWidth, device.viewportHeight), (1236, 1648));
+      // 每行字数 = 版心宽 ÷ 取整后的字宽（真机截图实测，docs/research/2026-10-29_KPW5真机实测.md）。
+      int perLine(ReaderMetrics m) =>
+          ((device.viewportWidth - m.padding.left - m.padding.right) /
+                  m.fontPx.roundToDouble())
+              .floor();
+      double pitch(ReaderMetrics m) => (m.fontPx * m.lineRatio);
       final m8 = readerMetrics(kpw5);
-      // 实测：字号 8 时每行约 16 字（窄边距）。
-      final width =
-          390 -
-          2 *
-              readerSideMargin(
-                kindleDevices.firstWhere((d) => d.id == 'kpw5'),
-                'narrow',
-              );
-      expect((width / m8.fontPx).round(), 16);
+      expect(m8.fontPx, closeTo(63.8, .001));
+      expect(perLine(m8), 15);
+      expect(pitch(m8), closeTo(103, .001));
+      expect(m8.padding.left, closeTo(107.6, .05));
+      expect((m8.padding.top, m8.padding.bottom), (63, 63));
+      expect(m8.justify, true);
+      expect(m8.cssPx, 1.875);
       expect(m8.measured, true);
-      expect(m8.note, '按 KPW5 实测');
-      final m4 = readerMetrics(kpw5.copyWith(level: 4));
-      final m12 = readerMetrics(kpw5.copyWith(level: 12));
-      expect((width / m4.fontPx).round(), 25);
-      expect((width / m12.fontPx).round(), 9);
-      final m6 = readerMetrics(kpw5.copyWith(level: 6));
-      expect(m6.measured, false);
-      expect(m6.fontPx, inExclusiveRange(m4.fontPx, m8.fontPx));
-      // 宽边距每行字数更少；书内字号放大也是推算。
-      expect(readerMetrics(kpw5.copyWith(margin: 'wide')).measured, false);
+      expect(m8.note, '按 KPW5 真机实测');
+      for (final (level, chars, line) in [
+        (6, 19, 86.0),
+        (10, 13, 127.0),
+        (12, 10, 164.0),
+      ]) {
+        final m = readerMetrics(kpw5.copyWith(level: level));
+        expect(perLine(m), chars, reason: '字号 $level');
+        expect(pitch(m), closeTo(line, .001), reason: '字号 $level');
+      }
+      expect(perLine(readerMetrics(kpw5.copyWith(margin: 'medium'))), 12);
+      expect(perLine(readerMetrics(kpw5.copyWith(margin: 'wide'))), 10);
+      expect(pitch(readerMetrics(kpw5.copyWith(spacing: 'large'))), 118);
+      // 没实测的档位按规则推算。
+      final m7 = readerMetrics(kpw5.copyWith(level: 7));
+      expect(m7.measured, false);
+      expect(m7.note, '按 KPW5 真机规则推算');
       expect(
         readerMetrics(kpw5, bookScale: 1.2).fontPx,
         closeTo(m8.fontPx * 1.2, .01),
       );
+      final width =
+          device.viewportWidth - 2 * readerSideMargin(device, 'narrow');
       // 用户校准：按输入的每行字数排版，并记入偏好。
       final calibrated = kpw5.copyWith(
         level: 6,
@@ -394,7 +410,8 @@ void main() {
       await until(t, () => settings.evaluate().isNotEmpty);
       await idle(t);
       await t.pumpAndSettle();
-      expect(find.text('按固件推算'), findsOneWidget);
+      // 默认机型 KPW6：按 KPW5 真机规则按 ppi 换算（V118）。
+      expect(find.text('按 KPW5 真机规则按 300 PPI 换算'), findsOneWidget);
       // V13：阅读器设置收进弹出面板，先打开面板再校准。
       await t.tap(settings);
       await t.pumpAndSettle();

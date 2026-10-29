@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/gestures.dart'
+    show DragStartBehavior, kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -83,6 +85,10 @@ class _CleanupPageState extends State<CleanupPage>
   /// 差异列表占结果区的比例（CLEAN-101）：默认约 60%，拖动分隔线调整；
   /// 本次运行期间在各书之间保持，重启后恢复默认。
   static double split = .6;
+
+  /// 拖动分隔线时按按下时的高度加鼠标总位移计算（V112，同 V83 的分隔条）：
+  /// 以前每个移动事件都从上一帧的高度加增量，一帧内多个事件只算最后一个，分隔线跟不上鼠标。
+  double? dragTop, dragOrigin;
   String contextKey = '';
   Future<String>? contextFuture;
   final undoDraft = <String>[], redoDraft = <String>[];
@@ -96,7 +102,7 @@ class _CleanupPageState extends State<CleanupPage>
       ? widget.library as WorkspaceAutosaveService
       : null;
   void saveDraft() => workspace?.writeDraft('cleanup:${widget.bookId}', {
-    'rules': jsonEncode(draft),
+    'rules': draftIdentity,
     'selected': selected,
     'undo': undoDraft,
     'redo': redoDraft,
@@ -109,7 +115,8 @@ class _CleanupPageState extends State<CleanupPage>
     draftIdentity = saved;
     final restored = workspace?.readDraft('cleanup:${widget.bookId}');
     if (restored != null) {
-      draft = decodeCleanup(restored['rules'] as String);
+      final restoredRules = restored['rules'] as String;
+      draft = decodeCleanup(restoredRules);
       draftIdentity = jsonEncode(draft);
       selected = (restored['selected'] as int? ?? 0).clamp(
         0,
@@ -141,6 +148,7 @@ class _CleanupPageState extends State<CleanupPage>
     widget.navigation.check = null;
     widget.navigation.checkWorkspace = null;
     session.dispose();
+    changeList.dispose();
     generation++;
     super.dispose();
   }
@@ -162,7 +170,7 @@ class _CleanupPageState extends State<CleanupPage>
       builder: (_) => CleanupBatchDialog(
         library: widget.library,
         bookId: widget.bookId,
-        template: jsonEncode(draft),
+        template: draftIdentity,
       ),
     );
     if (!mounted || targets == null) return;
@@ -185,7 +193,7 @@ class _CleanupPageState extends State<CleanupPage>
 
   void edit(void Function() action, {bool preserveResults = false}) {
     final oldPlan = plan, oldChange = change, oldDiff = diff;
-    undoDraft.add(jsonEncode(draft));
+    undoDraft.add(draftIdentity);
     if (undoDraft.length > 50) undoDraft.removeAt(0);
     redoDraft.clear();
     session.cancel();
@@ -205,9 +213,10 @@ class _CleanupPageState extends State<CleanupPage>
     });
     saveDraft();
     if (preserveResults) {
+      final requestJson = draftIdentity;
       run(() async {
         final next = await session.preview(
-          jsonEncode(draft),
+          requestJson,
           offset: oldPlan?.offset ?? 0,
         );
         if (!mounted) return;
@@ -244,7 +253,7 @@ class _CleanupPageState extends State<CleanupPage>
   }
 
   Future<void> detect({int offset = 0, bool asDiff = false}) => run(() async {
-    final next = await session.preview(jsonEncode(draft), offset: offset);
+    final next = await session.preview(draftIdentity, offset: offset);
     if (!mounted) return;
     setState(() {
       plan = next;
@@ -353,7 +362,7 @@ class _CleanupPageState extends State<CleanupPage>
       });
       return;
     }
-    undoDraft.add(jsonEncode(draft));
+    undoDraft.add(draftIdentity);
     if (undoDraft.length > 50) undoDraft.removeAt(0);
     redoDraft.clear();
     setState(() {
@@ -376,9 +385,10 @@ class _CleanupPageState extends State<CleanupPage>
     if (stack.isNotEmpty) {
       session.cancel();
       setState(() {
-        (redo ? undoDraft : redoDraft).add(jsonEncode(draft));
-        draft = decodeCleanup(stack.removeLast());
-        draftIdentity = jsonEncode(draft);
+        (redo ? undoDraft : redoDraft).add(draftIdentity);
+        final nextRaw = stack.removeLast();
+        draft = decodeCleanup(nextRaw);
+        draftIdentity = nextRaw;
         plan = null;
         receipt = null;
         diff = false;
@@ -433,7 +443,7 @@ class _CleanupPageState extends State<CleanupPage>
       return;
     }
     final probe = widget.library.openCleanup(widget.bookId);
-    final frozen = jsonEncode(draft);
+    final frozen = draftIdentity;
     // Rule order can change while an unfinished editor draft is retained.
     final ruleIdentity = index == null
         ? 'new'
@@ -787,6 +797,86 @@ class _CleanupPageState extends State<CleanupPage>
         draft['remove_lines'] = lines.toList();
       }, preserveResults: true);
 
+  /// 规则行的单击与双击（V115）：单击立即选中并跳到这条规则的变更，0.3 秒内再点同一行打开编辑。
+  DateTime? lastRuleTap;
+  int? lastRuleTapIndex;
+  void tapRule(int i) {
+    final now = DateTime.now();
+    final again =
+        lastRuleTapIndex == i &&
+        lastRuleTap != null &&
+        now.difference(lastRuleTap!) < kDoubleTapTimeout;
+    lastRuleTap = again ? null : now;
+    lastRuleTapIndex = i;
+    if (again) {
+      ruleDialog(i);
+      return;
+    }
+    setState(() => selected = i);
+    jumpToRule(i);
+  }
+
+  /// 变更列表的滚动与当前项（V115）：点规则跳到它的第一处时，把这一项滚到列表上方可见处。
+  final changeList = ScrollController();
+  final currentChangeKey = GlobalKey();
+  void revealChange() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !changeList.hasClients) return;
+      final target = currentChangeKey.currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(target, alignment: 0.05);
+        return;
+      }
+      // 还没建出来（在可见区以外）：先按估计行高滚过去，下一帧再精确对齐。
+      final estimate = (change * 84.0).clamp(
+        0.0,
+        changeList.position.maxScrollExtent,
+      );
+      changeList.jumpTo(estimate);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final again = currentChangeKey.currentContext;
+        if (mounted && again != null) {
+          Scrollable.ensureVisible(again, alignment: 0.05);
+        }
+      });
+    });
+  }
+
+  /// 已检测且这条规则有变更时，切到“逐步骤差异”并定位到它的第一处。逐步骤记录按规则顺序排列，
+  /// 第一处的位置是前面各条规则变更数之和；每页 40 条，不在当前页时读那一页。
+  void jumpToRule(int i) {
+    final p = plan;
+    if (p == null || !session.isCurrent(p) || (p.stepCounts[i] ?? 0) == 0) {
+      return;
+    }
+    var start = 0;
+    for (var j = 0; j < i; j++) {
+      start += p.stepCounts[j] ?? 0;
+    }
+    final page = start - start % 40;
+    if (showStages && page == p.offset) {
+      setState(() => change = start - page);
+      revealChange();
+      return;
+    }
+    run(() async {
+      final next = page == p.offset
+          ? p
+          : await session.preview(draftIdentity, offset: page);
+      if (!mounted) return;
+      setState(() {
+        plan = next;
+        showStages = true;
+        diff = false;
+        change = (start - page).clamp(
+          0,
+          next.stages.isEmpty ? 0 : next.stages.length - 1,
+        );
+      });
+      revealChange();
+    });
+  }
+
   Widget ruleRow(int i) {
     final d = context.desk;
     final step = rules[i];
@@ -808,8 +898,8 @@ class _CleanupPageState extends State<CleanupPage>
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: busy ? null : () => setState(() => selected = i),
-        onDoubleTap: busy ? null : () => ruleDialog(i),
+        // 不用 onDoubleTap：同时设了双击时，单击要等双击判定超时（约 0.3 秒）才生效（V115）。
+        onTap: busy ? null : () => tapRule(i),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
           child: Row(
@@ -829,6 +919,16 @@ class _CleanupPageState extends State<CleanupPage>
                     ? null
                     : (v) => toggleRules(ruleRange.span(i), v),
               ),
+              // 执行顺序号胶囊（V105 视觉语言）；停用的步骤一起变淡。
+              DeskPill(
+                Text(
+                  '${i + 1}',
+                  style: mono(10.5, w: 600, c: enabled ? d.ink2 : d.ink3),
+                ),
+                color: enabled ? d.sunken : d.canvas,
+                outlined: !enabled,
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -874,6 +974,7 @@ class _CleanupPageState extends State<CleanupPage>
     final deleted = value.after == null;
     final after = value.after ?? '';
     return InkWell(
+      key: on ? currentChangeKey : null,
       onTap: busy ? null : () => setState(() => change = index),
       child: Container(
         padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
@@ -1025,7 +1126,14 @@ class _CleanupPageState extends State<CleanupPage>
     return groups;
   }
 
-  /// 一组连续空行：一行显示，可整组保留或展开后逐行处理。
+  /// V116：后端把一段连续空行记成一处变更（跨多行的整行空行删除），最终差异里同样按一组显示。
+  bool blankRun(CleanupChange c) =>
+      !showStages &&
+      c.after == null &&
+      c.before.trim().isEmpty &&
+      c.end > c.line;
+
+  /// 一组连续空行：一行显示，可整组保留；前端合并的组还可展开后逐行处理。
   Widget blankGroupRow(
     List<int> group,
     List<CleanupChange> changes,
@@ -1075,13 +1183,14 @@ class _CleanupPageState extends State<CleanupPage>
               child: Text('（删除这些行）', style: serif(13.5, c: d.ink3, h: 1.6)),
             ),
             ...actionSlot(on && !diff, [
-              DeskButton(
-                '逐行',
-                quiet: true,
-                onPressed: busy
-                    ? null
-                    : () => setState(() => expandedBlanks.add(first.line)),
-              ),
+              if (group.length > 1)
+                DeskButton(
+                  '逐行',
+                  quiet: true,
+                  onPressed: busy
+                      ? null
+                      : () => setState(() => expandedBlanks.add(first.line)),
+                ),
               DeskButton(
                 '保留这些行',
                 quiet: true,
@@ -1512,8 +1621,11 @@ class _CleanupPageState extends State<CleanupPage>
               SizedBox(
                 height: top,
                 child: ListView.builder(
+                  controller: changeList,
                   itemCount: groups.length,
-                  itemBuilder: (_, i) => groups[i].length == 1
+                  itemBuilder: (_, i) =>
+                      groups[i].length == 1 &&
+                          !blankRun(changes[groups[i].first])
                       ? pairRow(
                           changes[groups[i].first],
                           groups[i].first,
@@ -1527,10 +1639,21 @@ class _CleanupPageState extends State<CleanupPage>
                 child: GestureDetector(
                   key: const ValueKey('cleanup-split-handle'),
                   behavior: HitTestBehavior.opaque,
+                  dragStartBehavior: DragStartBehavior.down,
+                  onVerticalDragStart: (drag) {
+                    dragTop = top;
+                    dragOrigin = drag.globalPosition.dy;
+                  },
                   onVerticalDragUpdate: (drag) => setState(
-                    () =>
-                        split = ((top + drag.delta.dy) / room).clamp(.15, .85),
+                    () => split =
+                        (((dragTop ?? top) +
+                                    drag.globalPosition.dy -
+                                    (dragOrigin ?? drag.globalPosition.dy)) /
+                                room)
+                            .clamp(.15, .85),
                   ),
+                  onVerticalDragEnd: (_) => dragTop = dragOrigin = null,
+                  onVerticalDragCancel: () => dragTop = dragOrigin = null,
                   onDoubleTap: () => setState(() => split = .6),
                   child: Tooltip(
                     message: '拖动调整上下比例，双击恢复默认',

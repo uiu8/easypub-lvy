@@ -194,7 +194,7 @@ class _DeskChoiceState<T> extends State<DeskChoice<T>> {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: DefaultTextStyle.merge(
-                style: widget.style ?? const TextStyle(fontSize: 14),
+                style: widget.style ?? ui(14, c: context.desk.ink),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 child: Row(
@@ -481,9 +481,9 @@ class DeskMenuRow extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(checked == null ? 10 : 6, 6, 10, 6),
           alignment: Alignment.centerLeft,
           child: DefaultTextStyle.merge(
-            style: TextStyle(
-              fontSize: 13,
-              color: onTap == null ? d.ink3 : d.ink,
+            style: ui(
+              13,
+              c: onTap == null ? d.ink3 : d.ink,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -717,7 +717,7 @@ class _MenuEntranceState extends State<_MenuEntrance>
           color: d.surface,
           surfaceTintColor: Colors.transparent,
           elevation: 6,
-          shadowColor: Colors.black.withValues(alpha: .35),
+          shadowColor: d.shadowInk.withValues(alpha: .35),
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),

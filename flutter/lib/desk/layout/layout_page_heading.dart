@@ -35,7 +35,7 @@ extension _LayoutHeadingSection on _LayoutPageState {
     if (path != null) {
       try {
         final codec = await dui.instantiateImageCodec(
-          await File(path).readAsBytes(),
+          await readLocalFileBytes(path),
         );
         image = (await codec.getNextFrame()).image;
       } catch (_) {
@@ -187,8 +187,10 @@ extension _LayoutHeadingSection on _LayoutPageState {
     }
   }
 
-  Future<void> importStyle() async {
-    final path = await widget.pickStylePack?.call();
+  Future<void> importStyle({bool folder = false}) async {
+    final path =
+        await (folder ? widget.pickStylePackFolder : widget.pickStylePack)
+            ?.call();
     if (path == null || !mounted) return;
     final result = await styleRequest({
       'action': 'import',
@@ -325,6 +327,18 @@ extension _LayoutHeadingSection on _LayoutPageState {
               onPressed: busy || widget.pickStylePack == null
                   ? null
                   : importStyle,
+            ),
+            DeskButton(
+              '从文件夹导入…',
+              key: const ValueKey('layout-chapter-style-import-folder'),
+              quiet: true,
+              tooltip:
+                  '文件夹里有 style.json 时按样式包读取；否则按文件名识别：header-01、header-02… 为章头图（按章轮换），'
+                  'header-line 为标题下装饰线，footer-line 为章末装饰，cover 为文字封面背景（PNG 或 JPG）。'
+                  '名称取文件夹名；上一级有 style-names.json 时用其中的名称。',
+              onPressed: busy || widget.pickStylePackFolder == null
+                  ? null
+                  : () => importStyle(folder: true),
             ),
             if (style != null)
               DeskButton(

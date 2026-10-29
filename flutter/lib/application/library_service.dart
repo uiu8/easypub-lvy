@@ -91,10 +91,15 @@ class ImportOutcome {
     this.succeeded,
     this.message, {
     this.skipped = false,
+    this.sourceChanged = false,
   });
   final String path, message;
   final bool succeeded;
   final bool skipped;
+
+  /// 书库里已有这本书，来源文件的内容却变了（如书源追更后重新拼出 TXT）：草稿保留，
+  /// 新内容没有采用，要用“刷新来源”对比确认（V111）。
+  final bool sourceChanged;
 }
 
 @immutable

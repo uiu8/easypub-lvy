@@ -150,6 +150,10 @@ Future<void> main() async {
     await _libraryScrollFilter();
     return;
   }
+  if (Platform.environment['EASYPUB_FRAME_TARGET'] == 'booksource') {
+    await _booksourcePage();
+    return;
+  }
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
   await windowManager.setTitleBarStyle(
@@ -694,6 +698,167 @@ Future<void> _navigationSwitch() async {
           },
       },
       'samples': perRoute,
+    }),
+  );
+  exit(0);
+}
+
+/// R8：书源页。脚本事先在插件数据目录写好 N 个假书源（不访问网络），这里：
+/// 1) 打开书源下载页、切到“书源”页签，记录到首帧时间并等列表读完；
+/// 2) 书源列表每 16ms 滚动 120 像素，先到底再回到顶，统计逐帧耗时；
+/// 3) 在“搜索书源”框里逐字输入再逐字删掉，每次改动记录到首帧结束的时间。
+Future<void> _booksourcePage() async {
+  final (_, router, plugin, _, report, importMs) = await _switchFixture();
+  if (!plugin) throw StateError('booksource plugin is not active');
+  final sourceCount = int.parse(
+    Platform.environment['EASYPUB_FRAME_SOURCES'] ?? '0',
+  );
+  T? find<T>(bool Function(Element e) test, T Function(Element e) pick) {
+    T? found;
+    void visit(Element element) {
+      if (found != null) return;
+      if (test(element)) {
+        found = pick(element);
+        return;
+      }
+      element.visitChildren(visit);
+    }
+
+    (_root.currentContext! as Element).visitChildren(visit);
+    return found;
+  }
+
+  final openWatch = Stopwatch()..start();
+  router.go('/plugins/booksource');
+  await SchedulerBinding.instance.endOfFrame;
+  final openMs = openWatch.elapsedMicroseconds / 1000;
+  await Future<void>.delayed(const Duration(seconds: 2));
+  final tab = find<InkWell>(
+    (e) => e.widget.key == const ValueKey('booksource-tab-sources'),
+    (e) => e.widget as InkWell,
+  );
+  if (tab == null) throw StateError('No sources tab');
+  _frames.clear();
+  _collecting = true;
+  final tabWatch = Stopwatch()..start();
+  tab.onTap!();
+  await SchedulerBinding.instance.endOfFrame;
+  final tabMs = tabWatch.elapsedMicroseconds / 1000;
+  await Future<void>.delayed(const Duration(milliseconds: 600));
+  _collecting = false;
+  final tabFrames = _frameStats();
+  // 等书源读完（标签上显示“书源 a/N”）。
+  final loadWatch = Stopwatch()..start();
+  while (find<Text>(
+        (e) =>
+            e.widget is Text &&
+            ((e.widget as Text).data ?? '').endsWith('/$sourceCount'),
+        (e) => e.widget as Text,
+      ) ==
+      null) {
+    if (loadWatch.elapsed > const Duration(seconds: 60)) {
+      throw StateError('sources not loaded');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+  final loadMs = loadWatch.elapsedMilliseconds + tabMs;
+  await Future<void>.delayed(const Duration(seconds: 1));
+  ScrollPosition? list;
+  void visitLists(Element element) {
+    if (element is StatefulElement) {
+      final state = element.state;
+      if (state is ScrollableState &&
+          state.position.axis == Axis.vertical &&
+          state.position.maxScrollExtent > (list?.maxScrollExtent ?? -1)) {
+        list = state.position;
+      }
+    }
+    element.visitChildren(visitLists);
+  }
+
+  (_root.currentContext! as Element).visitChildren(visitLists);
+  if (list == null) throw StateError('No source list');
+  final position = list!;
+  _frames.clear();
+  _collecting = true;
+  var steps = 0;
+  for (var direction = 1; direction >= -1; direction -= 2) {
+    for (var i = 0; i < 400; i++) {
+      final target = (position.pixels + 120 * direction).clamp(
+        0.0,
+        position.maxScrollExtent,
+      );
+      if (target == position.pixels) break;
+      position.jumpTo(target);
+      steps++;
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+  }
+  await Future<void>.delayed(const Duration(milliseconds: 300));
+  _collecting = false;
+  final scroll = <String, double>{
+    'steps': steps.toDouble(),
+    'max_scroll_extent': position.maxScrollExtent,
+    ..._frameStats(),
+    'build_p95_ms': _percentile(
+      _frames.map((f) => f.buildDuration.inMicroseconds).toList(),
+      .95,
+    ),
+    'total_p95_ms': _percentile(
+      _frames.map((f) => f.totalSpan.inMicroseconds).toList(),
+      .95,
+    ),
+  };
+  final search = find<EditableTextState>(
+    (e) =>
+        e is StatefulElement &&
+        e.state is EditableTextState &&
+        e.findAncestorWidgetOfExactType<TextField>()?.key ==
+            const ValueKey('booksource-filter'),
+    (e) => (e as StatefulElement).state as EditableTextState,
+  );
+  if (search == null) throw StateError('No source filter');
+  const word = '合成书源12';
+  final typing = <double>[];
+  _frames.clear();
+  _collecting = true;
+  for (final text in [
+    for (var i = 1; i <= word.length; i++) word.substring(0, i),
+    for (var i = word.length - 1; i >= 0; i--) word.substring(0, i),
+  ]) {
+    final watch = Stopwatch()..start();
+    search.updateEditingValue(
+      TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      ),
+    );
+    await SchedulerBinding.instance.endOfFrame;
+    typing.add(watch.elapsedMicroseconds / 1000);
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+  }
+  _collecting = false;
+  await report.writeAsString(
+    const JsonEncoder.withIndent('  ').convert({
+      'schema': 'booksource-page-v1',
+      'scope':
+          'Profile RewriteApp book source page with $sourceCount fake sources (no network); open page, switch to sources tab, scroll 120px per 16ms down then up, type and delete a query one character at a time.',
+      'sources': sourceCount,
+      'books': _bookCount,
+      'import_ms': importMs,
+      'open_first_frame_ms': openMs,
+      'tab_first_frame_ms': tabMs,
+      'tab_frames': tabFrames,
+      'sources_loaded_ms': loadMs,
+      'physical_width': View.of(_root.currentContext!).physicalSize.width,
+      'physical_height': View.of(_root.currentContext!).physicalSize.height,
+      'scroll': scroll,
+      'filter': {
+        'keystrokes': typing.length,
+        'first_frame_median_ms': _median(typing),
+        'first_frame_max_ms': typing.fold(0.0, max),
+        ..._frameStats(),
+      },
     }),
   );
   exit(0);

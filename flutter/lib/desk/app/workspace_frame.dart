@@ -215,6 +215,8 @@ class _Workspace extends StatelessWidget {
                               ),
                             ),
                           ),
+                        if (_PageSwitcher.groupFor(title) case final group?)
+                          _PageSwitcher(group: group, current: title!),
                         Expanded(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
@@ -240,8 +242,13 @@ class _Workspace extends StatelessWidget {
       library.books,
       app.conversion.changes,
       app.navExpanded,
+      if (library case final SettingsService settings) settings.snapshot,
     ]),
     builder: (context, _) {
+      final hidden = navHiddenPages(switch (library) {
+        final SettingsService s => s.snapshot.value.configuration,
+        _ => const {},
+      });
       final selection = library.selection.value;
       final book = library.books.value
           .where((b) => b.id == selection.current)
@@ -264,15 +271,17 @@ class _Workspace extends StatelessWidget {
             selected: !folders && title == null,
             onTap: () => context.go('/'),
           ),
-          DeskRailEntry(
-            label: '文件夹',
-            icon: Icons.folder_outlined,
-            shortcut: 'Alt 2',
-            selected: folders,
-            onTap: () => context.go('/folders'),
-          ),
-          // 书源下载插件启用后才出现。
-          if (PluginRegistry.instance.isActive('booksource'))
+          if (!hidden.contains('folders'))
+            DeskRailEntry(
+              label: '文件夹',
+              icon: Icons.folder_outlined,
+              shortcut: 'Alt 2',
+              selected: folders,
+              onTap: () => context.go('/folders'),
+            ),
+          // 书源下载插件启用后才出现；也可在设置里从左栏收起（V109）。
+          if (PluginRegistry.instance.isActive('booksource') &&
+              !hidden.contains('booksource'))
             DeskRailEntry(
               label: '书源',
               icon: Icons.travel_explore_outlined,
@@ -292,24 +301,19 @@ class _Workspace extends StatelessWidget {
           onTap: () => app.chooseBook(context),
         ),
         bookEntries: [
-          DeskRailEntry(
-            label: '概览',
-            icon: Icons.space_dashboard_outlined,
-            selected: title == '书稿概览',
-            onTap: () => openBook('overview'),
-          ),
-          DeskRailEntry(
-            label: '章节',
-            icon: Icons.account_tree_outlined,
-            shortcut: 'Alt 3',
-            selected: title == '章节编辑' || title == '章节修复' || title == '参考目录',
-            onTap: () => openBook('chapters'),
-          ),
+          // V109：概览默认从左栏收起，可在设置里打开。
+          if (!hidden.contains('overview'))
+            DeskRailEntry(
+              label: '概览',
+              icon: Icons.space_dashboard_outlined,
+              selected: title == '书稿概览',
+              onTap: () => openBook('overview'),
+            ),
           DeskRailEntry(
             label: '检查与修复',
             shortLabel: '检查',
             icon: Icons.fact_check_outlined,
-            shortcut: 'Alt 4',
+            shortcut: 'Alt 3',
             // 规则页从检查页进入（V64，CH-279），左栏不单列，打开时仍高亮“检查”。
             selected: title == '检查与修复' || title == '识别与检查规则',
             onTap: () => openBook('checks'),
@@ -326,16 +330,25 @@ class _Workspace extends StatelessWidget {
             },
           ),
           DeskRailEntry(
-            label: '文本清理',
-            shortLabel: '清理',
+            label: '章节',
+            icon: Icons.account_tree_outlined,
+            shortcut: 'Alt 4',
+            selected: title == '章节编辑' || title == '章节修复' || title == '参考目录',
+            onTap: () => openBook('chapters'),
+          ),
+          DeskRailEntry(
+            label: '文本',
+            shortLabel: '文本',
             icon: Icons.cleaning_services_outlined,
             selected: title == '文本清理',
             onTap: () => openBook('cleanup'),
           ),
           DeskRailEntry(
             label: '书籍信息',
+            shortLabel: '信息',
             icon: Icons.info_outline_rounded,
-            selected: title == '书籍信息',
+            // 图片与资源并进书籍信息：页面顶部的窄条切换。
+            selected: title == '书籍信息' || title == '图片与资源',
             onTap: () => openBook('information'),
           ),
           DeskRailEntry(
@@ -343,13 +356,6 @@ class _Workspace extends StatelessWidget {
             icon: Icons.text_fields_rounded,
             selected: title == '排版',
             onTap: () => openBook('layout'),
-          ),
-          DeskRailEntry(
-            label: '图片与资源',
-            shortLabel: '图片资源',
-            icon: Icons.image_outlined,
-            selected: title == '图片与资源',
-            onTap: () => openBook('resources'),
           ),
         ],
         output: [
@@ -366,23 +372,23 @@ class _Workspace extends StatelessWidget {
             shortcut: 'Alt 6',
             badge: running > 0 ? '$running' : null,
             badgeTone: Tone.accent,
-            selected: title == '任务' || title == '转换历史' || title == '成品验收',
+            // 记录并进任务：页面顶部的窄条切换任务、转换历史与修改记录。
+            selected:
+                title == '任务' ||
+                title == '转换历史' ||
+                title == '成品验收' ||
+                title == '记录',
             onTap: () => context.go('/tasks'),
           ),
         ],
         bottom: [
-          DeskRailEntry(
-            label: '记录',
-            icon: Icons.history_rounded,
-            selected: title == '记录',
-            onTap: () => context.go('/history'),
-          ),
-          DeskRailEntry(
-            label: '插件',
-            icon: Icons.extension_outlined,
-            selected: title == '插件',
-            onTap: () => context.go('/plugins'),
-          ),
+          if (!hidden.contains('plugins'))
+            DeskRailEntry(
+              label: '插件',
+              icon: Icons.extension_outlined,
+              selected: title == '插件',
+              onTap: () => context.go('/plugins'),
+            ),
           DeskRailEntry(
             label: '设置',
             icon: Icons.settings_outlined,
@@ -464,4 +470,78 @@ class _AccessibleCanvas extends StatelessWidget {
   final Widget child;
   @override
   Widget build(BuildContext context) => child;
+}
+
+/// 合并页面顶部的窄切换条（V109）：书籍信息 | 图片与资源；任务 | 转换历史 | 修改记录。
+class _PageSwitcher extends StatelessWidget {
+  const _PageSwitcher({required this.group, required this.current});
+  final List<(String label, String title, String Function(GoRouterState) route)>
+  group;
+  final String current;
+
+  static String _book(GoRouterState s, String page) {
+    final id = s.pathParameters['bookId'];
+    return id == null ? '/' : '/books/${Uri.encodeComponent(id)}/$page';
+  }
+
+  static final _info = [
+    ('书籍信息', '书籍信息', (GoRouterState s) => _book(s, 'information')),
+    ('图片与资源', '图片与资源', (GoRouterState s) => _book(s, 'resources')),
+  ];
+  static final _tasks = [
+    ('任务', '任务', (GoRouterState _) => '/tasks'),
+    ('转换历史', '转换历史', (GoRouterState _) => '/tasks/history'),
+    ('修改记录', '记录', (GoRouterState _) => '/history'),
+  ];
+
+  static List<(String, String, String Function(GoRouterState))>? groupFor(
+    String? title,
+  ) => switch (title) {
+    '书籍信息' || '图片与资源' => _info,
+    '任务' || '转换历史' || '记录' => _tasks,
+    _ => null,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desk;
+    final state = GoRouterState.of(context);
+    return Container(
+      key: const ValueKey('page-switcher'),
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: d.line)),
+      ),
+      child: Row(
+        children: [
+          for (final (label, title, route) in group)
+            InkWell(
+              key: ValueKey(('page-switcher', title)),
+              onTap: title == current ? null : () => context.go(route(state)),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: title == current ? d.accent : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                child: Text(
+                  label,
+                  style: ui(
+                    13,
+                    w: title == current ? 620 : 480,
+                    c: title == current ? d.ink : d.ink2,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

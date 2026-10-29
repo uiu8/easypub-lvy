@@ -280,7 +280,8 @@ class _CssDialogState extends State<CssDialog> {
             height: 190,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: const Color(0xff20322B),
+              color: context.desk.sunken,
+              border: Border.all(color: context.desk.line),
               borderRadius: BorderRadius.circular(7),
             ),
             child: CssEditor(

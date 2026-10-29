@@ -51,7 +51,7 @@ extension _BookSourceQueue on _BookSourcePageState {
       await api!.call(method, params);
       await _loadQueue();
     } catch (e) {
-      update(() => sourceMessage = '$e');
+      update(() => sourceMessage = bookSourceErrorText(e));
     }
   }
 
@@ -62,7 +62,22 @@ extension _BookSourceQueue on _BookSourcePageState {
     update(() {
       t.imported = error == null;
       if (error != null) t.error = '加入书库失败：$error';
+      t.libraryOutdated =
+          error == null && widget.outdatedInLibrary?.call(t.path!) == true;
     });
+  }
+
+  /// 书库里还是旧版本时“刷新来源”（V111）；采用后，下载格式为 EPUB 的接着生成。
+  Future<void> _refreshLibrary(DownloadTask t) async {
+    if (t.path == null || widget.refreshInLibrary == null) return;
+    final fresh = await widget.refreshInLibrary!(t.path!);
+    update(() => t.libraryOutdated = !fresh);
+    if (fresh &&
+        settings.downloadFormat == 'epub' &&
+        widget.exportEpub != null &&
+        !t.epubDone) {
+      await _exportEpub(t);
+    }
   }
 
   /// 单独清除一条下载记录（LIB-223）：文件与章节缓存保留；进行中的任务由插件拒绝并说明。
@@ -72,7 +87,7 @@ extension _BookSourceQueue on _BookSourcePageState {
       await _loadQueue();
       update(() => sourceMessage = '已清除《${t.title}》的下载记录，下载的文件保留。');
     } catch (e) {
-      update(() => sourceMessage = '$e');
+      update(() => sourceMessage = bookSourceErrorText(e));
     }
   }
 
@@ -88,6 +103,8 @@ extension _BookSourceQueue on _BookSourcePageState {
       t.imported = t.imported || r.imported;
       t.epubDone = r.error == null;
       t.epubError = r.error;
+      t.libraryOutdated =
+          r.imported && widget.outdatedInLibrary?.call(t.path!) == true;
     });
   }
 
@@ -147,11 +164,9 @@ extension _BookSourceQueue on _BookSourcePageState {
           const SizedBox(height: 8),
           Expanded(
             child: tasks.isEmpty
-                ? Center(
-                    child: DeskText(
-                      '还没有下载。在“搜索”里选书，或用“书名清单…”批量加入。',
-                      color: d.ink2,
-                    ),
+                ? const DeskEmptyState(
+                    '还没有下载。在“搜索”里选书，或用“书名清单…”批量加入。',
+                    icon: Icons.download_outlined,
                   )
                 : ListView.builder(
                     itemCount: tasks.length,
@@ -339,7 +354,19 @@ extension _BookSourceQueue on _BookSourcePageState {
                   primary: true,
                   onPressed: () => _import(t),
                 ),
-              if (t.imported) const DeskTag('已加入书库', Tone.ok),
+              if (t.imported && t.libraryOutdated) ...[
+                const DeskTag('书库里是旧版本', Tone.warn),
+                if (widget.refreshInLibrary != null) ...[
+                  const SizedBox(width: 6),
+                  DeskButton(
+                    '刷新来源',
+                    key: ValueKey('booksource-refresh-${t.id}'),
+                    primary: true,
+                    onPressed: () => _refreshLibrary(t),
+                  ),
+                ],
+              ] else if (t.imported)
+                const DeskTag('已加入书库', Tone.ok),
               if (t.epubBusy) ...[
                 const SizedBox(width: 6),
                 const DeskTag('正在生成 EPUB', Tone.accent),
@@ -400,6 +427,14 @@ extension _BookSourceQueue on _BookSourcePageState {
               ),
             ],
           ),
+          if (t.imported && t.libraryOutdated && t.epubError == null)
+            DeskText(
+              '书库里已有这本书，这次下载的内容变了，书库里的草稿没有动。点“刷新来源”对比后再采用新内容。',
+              key: ValueKey('booksource-outdated-${t.id}'),
+              size: 12,
+              color: d.pen,
+              lines: 2,
+            ),
           if (t.epubError != null)
             DeskText(
               'EPUB：${t.epubError}',

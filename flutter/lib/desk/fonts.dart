@@ -6,7 +6,7 @@ import 'tokens.dart';
 
 /// 从系统字体目录登记编辑台字体族。思源黑体/宋体可变字体不存在时依次回落到
 /// 微软雅黑、宋体、Consolas；全部缺失时由主题的 fontFamilyFallback 接手。
-/// 字体不打包进安装包（思源黑体、宋体可变字体分别约 17 MB、25 MB），见 docs/37 §15。
+/// 字体不打包进安装包（思源黑体、宋体可变字体分别约 17 MB、25 MB），见 docs/37 第 2 节。
 Future<void> loadDeskFonts({String? fontsDirectory}) async {
   final root =
       fontsDirectory ??

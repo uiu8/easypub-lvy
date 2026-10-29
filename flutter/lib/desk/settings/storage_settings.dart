@@ -189,17 +189,23 @@ class _StorageSettingsGroupState extends State<StorageSettingsGroup> {
     await _run(() async {
       final result = await service.cleanCache(kinds);
       var deleted = 0, skipped = 0;
+      var previewOpen = false;
       for (final r
           in (result['categories'] as List? ?? const []).whereType<Map>()) {
         deleted += (r['deleted_bytes'] as num?)?.toInt() ?? 0;
-        if (r['skipped'] != null) skipped++;
+        if (r['skipped'] == 'preview_open') {
+          previewOpen = true;
+        } else if (r['skipped'] != null) {
+          skipped++;
+        }
         skipped += (r['skipped_files'] as num?)?.toInt() ?? 0;
       }
       if (mounted) {
         setState(
           () => notice =
               '已清理 ${formatStorageBytes(deleted)}'
-              '${skipped > 0 ? '；$skipped 项正在使用或无法删除，已跳过' : ''}。',
+              '${skipped > 0 ? '；$skipped 项正在使用或无法删除，已跳过' : ''}'
+              '${previewOpen ? '；真机预览窗口还开着，这一类没清理，关掉预览窗口后再清理' : ''}。',
         );
       }
     });
@@ -524,13 +530,13 @@ class _StorageSettingsGroupState extends State<StorageSettingsGroup> {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: protectedCacheKinds.contains(kind)
-                          ? DeskTag(
+                          ? const DeskTag('保留 · 书库可能在引用', Tone.neutral)
+                          : DeskTag(
                               kind == 'kindle_preview'
-                                  ? '保留 · 浏览器可能在用'
-                                  : '保留 · 书库可能在引用',
-                              Tone.neutral,
-                            )
-                          : const DeskTag('可清理', Tone.ok),
+                                  ? '可清理 · 预览开着时跳过'
+                                  : '可清理',
+                              Tone.ok,
+                            ),
                     ),
                   ),
                 ],
@@ -542,7 +548,8 @@ class _StorageSettingsGroupState extends State<StorageSettingsGroup> {
             children: [
               Expanded(
                 child: Text(
-                  '“保留”的几类这一版不清理：旧书可能还在引用解包文件与生成的封面，真机预览可能还开在浏览器里。正在用的会自动跳过。',
+                  '“保留”的几类这一版不清理：旧书可能还在引用解包文件与生成的封面。真机预览窗口开着时，这一类会跳过；正在用的也会自动跳过。'
+                  '书源下载的章节缓存追更要用，在书源插件的设置里管理。',
                   style: ui(11.5, c: d.ink3, h: 1.45),
                 ),
               ),

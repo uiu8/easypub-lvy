@@ -136,6 +136,7 @@ class BookDraft {
   String verseBlockStyle = 'center';
   List<Map<String, dynamic>> blockAnnotations = [];
   List<Map<String, dynamic>> manualNotes = [];
+  List<Map<String, dynamic>> inlineStyles = [];
   List<Map<String, dynamic>> supplementalPages = [];
   String additionalCss = '';
   String additionalCssBase = '';
@@ -547,6 +548,9 @@ class PrototypeState extends ChangeNotifier {
   String output = r'D:\EasyPub\输出', format = 'EPUB';
   String importStatus = '';
   bool importing = false;
+
+  /// 最近一次导入遇到书库里已有的书、来源内容已变化（草稿保留，V111）。
+  bool importSourceChanged = false;
   bool reducedMotion = false;
 
   String catalogReason(String reason) => switch (reason) {
@@ -639,7 +643,7 @@ class PrototypeState extends ChangeNotifier {
       (metadata[book.id]?.$2 ?? book.author).trim();
 
   String illustrationContext(String bookId) => jsonEncode([
-    production.guardFor(bookId),
+    production.guardInputs(bookId),
     manuscript.structures[bookId],
     manuscript.structureHistories[bookId],
     manuscript.effectiveHistories[bookId],
@@ -649,8 +653,9 @@ class PrototypeState extends ChangeNotifier {
   ]);
 
   // 内容版本不包含当前导航的书；导入/换书不会改变其他书的内容。
+  // 直接嵌入制作设置的组成部分，不嵌入已编码的 guardFor 字符串（V117，免去二次转义）。
   String publicationContext(String bookId) => jsonEncode([
-    production.guardFor(bookId),
+    production.guardInputs(bookId),
     manuscript.structures[bookId],
     manuscript.structureHistories[bookId],
     manuscript.effectiveHistories[bookId],
@@ -681,6 +686,9 @@ class PrototypeState extends ChangeNotifier {
         'manual': {'kind': 'manual_batch', 'actions': actions},
       if (cleanup.drafts[bookId] != null) 'cleanup': cleanup.drafts[bookId],
       'post_edits': manuscript.effectiveSelection(bookId),
+      // V109：设置里关掉“自动转换 Kindle 不支持的图片”时，封面与插图保留原图。
+      if (globalConfiguration['convert_kindle_images'] == false)
+        'keep_original_images': true,
     };
   }
 
@@ -756,6 +764,25 @@ class PrototypeState extends ChangeNotifier {
   /// Non-visual import outcome for the new application boundary. Unlike a
   /// library-membership check, this distinguishes a failed reimport from a
   /// successful import of a file that was already present.
+  /// 读 TXT 开头 4 KB 找“书名 / 作者：”；读不了或不是 UTF-8 时为空。
+  FileNameMetadata? _txtHeader(String path) {
+    if (bookFormatForPath(path) != 'TXT') return null;
+    try {
+      final file = File(path).openSync();
+      try {
+        final bytes = file.readSync(4096);
+        return txtHeaderMetadata(
+          utf8.decode(bytes, allowMalformed: true),
+          path,
+        );
+      } finally {
+        file.closeSync();
+      }
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<bool> importBookOutcome(
     String path, {
     DeskPage destination = DeskPage.library,
@@ -777,6 +804,7 @@ class PrototypeState extends ChangeNotifier {
     change(() {
       importing = true;
       _cancelImport = false;
+      importSourceChanged = false;
       importStatus = '正在读取书稿…';
     }, bookIds: const {});
     try {
@@ -801,11 +829,12 @@ class PrototypeState extends ChangeNotifier {
       final importedMetadata = (importedResources?['metadata'] as Map?)
           ?.cast<String, dynamic>();
       final id = originalPath.toLowerCase();
-      // 来源里没有书名、作者时，从文件名里取（V72，LIB-116）。
-      final named = fileNameMetadata(
-        originalPath,
-        FileNameOptions.fromConfiguration(globalConfiguration),
-      );
+      // 来源里没有书名、作者时，先看 TXT 开头有没有“书名 / 作者：某某”（V107，书源下载的格式），
+      // 再从文件名里取（V72，LIB-116）。
+      final options = FileNameOptions.fromConfiguration(globalConfiguration);
+      final named =
+          (options.mode == 'off' ? null : _txtHeader(originalPath)) ??
+          fileNameMetadata(originalPath, options);
       final book = SampleBook(
         id,
         (importedMetadata?['title'] as String?)?.trim().isNotEmpty == true
@@ -827,6 +856,7 @@ class PrototypeState extends ChangeNotifier {
         final same = shelf.books[existing].source?.sourceId == source.sourceId;
         change(() {
           currentId = id;
+          importSourceChanged = !same;
           if (destination == DeskPage.conversion) shelf.selected.add(id);
           importStatus = same
               ? '已在书库，保留现有草稿；更新来源信息请使用“刷新来源”。'
@@ -893,6 +923,9 @@ class PrototypeState extends ChangeNotifier {
                 .map((a) => Map<String, dynamic>.from(a as Map))
                 .toList()
             ..manualNotes = (v['manual_notes'] as List? ?? [])
+                .map((a) => Map<String, dynamic>.from(a as Map))
+                .toList()
+            ..inlineStyles = (v['inline_styles'] as List? ?? [])
                 .map((a) => Map<String, dynamic>.from(a as Map))
                 .toList()
             ..supplementalPages = (v['supplemental_pages'] as List? ?? [])
@@ -1175,6 +1208,7 @@ class PrototypeState extends ChangeNotifier {
           if (d.blockAnnotations.isNotEmpty)
             'block_annotations': d.blockAnnotations,
           if (d.manualNotes.isNotEmpty) 'manual_notes': d.manualNotes,
+          if (d.inlineStyles.isNotEmpty) 'inline_styles': d.inlineStyles,
           if (d.supplementalPages.isNotEmpty)
             'supplemental_pages': d.supplementalPages,
           'additional_css': d.additionalCss,
@@ -1458,6 +1492,9 @@ class PrototypeState extends ChangeNotifier {
               .map((a) => Map<String, dynamic>.from(a as Map))
               .toList()
           ..manualNotes = (row['manual_notes'] as List? ?? [])
+              .map((a) => Map<String, dynamic>.from(a as Map))
+              .toList()
+          ..inlineStyles = (row['inline_styles'] as List? ?? [])
               .map((a) => Map<String, dynamic>.from(a as Map))
               .toList()
           ..supplementalPages = (row['supplemental_pages'] as List? ?? [])

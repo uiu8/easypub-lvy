@@ -2,7 +2,6 @@
 // 适配与封面入口。保存、草稿、离开保护的逻辑逐行沿用 V5 前的 BookInformationPage。
 // 设计：design_review_v37/d3_meta.dart（D3-A）。
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
@@ -103,7 +102,7 @@ class _BookInformationPageState extends State<BookInformationPage> {
     'cover_design': design,
   };
   bool get dirty =>
-      touchedFields.isNotEmpty || jsonEncode(values) != jsonEncode(baseline);
+      touchedFields.isNotEmpty || !deskDeepEquals(values, baseline);
   @override
   void initState() {
     super.initState();
@@ -172,7 +171,7 @@ class _BookInformationPageState extends State<BookInformationPage> {
     if (image == null) {
       if (details.files.isNotEmpty && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('这里只接受图片：PNG、JPEG、WebP、GIF 或 BMP。')),
+          deskSnackBar(content: const Text('这里只接受图片：PNG、JPEG、WebP、GIF 或 BMP。')),
         );
       }
       return;
@@ -258,7 +257,7 @@ class _BookInformationPageState extends State<BookInformationPage> {
       final plan = await session!.preview({
         for (final entry in snapshot.entries)
           if (fields.contains(entry.key) ||
-              jsonEncode(entry.value) != jsonEncode(baseline[entry.key]))
+              !deskDeepEquals(entry.value, baseline[entry.key]))
             entry.key: entry.value,
       });
       await session!.apply(plan);

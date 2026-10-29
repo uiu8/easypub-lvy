@@ -55,7 +55,7 @@ class _NetworkDialogState extends State<_NetworkDialog> {
         if (mounted) Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = bookSourceErrorText(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -70,7 +70,7 @@ class _NetworkDialogState extends State<_NetworkDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => DeskAlert(
     title: const Text('网络与代理'),
     content: SizedBox(
       width: 600,
@@ -79,7 +79,7 @@ class _NetworkDialogState extends State<_NetworkDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            DropdownButtonFormField<String>(
+            DeskChoice<String>(
               key: const ValueKey('network-mode'),
               initialValue: mode.isEmpty ? 'none' : mode,
               decoration: const InputDecoration(labelText: '连接方式'),
@@ -127,7 +127,7 @@ class _NetworkDialogState extends State<_NetworkDialog> {
               ),
             ],
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
+            DeskChoice<String>(
               key: const ValueKey('network-scope'),
               initialValue: scope,
               decoration: const InputDecoration(labelText: '代理作用范围'),

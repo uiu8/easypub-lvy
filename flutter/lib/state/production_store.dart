@@ -141,6 +141,7 @@ class ProductionStore {
       if (d.blockAnnotations.isNotEmpty)
         'block_annotations': d.blockAnnotations,
       if (d.manualNotes.isNotEmpty) 'manual_notes': d.manualNotes,
+      if (d.inlineStyles.isNotEmpty) 'inline_styles': d.inlineStyles,
       if (d.supplementalPages.isNotEmpty)
         'supplemental_pages': d.supplementalPages,
       'additional_css': d.additionalCss,
@@ -189,16 +190,20 @@ class ProductionStore {
     return values;
   }
 
-  String guardFor(String id) {
+  String guardFor(String id) => jsonEncode(guardInputs(id));
+
+  /// [guardFor] 的组成部分。稿件版本直接嵌入它们（V117）：嵌入已编码的 [guardFor] 字符串会把
+  /// 约 5 KB 的设置再转义编码一次，书库每次刷新给每本书算一遍，300 本时约占刷新的六成。
+  List<Object?> guardInputs(String id) {
     final b = _core.shelf.books.firstWhere((b) => b.id == id && !b.isDemo);
-    return jsonEncode([
+    return [
       b.source!.sourceId,
       b.source!.revision,
       settings(id),
       histories[id],
       _core.bookMembership[id] ?? 0,
       _core.removalEpoch,
-    ]);
+    ];
   }
 
   Future<Map<String, dynamic>> productionRequest(
@@ -325,6 +330,9 @@ class ProductionStore {
           .map((a) => Map<String, dynamic>.from(a as Map))
           .toList()
       ..manualNotes = (v['manual_notes'] as List? ?? [])
+          .map((a) => Map<String, dynamic>.from(a as Map))
+          .toList()
+      ..inlineStyles = (v['inline_styles'] as List? ?? [])
           .map((a) => Map<String, dynamic>.from(a as Map))
           .toList()
       ..supplementalPages = (v['supplemental_pages'] as List? ?? [])

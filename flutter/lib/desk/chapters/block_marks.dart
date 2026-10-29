@@ -596,9 +596,13 @@ class BlockMarkBar extends StatelessWidget {
     required this.controller,
     required this.lines,
     this.onNote,
+    this.onStyle,
   });
   final BlockMarkController controller;
   final String lines;
+
+  /// “文字样式…”（V106，LAY-152）：单行或跨行都可用；书库不提供样式能力时为空。
+  final VoidCallback? onStyle;
 
   /// 选中单行时的“注释…”（V62，LAY-128）；书库不提供注释能力或选了多行时为空。
   final VoidCallback? onNote;
@@ -666,6 +670,13 @@ class BlockMarkBar extends StatelessWidget {
                       key: const ValueKey('note-open'),
                       icon: Icons.sticky_note_2_outlined,
                       onPressed: c.busy ? null : onNote,
+                    ),
+                  if (onStyle != null)
+                    DeskButton(
+                      '文字样式…',
+                      key: const ValueKey('inline-style-open'),
+                      icon: Icons.format_bold_rounded,
+                      onPressed: c.busy ? null : onStyle,
                     ),
                   DeskButton(
                     '取消',

@@ -300,6 +300,19 @@ void main() {
       await t.pump();
       expect(t.getRect(handle).top, lessThan(top - 40));
       expect(list, findsOneWidget);
+      // V112：一帧里来多个移动事件时，分隔线仍跟着鼠标的总位移走。
+      final before = t.getRect(handle).top;
+      final fast = await t.startGesture(
+        t.getCenter(handle),
+        kind: PointerDeviceKind.mouse,
+      );
+      for (var i = 0; i < 4; i++) {
+        await fast.moveBy(const Offset(0, 10));
+      }
+      await t.pump();
+      await fast.up();
+      await t.pump();
+      expect(t.getRect(handle).top, closeTo(before + 40, 1));
       expect(t.takeException(), isNull);
 
       // 概览：只有底部的转换入口，项目文件状态写在“项目与来源”（LIB-109、LIB-110）。

@@ -237,6 +237,50 @@ class DeskAlert extends StatelessWidget {
   }
 }
 
+/// 编辑台统一悬浮轻提示（V105，收口散落 SnackBar）：
+/// 外观由 [deskTheme] 的 `snackBarTheme` 统一提供（10 圆角、表面底色、细边、避开底栏托盘），
+/// 同时保留原生 [SnackBar] 与 [SnackBarAction] 类型以兼容全部组件测试。
+/// 弹窗控制器托管件（V105，P0-03）：
+/// 在弹窗路由完全卸载时的 `State.dispose()` 中释放全部控制器，
+/// 避免未释放泄漏或 `Future.delayed(300ms)` 悬挂定时器。
+class DeskControllerScope extends StatefulWidget {
+  const DeskControllerScope({
+    super.key,
+    required this.controllers,
+    required this.child,
+  });
+  final Iterable<ChangeNotifier> controllers;
+  final Widget child;
+  @override
+  State<DeskControllerScope> createState() => _DeskControllerScopeState();
+}
+
+class _DeskControllerScopeState extends State<DeskControllerScope> {
+  @override
+  void dispose() {
+    for (final c in widget.controllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+SnackBar deskSnackBar({
+  required Widget content,
+  SnackBarAction? action,
+  Duration? duration,
+  bool? showCloseIcon,
+}) => SnackBar(
+  content: content,
+  action: action,
+  duration: duration ?? const Duration(milliseconds: 4000),
+  showCloseIcon: showCloseIcon,
+  behavior: SnackBarBehavior.floating,
+);
+
 /// 小节标签（灰、半粗）。
 class DeskLabel extends StatelessWidget {
   const DeskLabel(this.text, {super.key});

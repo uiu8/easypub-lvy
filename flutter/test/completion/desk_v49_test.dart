@@ -254,7 +254,11 @@ void main() {
       expect(xhtml, contains('<span class="first-char">天</span>亮了。'));
       expect(
         xhtml,
-        contains('first-para" data-source="true" data-eol="lf">“明天出海吗？”'),
+        // V114：弯引号连同相邻的字放进不断行片段，以引号开头的首段仍不放大。
+        contains(
+          'first-para" data-source="true" data-eol="lf">'
+          '<span class="nb">“明</span>天出海吗<span class="nb">？”</span>',
+        ),
       );
       expect(xhtml, contains('>　　正文甲。</p>'), reason: '其后的段落照常缩进');
 

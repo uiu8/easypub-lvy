@@ -22,6 +22,9 @@ pub struct Request {
     pub cleanup: Option<Value>,
     pub catalog: Option<crate::catalog::CompositionSelection>,
     pub post_edits: Option<crate::edit_checkpoint::EditRequest>,
+    /// V109：设置里关掉“自动转换 Kindle 不支持的图片”时为真，封面与插图保留原图。
+    #[serde(default)]
+    pub keep_original_images: bool,
 }
 #[derive(Serialize)]
 pub struct Resource {
@@ -137,6 +140,8 @@ pub struct Manifest {
     pub block_annotations: Vec<crate::block_annotations::Annotation>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub manual_notes: Vec<crate::manual_notes::Note>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inline_styles: Vec<crate::inline_styles::Annotation>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub supplemental_pages: Vec<crate::supplemental_pages::Page>,
     pub navigation: crate::publication_navigation::Navigation,
@@ -158,6 +163,9 @@ pub struct Manifest {
     pub chapter_style: Option<crate::style_packs::StyleIds>,
     /// 为 Kindle 转换过的封面与插图（V24，OUT-078）；没有转换时为空。
     pub image_conversions: Vec<crate::kindle_images::Conversion>,
+    /// V109：保留原图、不做 Kindle 转换（只有为真时写进清单，旧的计划标识不变）。
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub keep_original_images: bool,
 }
 pub struct Prepared {
     book: EffectiveBook,
@@ -245,6 +253,15 @@ pub(crate) fn compose(
 }
 pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, ApiError> {
     let summary = source.summary();
+    let keep_original_images = request.keep_original_images;
+    // 关掉自动转换时封面与插图原样放进成品（只纠正拍摄方向）。
+    let ready = |snapshot: assets::ImageSnapshot| {
+        if keep_original_images {
+            Ok((snapshot, None))
+        } else {
+            crate::kindle_images::kindle_ready(snapshot)
+        }
+    };
     let (book, mut settings) = compose(source, request)?;
     settings
         .block_annotations
@@ -253,6 +270,9 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
     settings
         .manual_notes
         .retain(|a| crate::manual_notes::invalid_reason(a, &book).is_none());
+    settings
+        .inline_styles
+        .retain(|a| crate::inline_styles::invalid_reason(a, &book).is_none());
     // Reuse the source scanner for CR/LF/CRLF and UTF-8 byte boundaries.
     let output = SourceSnapshot::from_utf8(
         book.text.as_bytes().to_vec(),
@@ -309,8 +329,7 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         if paths.contains_key(path) {
             continue;
         }
-        let (snapshot, conversion) =
-            crate::kindle_images::kindle_ready(assets::display_snapshot(path)?)?;
+        let (snapshot, conversion) = ready(assets::display_snapshot(path)?)?;
         image_conversions.extend(conversion);
         let evidence = snapshot.evidence;
         let id = format!("{}.{}", evidence.sha256, evidence.format);
@@ -328,6 +347,8 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
             "png" => "image/png",
             "jpg" | "jpeg" => "image/jpeg",
             "webp" => "image/webp",
+            "gif" => "image/gif",
+            "bmp" => "image/bmp",
             _ => return Err(invalid("choose_supported_image")),
         };
         resources.push(Resource {
@@ -358,8 +379,7 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
             bytes: images[id].clone(),
         };
         // 裁切结果同样要符合 Kindle 的尺寸上限（裁切本身输出 PNG）。
-        let (result, conversion) =
-            crate::kindle_images::kindle_ready(assets::cropped(&original, crop)?)?;
+        let (result, conversion) = ready(assets::cropped(&original, crop)?)?;
         image_conversions.extend(conversion);
         let original_id = id.clone();
         let id = format!("{}.png", result.evidence.sha256);
@@ -439,19 +459,30 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         .chapter_head_image
         .as_ref()
         .map(|p| paths[p].clone());
+    // V114：竖排时样式包的章头图与标题装饰线是横向图案，按页宽会占满一整页、把标题挤到下一页，
+    // 所以竖排不放这两样；章末装饰与卷页边框照常。
+    let vertical = settings.writing_mode == "vertical";
     let chapter_style = settings
         .chapter_style
         .as_ref()
         .map(|s| crate::style_packs::StyleIds {
-            head_ids: s.head_images.iter().map(|p| paths[p].clone()).collect(),
-            title_rule_id: s.title_rule.as_ref().map(|p| paths[p].clone()),
+            head_ids: if vertical {
+                Vec::new()
+            } else {
+                s.head_images.iter().map(|p| paths[p].clone()).collect()
+            },
+            title_rule_id: s
+                .title_rule
+                .as_ref()
+                .filter(|_| !vertical)
+                .map(|p| paths[p].clone()),
             chapter_end_id: s.chapter_end.as_ref().map(|p| paths[p].clone()),
             volume_frame: s.volume_frame.clone(),
         });
     let mut stylesheet = crate::publication_style::separate_additional(
         crate::publication_style::prepare(&settings)?,
     );
-    if crate::inline_markup::has_markup(&book.text) {
+    if crate::inline_markup::has_markup(&book.text) || !settings.inline_styles.is_empty() {
         stylesheet = crate::publication_style::add_inline_markup(stylesheet);
     }
     let mut fonts = BTreeMap::new();
@@ -577,6 +608,7 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         rule_options: settings.rule_options.clone(),
         block_annotations: settings.block_annotations.clone(),
         manual_notes: settings.manual_notes.clone(),
+        inline_styles: settings.inline_styles.clone(),
         supplemental_pages: settings.supplemental_pages.clone(),
         navigation: crate::publication_navigation::prepare(
             &book.tree,
@@ -598,6 +630,7 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         chapter_head_width: settings.chapter_head_width.clone(),
         chapter_style,
         image_conversions,
+        keep_original_images,
     };
     let mut hash = Sha256::new();
     hash.update(b"publication-resources-v1");
@@ -767,6 +800,26 @@ mod tests {
             image::ImageFormat::Jpeg
         );
         assert_eq!(std::fs::read(&path).unwrap(), original);
+        // V109：关掉自动转换时保留原图（WebP），不记转换；计划标识随之改变。
+        let mut keep = request(&source, path.to_str().unwrap());
+        keep.keep_original_images = true;
+        let kept = prepare(&source, keep).unwrap();
+        let m = kept.manifest();
+        assert!(
+            m.resources[0].id.ends_with(".webp"),
+            "{}",
+            m.resources[0].id
+        );
+        assert_eq!(m.resources[0].media_type, "image/webp");
+        assert!(m.image_conversions.is_empty());
+        assert_eq!(kept.image_bytes(&m.resources[0].id).unwrap(), original);
+        assert_ne!(kept.id(), prepared.id());
+        // 默认请求不带这个字段，旧计划的标识不变。
+        assert!(
+            !serde_json::to_string(prepared.manifest())
+                .unwrap()
+                .contains("keep_original_images")
+        );
         let _ = std::fs::remove_file(path);
     }
 

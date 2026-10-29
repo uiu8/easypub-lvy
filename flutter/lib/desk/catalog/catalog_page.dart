@@ -78,7 +78,7 @@ class _CatalogPageState extends State<CatalogPage> {
     if (result.changes.isEmpty) {
       ScaffoldMessenger.maybeOf(
         context,
-      )?.showSnackBar(const SnackBar(content: Text('目录与当前书稿已对应，没有推荐的目录修复。')));
+      )?.showSnackBar(deskSnackBar(content: const Text('目录与当前书稿已对应，没有推荐的目录修复。')));
       return;
     }
     await reviewComposition();

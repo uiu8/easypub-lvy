@@ -14,7 +14,10 @@ fn try_source(src: source::BookSource) -> (String, String) {
 
 fn try_source_logged(src: source::BookSource) -> (String, String, Vec<String>) {
     let name = src.book_source_name.clone();
-    let keyword = {
+    // EASYPUB_LIVE_KEYWORD：指定搜索词（排查某本书搜不到时用）。
+    let keyword = if let Ok(k) = std::env::var("EASYPUB_LIVE_KEYWORD") {
+        k
+    } else {
         let k = source::BookSource::rule(&src.rule_search, "checkKeyWord");
         if k.is_empty() {
             "我的".to_owned()
@@ -28,12 +31,22 @@ fn try_source_logged(src: source::BookSource) -> (String, String, Vec<String>) {
     };
     let result = engine.run(|s| -> Result<String, String> {
         let books = s.search(&keyword, 1).map_err(|e| format!("搜索：{e}"))?;
+        let found = format!(
+            "搜到 {} 本（{}）；",
+            books.len(),
+            books
+                .iter()
+                .take(3)
+                .map(|b| format!("{}/{}", b.name, b.author))
+                .collect::<Vec<_>>()
+                .join("、")
+        );
         let Some(first) = books.into_iter().next() else {
             return Err(format!("搜索：没有结果（{keyword}）"));
         };
         let mut book = first;
         s.book_info(&mut book).map_err(|e| format!("详情：{e}"))?;
-        let toc = s.toc(&book).map_err(|e| format!("目录：{e}"))?;
+        let toc = s.toc(&book).map_err(|e| format!("{found}目录：{e}"))?;
         let Some(chapter) = toc.iter().find(|c| !c.is_volume) else {
             return Err("目录：空".into());
         };
@@ -48,7 +61,7 @@ fn try_source_logged(src: source::BookSource) -> (String, String, Vec<String>) {
             return Err(format!("正文：太短（{} 字）", text.chars().count()));
         }
         Ok(format!(
-            "成功：目录 {} 章，第一章 {} 字",
+            "{found}成功：目录 {} 章，第一章 {} 字",
             toc.len(),
             text.chars().count()
         ))

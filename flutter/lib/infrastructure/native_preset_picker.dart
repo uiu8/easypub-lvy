@@ -26,6 +26,10 @@ const _stylePackType = XTypeGroup(
 );
 Future<String?> pickStylePackFile() async =>
     (await openFile(acceptedTypeGroups: [_stylePackType]))?.path;
+
+/// 样式包文件夹（V114）：含 style.json，或按文件名放章头图、装饰线与封面背景。
+Future<String?> pickStylePackFolder() async =>
+    getDirectoryPath(confirmButtonText: '导入这个文件夹');
 Future<String?> pickStylePackDestination(String name) async =>
     (await getSaveLocation(
       suggestedName: '$name.zip',

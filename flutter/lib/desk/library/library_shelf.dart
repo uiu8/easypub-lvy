@@ -59,7 +59,7 @@ extension _LibraryShelf on _LibraryPageState {
             const SizedBox(width: _checkWidth + 6),
             const SizedBox(width: 48 + 12),
             Expanded(child: Text('书名', style: style)),
-            if (_wide(bounds.maxWidth)) ...[
+            if (_wideColumns) ...[
               SizedBox(
                 width: _formatWidth,
                 child: Text('格式', style: style),
@@ -225,15 +225,43 @@ extension _LibraryShelf on _LibraryPageState {
                   Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(5),
-                          boxShadow: hovering || on ? d.shadow2 : d.shadow1,
-                          border: on
-                              ? Border.all(color: d.accent, width: 2)
-                              : null,
+                      AnimatedContainer(
+                        duration: DeskMotion.of(context, DeskMotion.fast),
+                        curve: DeskMotion.easeOut,
+                        transform: Matrix4.translationValues(
+                          0,
+                          hovering &&
+                                  MediaQuery.maybeDisableAnimationsOf(
+                                        context,
+                                      ) !=
+                                      true
+                              ? -2.5
+                              : 0,
+                          0,
                         ),
-                        child: LibraryCover(b, width: coverWidth),
+                        decoration: BoxDecoration(
+                          borderRadius: const BorderRadius.horizontal(
+                            left: Radius.circular(3),
+                            right: Radius.circular(6),
+                          ),
+                          boxShadow: hovering
+                              ? d.shadow3
+                              : (on ? d.shadow2 : d.shadow1),
+                        ),
+                        // 选中框沿用原来的画法（DecoratedBox 画在封面下层）：放进 Container 的
+                        // decoration 会按边框宽度内缩，选中时封面变小、错位。
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: const BorderRadius.horizontal(
+                              left: Radius.circular(3),
+                              right: Radius.circular(6),
+                            ),
+                            border: on
+                                ? Border.all(color: d.accent, width: 2)
+                                : null,
+                          ),
+                          child: LibraryCover(b, width: coverWidth),
+                        ),
                       ),
                       if (bookNeedsAttention(b))
                         Positioned(
@@ -442,7 +470,7 @@ extension _LibraryShelf on _LibraryPageState {
                       ),
                     ),
                     // 宽行显示格式与原文件大小列（大小来自原文件属性，读不到显示“—”）。
-                    if (_wide(bounds.maxWidth)) ...[
+                    if (_wideColumns) ...[
                       SizedBox(
                         width: _formatWidth,
                         child: Text(b.format, style: ui(12, c: d.ink2)),

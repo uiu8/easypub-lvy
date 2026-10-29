@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../tokens.dart';
+
 /// Uses the editable's laid-out caret positions so wrapped lines retain their
 /// source line number. Only visible line labels are painted during scrolling.
 class CssEditor extends StatefulWidget {
@@ -73,61 +75,66 @@ class _CssEditorState extends State<CssEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      SizedBox(
-        width: starts.length.toString().length.clamp(2, 6) * 9.0 + 12,
-        child: ClipRect(
-          child: CustomPaint(
-            key: gutter,
-            painter: _LineNumbers(
-              Listenable.merge([scroll, widget.controller]),
-              () => starts,
-              () => editable(field.currentContext?.findRenderObject()),
-              () => gutter.currentContext?.findRenderObject() as RenderBox?,
+  Widget build(BuildContext context) {
+    final d = context.desk;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: starts.length.toString().length.clamp(2, 6) * 9.0 + 12,
+          child: ClipRect(
+            child: CustomPaint(
+              key: gutter,
+              painter: _LineNumbers(
+                Listenable.merge([scroll, widget.controller]),
+                () => starts,
+                () => editable(field.currentContext?.findRenderObject()),
+                () => gutter.currentContext?.findRenderObject() as RenderBox?,
+                d.ink3,
+              ),
             ),
           ),
         ),
-      ),
-      Expanded(
-        child: TextField(
-          key: field,
-          controller: widget.controller,
-          scrollController: scroll,
-          enabled: widget.enabled,
-          expands: true,
-          minLines: null,
-          maxLines: null,
-          style: const TextStyle(
-            color: Color(0xffD3E9DA),
-            fontSize: 14,
-            height: 1.45,
-            fontFamily: 'Consolas',
+        Expanded(
+          child: TextField(
+            key: field,
+            controller: widget.controller,
+            scrollController: scroll,
+            enabled: widget.enabled,
+            expands: true,
+            minLines: null,
+            maxLines: null,
+            style: mono(14, c: d.ink).copyWith(height: 1.45),
+            decoration: InputDecoration(
+              filled: false,
+              contentPadding: EdgeInsets.zero,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              hintStyle: mono(14, c: d.ink3),
+              hintText: 'p { text-indent: 2em; }',
+            ),
+            onChanged: widget.onChanged,
           ),
-          decoration: const InputDecoration(
-            filled: false,
-            contentPadding: EdgeInsets.zero,
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            disabledBorder: InputBorder.none,
-            hintStyle: TextStyle(color: Color(0xffD3E9DA)),
-            hintText: 'p { text-indent: 2em; }',
-          ),
-          onChanged: widget.onChanged,
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 class _LineNumbers extends CustomPainter {
-  _LineNumbers(Listenable listenable, this.starts, this.editable, this.gutter)
-    : super(repaint: listenable);
+  _LineNumbers(
+    Listenable listenable,
+    this.starts,
+    this.editable,
+    this.gutter,
+    this.color,
+  ) : super(repaint: listenable);
   final List<int> Function() starts;
   final RenderEditable? Function() editable;
   final RenderBox? Function() gutter;
+  final Color color;
   @override
   void paint(Canvas canvas, Size size) {
     final render = editable();
@@ -155,11 +162,7 @@ class _LineNumbers extends CustomPainter {
       final text = TextPainter(
         text: TextSpan(
           text: '${i + 1}'.padLeft(2, '0'),
-          style: const TextStyle(
-            color: Color(0xffD3E9DA),
-            fontSize: 14,
-            fontFamily: 'Consolas',
-          ),
+          style: mono(14, c: color),
         ),
         textDirection: TextDirection.ltr,
       )..layout(maxWidth: size.width);

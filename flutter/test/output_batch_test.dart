@@ -20,8 +20,7 @@ class BatchState extends PrototypeState {
       );
   final guards = <String, String>{};
   @override
-  String conversionContext(String bookId) =>
-      guards[bookId] ?? 'original';
+  String conversionContext(String bookId) => guards[bookId] ?? 'original';
   @override
   Map<String, dynamic> publicationRequest(String bookId) => {
     'settings': {'language': 'zh'},
@@ -106,16 +105,16 @@ void main() {
         await batch.previewAll(() {});
         if (failAt == 0) {
           await batch.commitAll(() {});
-          expect(state.savedStates, [
-            'running',
-            'running',
-            'running',
-            'complete',
-          ]);
+          // R6：每本完成后的“进行中”记录合并保存、最多每 10 秒一次，批次结束由最终保存代替。
+          expect(state.savedStates.first, 'running');
+          expect(state.savedStates.last, 'complete');
+          expect(state.savedStates.length, lessThanOrEqualTo(4));
           expect(commits, 2);
         } else {
           await expectLater(batch.commitAll(() {}), throwsFormatException);
-          expect(commits, failAt - 1);
+          // 开始前的记录存不下：一本都不写。进行中的记录存不下：发现失败后不再开始新书
+          // （R6 起不再逐本等保存，失败被发现前已开始的那本仍会完成），结束时报错。
+          expect(commits, failAt == 1 ? 0 : lessThanOrEqualTo(2));
           expect(state.savedStates, isNot(contains('complete')));
         }
         expect(batch.busy, false);

@@ -237,7 +237,7 @@ class _RailItem extends StatelessWidget {
                       w: 700,
                       c: entry.badgeTone == Tone.accent
                           ? d.accentInk
-                          : (d.dark ? d.canvas : Colors.white),
+                          : d.surface,
                     ),
                   ),
                 ),

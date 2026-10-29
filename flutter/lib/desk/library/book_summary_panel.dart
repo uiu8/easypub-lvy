@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../../application/chapter_rules_service.dart';
 import '../../application/library_service.dart';
 import '../../application/output_history_service.dart';
+import '../../application/settings_service.dart';
+import '../dialogs.dart';
 import '../errors.dart';
 import '../controls/controls.dart';
 import '../metadata/cover_preview.dart';
@@ -27,16 +29,29 @@ class LibraryCover extends StatelessWidget {
     width: width,
     height: width * 4 / 3,
     child: book.coverPath?.isNotEmpty == true
-        ? CoverPreview(
-            path: book.coverPath!,
-            decodeWidth: (width * 2).round(),
-            crop: book.coverCrop,
-            revision: book.coverDesign?['image_sha256'] as String? ?? '',
-            fit: switch (book.coverFit) {
-              'cover' => BoxFit.cover,
-              'fill' => BoxFit.fill,
-              _ => BoxFit.contain,
-            },
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              CoverPreview(
+                path: book.coverPath!,
+                decodeWidth: (width * 2).round(),
+                crop: book.coverCrop,
+                revision: book.coverDesign?['image_sha256'] as String? ?? '',
+                fit: switch (book.coverFit) {
+                  'cover' => BoxFit.cover,
+                  'fill' => BoxFit.fill,
+                  _ => BoxFit.contain,
+                },
+              ),
+              if (width >= 60)
+                IgnorePointer(
+                  child: CustomPaint(
+                    painter: HardcoverFinishPainter(
+                      edge: context.desk.lineStrong,
+                    ),
+                  ),
+                ),
+            ],
           )
         : _GeneratedCover(book: book, width: width),
   );
@@ -436,7 +451,7 @@ class BookSummaryPanel extends StatelessWidget {
                 } catch (error) {
                   if (!context.mounted) return;
                   ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                    SnackBar(
+                    deskSnackBar(
                       content: Text(deskErrorText(error, '未能打开输出文件夹：$error')),
                     ),
                   );
@@ -457,11 +472,17 @@ class BookSummaryPanel extends StatelessWidget {
       _bytes(book.bytes),
     ].where((v) => v.isNotEmpty).join(' · ');
     final source = book.path.replaceAll('\\', '/').split('/').last;
-    const entries = [
+    // 左栏收起概览时（V109 默认收起），这里也不显示“书稿概览”（V111）。
+    final hidden = navHiddenPages(switch (library) {
+      final SettingsService s => s.snapshot.value.configuration,
+      _ => const {},
+    });
+    final entries = [
       ('layout', '排版', Icons.text_fields_rounded),
       ('cleanup', '文本清理', Icons.cleaning_services_outlined),
       ('information', '书籍信息', Icons.info_outline_rounded),
-      ('overview', '书稿概览', Icons.space_dashboard_outlined),
+      if (!hidden.contains('overview'))
+        ('overview', '书稿概览', Icons.space_dashboard_outlined),
     ];
     final reveal = onReveal == null
         ? null

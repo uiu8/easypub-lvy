@@ -78,7 +78,8 @@ void main() {
     for (final (path, label) in [
       ('/settings', '设置'),
       ('/plugins', '插件'),
-      ('/history', '记录'),
+      // V109：记录并进任务，左栏点亮“任务”。
+      ('/history', '任务'),
     ]) {
       router.go(path);
       // 一帧之后新页已完全显示（原先 Windows 缩放淡入约 300ms）。

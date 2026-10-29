@@ -33,6 +33,14 @@ const _choices = <String, (String, Map<Object, String>)>{
   'key_bold': ('键名加粗', {false: '关', true: '开'}),
   'brackets': ('成品括号', {'keep': '保留【】', 'remove': '去掉'}),
   'spacing': ('上下间距', {'tight': '紧', 'medium': '中', 'loose': '松'}),
+  // V119：参照中文精排加的四项。
+  'tone': ('线色', {'black': '黑', 'gray': '灰'}),
+  'font': ('字体', {'body': '随正文', 'kai': '楷体'}),
+  'inset': (
+    '缩进',
+    {'none': '不缩', 'small': '左缩 1 字', 'large': '左缩 2 字', 'narrow': '左右各收'},
+  ),
+  'radius': ('圆角', {false: '关', true: '开'}),
 };
 
 Future<BlockStyleEdit?> showBlockStyleEditor(
@@ -59,7 +67,8 @@ class _Editor extends StatefulWidget {
 }
 
 class _EditorState extends State<_Editor> {
-  late final style = Map<String, Object>.from(widget.initial);
+  // 旧样式没有 V119 的四项参数：按默认值补齐，编辑器里每项都有选中的值。
+  late final style = <String, Object>{...blockStyleDefaults, ...widget.initial};
   final name = TextEditingController();
   bool get panel => widget.kind == 'panel';
 
@@ -322,11 +331,12 @@ Map<String, Map<String, Object>> savedStylesOf(
 };
 
 /// 两组参数是否相同。
-bool sameStyle(Map? a, Map? b) =>
-    a != null &&
-    b != null &&
-    a.length == b.length &&
-    a.entries.every((e) => b[e.key] == e.value);
+bool sameStyle(Map? a, Map? b) {
+  if (a == null || b == null) return false;
+  // V119 新增参数缺省时按默认值比较。
+  final x = normalizedBlockStyle(a), y = normalizedBlockStyle(b);
+  return x.length == y.length && x.entries.every((e) => y[e.key] == e.value);
+}
 
 /// 参数是否与某个内置预设相同，供编辑器默认值等使用。
 Map<String, Object> styleOrPreset(Map? value, String fallback) => value == null

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import '../application/conversion_snapshot.dart';
@@ -324,6 +325,7 @@ class OutputBatch {
     busy = true;
     stopped = false;
     consumed = true;
+    _runningRecordError = null;
     state.change(() => state.outputs.batchBusy = true);
     try {
       await _saveBatchRecord('running');
@@ -428,10 +430,15 @@ class OutputBatch {
           item.status = '${task.label}：${task.detail}';
         }
         await state.outputs.historySaved;
-        await _saveBatchRecord('running');
+        _saveRunningSoon();
         _active.remove(task);
         changed();
       });
+      // 最终保存会写最新状态：取消还在等间隔的“进行中”保存，只等正在写的那次。
+      _runningRecordDirty = false;
+      if (_runningWake case final wake? when !wake.isCompleted) wake.complete();
+      await _runningRecord;
+      if (_runningRecordError case final error?) throw error;
       await _saveBatchRecord(
         items.every((item) => item.phase == 'complete')
             ? 'complete'
@@ -477,6 +484,47 @@ class OutputBatch {
         },
     ],
   };
+
+  /// 每本完成后的“进行中”记录合并保存（R6）：一次保存约 200ms（读全局设置、整表改写、
+  /// 落一个设置版本和一份约 6KB×本数的记录），原来每本都排队等它，批量时成了瓶颈，
+  /// 设置目录也每本多一份记录（设置版本上限 1024，用完后设置无法保存）。现在不等，并且最多每 10 秒存一次
+  /// 最新快照；重启后各书状态按任务历史重新核对（loadTaskFeed），单本回执仍由
+  /// 任务历史即时保存。批次结束时不再补存“进行中”，直接由最终保存代替。
+  Future<void>? _runningRecord;
+  bool _runningRecordDirty = false;
+  Object? _runningRecordError;
+  DateTime? _lastRunningSave;
+  Completer<void>? _runningWake;
+  static const runningRecordInterval = Duration(seconds: 10);
+  void _saveRunningSoon() {
+    _runningRecordDirty = true;
+    _runningRecord ??= () async {
+      try {
+        while (_runningRecordDirty && _runningRecordError == null) {
+          final last = _lastRunningSave;
+          final wait = last == null
+              ? Duration.zero
+              : runningRecordInterval - DateTime.now().difference(last);
+          if (wait > Duration.zero) {
+            final wake = _runningWake = Completer<void>();
+            await Future.any([Future<void>.delayed(wait), wake.future]);
+            _runningWake = null;
+            if (!_runningRecordDirty) break;
+          }
+          _runningRecordDirty = false;
+          _lastRunningSave = DateTime.now();
+          try {
+            await _saveBatchRecord('running');
+          } catch (e) {
+            // _saveBatchRecord 失败时已置 stopped，后续书不再开始；错误在批次结束时抛出。
+            _runningRecordError = e;
+          }
+        }
+      } finally {
+        _runningRecord = null;
+      }
+    }();
+  }
 
   Future<bool> _saveBatchRecord(String stateName) => _records.run(() async {
     if (state.settingsDirectory == null) return true;

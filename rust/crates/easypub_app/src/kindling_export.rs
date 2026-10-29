@@ -112,15 +112,16 @@ const BOKAI_WORKERS: &str = "4";
 fn error(code: ErrorCode, action: &str) -> ApiError {
     ApiError::new(code, "kindling_export", action)
 }
-/// `build --help` 的说明里是否有 `--threads`（V37）：用户在设置里自选的旧版 Kindling 或其他程序没有这个参数，
-/// 传了会直接失败。按引擎哈希缓存，同一个程序只问一次；问不出来（超时、退出码非 0）按不支持处理。
-fn kindling_supports_threads(
+/// `build --help` 的说明里是否有 `--threads`（V37）与 `--no-embed-source`（V117）：用户在设置里自选的
+/// 旧版 Kindling 或其他程序没有这些参数，传了会直接失败。按引擎哈希缓存，同一个程序只问一次；
+/// 问不出来（超时、退出码非 0）按不支持处理。
+fn kindling_flags(
     engine: &Path,
     engine_hash: &str,
     stage: &Path,
     cancelled: impl Fn() -> bool,
-) -> Result<bool, ApiError> {
-    static KNOWN: std::sync::OnceLock<Mutex<std::collections::HashMap<String, bool>>> =
+) -> Result<(bool, bool), ApiError> {
+    static KNOWN: std::sync::OnceLock<Mutex<std::collections::HashMap<String, (bool, bool)>>> =
         std::sync::OnceLock::new();
     let known = KNOWN.get_or_init(Default::default);
     if let Some(&answer) = known.lock().unwrap().get(engine_hash) {
@@ -139,8 +140,14 @@ fn kindling_supports_threads(
     if matches!(outcome, Outcome::Cancelled) {
         return Err(error(ErrorCode::Cancelled, "export_cancelled"));
     }
-    let answer = matches!(outcome, Outcome::Exited(0))
-        && fs::read_to_string(&log).is_ok_and(|text| text.contains("--threads"));
+    let help = match outcome {
+        Outcome::Exited(0) => fs::read_to_string(&log).unwrap_or_default(),
+        _ => String::new(),
+    };
+    let answer = (
+        help.contains("--threads"),
+        help.contains("--no-embed-source"),
+    );
     let _ = fs::remove_file(&log);
     known
         .lock()
@@ -301,8 +308,18 @@ fn execute_inner(
     };
     // 固定 4 个工作线程（V37，OUT-082）：本地 Kindling 的逐文件步骤可并行，输出与单线程逐字节相同；
     // 实测 4 与 8 线程耗时相近，不占满全部核心，转换时电脑仍能流畅使用。只对支持的版本传。
-    let threads = !is_kfx
-        && kindling_supports_threads(&engine, &engine_hash, &stage, || control.cancelled())?;
+    let (threads, no_embed) = if is_kfx {
+        (false, false)
+    } else {
+        kindling_flags(&engine, &engine_hash, &stage, || control.cancelled())?
+    };
+    // 不把中间 EPUB 嵌进 AZW3/MOBI（V117，用户决定一律不嵌）：Kindling 默认把整个 EPUB 存成一条
+    // SRCS 记录，只供 Kindle Previewer 使用。书大时这条记录超过 16 MB，会被 Kindling 自己的回读检查
+    // 判为 Kindle 打不开而拒绝输出（实测 39 MB 的书，SRCS 60 MB）；不嵌时同一本书 102 MB 降到 39 MB。
+    let skip_source = no_embed;
+    if skip_source {
+        arguments.push(OsStr::new("--no-embed-source"));
+    }
     if threads {
         arguments.extend([OsStr::new("--threads"), OsStr::new(KINDLING_THREADS)]);
     }
@@ -436,7 +453,7 @@ fn execute_inner(
     source_matches(&source_path, source.original_bytes())?;
     let evidence = serde_json::to_vec(
         &json!({"plan_id":plan_id,"plan":plan,"manifest":prepared.manifest(),
-        "engine_log":log,"engine_log_sha256":fingerprint(&log)?,"engine_threads":engine_threads,"conversion_directory":stage,"metadata_checked":metadata_checked,"kindle_identity":kindle_identity}),
+        "engine_log":log,"engine_log_sha256":fingerprint(&log)?,"engine_threads":engine_threads,"embedded_source":!is_kfx && !skip_source,"conversion_directory":stage,"metadata_checked":metadata_checked,"kindle_identity":kindle_identity}),
     )
     .unwrap();
     // Cancellation and the start of non-interruptible publication share one lock.
@@ -469,27 +486,27 @@ mod tests {
         // 不认识 build --help 的程序：按不支持处理，不报错；同一哈希的答案被缓存，不再运行。
         let other = Path::new(r"C:\Windows\System32\hostname.exe");
         if other.is_file() {
-            assert!(!kindling_supports_threads(other, "probe-hostname", &stage, || false).unwrap());
-            assert!(
-                !kindling_supports_threads(
-                    Path::new("missing.exe"),
-                    "probe-hostname",
-                    &stage,
-                    || false
-                )
-                .unwrap()
+            assert_eq!(
+                kindling_flags(other, "probe-hostname", &stage, || false).unwrap(),
+                (false, false)
+            );
+            assert_eq!(
+                kindling_flags(Path::new("missing.exe"), "probe-hostname", &stage, || false)
+                    .unwrap(),
+                (false, false)
             );
         }
-        // 本地优化版 Kindling（V37）：说明里有 --threads。
+        // 本地优化版 Kindling：说明里有 --threads（V37）与 --no-embed-source（V117）。
         let kindling = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../../third_party/kindling/target/release/kindling-cli.exe");
         if kindling.is_file() {
-            assert!(
-                kindling_supports_threads(&kindling, "probe-kindling", &stage, || false).unwrap()
+            assert_eq!(
+                kindling_flags(&kindling, "probe-kindling", &stage, || false).unwrap(),
+                (true, true)
             );
         }
         assert!(matches!(
-            kindling_supports_threads(other, "probe-cancel", &stage, || true),
+            kindling_flags(other, "probe-cancel", &stage, || true),
             Err(e) if e.code == ErrorCode::Cancelled
         ));
         let _ = fs::remove_dir_all(&stage);

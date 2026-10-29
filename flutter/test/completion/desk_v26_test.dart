@@ -76,11 +76,15 @@ void main() {
       // 从书库移除的书记入忽略列表，不再自动导入。
       final yi = library.books.value.singleWhere((b) => b.title == '乙');
       library.removeBooks({yi.id});
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      expect(
-        (state.globalConfiguration['auto_import_ignored'] as List).single,
-        yi.path,
-      );
+      // removeBooks 异步保存忽略列表；并发回归不能假定 200ms 内完成。
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while ((state.globalConfiguration['auto_import_ignored'] as List?)
+                  ?.contains(yi.path) !=
+              true &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      expect(state.globalConfiguration['auto_import_ignored'], [yi.path]);
       await library.syncAutoImport();
       expect(library.books.value.where((b) => b.title == '乙'), isEmpty);
 

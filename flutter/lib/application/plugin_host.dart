@@ -9,9 +9,38 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../infrastructure/atomic_file.dart';
+
+Map<String, dynamic> readBookSourceUiSettings(String path) {
+  if (path.isEmpty) return const {};
+  try {
+    final file = File(path);
+    if (!file.existsSync()) return const {};
+    return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+  } catch (_) {
+    return const {};
+  }
+}
+
+/// 书源页界面设置只有几 KB：同步写临时文件再替换，写到一半中断也不会留下半截文件；
+/// 写不进去时经 [onError] 告诉用户，不再静默忽略。
+void saveBookSourceUiSettings(
+  String path,
+  Map<String, dynamic> data, {
+  ValueChanged<Object>? onError,
+}) {
+  if (path.isEmpty) return;
+  try {
+    final target = File(path)..parent.createSync(recursive: true);
+    final temp = File('$path.tmp')
+      ..writeAsStringSync(jsonEncode(data), flush: true);
+    temp.renameSync(target.path);
+  } catch (e) {
+    onError?.call(e);
+  }
+}
 
 class PluginManifest {
   PluginManifest({

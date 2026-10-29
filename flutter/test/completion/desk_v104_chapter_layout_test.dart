@@ -97,14 +97,14 @@ void main() {
     expect(bars(), findsNWidgets(6));
     expect(find.byType(SelectionArea), findsNothing);
     // 标题面板：首行作标题、去括号，键名单独加粗。
-    expect(find.text('山门试炼'), findsOneWidget);
-    expect(find.textContaining('守住山门三日'), findsOneWidget);
-    expect(find.text('【叮！检测到任务】'), findsOneWidget, reason: '提示条保留括号');
+    expect(body('山门试炼'), findsOneWidget);
+    expect(body('守住山门三日'), findsOneWidget);
+    expect(body('【叮！检测到任务】'), findsOneWidget, reason: '提示条保留括号');
 
     // 悬停在单行提示上才出标签。
     expect(find.text('系统提示 · 单行 · 自动'), findsNothing);
     final mouse = await t.createGesture(kind: PointerDeviceKind.mouse);
-    await mouse.addPointer(location: t.getCenter(find.text('【叮！检测到任务】')));
+    await mouse.addPointer(location: t.getCenter(body('【叮！检测到任务】')));
     addTearDown(mouse.removePointer);
     await t.pump();
     expect(find.text('系统提示 · 单行 · 自动'), findsOneWidget);
@@ -127,9 +127,10 @@ void main() {
     await until(() => counts().startsWith('本章 系统提示 1 · 诗词 1 · 手工标注 1'), '重新识别');
 
     // 拖选“正文三”“正文四”两行，标为诗词。
-    final from = t.getCenter(find.text('正文三。'));
-    final to = t.getCenter(find.text('正文四。'));
-    final drag = await t.startGesture(from);
+    final from = t.getCenter(body('正文三。'));
+    final to = t.getCenter(body('正文四。'));
+    // 用鼠标拖（桌面上鼠标拖动不滚动正文）。
+    final drag = await t.startGesture(from, kind: PointerDeviceKind.mouse);
     await t.pump(const Duration(milliseconds: 30));
     for (var i = 1; i <= 8; i++) {
       await drag.moveTo(Offset.lerp(from, to, i / 8)!);
@@ -139,6 +140,9 @@ void main() {
     await t.pump();
     expect(find.byKey(const ValueKey('block-mark-bar')), findsOneWidget);
     expect(find.textContaining('第 10–11 行'), findsWidgets);
+    // 排版视图按书页画，行较高，工具条可能在屏幕下方。
+    await t.ensureVisible(find.byKey(const ValueKey('block-mark-bar')));
+    await t.pump();
     await t.tap(find.byKey(const ValueKey(('block-mark-choose', 'verse'))));
     await until(
       () => find
@@ -147,6 +151,8 @@ void main() {
           .isNotEmpty,
       '确认步骤',
     );
+    await t.ensureVisible(find.byKey(const ValueKey('block-mark-confirm')));
+    await t.pump();
     await t.tap(find.byKey(const ValueKey('block-mark-confirm')));
     await until(() => annotations().length == 2, '第二条标注写入');
     expect(annotations().map((a) => a['kind']), containsAll(['none', 'verse']));
@@ -161,3 +167,9 @@ void main() {
     await t.pumpWidget(const SizedBox());
   });
 }
+
+/// 正文里的一行：排版视图按书页画，文字在语义标签里（侧栏摘录里也可能有同样的文字）。
+Finder body(String text) => find.descendant(
+  of: find.byType(CustomScrollView),
+  matching: find.bySemanticsLabel(RegExp(RegExp.escape(text))),
+);

@@ -2,10 +2,11 @@
 ///
 /// 先去掉末尾的下载重复编号（“ (1)”“ (2)”）。之后按设置：
 /// * 自动识别（默认）：认 `《书名》（校对版全本）作者：某某`、`《书名》作者：某某`、`《书名》`、
-///   `书名 作者：某某`、`书名_作者:某某`、`书名(作者)`、`书名（作者）`。
+///   `书名 作者：某某`、`书名_作者:某某`、`书名(作者)`、`书名（作者）`，
+///   以及书源插件默认的 `书名 - 作者`（V107：减号两边有空格、全名里只有一处，后半段不像分册或章节）。
 ///   书名后带“校对、精校、全本、完结”等字样的括号说明去掉；括号里是“上、中、下、卷、册、番外”或数字时不当作者。
-///   “书名 - 作者”这类没有标记的写法不猜。
-/// * 自定义格式：`{书名}`、`{作者}`、`{*}`（任意内容，忽略）组成的格式，整个文件名必须符合；不符合时不提取。
+/// * 自定义格式：`{书名}`、`{作者}`、`{*}`（任意内容，忽略）组成的格式，整个文件名必须符合。
+///   可以写多行（V107），按顺序逐行尝试，用第一个符合的；都不符合时按自动识别。
 /// * 不提取：书名用文件名，作者留空。
 /// 关掉“书名里去掉作者名”时，书名保留（去掉重复编号后的）整个文件名，只另外填作者。
 class FileNameMetadata {
@@ -23,6 +24,12 @@ class FileNameOptions {
     this.pattern = defaultFileNamePattern,
     this.stripAuthor = true,
   });
+
+  /// 自定义格式的各行（去掉空行）。
+  List<String> get patterns => [
+    for (final line in pattern.split('\n'))
+      if (line.trim().isNotEmpty) line.trim(),
+  ];
 
   factory FileNameOptions.fromConfiguration(Map<String, dynamic> c) =>
       FileNameOptions(
@@ -54,6 +61,9 @@ final _authorMark = RegExp(r'作者\s*[:：]\s*');
 final _bracketGroup = RegExp(r'\s*[（(\[【〔][^（）()\[\]【】〔〕]*[）)\]】〕]\s*$');
 final _copySuffix = RegExp(r'\s+[(（]\d{1,3}[)）]$');
 final _trailingAuthor = RegExp(r'^(.+?)\s*[(（]([^()（）]+)[)）]$');
+
+/// `书名 - 作者`：减号（或全角、破折号）两边都有空格。
+final _dashSeparator = RegExp(r'\s+[-－—]\s+');
 
 /// 括号里是分册、卷次、数字时不是作者。
 final _notAuthor = RegExp(
@@ -123,6 +133,23 @@ FileNameMetadata _auto(String stem) {
       if (title.isNotEmpty) return FileNameMetadata(title, inner);
     }
   }
+  if (mark == null) {
+    // 书名 - 作者：只认全名里唯一的一处分隔；后半段是分册、卷次、章节或数字时不当作者。
+    final dashes = _dashSeparator.allMatches(stem).toList();
+    if (dashes.length == 1) {
+      final cut = dashes.single;
+      final title = _stripTags(stem.substring(0, cut.start));
+      final author = _cleanAuthor(stem.substring(cut.end));
+      if (title.isNotEmpty &&
+          author.isNotEmpty &&
+          author.length <= 20 &&
+          !_tagWords.any(author.contains) &&
+          !_notAuthor.hasMatch(author) &&
+          !author.startsWith('第')) {
+        return FileNameMetadata(title, author);
+      }
+    }
+  }
   final title = _stripTags(stem);
   return FileNameMetadata(title.isEmpty ? stem : title, '');
 }
@@ -157,10 +184,15 @@ RegExp? _patternRegExp(String pattern) {
   }
 }
 
-/// 自定义格式是否可用（必须恰好有一个 {书名}，{作者} 最多一个）。
-bool isValidFileNamePattern(String pattern) =>
-    '{作者}'.allMatches(pattern).length <= 1 &&
-    _patternRegExp(pattern.trim()) != null;
+/// 自定义格式是否可用：至少一行，每行恰好一个 {书名}，{作者} 最多一个。
+bool isValidFileNamePattern(String pattern) {
+  final lines = FileNameOptions(pattern: pattern).patterns;
+  return lines.isNotEmpty &&
+      lines.every(
+        (line) =>
+            '{作者}'.allMatches(line).length <= 1 && _patternRegExp(line) != null,
+      );
+}
 
 FileNameMetadata fileNameMetadata(
   String fileName, [
@@ -170,22 +202,48 @@ FileNameMetadata fileNameMetadata(
   final found = switch (options.mode) {
     'off' => FileNameMetadata(stem, ''),
     'custom' => () {
-      final re = isValidFileNamePattern(options.pattern)
-          ? _patternRegExp(options.pattern.trim())
-          : null;
-      final m = re?.firstMatch(stem);
-      if (m == null) return FileNameMetadata(stem, '');
-      final title = m.namedGroup('title')!.trim();
-      final author = m.groupNames.contains('author')
-          ? m.namedGroup('author')!.trim()
-          : '';
-      return title.isEmpty
-          ? FileNameMetadata(stem, '')
-          : FileNameMetadata(title, author.length > 30 ? '' : author);
+      if (isValidFileNamePattern(options.pattern)) {
+        for (final line in options.patterns) {
+          final m = _patternRegExp(line)?.firstMatch(stem);
+          if (m == null) continue;
+          final title = m.namedGroup('title')!.trim();
+          final author = m.groupNames.contains('author')
+              ? m.namedGroup('author')!.trim()
+              : '';
+          if (title.isNotEmpty) {
+            return FileNameMetadata(title, author.length > 30 ? '' : author);
+          }
+        }
+      }
+      // 各行都不符合时按自动识别。
+      return _auto(stem);
     }(),
     _ => _auto(stem),
   };
   return options.stripAuthor || found.author.isEmpty
       ? found
       : FileNameMetadata(stem, found.author);
+}
+
+/// TXT 开头的书名与作者（V107）：书源插件下载的 TXT 第一行是书名、第二行是“作者：某某”。
+/// 只在前几行里找“作者：”；书名行要短，且文件名以它开头（免得把正文第一句当书名）。
+/// 找不到时返回空，按文件名识别。
+FileNameMetadata? txtHeaderMetadata(String head, String fileName) {
+  final lines = head
+      .split(RegExp(r'\r?\n'))
+      .map((l) => l.replaceAll('\uFEFF', '').trim())
+      .where((l) => l.isNotEmpty)
+      .take(3)
+      .toList();
+  if (lines.length < 2) return null;
+  final mark = RegExp(r'^作者\s*[:：]\s*(.+)$').firstMatch(lines[1]);
+  if (mark == null) return null;
+  final author = _cleanAuthor(mark.group(1)!);
+  final title = lines.first;
+  if (author.isEmpty ||
+      title.length > 60 ||
+      !_stem(fileName).startsWith(title)) {
+    return null;
+  }
+  return FileNameMetadata(title, author);
 }

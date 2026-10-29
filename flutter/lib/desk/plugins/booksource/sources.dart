@@ -25,7 +25,7 @@ extension _BookSourceSources on _BookSourcePageState {
       await _loadSources();
       update(() => sourceMessage = _importSummary(r));
     } catch (e) {
-      update(() => sourceMessage = '$e');
+      update(() => sourceMessage = bookSourceErrorText(e));
     }
   }
 
@@ -33,31 +33,32 @@ extension _BookSourceSources on _BookSourcePageState {
     final controller = TextEditingController();
     final url = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('从网址导入书源'),
-        content: SizedBox(
-          width: 460,
-          child: TextField(
-            key: const ValueKey('booksource-import-url-field'),
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'https://…（书源 JSON 的网址）',
+      builder: (context) => DeskControllerScope(
+        controllers: [controller],
+        child: DeskAlert(
+          title: const Text('从网址导入书源'),
+          content: SizedBox(
+            width: 460,
+            child: TextField(
+              key: const ValueKey('booksource-import-url-field'),
+              controller: controller,
+              autofocus: true,
+              decoration: deskInput(context, hint: 'https://…（书源 JSON 的网址）'),
             ),
           ),
+          actions: [
+            DeskButton(
+              '取消',
+              quiet: true,
+              onPressed: () => Navigator.pop(context),
+            ),
+            DeskButton(
+              '导入',
+              primary: true,
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+            ),
+          ],
         ),
-        actions: [
-          DeskButton(
-            '取消',
-            quiet: true,
-            onPressed: () => Navigator.pop(context),
-          ),
-          DeskButton(
-            '导入',
-            primary: true,
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-          ),
-        ],
       ),
     );
     if (url == null || url.isEmpty) return;
@@ -73,7 +74,7 @@ extension _BookSourceSources on _BookSourcePageState {
         await _subscriptionPreview(url, r['subscription'] as Map);
       }
     } catch (e) {
-      sourceMessage = '$e';
+      sourceMessage = bookSourceErrorText(e);
     } finally {
       importingSource = false;
     }
@@ -96,125 +97,128 @@ extension _BookSourceSources on _BookSourcePageState {
           for (final (i, f) in ui.indexed)
             if (f is Map && f['type'] == 'button') (i, '${f['name']}'),
         ];
+        if (!context.mounted) return;
         final controllers = {
           for (final f in fields) '${f['name']}': TextEditingController(),
         };
-        if (!context.mounted) return;
         int? running;
         String? actionMessage;
         loginDialogSource = id;
         loginNotice.value = null;
         final choice = await showDialog<String>(
           context: context,
-          builder: (context) => StatefulBuilder(
-            builder: (context, change) {
-              Future<void> runAction(int index) async {
-                loginNotice.value = null;
-                change(() {
-                  running = index;
-                  actionMessage = null;
-                });
-                try {
-                  await _enableInteractions(id);
-                  final r = await api!.call('source.loginAction', {
-                    'id': id,
-                    'index': index,
-                    if (fields.isNotEmpty)
-                      'info': {
-                        for (final e in controllers.entries)
-                          e.key: e.value.text,
-                      },
-                  }) as Map;
-                  actionMessage = '${r['message']}';
-                } catch (e) {
-                  actionMessage = '没有执行：$e';
-                }
-                if (context.mounted) change(() => running = null);
-              }
-
-              return DeskAlert(
-                title: Text('登录 ${source['name']}'),
-                content: SizedBox(
-                  width: 380,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final f in fields)
-                        TextField(
-                          controller: controllers['${f['name']}'],
-                          obscureText: f['type'] == 'password',
-                          decoration: InputDecoration(
-                            labelText: '${f['name']}',
-                          ),
-                        ),
-                      if (buttons.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final (i, name) in buttons)
-                              DeskButton(
-                                name,
-                                key: ValueKey('booksource-login-action-$i'),
-                                busy: running == i,
-                                onPressed: running == null
-                                    ? () => runAction(i)
-                                    : null,
-                              ),
-                          ],
-                        ),
-                      ],
-                      ValueListenableBuilder<String?>(
-                        valueListenable: loginNotice,
-                        builder: (_, notice, _) {
-                          final text = notice ?? actionMessage;
-                          return text == null
-                              ? const SizedBox.shrink()
-                              : Padding(
-                                  padding: const EdgeInsets.only(top: 10),
-                                  child: DeskNote(
-                                    text,
-                                    key: const ValueKey(
-                                      'booksource-login-notice',
-                                    ),
-                                  ),
-                                );
+          builder: (context) => DeskControllerScope(
+            controllers: controllers.values,
+            child: StatefulBuilder(
+              builder: (context, change) {
+                Future<void> runAction(int index) async {
+                  loginNotice.value = null;
+                  change(() {
+                    running = index;
+                    actionMessage = null;
+                  });
+                  try {
+                    await _enableInteractions(id);
+                    final r = await api!.call('source.loginAction', {
+                      'id': id,
+                      'index': index,
+                      if (fields.isNotEmpty)
+                        'info': {
+                          for (final e in controllers.entries)
+                            e.key: e.value.text,
                         },
-                      ),
-                      if (fields.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        const DeskText(
-                          '登录信息用当前 Windows 账户加密保存在本机，只有这个书源能读取；再次登录会覆盖之前保存的内容。',
-                          size: 12,
+                    }) as Map;
+                    actionMessage = '${r['message']}';
+                  } catch (e) {
+                    actionMessage = '没有执行：${bookSourceErrorText(e)}';
+                  }
+                  if (context.mounted) change(() => running = null);
+                }
+
+                return DeskAlert(
+                  title: Text('登录 ${source['name']}'),
+                  content: SizedBox(
+                    width: 380,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final f in fields)
+                          TextField(
+                            controller: controllers['${f['name']}'],
+                            obscureText: f['type'] == 'password',
+                            decoration: InputDecoration(
+                              labelText: '${f['name']}',
+                            ),
+                          ),
+                        if (buttons.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final (i, name) in buttons)
+                                DeskButton(
+                                  name,
+                                  key: ValueKey('booksource-login-action-$i'),
+                                  busy: running == i,
+                                  onPressed: running == null
+                                      ? () => runAction(i)
+                                      : null,
+                                ),
+                            ],
+                          ),
+                        ],
+                        ValueListenableBuilder<String?>(
+                          valueListenable: loginNotice,
+                          builder: (_, notice, _) {
+                            final text = notice ?? actionMessage;
+                            return text == null
+                                ? const SizedBox.shrink()
+                                : Padding(
+                                    padding: const EdgeInsets.only(top: 10),
+                                    child: DeskNote(
+                                      text,
+                                      key: const ValueKey(
+                                        'booksource-login-notice',
+                                      ),
+                                    ),
+                                  );
+                          },
                         ),
+                        if (fields.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          const DeskText(
+                            '登录信息用当前 Windows 账户加密保存在本机，只有这个书源能读取；再次登录会覆盖之前保存的内容。',
+                            size: 12,
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-                ),
-                actions: [
-                  if (fields.isNotEmpty)
-                    DeskButton(
-                      '忘记已保存的登录信息',
-                      key: const ValueKey('booksource-login-forget'),
-                      quiet: true,
-                      onPressed: () => Navigator.pop(context, 'forget'),
                     ),
-                  DeskButton(
-                    fields.isEmpty ? '关闭' : '取消',
-                    quiet: fields.isNotEmpty,
-                    onPressed: () => Navigator.pop(context),
                   ),
-                  if (fields.isNotEmpty)
+                  actions: [
+                    if (fields.isNotEmpty)
+                      DeskButton(
+                        '忘记已保存的登录信息',
+                        key: const ValueKey('booksource-login-forget'),
+                        quiet: true,
+                        onPressed: () => Navigator.pop(context, 'forget'),
+                      ),
                     DeskButton(
-                      '登录',
-                      primary: true,
-                      onPressed: () => Navigator.pop(context, 'login'),
+                      fields.isEmpty ? '关闭' : '取消',
+                      quiet: fields.isNotEmpty,
+                      onPressed: () => Navigator.pop(context),
                     ),
-                ],
-              );
-            },
+                    if (fields.isNotEmpty)
+                      DeskButton(
+                        '登录',
+                        primary: true,
+                        onPressed: () => Navigator.pop(context, 'login'),
+                      ),
+                  ],
+                );
+              },
+            ),
           ),
         );
         loginDialogSource = null;
@@ -223,7 +227,7 @@ extension _BookSourceSources on _BookSourcePageState {
             await api!.call('source.loginData.clear', {'id': id});
             sourceMessage = '已清除保存在本机的登录信息；网站上的登录状态（Cookie）不受影响。';
           } catch (e) {
-            sourceMessage = '没有清除登录信息：$e';
+            sourceMessage = '没有清除登录信息：${bookSourceErrorText(e)}';
           }
         } else if (choice == 'login') {
           final info = {
@@ -245,7 +249,7 @@ extension _BookSourceSources on _BookSourcePageState {
         sourceMessage = '${r['message']}';
       }
     } catch (e) {
-      sourceMessage = '登录没有完成：$e';
+      sourceMessage = '登录没有完成：${bookSourceErrorText(e)}';
     } finally {
       loginDrafts.remove(id);
     }
@@ -259,39 +263,43 @@ extension _BookSourceSources on _BookSourcePageState {
     bool multiline = false,
   }) async {
     final controller = TextEditingController(text: initial);
-    final result = await showDialog<String>(
+    return showDialog<String>(
       context: context,
-      builder: (dialog) => AlertDialog(
-        title: Text(title),
-        content: SizedBox(
-          width: 520,
-          child: TextField(
-            controller: controller,
-            autofocus: true,
-            minLines: multiline ? 8 : 1,
-            maxLines: multiline ? 14 : 1,
-            decoration: InputDecoration(hintText: hint),
+      builder: (dialog) => DeskControllerScope(
+        controllers: [controller],
+        child: DeskAlert(
+          title: Text(title),
+          content: SizedBox(
+            width: 520,
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              minLines: multiline ? 8 : 1,
+              maxLines: multiline ? 14 : 1,
+              decoration: InputDecoration(hintText: hint),
+            ),
           ),
+          actions: [
+            DeskButton(
+              '取消',
+              quiet: true,
+              onPressed: () => Navigator.pop(dialog),
+            ),
+            DeskButton(
+              '确定',
+              primary: true,
+              onPressed: () => Navigator.pop(dialog, controller.text.trim()),
+            ),
+          ],
         ),
-        actions: [
-          DeskButton('取消', quiet: true, onPressed: () => Navigator.pop(dialog)),
-          DeskButton(
-            '确定',
-            primary: true,
-            onPressed: () => Navigator.pop(dialog, controller.text.trim()),
-          ),
-        ],
       ),
     );
-    // 弹层关闭动画结束后 TextField 不再使用控制器。
-    Future<void>.delayed(const Duration(milliseconds: 300), controller.dispose);
-    return result;
   }
 
   Future<bool> _confirm(String title, String message) async =>
       await showDialog<bool>(
         context: context,
-        builder: (dialog) => AlertDialog(
+        builder: (dialog) => DeskAlert(
           title: Text(title),
           content: Text(message),
           actions: [
@@ -325,7 +333,7 @@ extension _BookSourceSources on _BookSourcePageState {
             '操作完成${result is Map && result['changed'] != null ? '，处理 ${result['changed']} 个书源' : ''}。';
       });
     } catch (e) {
-      update(() => sourceMessage = '$e');
+      update(() => sourceMessage = bookSourceErrorText(e));
     }
   }
 
@@ -349,7 +357,7 @@ extension _BookSourceSources on _BookSourcePageState {
       checkStatus =
           '${ping ? '测速' : '校验'}了 ${r['total']} 个书源，${ping ? '可连接' : '通过校验'} ${r['ok']} 个。';
     } catch (e) {
-      checkStatus = '$e';
+      checkStatus = bookSourceErrorText(e);
     }
     update(() {
       if (ping) {
@@ -358,6 +366,20 @@ extension _BookSourceSources on _BookSourcePageState {
         checking = false;
       }
     });
+  }
+
+  /// 重置书源运行状态（V108，LIB-289）：丢掉本次运行里书源脚本存的设备、临时 Cookie 与缓存，
+  /// 下次使用时重新生成；登录信息保留。番茄 APP 书源搜不到、目录取不到时用它换一批新设备。
+  Future<void> _resetSource(Map<String, dynamic> s) async {
+    try {
+      await api!.call('source.reset', {'id': s['id']});
+      update(
+        () => sourceMessage =
+            '已重置“${s['name']}”：下次搜索或下载时重新生成设备和临时数据，登录信息保留。正在进行的下载不受影响。',
+      );
+    } catch (e) {
+      update(() => sourceMessage = '没有重置：${bookSourceErrorText(e)}');
+    }
   }
 
   /// “去验证”（LIB-279）：单源交互式校验，插件自己弹出验证网页；每次用新的 checkId。
@@ -377,7 +399,7 @@ extension _BookSourceSources on _BookSourcePageState {
       });
       await _loadSources();
     } catch (e) {
-      if (mounted) update(() => checkStatus = '$e');
+      if (mounted) update(() => checkStatus = bookSourceErrorText(e));
     } finally {
       if (mounted && verifying[id] == checkId) {
         update(() => verifying.remove(id));
@@ -409,7 +431,7 @@ extension _BookSourceSources on _BookSourcePageState {
   Future<void> _dedupe() async {
     final action = await showDialog<String>(
       context: context,
-      builder: (dialog) => AlertDialog(
+      builder: (dialog) => DeskAlert(
         title: const Text('清理重复书源'),
         content: const Text('同一书源地址保留规则更新时间最新的一份，其余选择停用或删除。'),
         actions: [
@@ -506,7 +528,7 @@ extension _BookSourceSources on _BookSourcePageState {
       if (!mounted) return;
       await showDialog<void>(
         context: context,
-        builder: (dialog) => AlertDialog(
+        builder: (dialog) => DeskAlert(
           title: Text('${source['name']}'),
           content: SizedBox(
             width: 640,
@@ -590,7 +612,7 @@ extension _BookSourceSources on _BookSourcePageState {
         ),
       );
     } catch (e) {
-      update(() => sourceMessage = '$e');
+      update(() => sourceMessage = bookSourceErrorText(e));
     }
   }
 
@@ -1387,6 +1409,11 @@ extension _BookSourceSources on _BookSourcePageState {
                       enabled: !checking,
                       value: () => _probe(false, [id]),
                       child: const Text('校验'),
+                    ),
+                    PopupMenuItem(
+                      key: ValueKey('booksource-reset-$id'),
+                      value: () => _resetSource(s),
+                      child: const Text('重置设备与运行状态'),
                     ),
                     PopupMenuItem(
                       value: () => _sourceDetail(s),

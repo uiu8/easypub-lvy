@@ -259,6 +259,197 @@ class DeskTag extends StatelessWidget {
   }
 }
 
+// ---- V105 视觉语言：分组横幅、状态色条、小胶囊、进度槽 ----
+// 问题队列、目录、正文先用；后续页面直接复用，不再各写一份装饰。
+
+extension DeskBanner on Desk {
+  /// 凹底横幅：分组标题、分卷行的底。
+  BoxDecoration get banner => BoxDecoration(
+    color: sunken,
+    borderRadius: BorderRadius.circular(6),
+    border: Border.all(color: line, width: .8),
+  );
+}
+
+/// 小胶囊：计数、结论、行号等短字。[outlined] 时加 0.8 细边。
+class DeskPill extends StatelessWidget {
+  const DeskPill(
+    this.child, {
+    super.key,
+    this.color,
+    this.outlined = false,
+    this.padding = const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+    this.radius = 4,
+  });
+  final Widget child;
+
+  /// 底色，默认凹底色。
+  final Color? color;
+  final bool outlined;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desk;
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: color ?? d.sunken,
+        borderRadius: BorderRadius.circular(radius),
+        border: outlined ? Border.all(color: d.line, width: .8) : null,
+      ),
+      child: child,
+    );
+  }
+}
+
+/// 左侧状态色条：未处理按严重度着色，已处理用细线色。不给 [height] 时随外层撑满。
+class DeskStripe extends StatelessWidget {
+  const DeskStripe(this.color, {super.key, this.height, this.width = 3});
+  final Color color;
+  final double? height;
+  final double width;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    height: height,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(2),
+      ),
+    ),
+  );
+}
+
+/// 圆角进度槽：凹底轨道 + 填充色。
+class DeskProgressTrack extends StatelessWidget {
+  const DeskProgressTrack({
+    super.key,
+    required this.value,
+    required this.color,
+    this.height = 5,
+  });
+
+  /// 0–1，超出按端点算。
+  final double value;
+  final Color color;
+  final double height;
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(99),
+    child: Container(
+      height: height,
+      color: context.desk.sunken,
+      alignment: Alignment.centerLeft,
+      child: FractionallySizedBox(
+        widthFactor: value.clamp(0.0, 1.0),
+        child: ColoredBox(color: color),
+      ),
+    ),
+  );
+}
+
+/// 分组横幅：折叠箭头、组名、说明、计数胶囊，点按展开或收起。
+class DeskGroupBanner extends StatelessWidget {
+  const DeskGroupBanner({
+    super.key,
+    required this.title,
+    this.detail,
+    this.count,
+    this.open = true,
+    this.onTap,
+  });
+  final String title;
+  final String? detail;
+  final int? count;
+  final bool open;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desk;
+    return InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: onTap,
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: d.banner,
+        child: Row(
+          children: [
+            Icon(
+              open ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
+              size: 16,
+              color: d.ink2,
+            ),
+            const SizedBox(width: 4),
+            Text(title, style: ui(12, w: 650, c: d.ink)),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                detail ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: ui(11, c: d.ink2),
+              ),
+            ),
+            if (count != null)
+              DeskPill(
+                Text('$count', style: mono(10.5, w: 600, c: d.ink2)),
+                color: d.surface,
+                outlined: true,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 页面级空态：凹底圆里一个线条图标，下面一句说明，可选一个下一步按钮。
+/// 文字照原样传入；只用于整块区域为空的地方，不用于弹窗里的小列表。
+class DeskEmptyState extends StatelessWidget {
+  const DeskEmptyState(
+    this.message, {
+    super.key,
+    this.icon = Icons.inbox_outlined,
+    this.action,
+  });
+  final String message;
+  final IconData icon;
+  final Widget? action;
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desk;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: d.sunken,
+                shape: BoxShape.circle,
+                border: Border.all(color: d.line, width: .8),
+              ),
+              child: Icon(icon, size: 21, color: d.ink3),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: ui(12.5, c: d.ink2, h: 1.5),
+            ),
+            if (action != null) ...[const SizedBox(height: 10), action!],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// 文件大小：不足 1 KB 写字节数，其余写 KB / MB（一位小数）（TASK-025、TASK-028）。
 String formatFileSize(int bytes) => bytes < 1024
     ? '$bytes 字节'

@@ -335,9 +335,10 @@ impl Notes {
         original: &str,
         text: &str,
         digits: Option<u8>,
+        styles: &[&crate::inline_styles::Annotation],
     ) -> Result<String, ApiError> {
         let Some(links) = self.lines.get(&line) else {
-            return inline_markup::render(text, digits);
+            return crate::inline_styles::render(text, 0, styles, digits);
         };
         let old_prefix = original.len() - original.trim_start_matches([' ', '　', '\t']).len();
         let new_prefix = text.len() - text.trim_start_matches([' ', '　', '\t']).len();
@@ -352,11 +353,16 @@ impl Notes {
         let mut cursor = 0;
         for link in links {
             let (from, to) = (position(link.from), position(link.to));
-            html.push_str(&inline_markup::render(&text[cursor..from], digits)?);
+            html.push_str(&crate::inline_styles::render(
+                &text[cursor..from],
+                cursor,
+                styles,
+                digits,
+            )?);
             let label = match &link.label {
                 Some(label) => inline_markup::render(label, digits)?,
                 None if link.automatic => escaped(&text[from..to])?,
-                None => inline_markup::render(&text[from..to], digits)?,
+                None => crate::inline_styles::render(&text[from..to], from, styles, digits)?,
             };
             html.push_str(&if link.definition {
                 let mut backlink = format!(
@@ -365,7 +371,7 @@ impl Notes {
                 );
                 if link.label.is_some() {
                     backlink.push(' ');
-                    backlink.push_str(&inline_markup::render(&text[from..to], digits)?);
+                    backlink.push_str(&crate::inline_styles::render(&text[from..to], from, styles, digits)?);
                 }
                 backlink
             } else {
@@ -373,7 +379,12 @@ impl Notes {
             });
             cursor = to;
         }
-        html.push_str(&inline_markup::render(&text[cursor..], digits)?);
+        html.push_str(&crate::inline_styles::render(
+            &text[cursor..],
+            cursor,
+            styles,
+            digits,
+        )?);
         Ok(html)
     }
     /// 新写注释集中放到本章末尾；已有来源注释行继续保留原顺序。

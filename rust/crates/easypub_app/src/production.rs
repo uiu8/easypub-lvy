@@ -281,6 +281,8 @@ pub struct Settings {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub manual_notes: Vec<crate::manual_notes::Note>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inline_styles: Vec<crate::inline_styles::Annotation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub supplemental_pages: Vec<crate::supplemental_pages::Page>,
     #[serde(default)]
     pub additional_css: String,
@@ -387,6 +389,7 @@ impl From<&crate::project::ProjectBook> for Settings {
             rule_options: book.rule_options.clone(),
             block_annotations: book.block_annotations.clone(),
             manual_notes: book.manual_notes.clone(),
+            inline_styles: book.inline_styles.clone(),
             supplemental_pages: book.supplemental_pages.clone(),
             illustrations: book.illustrations.clone(),
         }
@@ -498,6 +501,7 @@ impl Settings {
         self.rule_options.validate()?;
         crate::block_annotations::validate(&self.block_annotations)?;
         crate::manual_notes::validate(&self.manual_notes)?;
+        crate::inline_styles::validate(&self.inline_styles)?;
         crate::supplemental_pages::validate(&self.supplemental_pages)?;
         let values = serde_json::to_value(self).map_err(|_| invalid())?;
         if self.metadata_origins.len() > 16
@@ -836,6 +840,7 @@ fn edited(current: &Settings, fields: &BTreeMap<String, Edit>) -> Result<Setting
     map.entry("additional_css_bundle").or_insert(Value::Null);
     map.entry("block_annotations").or_insert(json!([]));
     map.entry("manual_notes").or_insert(json!([]));
+    map.entry("inline_styles").or_insert(json!([]));
     map.entry("supplemental_pages").or_insert(json!([]));
     for (key, edit) in fields {
         if key == "layout_origins" || key == "metadata_origins" {
@@ -879,6 +884,7 @@ fn edited(current: &Settings, fields: &BTreeMap<String, Edit>) -> Result<Setting
                     | "css_font_permissions"
                     | "block_annotations"
                     | "manual_notes"
+                    | "inline_styles"
                     | "supplemental_pages" => json!([]),
                     _ => return Err(invalid()),
                 }
@@ -1433,6 +1439,9 @@ pub fn run(
             return Err(invalid());
         }
         return crate::rule_statistics::run(service, value);
+    }
+    if value["op"] == "inline_styles" {
+        return crate::inline_styles::run(service, value, apply, &plan_id, confirmed);
     }
     if value["op"] == "manual_notes" {
         return crate::manual_notes::run(service, value, apply, &plan_id, confirmed);

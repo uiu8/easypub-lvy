@@ -3,7 +3,12 @@ part of '../booksource_page.dart';
 extension _BookSourceSettingsView on _BookSourcePageState {
   void _saveSettings(VoidCallback action) {
     update(action);
-    settings.save(widget.settingsPath);
+    settings.save(
+      widget.settingsPath,
+      onError: (e) => update(
+        () => sourceMessage = deskErrorText(e, '书源页界面偏好没有保存：请检查设置目录是否可写。'),
+      ),
+    );
   }
 
   /// 读插件端偏好；旧版插件没有这些接口时保持默认，不影响其他功能。
@@ -15,6 +20,111 @@ extension _BookSourceSettingsView on _BookSourcePageState {
       autoCheckHours = ((auto as Map)['hours'] as num? ?? 0).toInt();
       autoCheckLast = (auto['lastChecked'] as num? ?? 0).toInt();
     } catch (_) {}
+    try {
+      cacheLocation = Map<String, dynamic>.from(
+        await api!.call('cache.location.get') as Map,
+      );
+    } catch (_) {}
+  }
+
+  /// 换章节缓存位置（[path] 为空时回到默认位置）；已有缓存一起搬过去。
+  Future<void> _setCacheLocation(String? path) async {
+    update(() => cacheMoving = true);
+    try {
+      final r = Map<String, dynamic>.from(
+        await api!.call('cache.location.set', {'path': ?path}) as Map,
+      );
+      final kept = (r['kept'] as List? ?? const []).length;
+      update(() {
+        cacheLocation = r;
+        cacheMessage = kept == 0
+            ? '章节缓存已换到新位置${(r['moved'] as num? ?? 0) > 0 ? '，${r['moved']} 本书的缓存已搬过去' : ''}。'
+            : '章节缓存已换到新位置；有 $kept 本书的缓存没有搬动（可能正被占用），仍在原处。';
+      });
+    } catch (e) {
+      update(() => cacheMessage = bookSourceErrorText(e));
+    } finally {
+      update(() => cacheMoving = false);
+    }
+  }
+
+  Widget _cacheRow() {
+    final d = context.desk;
+    final c = cacheLocation!;
+    final bytes = (c['bytes'] as num? ?? 0).toInt();
+    final size = bytes < 1024 * 1024
+        ? '${(bytes / 1024).toStringAsFixed(0)} KB'
+        : bytes < 1024 * 1024 * 1024
+        ? '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB'
+        : '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(2)} GB';
+    return Padding(
+      key: const ValueKey('booksource-cache-location'),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    DeskText('章节缓存', size: 14),
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message:
+                          '追更要用：只下载新章节，再用缓存里的全部章节重新拼出整本 TXT。'
+                          '默认放在软件数据目录里，软件数据搬家时一起搬。'
+                          '换位置时，已有的缓存会一起搬过去。不再追更的书，可以在书架里“删除记录与缓存”。',
+                      child: Icon(Icons.help_outline, size: 16, color: d.ink3),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${c['path']}',
+                  key: const ValueKey('booksource-cache-path'),
+                  style: ui(12, c: d.ink2),
+                ),
+                Text(
+                  '${c['custom'] == true ? '自选位置' : '默认位置'} · '
+                  '${c['books']} 本书 · $size · 每本一个文件夹，按“书名 - 作者”命名',
+                  style: ui(11.5, c: d.ink3),
+                ),
+                if (cacheMessage != null)
+                  Text(
+                    cacheMessage!,
+                    key: const ValueKey('booksource-cache-message'),
+                    style: ui(11.5, c: d.ink2),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (c['custom'] == true)
+            DeskButton(
+              '恢复默认',
+              key: const ValueKey('booksource-cache-default'),
+              quiet: true,
+              busy: cacheMoving,
+              onPressed: cacheMoving ? null : () => _setCacheLocation(null),
+            ),
+          DeskButton(
+            '选择…',
+            key: const ValueKey('booksource-cache-choose'),
+            quiet: true,
+            busy: cacheMoving,
+            onPressed: cacheMoving
+                ? null
+                : () async {
+                    final folder = await widget.chooseFolder();
+                    if (folder != null && mounted) {
+                      await _setCacheLocation(folder);
+                    }
+                  },
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _setImportOption(String key, Object value) async {
@@ -23,7 +133,7 @@ extension _BookSourceSettingsView on _BookSourcePageState {
       final r = await api!.call('sources.importOptions.set', {'options': next});
       update(() => importOptions = Map<String, dynamic>.from(r as Map));
     } catch (e) {
-      update(() => sourceMessage = '$e');
+      update(() => sourceMessage = bookSourceErrorText(e));
     }
   }
 
@@ -41,7 +151,7 @@ extension _BookSourceSettingsView on _BookSourcePageState {
         autoCheckLast = (r['lastChecked'] as num? ?? 0).toInt();
       });
     } catch (e) {
-      update(() => shelfMessage = '$e');
+      update(() => shelfMessage = bookSourceErrorText(e));
     }
   }
 
@@ -172,7 +282,9 @@ extension _BookSourceSettingsView on _BookSourcePageState {
                       }
                     },
                   ),
+                  help: '下载好的 TXT（或 EPUB）放在这里。章节缓存另放，见下一项。',
                 ),
+                if (cacheLocation != null) _cacheRow(),
                 _numberChoice(
                   '每本书并发上限',
                   settings.threads,

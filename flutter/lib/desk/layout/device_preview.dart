@@ -65,8 +65,8 @@ const kindleDevices = <KindleDevice>[
     1072,
     1448,
     300,
-    360,
-    486,
+    1072,
+    1448,
     bodyWidthMm: 117.0,
     bodyHeightMm: 169.0,
     topBezelMm: 13.4,
@@ -79,8 +79,8 @@ const kindleDevices = <KindleDevice>[
     1072,
     1448,
     300,
-    360,
-    486,
+    1072,
+    1448,
     bodyWidthMm: 116.0,
     bodyHeightMm: 167.0,
     topBezelMm: 18.6,
@@ -93,8 +93,8 @@ const kindleDevices = <KindleDevice>[
     1236,
     1648,
     300,
-    390,
-    520,
+    1236,
+    1648,
     bodyWidthMm: 124.6,
     bodyHeightMm: 174.2,
     topBezelMm: 9.7,
@@ -107,8 +107,8 @@ const kindleDevices = <KindleDevice>[
     1264,
     1680,
     300,
-    400,
-    532,
+    1264,
+    1680,
     bodyWidthMm: 127.6,
     bodyHeightMm: 176.7,
     topBezelMm: 8.4,
@@ -121,8 +121,8 @@ const kindleDevices = <KindleDevice>[
     600,
     800,
     167,
-    360,
-    480,
+    600,
+    800,
     bodyWidthMm: 113.0,
     bodyHeightMm: 160.0,
     topBezelMm: 10.7,
@@ -135,8 +135,8 @@ const kindleDevices = <KindleDevice>[
     1072,
     1448,
     300,
-    360,
-    486,
+    1072,
+    1448,
     bodyWidthMm: 108.6,
     bodyHeightMm: 157.8,
     topBezelMm: 8.4,
@@ -149,8 +149,8 @@ const kindleDevices = <KindleDevice>[
     1080,
     1440,
     300,
-    360,
-    480,
+    1080,
+    1440,
     bodyWidthMm: 115.0,
     bodyHeightMm: 162.0,
     topBezelMm: 15.0,
@@ -164,8 +164,8 @@ const kindleDevices = <KindleDevice>[
     1080,
     1440,
     300,
-    360,
-    480,
+    1080,
+    1440,
     bodyWidthMm: 122.0,
     bodyHeightMm: 143.0,
     grip: true,
@@ -178,8 +178,8 @@ const kindleDevices = <KindleDevice>[
     1264,
     1680,
     300,
-    400,
-    532,
+    1264,
+    1680,
     bodyWidthMm: 141.0,
     bodyHeightMm: 159.0,
     grip: true,
@@ -192,8 +192,8 @@ const kindleDevices = <KindleDevice>[
     1264,
     1680,
     300,
-    400,
-    532,
+    1264,
+    1680,
     bodyWidthMm: 141.0,
     bodyHeightMm: 159.0,
     grip: true,
@@ -206,8 +206,8 @@ const kindleDevices = <KindleDevice>[
     1860,
     2480,
     300,
-    465,
-    620,
+    1860,
+    2480,
     bodyWidthMm: 196.0,
     bodyHeightMm: 230.0,
     grip: true,
@@ -221,8 +221,8 @@ const kindleDevices = <KindleDevice>[
     1264,
     1680,
     300,
-    400,
-    532,
+    1264,
+    1680,
     bodyWidthMm: 127.6,
     bodyHeightMm: 176.7,
     topBezelMm: 8.4,
@@ -243,15 +243,14 @@ String kindleShortName(String name) =>
 KindleDevice? customKindleDevice(int width, int height, int ppi) {
   if (width < 320 || width > 5000 || height < 320 || height > 7000) return null;
   if (ppi < 72 || ppi > 600) return null;
-  final scale = 540 / math.max(width, height);
   return KindleDevice(
     'custom',
     '自定义 · $ppi PPI',
     width,
     height,
     ppi,
-    math.max(240, (width * scale).round()),
-    math.max(320, (height * scale).round()),
+    width,
+    height,
     // 自定义机型没有真实机身：按屏幕加通用边框（左右各 10 毫米、上下合计 34 毫米）绘制。
     bodyWidthMm: width / ppi * 25.4 + 20,
     bodyHeightMm: height / ppi * 25.4 + 34,
@@ -356,14 +355,6 @@ class PreviewDeviceChoice {
   }
 }
 
-/// KPW5 实测校准点（来源：用户 2026-10-12 拍摄的真机照片；苹方、页边距最窄、行距中，
-/// 书内字号 110%、行高 1.2）：档位 →（每行字数，每页正文行数，该页段间距数）。
-const kpw5Calibration = <int, (int, int, int)>{
-  4: (25, 17, 8),
-  8: (16, 12, 6),
-  12: (9, 9, 2),
-};
-
 /// Kindle 固件 5.8.11 中的 14 档默认字号（V32，LAY-113）。MobileRead 论坛从固件代码读出，
 /// 用于非中日韩文字，按屏幕 ppi 分三套；数值按磅计（与 KPW5 实测吻合，论坛另有“1/100 英寸”之说，与实测不符）。
 const kindleFontRamp = <int, List<double>>{
@@ -425,13 +416,6 @@ const readerMarginPt = {'narrow': 16.98, 'medium': 33.96, 'wide': 50.94};
 const readerTopPt = 13.58;
 const readerBottomPt = 13.58;
 
-/// 推导行距时用的下方留白（磅）：KPW5 校准照片“每页行数”按下边距加页脚高度推导行距；
-/// V35 并排照片直接量得的第 8 档行距与这样推导的结果相差 0.6%，所以行距推导保留这个值。
-const readerCalibrationBottomPt = 13.58 + 13.58;
-
-/// 行距档位对行高的倍数。中为实测；小、大为推算（没有找到固件数值）。
-const readerSpacingFactor = {'small': .88, 'medium': 1.0, 'large': 1.15};
-
 /// 预览排版尺寸。[measured] 为 true 表示直接来自实测或用户校准；否则为推算。
 class ReaderMetrics {
   const ReaderMetrics({
@@ -440,11 +424,115 @@ class ReaderMetrics {
     required this.padding,
     required this.measured,
     required this.note,
+    this.tracking = 0,
+    this.justify = false,
+    this.cssPx = 1,
   });
   final double fontPx, lineRatio;
   final EdgeInsets padding;
   final bool measured;
   final String note;
+
+  /// 正文字距补偿（em）与两端对齐（V118，KPW5 真机规则）：真机按取整后的字宽断行，再两端对齐。
+  final double tracking;
+  final bool justify;
+
+  /// 书内 CSS 的 1px 在屏幕上画几个像素（V118：KPW5 为 300 / 160 = 1.875，按标题内边距与下框实测）。
+  /// 为 1 时不换算。
+  final double cssPx;
+}
+
+/// KFX 真机规则（V118，2026-10-29 用户 KPW5 真机截图实测，docs/research/2026-10-29_KPW5真机实测.md）。
+/// 字号 = 固件中文字号表（磅）× ppi/72 × 书内字号；行距 = 字号 × 书内行高 × 阅读器行间距，取整；
+/// 版心 = 字号的整数倍（可用宽 ÷ 字号取整）并居中，两端对齐；上、下各留 15.12 磅（KPW5 上 63 像素），
+/// 页脚画在下边距里。所有机型按原生分辨率排版；KPW5 以外的机型按 ppi 换算，属于推算。
+const kpw5CjkRampPt = [
+  6.96,
+  7.92,
+  8.40,
+  9.36,
+  10.56,
+  11.52,
+  12.48,
+  13.92,
+  15.36,
+  17.04,
+  19.20,
+  22.08,
+  25.20,
+  29.04,
+];
+
+/// 阅读器行间距三档（固件行距资源 1.14 / 1.35 / 1.54；中、大实测，小为资源值）。
+const kpw5SpacingFactor = {'small': 1.14, 'medium': 1.35, 'large': 1.54};
+
+/// 三档页边距每侧扣掉的宽度（磅）：KPW5 实测可用宽窄 1056–1072、中 829–893、宽 702–766 像素，
+/// 取中间值 1064 / 861 / 734，每侧 86 / 187.5 / 251 像素，按 300 ppi 换成磅，其他机型按 ppi 换算。
+const kfxSideMarginPt = {'narrow': 20.64, 'medium': 45.0, 'wide': 60.24};
+
+/// 上下边距（磅）：KPW5 上 63 像素。下边距由各截图每页行数反推为 52–92 像素，取与上边距相同；
+/// 126 是 AZW3 阅读窗口的留白，不适用于 KFX。
+const kfxTopPt = 15.12, kfxBottomPt = 15.12;
+
+/// 实测过的情况：档位:页边距:行间距。
+const kpw5MeasuredCases = {
+  '4:narrow:medium',
+  '6:narrow:medium',
+  '8:narrow:medium',
+  '10:narrow:medium',
+  '12:narrow:medium',
+  '8:medium:medium',
+  '8:wide:medium',
+  '8:narrow:large',
+};
+
+/// 字号表：300 ppi 级机型用 KPW5 固件的中文字号表；其他按 ppi 取固件字号表（只有非中日韩的一套）。
+List<double> kfxRamp(KindleDevice d) =>
+    d.ppi >= 256 ? kpw5CjkRampPt : kindleRamp(d);
+
+ReaderMetrics kfxMetrics(
+  PreviewDeviceChoice choice, {
+  double bookScale = 1,
+  double bookLineHeight = 1.2,
+}) {
+  final device = choice.device;
+  final px = device.ppi / 72;
+  final level = choice.level.clamp(1, 14);
+  final table = (kfxRamp(device)[level - 1] * px).roundToDouble();
+  final font = table * 1.1 * bookScale;
+  final spacing = kpw5SpacingFactor[choice.spacing] ?? 1.35;
+  final line = (font * bookLineHeight * spacing).roundToDouble();
+  final sidePt = kfxSideMarginPt[choice.margin] ?? kfxSideMarginPt['narrow']!;
+  final available = device.width - 2 * sidePt * px;
+  final box = (available / font).floor() * font;
+  final side = (device.viewportWidth - box) / 2;
+  final kpw5 = device.id == 'kpw5';
+  final measured =
+      kpw5 &&
+      kpw5MeasuredCases.contains('$level:${choice.margin}:${choice.spacing}') &&
+      bookScale == 1 &&
+      bookLineHeight == 1.2;
+  return ReaderMetrics(
+    fontPx: font,
+    lineRatio: line / font,
+    padding: EdgeInsets.fromLTRB(
+      side,
+      (kfxTopPt * px).roundToDouble(),
+      side,
+      (kfxBottomPt * px).roundToDouble(),
+    ),
+    measured: measured,
+    note: measured
+        ? '按 KPW5 真机实测'
+        : kpw5
+        ? '按 KPW5 真机规则推算'
+        : '按 KPW5 真机规则按 ${device.ppi} PPI 换算',
+    // 真机按取整后的字宽断行（字号 6、8 时一行少放一个字），这里用字距补到整数宽。
+    tracking: (font.roundToDouble() - font) / font,
+    justify: true,
+    // 书内 1px 画成 ppi/160 个像素（KPW5 上 1.875）。
+    cssPx: device.ppi / 160,
+  );
 }
 
 /// 实测“每行 N 字”对应的行宽（字）：真机行末的句号、逗号压成半宽，数到的 N 字通常是 N−1 个整字
@@ -468,86 +556,37 @@ double readerSideMargin(KindleDevice d, String margin) =>
 
 /// 按机型与阅读器设置计算正文字号与行高（LAY-096、LAY-113）。
 /// [bookScale] 为书内字号相对 110% 的倍数；[bookLineHeight] 为书内行高。
-/// 字号：固件字号表 × 书内 110% × 中文修正；修正取 KPW5 实测点与字号表之比，档位之间线性插值，
-/// 所以 KPW5 的实测档位与照片一致，其他档位与机型沿用固件字号表的走势。
+/// V118 起没有用户校准时一律按 KFX 真机规则（[kfxMetrics]，所有机型按原生分辨率排版）；
+/// 有“按真机校准”记录时按输入的每行字数、每页行数反推。
 ReaderMetrics readerMetrics(
   PreviewDeviceChoice choice, {
   double bookScale = 1,
   double bookLineHeight = 1.2,
 }) {
+  final override = choice.calibrations[choice.calibrationKey];
+  if (override == null) {
+    return kfxMetrics(
+      choice,
+      bookScale: bookScale,
+      bookLineHeight: bookLineHeight,
+    );
+  }
+  // 用户“按真机校准”：按输入的每行字数、每页行数反推字号与行高（LAY-096）。
   final device = choice.device;
-  final kpw5 = kindleDevices.firstWhere((d) => d.id == 'kpw5');
   final side = readerSideMargin(device, choice.margin);
   final top = kindlePtToCss(device, readerTopPt);
   final bottom = kindlePtToCss(device, readerBottomPt);
   final width = device.viewportWidth - 2 * side;
   final height = device.viewportHeight - top - bottom;
-  final padding = EdgeInsets.fromLTRB(side, top, side, bottom);
-  final override = choice.calibrations[choice.calibrationKey];
-  if (override != null) {
-    final font = width / readerLineEms(override.$1);
-    // 校准时一页里通常有若干段间距：按约 12% 的高度留给段间距估计行高。
-    final line = height * .88 / override.$2;
-    return ReaderMetrics(
-      fontPx: font * bookScale,
-      lineRatio: line / font,
-      padding: padding,
-      measured: true,
-      note: '按真机校准',
-    );
-  }
-  // KPW5 实测点：每档正文字号与固件字号表之比（中文修正）、行高倍数。
-  final kWidth = kpw5.viewportWidth - 2 * readerSideMargin(kpw5, 'narrow');
-  final kHeight =
-      kpw5.viewportHeight -
-      kindlePtToCss(kpw5, readerTopPt) -
-      kindlePtToCss(kpw5, readerCalibrationBottomPt);
-  final ramp300 = kindleFontRamp[300]!;
-  final points = [
-    for (final e in kpw5Calibration.entries)
-      () {
-        final font = kWidth / readerLineEms(e.value.$1);
-        final gaps = .6 * font * e.value.$3;
-        return (
-          e.key,
-          font / (kindlePtToCss(kpw5, ramp300[e.key - 1]) * 1.1),
-          (kHeight - gaps) / e.value.$2 / font,
-        );
-      }(),
-  ]..sort((a, b) => a.$1.compareTo(b.$1));
-  final level = choice.level.clamp(1, 14);
-  double at(double Function((int, double, double)) pick) {
-    if (level <= points.first.$1) return pick(points.first);
-    if (level >= points.last.$1) return pick(points.last);
-    var i = 0;
-    while (level > points[i + 1].$1) {
-      i++;
-    }
-    final t = (level - points[i].$1) / (points[i + 1].$1 - points[i].$1);
-    return pick(points[i]) + (pick(points[i + 1]) - pick(points[i])) * t;
-  }
-
-  final font =
-      kindlePtToCss(device, kindleRamp(device)[level - 1]) *
-      1.1 *
-      at((p) => p.$2);
-  final ratio =
-      at((p) => p.$3).clamp(1.05, 2.4) *
-      (readerSpacingFactor[choice.spacing] ?? 1) *
-      (bookLineHeight / 1.2);
-  final measured =
-      device.id == 'kpw5' &&
-      kpw5Calibration.containsKey(level) &&
-      choice.margin == 'narrow' &&
-      choice.spacing == 'medium' &&
-      bookScale == 1 &&
-      bookLineHeight == 1.2;
+  final font = width / readerLineEms(override.$1);
+  // 校准时一页里通常有若干段间距：按约 12% 的高度留给段间距估计行高。
+  final line = height * .88 / override.$2;
   return ReaderMetrics(
     fontPx: font * bookScale,
-    lineRatio: ratio,
-    padding: padding,
-    measured: measured,
-    note: measured ? '按 KPW5 实测' : '按固件推算',
+    lineRatio: line / font,
+    padding: EdgeInsets.fromLTRB(side, top, side, bottom),
+    measured: true,
+    note: '按真机校准',
   );
 }
 
@@ -661,9 +700,13 @@ class PreviewPiece {
     this.runStart = false,
     this.runEnd = false,
     this.heading = false,
+    this.spans,
   });
   final String text;
   final bool title, indent;
+
+  /// 文字样式（V120，章节页排版视图）：按显示的文字分出加粗等片段；为空时整段同一样式。
+  final InlineSpan Function(String text)? spans;
 
   /// 系统提示分类样式（V104，LAY-146）：单行 `note` 或面板 `panel`；不是分类样式时为空。
   /// 一段连续的系统提示从 [runStart] 到 [runEnd]；跨页切开时前半段不收尾、后半段不起头。
@@ -910,6 +953,7 @@ TextSpan _span(PreviewPiece piece, PreviewStyle style) {
     final base = style.body.copyWith(
       fontSize: look.fontEm,
       fontWeight: look.bold || piece.heading ? FontWeight.bold : null,
+      fontFamily: look.kai ? 'KaiTi' : null,
     );
     final key = look.keyBold && !piece.heading
         ? systemKeyEnd(piece.text)
@@ -917,7 +961,7 @@ TextSpan _span(PreviewPiece piece, PreviewStyle style) {
     return TextSpan(
       style: base,
       children: key == null
-          ? [TextSpan(text: piece.text)]
+          ? [piece.spans?.call(piece.text) ?? TextSpan(text: piece.text)]
           : [
               TextSpan(
                 text: piece.text.substring(0, key),
@@ -942,14 +986,45 @@ TextSpan _span(PreviewPiece piece, PreviewStyle style) {
             height: 1,
           ),
         ),
-      TextSpan(
-        text: initial
-            ? piece.text.substring(
-                String.fromCharCode(piece.text.runes.first).length,
-              )
-            : piece.text,
-      ),
+      if (!initial && piece.spans != null)
+        piece.spans!(piece.text)
+      else
+        TextSpan(
+          text: initial
+              ? piece.text.substring(
+                  String.fromCharCode(piece.text.runes.first).length,
+                )
+              : piece.text,
+        ),
     ],
+  );
+}
+
+/// 一段之后到下一段的间距（V120，章节页排版视图逐段排时用）。
+double previewGapAfter(PreviewPiece piece, PreviewStyle style) =>
+    _gapAfter(piece, style);
+
+/// 按书页规则画的一段（V120，章节页排版视图）：[style] 的页边距应为零，宽为版心宽；
+/// 高度与书页里这一段相同，不含段后间距。
+class PreviewPieceView extends StatelessWidget {
+  const PreviewPieceView({
+    super.key,
+    required this.piece,
+    required this.style,
+    required this.width,
+    required this.paper,
+    this.locale,
+  });
+  final PreviewPiece piece;
+  final PreviewStyle style;
+  final double width;
+  final Color paper;
+  final Locale? locale;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    size: Size(width, PreviewPage.contentHeight([piece], style, width, locale)),
+    painter: _PagePainter([piece], style, paper, locale),
   );
 }
 
@@ -986,10 +1061,20 @@ TextPainter _painter(
     ]);
   }
   // 分类样式的系统提示：文字在边框与左右内边距以内排。
+  // 普通段按版心宽排（V120）：否则段宽缩到文字宽，居中的诗句、靠右的署名都会画在左边。
   painter.layout(
+    minWidth: look == null ? width : 0,
     maxWidth: look == null
         ? width
-        : math.max(20.0, width - look.left - look.right - 2 * look.side),
+        : math.max(
+            20.0,
+            width -
+                look.insetLeft(width) -
+                look.insetRight(width) -
+                look.left -
+                look.right -
+                2 * look.side,
+          ),
   );
   return painter;
 }
@@ -1444,8 +1529,10 @@ class _PagePainter extends CustomPainter {
     double y,
     double width,
   ) {
-    final ink = style.body.color ?? const Color(0xFF333333);
-    final left = style.padding.left, right = left + width;
+    final ink = look.lineColor(style.body.color ?? const Color(0xFF333333));
+    final left = style.padding.left + look.insetLeft(width);
+    final right = style.padding.left + width - look.insetRight(width);
+    width = right - left;
     final margin = math.max(0.0, look.margin - style.paragraphSpacing);
     final shadedTitle = piece.heading && look.title == 'shaded';
     if (piece.runStart) y += margin;
@@ -1460,8 +1547,17 @@ class _PagePainter extends CustomPainter {
     if (piece.runEnd) bottom += look.pad + look.bottom;
     final shade = look.shade;
     if (shade != null) {
-      canvas.drawRect(
-        Rect.fromLTRB(left, top, right, bottom),
+      final rect = Rect.fromLTRB(left, top, right, bottom);
+      // 圆角（V119）：一段跨页切开时只给起头、收尾的那一侧画圆角。
+      final r = Radius.circular(look.radius ? .5 * look.fontEm : 0);
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(
+          rect,
+          topLeft: piece.runStart ? r : Radius.zero,
+          topRight: piece.runStart ? r : Radius.zero,
+          bottomLeft: piece.runEnd ? r : Radius.zero,
+          bottomRight: piece.runEnd ? r : Radius.zero,
+        ),
         Paint()..color = shade,
       );
     }

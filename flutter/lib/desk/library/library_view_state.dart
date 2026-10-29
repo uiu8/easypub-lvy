@@ -8,7 +8,8 @@ class LibraryViewState {
   bool descending = false;
 
   /// 左栏收成图标条与左栏宽度（V84b，可拖动伸缩）。
-  bool railCollapsed = false;
+  /// V110：收藏夹栏默认收起。
+  bool railCollapsed = true;
   double railWidth = 184;
 
   /// 收藏夹模式与收藏夹的排列顺序（V104：'custom' 创建顺序、'name'、'count'）。

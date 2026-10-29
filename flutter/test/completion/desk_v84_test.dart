@@ -10,6 +10,7 @@ import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/folders/folder_book_tools.dart';
 import 'package:easypub_desktop/desk/folders/folder_import_dialog.dart';
 import 'package:easypub_desktop/desk/library/library_page.dart';
+import 'package:easypub_desktop/desk/library/library_view_state.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
 
@@ -142,7 +143,12 @@ void main() {
       MaterialApp(
         theme: deskTheme(),
         home: Scaffold(
-          body: LibraryPage(library: library, picker: _NoPicker()),
+          // V110：收藏夹栏默认收起；这些测试从展开状态开始。
+          body: LibraryPage(
+            library: library,
+            picker: _NoPicker(),
+            viewState: LibraryViewState()..railCollapsed = false,
+          ),
         ),
       ),
     );

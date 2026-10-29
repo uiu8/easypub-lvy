@@ -30,10 +30,17 @@ void main() {
       await library.savePatch({'check_after_import': false});
       final ids = <String>[];
       final sources = <String>[];
-      for (var i = 0; i < 50; i++) {
+      final cover = await File('../samples/b7-covers/transparent.png')
+          .copy('${root.path}/cover.png');
+      // R6：可指定每本章数与样书本数，测大书。
+      final chapters = int.parse(
+        Platform.environment['EASYPUB_B8_CHAPTERS'] ?? '30',
+      );
+      final books = int.parse(Platform.environment['EASYPUB_B8_BOOKS'] ?? '50');
+      for (var i = 0; i < books; i++) {
         final file = File('${root.path}/样本$i.txt');
         final text = StringBuffer();
-        for (var chapter = 1; chapter <= 30; chapter++) {
+        for (var chapter = 1; chapter <= chapters; chapter++) {
           if (i % 3 == 2 && chapter % 10 == 1) {
             text.writeln('第${chapter ~/ 10 + 1}卷 卷名');
           }
@@ -49,60 +56,87 @@ void main() {
         final id = state.currentId;
         final info = library.openBookInformation(id);
         await info.apply(
-          await info.preview({'language': 'zh-CN', 'author': '合成作者'}),
+          await info.preview({
+            'language': 'zh-CN',
+            'author': '合成作者',
+            // AZW3/KFX 要求有封面（R6 起本测量也覆盖这两种格式）。
+            'cover_path': cover.path,
+          }),
         );
         info.dispose();
         ids.add(id);
         sources.add(file.path);
       }
       final reports = <Map<String, Object?>>[];
-      for (final count in [10, 50]) {
-        for (final parallel in [1, 4]) {
-          final dir = await Directory('${root.path}/$count-$parallel').create();
-          final batch = OutputBatch(state, ids.take(count))
-            ..parallelOverride = parallel
-            ..checksEnabled = false;
-          for (var i = 0; i < count; i++) {
-            batch.items[i].path = '${dir.path}/样本$i.epub';
-          }
-          var peak = 0;
-          void changed() {
-            peak = math.max(
-              peak,
-              batch.items
-                  .where(
-                    (i) => [
-                      'preparing',
-                      'prepared',
-                      'converting',
-                      'checking',
-                      'publishing',
-                    ].contains(i.phase),
-                  )
-                  .length,
-            );
-          }
+      // R6：可用环境变量指定格式、本数与并发；默认仍是 EPUB、10/50 本、并发 1/4。
+      List<String> list(String name, String fallback) =>
+          (Platform.environment[name] ?? fallback).split(',');
+      for (final format in list('EASYPUB_B8_FORMATS', 'EPUB')) {
+        for (final count in list('EASYPUB_B8_COUNTS', '10,50').map(int.parse)) {
+          for (final parallel in list(
+            'EASYPUB_B8_PARALLEL',
+            '1,4',
+          ).map(int.parse)) {
+            final ext = format.toLowerCase();
+            final dir = await Directory('${root.path}/$format-$count-$parallel')
+                .create();
+            final batch = OutputBatch(state, ids.take(count))
+              ..parallelOverride = parallel
+              ..checksEnabled = false
+              ..format = format
+              ..engine = switch (format) {
+                'KFX' => Platform.environment['EASYPUB_TEST_BOKAI'] ?? '',
+                'EPUB' => '',
+                _ => Platform.environment['EASYPUB_TEST_KINDLING'] ?? '',
+              };
+            for (var i = 0; i < count; i++) {
+              batch.items[i].path = '${dir.path}/样本$i.$ext';
+            }
+            var peak = 0;
+            void changed() {
+              peak = math.max(
+                peak,
+                batch.items
+                    .where(
+                      (i) => [
+                        'preparing',
+                        'prepared',
+                        'converting',
+                        'checking',
+                        'publishing',
+                      ].contains(i.phase),
+                    )
+                    .length,
+              );
+            }
 
-          final clock = Stopwatch()..start();
-          await batch.previewAll(changed);
-          final previewMs = clock.elapsedMilliseconds;
-          expect(batch.items.every((item) => item.preview != null), true);
-          clock.reset();
-          await batch.commitAll(changed);
-          final commitMs = clock.elapsedMilliseconds;
-          expect(
-            batch.items.every((item) => item.phase == 'complete'),
-            true,
-            reason: batch.items.map((i) => i.status).join('\n'),
-          );
-          expect(peak, lessThanOrEqualTo(parallel));
-          reports.add({
-            'count': count,
-            'parallel': parallel,
-            'peak_active': peak,
-            'preview_ms': previewMs,
-            'commit_ms': commitMs,
-          });
+            final clock = Stopwatch()..start();
+            await batch.previewAll(changed);
+            final previewMs = clock.elapsedMilliseconds;
+            expect(
+              batch.items.every((item) => item.preview != null),
+              true,
+              reason:
+                  '$format: ${batch.items.map((i) => i.status).toSet().join(" | ")}',
+            );
+            clock.reset();
+            await batch.commitAll(changed);
+            final commitMs = clock.elapsedMilliseconds;
+            expect(
+              batch.items.every((item) => item.phase == 'complete'),
+              true,
+              reason: batch.items.map((i) => i.status).join('\n'),
+            );
+            expect(peak, lessThanOrEqualTo(parallel));
+            reports.add({
+              'format': format,
+              'count': count,
+              'parallel': parallel,
+              'peak_active': peak,
+              'preview_ms': previewMs,
+              'commit_ms': commitMs,
+            });
+          }
         }
       }
       await File('${root.path}/report.json').writeAsString(
@@ -112,7 +146,7 @@ void main() {
             for (var i = 0; i < 3; i++)
               {
                 'source': sources[i],
-                'epub': '${root.path}/10-4/样本$i.epub',
+                'epub': '${root.path}/EPUB-10-4/样本$i.epub',
                 'title': '样本$i',
               },
           ],
@@ -120,6 +154,6 @@ void main() {
       );
     },
     skip: Platform.environment['EASYPUB_B8_PERF'] != '1',
-    timeout: const Timeout(Duration(minutes: 10)),
+    timeout: const Timeout(Duration(minutes: 60)),
   );
 }

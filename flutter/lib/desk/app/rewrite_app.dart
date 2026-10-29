@@ -48,6 +48,8 @@ import 'package:go_router/go_router.dart';
 import '../../application/library_service.dart';
 import '../controls/controls.dart';
 import '../library/library_page.dart';
+import '../library/source_refresh_dialog.dart';
+import '../../application/source_refresh_service.dart';
 import '../library/library_view_state.dart';
 import '../library/book_overview_page.dart';
 import '../library/project_menu.dart';
@@ -601,7 +603,45 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
         session: conversion,
         path: path,
         conversionBusy: quickActivity.value,
+        onImported: (out) => noteDownloadImport(path, out),
       );
+
+  /// 书源下载加入书库后，书库里已有这本书、下载内容却变了（追更、重新整理）的路径（V111）：
+  /// 草稿保留没动，下载队列据此提示“书库里是旧版本”并给出“刷新来源”。
+  final outdatedDownloads = <String>{};
+  String _downloadKey(String path) => path.replaceAll('/', r'\').toLowerCase();
+
+  void noteDownloadImport(String path, List<ImportOutcome> out) {
+    if (out.any((o) => o.sourceChanged)) {
+      outdatedDownloads.add(_downloadKey(path));
+    } else if (out.any((o) => o.succeeded)) {
+      outdatedDownloads.remove(_downloadKey(path));
+    }
+  }
+
+  /// 对下载的这本书打开“刷新来源”对比确认窗口；关闭后重新核对，返回书库里是否已是新版本。
+  Future<bool> refreshDownloadInLibrary(String path) async {
+    final key = _downloadKey(path);
+    final book = widget.library.books.value
+        .where((b) => _downloadKey(b.path) == key)
+        .firstOrNull;
+    final context = router.routerDelegate.navigatorKey.currentContext;
+    if (book == null ||
+        widget.library is! SourceRefreshService ||
+        context == null) {
+      return !outdatedDownloads.contains(key);
+    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => SourceRefreshDialog(
+        service: widget.library as SourceRefreshService,
+        bookId: book.id,
+      ),
+    );
+    noteDownloadImport(path, await widget.library.importFiles([path]));
+    return !outdatedDownloads.contains(key);
+  }
 
   Future<void> quickConvert(BuildContext context, {String? bookId}) async {
     if (quickActivity.value || conversion.busy) return;
@@ -870,7 +910,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
                 ): () => router.go(
                   bookPageLocation(
                     widget.library.selection.value.current,
-                    'chapters',
+                    'checks',
                   ),
                 ),
                 const SingleActivator(
@@ -879,7 +919,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
                 ): () => router.go(
                   bookPageLocation(
                     widget.library.selection.value.current,
-                    'checks',
+                    'chapters',
                   ),
                 ),
                 const SingleActivator(

@@ -111,7 +111,7 @@ class _LibraryPageState extends State<LibraryPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(deskErrorText(e, '无法开始检查，请稍后重试。'))),
+          deskSnackBar(content: Text(deskErrorText(e, '无法开始检查，请稍后重试。'))),
         );
       }
     }
@@ -188,6 +188,10 @@ class _LibraryPageState extends State<LibraryPage> {
   );
   List<BookSummary> _visible = [];
   double _extent = 132;
+
+  /// 列表视图是否显示“格式、大小”两列：按整个列表的宽度统一决定，表头与各行用同一个结果
+  /// （V110：以前表头和行各自按自己的宽度算，列表区域的内边距不同，宽度临界时表头有、行里没有）。
+  bool _wideColumns = false;
 
   /// 书架视图每行几本（列表视图为 1）；滚动位置按“行”保存和恢复。
   int _columns = 1;
@@ -324,7 +328,7 @@ class _LibraryPageState extends State<LibraryPage> {
     format = view?.format ?? '全部格式';
     onlySelected = view?.onlySelected ?? false;
     scope = view?.scope ?? '';
-    railCollapsed = view?.railCollapsed ?? false;
+    railCollapsed = view?.railCollapsed ?? true;
     railGone = railCollapsed;
     railWidthValue = view?.railWidth ?? 184;
     sort = view?.sort ?? 'default';
@@ -445,7 +449,7 @@ class _LibraryPageState extends State<LibraryPage> {
     } catch (error) {
       final blocked = error is LibraryRemovalBlocked ? error : null;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        deskSnackBar(
           content: Text(
             blocked?.message ?? (deskErrorText(error, '移除未完成：$error')),
           ),
@@ -478,12 +482,14 @@ class _LibraryPageState extends State<LibraryPage> {
                   message,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  style: ui(13, c: context.desk.surface),
                 ),
               ),
               TextButton(
                 key: const ValueKey('library-undo-removal'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                style: TextButton.styleFrom(
+                  foregroundColor: context.desk.surface,
+                ),
                 onPressed: () => remove({}, undo: true, batchId: id),
                 child: const Text('撤销'),
               ),
@@ -493,7 +499,7 @@ class _LibraryPageState extends State<LibraryPage> {
                   _undoBatchId = null;
                   _undoMessage = null;
                 }),
-                icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                icon: Icon(Icons.close, color: context.desk.surface, size: 18),
               ),
             ],
           ),
@@ -509,16 +515,27 @@ class _LibraryPageState extends State<LibraryPage> {
         ? records.single.id
         : await showDialog<int>(
             context: context,
-            builder: (context) => SimpleDialog(
+            builder: (context) => DeskAlert(
               title: const Text('恢复移除的书籍'),
-              children: [
-                for (final record in records)
-                  SimpleDialogOption(
-                    onPressed: () => Navigator.pop(context, record.id),
-                    child: Text(
-                      '记录 ${record.id} · ${record.titles.length} 本 · ${record.titles.take(3).join('、')}',
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final record in records)
+                    SimpleDialogOption(
+                      onPressed: () => Navigator.pop(context, record.id),
+                      child: Text(
+                        '记录 ${record.id} · ${record.titles.length} 本 · ${record.titles.take(3).join('、')}',
+                      ),
                     ),
-                  ),
+                ],
+              ),
+              actions: [
+                DeskButton(
+                  '取消',
+                  quiet: true,
+                  onPressed: () => Navigator.pop(context),
+                ),
               ],
             ),
           );
@@ -536,7 +553,7 @@ class _LibraryPageState extends State<LibraryPage> {
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
+              deskSnackBar(
                 content: Text(
                   deskErrorText(e, '没有恢复原文件：请确认备份还在、原位置可以写入，再试一次。'),
                 ),
@@ -573,7 +590,7 @@ class _LibraryPageState extends State<LibraryPage> {
       } catch (error) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+            deskSnackBar(
               content: Text(
                 deskErrorText(error, '找不到原文件：它可能已被移动或删除，可以在书的菜单里用“刷新来源”重新指定。'),
               ),
@@ -685,7 +702,7 @@ class _LibraryPageState extends State<LibraryPage> {
       final retained = results.where((r) => r.skipped).toList();
       // 有失败时只在提示里写数量，逐个原因放进清单（R2-02）。
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        deskSnackBar(
           content: Text(
             importCancelled
                 ? '导入已停止，已导入 $count 本书稿'
@@ -713,7 +730,7 @@ class _LibraryPageState extends State<LibraryPage> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          deskSnackBar(
             content: Text(
               deskErrorText(error, '导入没有完成：已导入的书保留在书库，可以再导入一次剩下的文件。'),
             ),
@@ -783,9 +800,9 @@ class _LibraryPageState extends State<LibraryPage> {
     if (images.isNotEmpty) {
       final target = bookAt(details.globalPosition) ?? currentId;
       if (target == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('先选中一本书，或把图片直接拖到某本书上。')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          deskSnackBar(content: const Text('先选中一本书，或把图片直接拖到某本书上。')),
+        );
       } else {
         final result = await adoptCoverImage(
           context,
@@ -796,7 +813,7 @@ class _LibraryPageState extends State<LibraryPage> {
         );
         if (result != null && mounted) {
           ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(result)));
+              .showSnackBar(deskSnackBar(content: Text(result)));
         }
       }
     }
@@ -949,7 +966,8 @@ class _LibraryPageState extends State<LibraryPage> {
   /// 左栏（收藏夹与类别，V84b）：书库区域宽 ≥520 就有；可拖右边缘伸缩（150–320）。
   /// V94：点标题行的开关或拖到最窄时整栏滑出收起；书库区域不足 700 时只显示 48 宽的图标条。
   bool railShown = false, railAvailable = false;
-  bool railCollapsed = false, railCanExpand = true;
+  // V110：收藏夹栏默认收起，点标题行左侧的开关展开。
+  bool railCollapsed = true, railCanExpand = true;
   double railWidthValue = 184;
   bool get railCollapsedNow => railCollapsed || !railCanExpand;
 
@@ -957,7 +975,7 @@ class _LibraryPageState extends State<LibraryPage> {
   bool get railHidden => railCollapsed && railCanExpand;
 
   /// 收起动画结束后不再构造左栏。
-  bool railGone = false;
+  bool railGone = true;
 
   /// 左栏是否列出了类别与收藏夹（展开时）；图标条只有收藏夹，类别要用显示范围。
   bool get railListsScope => railShown && !railCollapsedNow;
@@ -1068,116 +1086,124 @@ class _LibraryPageState extends State<LibraryPage> {
                       final current =
                           books.where((b) => b.id == currentId).firstOrNull ??
                           books.first;
-                      final list = Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (folderMode && scope.isNotEmpty)
-                            folderCrumb(visible.length),
-                          if (visible.isNotEmpty && compact) columnHeader(),
-                          Expanded(
-                            child: Stack(
-                              children: [
-                                Positioned.fill(
-                                  child: folderTop
-                                      ? folderGrid(filtered(books))
-                                      : visible.isEmpty
-                                      ? Center(
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                '没有匹配的书稿',
-                                                style: ui(13, c: d.ink2),
+                      final list = LayoutBuilder(
+                        builder: (context, box) {
+                          _wideColumns = _wide(box.maxWidth - 50);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (folderMode && scope.isNotEmpty)
+                                folderCrumb(visible.length),
+                              if (visible.isNotEmpty && compact) columnHeader(),
+                              Expanded(
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: folderTop
+                                          ? folderGrid(filtered(books))
+                                          : visible.isEmpty
+                                          ? Center(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    '没有匹配的书稿',
+                                                    style: ui(13, c: d.ink2),
+                                                  ),
+                                                  const SizedBox(height: 12),
+                                                  DeskButton(
+                                                    '清除搜索和筛选',
+                                                    onPressed: () {
+                                                      searchInput.clear();
+                                                      changeFilter(
+                                                        search: '',
+                                                        category: '全部书稿',
+                                                        sourceFormat: '全部格式',
+                                                        checkedOnly: false,
+                                                      );
+                                                    },
+                                                  ),
+                                                ],
                                               ),
-                                              const SizedBox(height: 12),
-                                              DeskButton(
-                                                '清除搜索和筛选',
-                                                onPressed: () {
-                                                  searchInput.clear();
-                                                  changeFilter(
-                                                    search: '',
-                                                    category: '全部书稿',
-                                                    sourceFormat: '全部格式',
-                                                    checkedOnly: false,
-                                                  );
-                                                },
+                                            )
+                                          : !compact
+                                          ? shelf(visible, current)
+                                          : DragSelectRegion(
+                                              key: const ValueKey(
+                                                'library-drag-select',
                                               ),
-                                            ],
-                                          ),
-                                        )
-                                      : !compact
-                                      ? shelf(visible, current)
-                                      : DragSelectRegion(
-                                          key: const ValueKey(
-                                            'library-drag-select',
-                                          ),
-                                          scroll: scroll,
-                                          itemExtent: rowExtent(context),
-                                          ids: [for (final b in visible) b.id],
-                                          isChecked: selected.contains,
-                                          checkColumnWidth:
-                                              16 + 10 + _checkWidth + 6,
-                                          passThrough: collectionService == null
-                                              ? null
-                                              : (at, i) =>
-                                                    at.dx >
-                                                        16 +
-                                                            10 +
-                                                            _checkWidth +
-                                                            6 &&
-                                                    i < visible.length &&
-                                                    selected.contains(
-                                                      visible[i].id,
-                                                    ),
-                                          apply: (check, uncheck) {
-                                            if (check.isNotEmpty) {
-                                              checkMany(check, true);
-                                            }
-                                            if (uncheck.isNotEmpty) {
-                                              checkMany(uncheck, false);
-                                            }
-                                          },
-                                          onSelectAll: () => checkMany(
-                                            visible.map((b) => b.id),
-                                            true,
-                                          ),
-                                          onClear: () =>
-                                              checkMany(selected, false),
-                                          child: ListView.builder(
-                                            controller: scroll,
-                                            padding: EdgeInsets.fromLTRB(
-                                              16,
-                                              0,
-                                              14,
-                                              selectionBarShown ? 64 : 8,
-                                            ),
-                                            itemExtent: rowExtent(context),
-                                            itemCount: visible.length,
-                                            itemBuilder: (context, i) =>
-                                                bookRow(
-                                                  visible,
-                                                  visible[i],
-                                                  current,
+                                              scroll: scroll,
+                                              itemExtent: rowExtent(context),
+                                              ids: [
+                                                for (final b in visible) b.id,
+                                              ],
+                                              isChecked: selected.contains,
+                                              checkColumnWidth:
+                                                  16 + 10 + _checkWidth + 6,
+                                              passThrough:
+                                                  collectionService == null
+                                                  ? null
+                                                  : (at, i) =>
+                                                        at.dx >
+                                                            16 +
+                                                                10 +
+                                                                _checkWidth +
+                                                                6 &&
+                                                        i < visible.length &&
+                                                        selected.contains(
+                                                          visible[i].id,
+                                                        ),
+                                              apply: (check, uncheck) {
+                                                if (check.isNotEmpty) {
+                                                  checkMany(check, true);
+                                                }
+                                                if (uncheck.isNotEmpty) {
+                                                  checkMany(uncheck, false);
+                                                }
+                                              },
+                                              onSelectAll: () => checkMany(
+                                                visible.map((b) => b.id),
+                                                true,
+                                              ),
+                                              onClear: () =>
+                                                  checkMany(selected, false),
+                                              child: ListView.builder(
+                                                controller: scroll,
+                                                padding: EdgeInsets.fromLTRB(
+                                                  16,
+                                                  0,
+                                                  14,
+                                                  selectionBarShown ? 64 : 8,
                                                 ),
-                                          ),
-                                        ),
+                                                itemExtent: rowExtent(context),
+                                                itemCount: visible.length,
+                                                itemBuilder: (context, i) =>
+                                                    bookRow(
+                                                      visible,
+                                                      visible[i],
+                                                      current,
+                                                    ),
+                                              ),
+                                            ),
+                                    ),
+                                    // 批量操作条浮在书架底部（LIB-105）：出现时不推动书架，
+                                    // 拖动连选途中不会错行，书架与详情栏的封面也保持对齐。
+                                    Positioned(
+                                      left: 20,
+                                      right: 20,
+                                      bottom: 12,
+                                      child: selectionBar(
+                                        visible,
+                                        current,
+                                        importing,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                // 批量操作条浮在书架底部（LIB-105）：出现时不推动书架，
-                                // 拖动连选途中不会错行，书架与详情栏的封面也保持对齐。
-                                Positioned(
-                                  left: 20,
-                                  right: 20,
-                                  bottom: 12,
-                                  child: selectionBar(
-                                    visible,
-                                    current,
-                                    importing,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                              ),
+                            ],
+                          );
+                        },
                       );
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,

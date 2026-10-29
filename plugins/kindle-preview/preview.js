@@ -102,6 +102,13 @@ function drawDevice() {
   const viewport = $('viewport');
   viewport.style.width = d.viewportWidth + 'px';
   viewport.style.height = d.viewportHeight + 'px';
+  // 视口等于屏幕分辨率时按屏幕像素排版（V118，KPW5），叠加的截图与预览逐像素对应。
+  viewport.classList.toggle('pixel', d.viewportWidth === d.width && d.viewportHeight === d.height);
+  // 页脚的字号与位置按 KPW5 截图（300 ppi）量得，其他机型按 ppi 换算。
+  viewport.style.setProperty('--ppx', String(d.ppi / 300));
+  const overlay = $('overlay');
+  overlay.style.width = d.viewportWidth + 'px';
+  overlay.style.height = d.viewportHeight + 'px';
   viewport.style.transform = 'scale(' + (screenW * s / d.viewportWidth) + ')';
   // Oasis 握持宽边上的两个翻页键（中心约在机身高度 40%、56%）。
   const buttons = $('grip-buttons');
@@ -151,6 +158,10 @@ function drawDevice() {
 // · 横排时弯引号“”‘’用西文字体，约 0.38 个字宽（真机如此）。
 const CLOSING = '。，、；：」』）》】〉';
 const QUOTES = '“”‘’';
+// 相邻标点挤压（V118，KPW5 真机）：后置标点后面紧跟后置标点时前一个占半个字宽；
+// 前置标点（引号、括号）前面是全角空格或另一个前置标点时占半个字宽。
+const CLOSING_ALL = CLOSING + '”’';
+const OPENING = '“‘「『（《【〈';
 const XHTML = 'http://www.w3.org/1999/xhtml';
 function kindleTypography(doc) {
   if (doc.__easypubTypography || !doc.body) return;
@@ -177,20 +188,70 @@ function kindleTypography(doc) {
       if (plain) frag.appendChild(doc.createTextNode(plain));
       plain = '';
     };
-    for (const ch of node.data) {
+    const chars = [...node.data];
+    chars.forEach((ch, i) => {
+      const next = chars[i + 1] || '';
+      const prev = chars[i - 1] || '';
+      const adjacent = next !== '' && CLOSING_ALL.includes(next);
       if (CLOSING.includes(ch)) {
         flush();
-        frag.appendChild(span('ep-p', ch));
-        frag.appendChild(span('ep-s', ' '));
+        frag.appendChild(span(adjacent ? 'ep-p ep-adj' : 'ep-p', ch));
+        frag.appendChild(span(adjacent ? 'ep-s ep-adjs' : 'ep-s', ' '));
       } else if (QUOTES.includes(ch)) {
         flush();
-        frag.appendChild(span('ep-q', ch));
+        const cls = ['ep-q'];
+        if (CLOSING_ALL.includes(ch) && adjacent) cls.push('ep-adj');
+        if (OPENING.includes(ch) && (prev === '\u3000' || (prev !== '' && OPENING.includes(prev)))) cls.push('ep-oa');
+        frag.appendChild(span(cls.join(' '), ch));
       } else {
         plain += ch;
       }
-    }
+    });
     flush();
     node.replaceWith(frag);
+  }
+}
+
+// 书内 CSS 的 px 换算到屏幕像素（V118）：KPW5 上 1px 画成 300/160 个像素（标题内边距与下框实测）。
+// 第一次记下各条样式里写了 px 的原值，之后每次按当前倍数从原值重算，换机型时能还原。
+function scaleCssPixels(doc, factor) {
+  if (!doc.__easypubPx) {
+    const list = [];
+    const visit = (rules) => {
+      for (const rule of rules) {
+        if (rule.cssRules && !rule.style) {
+          visit(rule.cssRules);
+          continue;
+        }
+        if (!rule.style) continue;
+        for (const name of [...rule.style]) {
+          const value = rule.style.getPropertyValue(name);
+          if (/\d(\.\d+)?px/.test(value)) list.push([rule.style, name, value, rule.style.getPropertyPriority(name)]);
+        }
+      }
+    };
+    for (const sheet of doc.styleSheets) {
+      if (sheet.ownerNode && sheet.ownerNode.id === 'easypub-reader') continue;
+      try {
+        visit(sheet.cssRules);
+      } catch (_) { /* 读不到的样式表跳过 */ }
+    }
+    doc.__easypubPx = { list, factor: 1 };
+  }
+  const state = doc.__easypubPx;
+  if (state.factor === factor) return;
+  state.factor = factor;
+  for (const [style, name, value, priority] of state.list) {
+    style.setProperty(name, value.replace(/(-?\d*\.?\d+)px/g, (_, n) => (parseFloat(n) * factor) + 'px'), priority);
+  }
+}
+
+// 书里写了楷体的元素（V119）：第一次排版时阅读器字体还没覆盖，按样式表算出的字体标记出来。
+function markKai(doc) {
+  if (doc.__easypubKai || !doc.body) return;
+  doc.__easypubKai = true;
+  for (const el of doc.body.querySelectorAll('*')) {
+    if (/kai|楷/i.test(getComputedStyle(el).fontFamily)) el.setAttribute('data-ep-kai', '');
   }
 }
 
@@ -298,7 +359,9 @@ function layout(keepRatio) {
   Object.assign($('page-head').style, { top: '0px', height: a.top + 'px' });
   Object.assign($('page-foot').style, {
     bottom: '0px', height: (S.device.viewportHeight - a.top - a.height) + 'px',
-    paddingLeft: a.left + 'px', paddingRight: a.left + 'px',
+    // 按屏幕像素排版时页脚文字离屏幕左右各约 81 像素（KPW5 真机截图）。
+    paddingLeft: ($('viewport').classList.contains('pixel') ? 81 * S.device.ppi / 300 : a.left) + 'px',
+    paddingRight: ($('viewport').classList.contains('pixel') ? 81 * S.device.ppi / 300 : a.left) + 'px',
   });
   let style = doc.getElementById('easypub-reader');
   if (!style) {
@@ -311,8 +374,11 @@ function layout(keepRatio) {
   const m = S.metrics;
   const font = FONTS[S.reader.font];
   markPageBreaks(doc);
+  markKai(doc);
   keywordFontSizes(doc);
+  scaleCssPixels(doc, m.cssPx || 1);
   kindleTypography(doc);
+  const kfx = !!m.justify;
   // 正文按列分页：横排的列向右排、竖排的列向下排；每页一列。
   style.textContent = [
     'html{color:#1E1E1E;font-size:' + m.rootPx + 'px!important;margin:0!important;padding:0!important;overflow:hidden!important;'
@@ -321,13 +387,25 @@ function layout(keepRatio) {
       + 'column-fill:auto!important;' + (vertical
         ? 'width:' + a.width + 'px!important;height:auto!important;column-width:' + a.height + 'px!important}'
         : 'height:' + a.height + 'px!important;width:auto!important;column-width:' + a.width + 'px!important}'),
-    'body *:not(rt){line-height:' + m.lineRatio + '!important}',
+    // 真机规则（V118，KPW5）：阅读器行间距只乘到正文上，标题保留书里写的行高。
+    (kfx ? 'body *:not(rt):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(.heading)' : 'body *:not(rt)')
+      + '{line-height:' + m.lineRatio + '!important}',
+    // 真机规则（V118，KPW5）：正文两端对齐；按取整后的字宽断行，用字距补齐。
+    m.justify ? 'p{text-align:justify;text-justify:inter-character}' : '',
+    m.tracking ? 'p{letter-spacing:' + m.tracking + 'em}' : '',
     'img,svg{max-width:100%!important;max-height:' + a.height + 'px!important}',
-    font ? 'body,body *:not(rt){font-family:' + font + '!important}' : '',
+    // 书里写了楷体的段落（书信、系统提示“细线楷体”等）保留楷体：KFX 真机上 STKai/楷体能显示（V119）。
+    font ? 'body,body *:not(rt):not([data-ep-kai]){font-family:' + font + '!important}' : '',
+    font ? '[data-ep-kai]{font-family:"KaiTi","STKaiti",serif!important}' : '',
     // 用负字距而不是负外边距：负外边距加行末空格时，浏览器断行仍按整字宽计算。
     'html .ep-p{letter-spacing:-0.5em!important}',
     'html .ep-s{word-spacing:var(--ep-ws,0)!important}',
-    vertical ? '' : 'html .ep-q{font-family:"Segoe UI",Arial,sans-serif!important}',
+    vertical || kfx ? '' : 'html .ep-q{font-family:"Segoe UI",Arial,sans-serif!important}',
+    // 相邻标点挤压（V118，KPW5）：前一个后置标点只占半个字宽；缩进后的前置引号去掉左半边。
+    kfx ? 'html .ep-adj{letter-spacing:-0.5em!important}html .ep-adjs{display:none!important}'
+      + 'html .ep-oa{margin-left:-0.5em!important}' : '',
+    // 真机允许段落只有一行留在页底或页顶（第四章首页实测），浏览器默认至少两行。
+    kfx ? 'body *{orphans:1;widows:1}' : '',
   ].join('\n');
   setHalfSpace(doc, vertical);
   const root = doc.scrollingElement || doc.documentElement;
@@ -562,7 +640,11 @@ async function refreshMetrics() {
     serif: S.reader.font === 'song' || S.reader.font === 'kai', values: S.draft,
   });
   $('measure').textContent = S.metrics.note;
-  $('measure').title = S.metrics.measured ? '与真机照片或校准一致' : '只有 KPW5 的 4、8、12 档是实测，其余按 Kindle 固件的字号表与页边距推算';
+  $('measure').title = S.metrics.measured
+    ? '与真机截图或校准一致'
+    : (S.device && S.device.id === 'kpw5'
+      ? 'KPW5 按真机规则计算；这一档没有逐张实测，每行字数可能差一字'
+      : '按 KPW5 真机规则按本机 ppi 换算；还没有用这台机器的截图核对');
   $('level').textContent = S.reader.level;
 }
 
@@ -727,6 +809,38 @@ function setupControls() {
     scheduleRender();
   });
   $('prev').addEventListener('click', () => turn(false));
+  // 叠加真机截图（V118）：只在本窗口内显示，不上传、不保存。
+  $('overlay-pick').addEventListener('click', () => $('overlay-file').click());
+  $('overlay-file').addEventListener('change', () => {
+    const file = $('overlay-file').files[0];
+    if (!file) return;
+    const img = $('overlay');
+    if (img.src) URL.revokeObjectURL(img.src);
+    img.onload = () => {
+      const d = S.device;
+      const same = img.naturalWidth === d.width && img.naturalHeight === d.height;
+      status(same ? '已叠加真机截图（' + img.naturalWidth + ' × ' + img.naturalHeight + '）'
+        : '截图是 ' + img.naturalWidth + ' × ' + img.naturalHeight + '，与机型分辨率 ' + d.width + ' × ' + d.height
+          + ' 不同，已按屏幕大小缩放', !same);
+    };
+    img.src = URL.createObjectURL(file);
+    img.hidden = false;
+    $('overlay-tools').hidden = false;
+    $('overlay-clear').hidden = false;
+    $('overlay-file').value = '';
+  });
+  $('overlay-diff').addEventListener('change', () => {
+    $('overlay').classList.toggle('diff', $('overlay-diff').checked);
+  });
+  $('overlay-clear').addEventListener('click', () => {
+    const img = $('overlay');
+    if (img.src) URL.revokeObjectURL(img.src);
+    img.removeAttribute('src');
+    img.hidden = true;
+    $('overlay-tools').hidden = true;
+    $('overlay-clear').hidden = true;
+    status('');
+  });
   $('next').addEventListener('click', () => turn(true));
   for (const [id, left] of [['tap-left', true], ['tap-right', false]]) {
     $(id).addEventListener('click', (event) => {

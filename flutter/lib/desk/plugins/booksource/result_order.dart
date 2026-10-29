@@ -140,7 +140,7 @@ extension _BookSourceResultOrder on _BookSourcePageState {
         'results': results,
       });
     } catch (e) {
-      update(() => searchStatus = '$e');
+      update(() => searchStatus = bookSourceErrorText(e));
     } finally {
       update(() => enriching = false);
     }

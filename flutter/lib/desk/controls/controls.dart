@@ -226,6 +226,28 @@ abstract final class _Ink {
         textStyle: TextStyle(fontSize: 12, color: d.canvas, height: 1.4),
         waitDuration: Duration(milliseconds: 400),
       ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: d.surface,
+        contentTextStyle: ui(13, c: d.ink, h: 1.45),
+        actionTextColor: d.accent,
+        closeIconColor: d.ink3,
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: d.lineStrong),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: d.sunken,
+        selectedColor: d.accentSoft,
+        disabledColor: d.sunken.withValues(alpha: .55),
+        checkmarkColor: d.accent,
+        labelStyle: ui(12.5, c: d.ink),
+        secondaryLabelStyle: ui(12.5, c: d.ink),
+        side: BorderSide(color: d.line),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
     );
   }
 }

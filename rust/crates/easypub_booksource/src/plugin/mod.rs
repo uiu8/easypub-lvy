@@ -20,6 +20,7 @@ use std::{
     time::Duration,
 };
 
+mod cache;
 mod enrich;
 pub(crate) mod fqnovel;
 mod interactions;
@@ -173,6 +174,17 @@ fn handle(method: &str, params: &Value) -> Result<Value, String> {
         }
         return Ok(json!({"ok":true}));
     }
+    // 重置书源运行状态（V108）：丢掉本次运行里书源脚本存的变量（如番茄书源的设备池）、临时 Cookie
+    // 与缓存，下次使用时重新生成；登录信息保留。正在进行的任务继续用旧状态直到结束。
+    if method == "source.reset" {
+        let id: String = param(params, "id")?;
+        let mut st = state();
+        let source_id = find_source(&st, &id).ok_or("没有这个书源")?.id().to_owned();
+        let before = st.runtimes.len();
+        st.runtimes.retain(|_, rt| rt.source.id() != source_id);
+        let cleared = before - st.runtimes.len();
+        return Ok(json!({ "cleared": cleared }));
+    }
     if method.starts_with("source.interaction.") {
         return interactions::handle(method, params);
     }
@@ -187,6 +199,9 @@ fn handle(method: &str, params: &Value) -> Result<Value, String> {
     }
     if method.starts_with("queue.") {
         return queue::handle(method, params);
+    }
+    if method.starts_with("cache.") {
+        return cache::handle(method, params);
     }
     if method.starts_with("network.proxy.")
         || method.starts_with("filters.")
@@ -447,6 +462,9 @@ pub fn run() {
         .ok();
     load();
     management::load();
+    cache::load();
+    // 旧版的章节缓存在下载文件夹里：启动时、恢复下载队列之前搬到缓存位置（同盘只是改名）。
+    cache::migrate_library();
     if subscriptions::load().is_err() {
         send(
             json!({"event":"subscriptions.error","error":"订阅恢复失败，请保留数据目录检查；本次未检查更新"}),

@@ -65,6 +65,9 @@ pub fn add_inline_markup(mut style: Stylesheet) -> Stylesheet {
     style.id = format!("{:x}.css", Sha256::digest(style.css.as_bytes()));
     style
 }
+/// Bokai 尚不支持波浪装饰，KFX 输入明确降级为下划线。
+pub const INLINE_WAVY_RULE: &str =
+    ".inline-wavy { text-decoration: underline; text-decoration-style: wavy; }\n";
 pub fn prepare(settings: &Settings) -> Result<Stylesheet, ApiError> {
     settings.validate(u32::MAX)?;
     let fallback = if settings.font_family == "SimSun" {
@@ -83,7 +86,8 @@ pub fn prepare(settings: &Settings) -> Result<Stylesheet, ApiError> {
          figure img {{ max-width: 100%; height: auto; }}\n\
          figcaption {{ font-size: 0.9em; text-indent: 0; }}\n\
          .cover {{ width: 100%; height: 100%; margin: 0; padding: 0; text-indent: 0; }}\n\
-         .cover img {{ width: 100%; height: auto; }}\n",
+         .cover img {{ width: 100%; height: auto; }}\n\
+         .nb {{ white-space: nowrap; }}\n",
         settings.margin_top
             * if settings.margin_top_unit == "em" {
                 if settings.font_size_unit == "%" {
@@ -172,6 +176,10 @@ pub fn prepare(settings: &Settings) -> Result<Stylesheet, ApiError> {
         ".system-line, .verse-line, .verse-by { text-indent: 0; margin: 0; }\n",
         ".verse-block .verse-by { text-align: right; }\n",
     ));
+    if !settings.inline_styles.is_empty() {
+        css.push_str(INLINE_WAVY_RULE);
+        css.push_str(".inline-bold { font-weight: bold; }\n.inline-italic { font-style: italic; }\n.inline-underline { text-decoration: underline; }\n.inline-kai { font-family: STKai, \"楷体\", KaiTi, serif; }\n.inline-fang-song { font-family: STFangsong, \"仿宋\", FangSong, serif; }\n");
+    }
     if settings.note_style == "popup" || !settings.manual_notes.is_empty() {
         // 亚马逊示例使用 sup > a；显式相对字号补齐 Bokai 缺少的 sup 默认缩小。
         // 0.75em 与本机 Previewer 3.107.0 的 sup 读回一致，不是规范固定值。
@@ -209,11 +217,12 @@ pub fn prepare(settings: &Settings) -> Result<Stylesheet, ApiError> {
             css.push_str(".chapter-end { margin: 1.5em 0 0; text-indent: 0; text-align: center; }\n.chapter-end img { width: 16%; height: auto; }\n");
         }
         match style.volume_frame.as_str() {
+            // V114：两侧外边距由 15% 收窄到 5%，卷名稍长（如“第一卷　远行”）时不再被拆成两行。
             "single" => css.push_str(
-                ".volume-heading { border: 1px solid; padding: 1em 0.5em; margin: 2em 15%; }\n",
+                ".volume-heading { border: 1px solid; padding: 1em 0.4em; margin: 2em 5%; }\n",
             ),
             "double" => css.push_str(
-                ".volume-heading { border: 3px double; padding: 1em 0.5em; margin: 2em 15%; }\n",
+                ".volume-heading { border: 3px double; padding: 1em 0.4em; margin: 2em 5%; }\n",
             ),
             _ => {}
         }

@@ -1,6 +1,6 @@
 // 章节工作区（CH-001–044）：目录 + 纸面正文 + 检查器。
 // 所有结构修改都经现有弹窗生成预览、确认后写入并可撤销；本页只组织入口与视图。
-// 设计：design/review-20261010-v37-flutter/d2（D2-A、D2-B）；docs/37 §15–16。
+// 设计：design/review-20261010-v37-flutter/d2（D2-A、D2-B）；docs/37 第 6 节 V2 行的证据。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -8,6 +8,7 @@ import '../errors.dart';
 import 'package:flutter/services.dart';
 
 import '../../application/block_annotation_service.dart';
+import '../../application/inline_style_service.dart';
 import '../../application/manual_note_service.dart';
 import '../../application/chapter_rules_service.dart';
 import '../../application/chapter_service.dart';
@@ -31,10 +32,12 @@ import '../history/change_history_page.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 import 'block_marks.dart';
+import 'inline_style_marks.dart';
 import 'layout_view.dart';
 import 'note_marks.dart';
 import 'manuscript.dart';
 import 'outline.dart';
+import 'style_segments.dart';
 import 'workspace_layout.dart';
 
 class ChapterWorkspace extends StatefulWidget {
@@ -90,6 +93,14 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
   late final NoteMarkController? noteMarks = switch (widget.library) {
     final ManualNoteLibrary library => NoteMarkController(
       library.openManualNotes(widget.bookId),
+    ),
+    _ => null,
+  };
+
+  /// 文字样式（V106，LAY-152）：书库提供样式能力时才有。
+  late final InlineStyleController? inlineStyles = switch (widget.library) {
+    final InlineStyleLibrary library => InlineStyleController(
+      library.openInlineStyles(widget.bookId),
     ),
     _ => null,
   };
@@ -163,6 +174,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     generation++;
     marks?.dispose();
     noteMarks?.dispose();
+    inlineStyles?.dispose();
     layoutView?.dispose();
     treeSearchFocus.dispose();
     super.dispose();
@@ -361,6 +373,105 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
         body = content;
         showIssues = false;
         showHistory = false;
+      });
+      rememberView();
+      refreshChapterIssues();
+    });
+  }
+
+  /// 样式片段（V120，LAY-166）：跳到本节第 [line] 行（本节正文行号），上面留三行。
+  Future<void> locateLine(int line) async {
+    final node = selected, current = page;
+    if (busy || node == null || current == null) return;
+    await run((ticket) async {
+      // 加样式、标注后书稿版本会变，先按当前页重读一次。
+      final next = await session.read(current.offset);
+      final fresh = node.id == chapterPrefixNode.id
+          ? chapterPrefixNode
+          : next.nodes.where((n) => n.id == node.id).firstOrNull;
+      if (fresh == null) throw const FormatException('本章已变化，请重新打开本章。');
+      final content = await session.body(
+        next,
+        fresh.id,
+        line > 4 ? line - 4 : 0,
+      );
+      if (!mounted || ticket != generation) return;
+      setState(() {
+        page = next;
+        selected = fresh;
+        focusLine = fresh.line + line;
+        continuousOffset = null;
+        continuousScroll = 0;
+        body = content;
+      });
+      rememberView();
+    });
+  }
+
+  /// 全书章节列表（按书稿版本缓存）：样式片段侧栏的“全书”按它汇总，点一章按所在页打开。
+  (String, List<(ChapterNode, int)>)? styleOutline;
+
+  Future<List<(ChapterNode, int)>> outlineNodes() async {
+    final guard = page!.guard;
+    final cached = styleOutline;
+    if (cached != null && cached.$1 == guard) return cached.$2;
+    final nodes = <(ChapterNode, int)>[];
+    var offset = 0;
+    while (true) {
+      final next = await session.read(offset);
+      for (final n in next.nodes) {
+        nodes.add((n, next.offset));
+      }
+      offset = next.offset + next.nodes.length;
+      if (next.nodes.isEmpty || offset >= next.total) break;
+    }
+    styleOutline = (guard, nodes);
+    return nodes;
+  }
+
+  Future<List<StyleSegmentChapter>> styleBook() async {
+    final nodes = await outlineNodes();
+    final layout = layoutView;
+    final result = <StyleSegmentChapter>[];
+    for (final (node, _) in nodes) {
+      final lines = layout?.linesFor(node.id) ?? const <int, LayoutLine>{};
+      final manual = marks?.linesFor(node.id) ?? const {};
+      final segments = chapterStyleSegments(
+        layoutLines: lines,
+        roles: layout?.systemRoles(lines, manual, const {}) ?? const {},
+        markLines: manual,
+        styleLines: inlineStyles?.stylesFor(node.id) ?? const {},
+        noteLines: noteMarks?.tagsFor(node.id) ?? const {},
+        text: (_) => '',
+      );
+      final counts = <String, int>{};
+      for (final s in segments) {
+        counts[s.group] = (counts[s.group] ?? 0) + 1;
+      }
+      if (counts.isNotEmpty) {
+        result.add((id: node.id, title: node.title, counts: counts));
+      }
+    }
+    return result;
+  }
+
+  Future<void> openStyleChapter(String id) async {
+    if (id == selected?.id) return;
+    final found = styleOutline?.$2.where((e) => e.$1.id == id).firstOrNull;
+    if (found == null || busy) return;
+    await run((ticket) async {
+      final next = await session.read(found.$2);
+      final node = next.nodes.where((n) => n.id == id).firstOrNull;
+      if (node == null) throw const FormatException('这一章已变化，请重新打开“全书”。');
+      final content = await session.body(next, node.id, 0);
+      if (!mounted || ticket != generation) return;
+      setState(() {
+        page = next;
+        focusLine = null;
+        continuousOffset = null;
+        continuousScroll = 0;
+        selected = node;
+        body = content;
       });
       rememberView();
       refreshChapterIssues();
@@ -791,10 +902,14 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
           session: session,
           marks: marks,
           noteMarks: noteMarks,
+          inlineStyles: inlineStyles,
           layout: layoutView,
           onLayoutMode: widget.library is RuleCatalogLibrary
               ? setLayoutMode
               : null,
+          onLocateLine: locateLine,
+          styleBook: styleBook,
+          onOpenChapter: openStyleChapter,
           page: page!,
           node: selected!,
           initialBody: body,
@@ -992,8 +1107,10 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
           workspaceWidth >= DeskChapterLayout.inspectorBreakpoint;
       final rules = widget.library is ChapterRulesService;
       final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
+      // 排版视图不显示章节设置，也就没有它的开关。
+      final inspectorToggle = aux && layoutView == null && !inspectorDocked;
       final toggles =
-          (aux && !outlineDocked ? 1 : 0) + (aux && !inspectorDocked ? 1 : 0);
+          (aux && !outlineDocked ? 1 : 0) + (inspectorToggle ? 1 : 0);
       double tabs(List<String> labels) =>
           4 + labels.fold(0.0, (sum, l) => sum + 20 + l.length * 12.5 * scale);
       double action(String label) => 51 + label.length * 14 * scale;
@@ -1139,7 +1256,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
                       ),
               ),
             ),
-            if (aux && !inspectorDocked)
+            if (inspectorToggle)
               IconButton(
                 tooltip: '章节设置',
                 onPressed: () => layoutKey.currentState?.toggleInspector(),
@@ -1279,6 +1396,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
               child: DeskChapterLayout(
                 key: layoutKey,
                 showAuxiliary: !showIssues && !showHistory,
+                showInspector: layoutView == null,
                 outline: outline(),
                 reader: reader(),
                 inspector: inspector(),

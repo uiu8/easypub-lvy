@@ -294,6 +294,8 @@ void main() {
     await t.tap(find.text('载入预设'));
     await t.pumpAndSettle();
     await t.tap(find.text('常用：第X话 / 第X集').last);
+    // 编辑台选择框先关菜单、下一帧才回调 onChanged，先推一帧再等载入完成。
+    await t.pump();
     await idle(t);
     await t.pumpAndSettle();
     expect(find.textContaining('规则预设“常用：第X话 / 第X集”'), findsOneWidget);
@@ -438,7 +440,8 @@ void main() {
       expect(customKindleDevice(300, 1000, 300), isNull);
       expect(customKindleDevice(1000, 1000, 700), isNull);
       final custom = customKindleDevice(1200, 1600, 300)!;
-      expect((custom.viewportWidth, custom.viewportHeight), (405, 540));
+      // V118：所有机型按原生分辨率排版，视口等于分辨率。
+      expect((custom.viewportWidth, custom.viewportHeight), (1200, 1600));
       final choice = PreviewDeviceChoice.decode(
         const PreviewDeviceChoice(id: 'scribe').encode(),
       );

@@ -261,7 +261,7 @@ pub(crate) fn calculate(
         "source_id":source.summary().source_id,"revision":source.summary().revision,
         "byte_length":book.text.len(),"line_count":locations.lines.len(),"chapter_count":book.tree.nodes.len(),
         "elapsed_ms":started.elapsed().as_secs_f64()*1000.0,"rules":stats.into_values().collect::<Vec<_>>(),
-        "layout_lines":layout_lines }),
+        "layout_lines":layout_lines,"inline_styles":crate::inline_styles::report(&settings,&book) }),
     )
 }
 

@@ -3,7 +3,7 @@ import '../../application/cleanup_rule_resolution.dart';
 
 import 'package:flutter/material.dart';
 
-import '../dialogs.dart' show DeskAlert;
+import '../dialogs.dart' show DeskAlert, deskSnackBar;
 
 import '../../application/cleanup_service.dart';
 import '../controls/controls.dart';
@@ -63,7 +63,7 @@ class AutomaticRulesEditor extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          deskSnackBar(
             content: Text(
               deskErrorText(e, '规则库没有读出来：规则文件可能损坏或被占用。关闭占用的程序后重新打开。'),
             ),

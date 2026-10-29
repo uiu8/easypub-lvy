@@ -153,6 +153,8 @@ pub struct ProjectBook {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub manual_notes: Vec<crate::manual_notes::Note>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inline_styles: Vec<crate::inline_styles::Annotation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub supplemental_pages: Vec<crate::supplemental_pages::Page>,
     #[serde(default)]
     pub additional_css: String,
@@ -929,6 +931,7 @@ mod tests {
             rule_options: Default::default(),
             block_annotations: Vec::new(),
             manual_notes: Vec::new(),
+            inline_styles: Vec::new(),
             supplemental_pages: Vec::new(),
             additional_css: String::new(),
             additional_css_base: String::new(),

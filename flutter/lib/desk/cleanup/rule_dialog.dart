@@ -414,6 +414,13 @@ class _CleanupRuleDialogState extends State<CleanupRuleDialog> {
       choice('转换方向', direction, const {
         't2s': '繁体 → 简体',
         's2t': '简体 → 繁体',
+        // V113：台湾、香港字形与台湾常用词。
+        'tw2s': '台湾正体 → 简体',
+        'tw2sp': '台湾正体 → 简体（含用词，如“軟體”→“软件”）',
+        'hk2s': '香港繁体 → 简体',
+        's2tw': '简体 → 台湾正体',
+        's2twp': '简体 → 台湾正体（含用词，如“软件”→“軟體”）',
+        's2hk': '简体 → 香港繁体',
       }, (v) => direction = v),
     if (kind == 'chapter_numbers') ...[
       choice('编号样式', numberStyle, const {

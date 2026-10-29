@@ -5,8 +5,10 @@
 # 先构建：flutter build windows --profile --target lib/frontend_rewrite_frame_perf_main.dart --no-tree-shake-icons
 # 结果在 artifacts/navigation-perf-<时间>/，summary.md 是基线表。
 param(
-  [ValidateSet('switch', 'library')][string[]]$Scenes = @('switch', 'library'),
+  [ValidateSet('switch', 'library', 'booksource')][string[]]$Scenes = @('switch', 'library'),
   [ValidateSet(40, 300, 1000)][int[]]$Books = @(40, 300, 1000),
+  # booksource 场景（R8）：书源数，每个数各测一组；书库固定 40 本。
+  [int[]]$Sources = @(368, 2425),
   [ValidateRange(1, 3)][int]$Runs = 2,
   [string]$Name = '',
   [string]$ExecutablePath,
@@ -40,7 +42,8 @@ $summary.Add("profile 构建：``$((Get-FileHash $exe).Hash.Substring(0, 12))``�
 $aot = Join-Path (Split-Path -Parent $exe) 'data/app.so'
 $summary.Add("Dart AOT：``$((Get-FileHash $aot).Hash)``（EXE 仅是 Flutter 原生启动壳）。")
 foreach ($scene in $Scenes) {
-  foreach ($count in $Books) {
+  $counts = if ($scene -eq 'booksource') { $Sources } else { $Books }
+  foreach ($count in $counts) {
     $reports = @()
     for ($i = 1; $i -le $Runs; $i++) {
       $case = Join-Path $out "$scene-$count-run$i"
@@ -56,7 +59,21 @@ foreach ($scene in $Scenes) {
       $start.Environment['EASYPUB_TEST_DLL'] = $dll
       $start.Environment['EASYPUB_PLUGIN_DIR'] = $plugins
       $start.Environment['EASYPUB_FRAME_TARGET'] = $scene
-      $start.Environment['EASYPUB_FRAME_BOOKS'] = "$count"
+      if ($scene -eq 'booksource') {
+        # 假书源写进插件数据目录（不访问网络），格式同 b10_source_list_perf.py。
+        $pdata = Join-Path $case 'user-data\EasyPub-RustFlutter\plugin-data\booksource'
+        New-Item -ItemType Directory -Force -Path $pdata | Out-Null
+        $fake = for ($k = 0; $k -lt $count; $k++) {
+          @{ bookSourceUrl = "https://fixture-$k.invalid"; bookSourceName = "合成书源$k"; bookSourceGroup = "分组$($k % 12)";
+             searchUrl = '/search?q={{key}}'; ruleSearch = @{ bookList = 'li'; name = 'a@text'; bookUrl = 'a@href' };
+             ruleContent = @{ content = '#content@html' } }
+        }
+        [IO.File]::WriteAllText((Join-Path $pdata 'sources.json'), (ConvertTo-Json -InputObject @($fake) -Depth 5 -Compress), [Text.UTF8Encoding]::new($false))
+        $start.Environment['EASYPUB_FRAME_SOURCES'] = "$count"
+        $start.Environment['EASYPUB_FRAME_BOOKS'] = '40'
+      } else {
+        $start.Environment['EASYPUB_FRAME_BOOKS'] = "$count"
+      }
       $start.Environment['EASYPUB_FRAME_REPORT'] = Join-Path $case 'report.json'
       $p = [Diagnostics.Process]::Start($start)
       if (-not $p.WaitForExit(900000)) { $p.Kill(); throw "超时：$scene $count" }
@@ -80,6 +97,20 @@ foreach ($scene in $Scenes) {
         $vals = $reports | ForEach-Object { $_.median.($prop.Name) }
         $summary.Add("| ``$route`` | $(Range ($vals | ForEach-Object first_frame_ms)) | $(Range ($vals | ForEach-Object max_build_ms)) | $(Range ($vals | ForEach-Object janky_frames)) |")
       }
+    } elseif ($scene -eq 'booksource') {
+      $summary.Add("## 书源页 · $count 个假书源")
+      $summary.Add('')
+      $summary.Add('| 项 | 数值 |')
+      $summary.Add('| --- | --- |')
+      $summary.Add("| 打开书源页到首帧 ms | $(Range ($reports | ForEach-Object { $_.open_first_frame_ms })) |")
+      $summary.Add("| 切到书源页签到首帧 ms / 之后单帧最长构建 ms | $(Range ($reports | ForEach-Object { $_.tab_first_frame_ms })) / $(Range ($reports | ForEach-Object { $_.tab_frames.max_build_ms })) |")
+      $summary.Add("| 书源列表读完 ms | $(Range ($reports | ForEach-Object { $_.sources_loaded_ms })) |")
+      $summary.Add("| 滚动步数 | $(Range ($reports | ForEach-Object { $_.scroll.steps })) |")
+      $summary.Add("| 滚动单帧构建 p95 / 最长 ms | $(Range ($reports | ForEach-Object { $_.scroll.build_p95_ms })) / $(Range ($reports | ForEach-Object { $_.scroll.max_build_ms })) |")
+      $summary.Add("| 滚动帧总耗时 p95 ms | $(Range ($reports | ForEach-Object { $_.scroll.total_p95_ms })) |")
+      $summary.Add("| 滚动卡顿帧 / 总帧 | $(Range ($reports | ForEach-Object { $_.scroll.janky_frames })) / $(Range ($reports | ForEach-Object { $_.scroll.frames })) |")
+      $summary.Add("| 筛选每字到首帧 中位 / 最长 ms | $(Range ($reports | ForEach-Object { $_.filter.first_frame_median_ms })) / $(Range ($reports | ForEach-Object { $_.filter.first_frame_max_ms })) |")
+      $summary.Add("| 筛选单帧最长构建 ms | $(Range ($reports | ForEach-Object { $_.filter.max_build_ms })) |")
     } else {
       $summary.Add("## 书库滚动与筛选 · $count 本（导入 $(Range ($reports | ForEach-Object { $_.import_ms / 1000 })) 秒）")
       $summary.Add('')

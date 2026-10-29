@@ -41,7 +41,7 @@ const cacheKindLabels = {
 };
 
 /// 书库或外部浏览器可能还在引用，后端一律保留。
-const protectedCacheKinds = {'imports', 'generated_covers', 'kindle_preview'};
+const protectedCacheKinds = {'imports', 'generated_covers'};
 
 const dataKindLabels = {
   'settings': '工作区与设置',

@@ -139,7 +139,7 @@ extension _BookSourceSearch on _BookSourcePageState {
         tab = 'downloads';
       });
     } catch (e) {
-      update(() => searchStatus = '$e');
+      update(() => searchStatus = bookSourceErrorText(e));
     }
   }
 
@@ -168,7 +168,7 @@ extension _BookSourceSearch on _BookSourcePageState {
       final accepted = await showDialog<bool>(
         context: context,
         builder: (dialog) => StatefulBuilder(
-          builder: (dialog, change) => AlertDialog(
+          builder: (dialog, change) => DeskAlert(
             title: const Text('确认书名清单'),
             content: SizedBox(
               width: 620,
@@ -187,7 +187,7 @@ extension _BookSourceSearch on _BookSourcePageState {
                         if (choices.isEmpty)
                           const DeskText('未找到；可返回搜索页单独搜索或换关键词。', size: 12)
                         else
-                          DropdownButton<int>(
+                          DeskChoice<int>(
                             isExpanded: true,
                             value: picks[i],
                             items: [
@@ -240,7 +240,7 @@ extension _BookSourceSearch on _BookSourcePageState {
       await _loadQueue();
       update(() => tab = 'downloads');
     } catch (e) {
-      update(() => searchStatus = '$e');
+      update(() => searchStatus = bookSourceErrorText(e));
     } finally {
       update(() => batchBusy = false);
     }
@@ -292,7 +292,7 @@ extension _BookSourceSearch on _BookSourcePageState {
     } catch (e) {
       if (!mounted || searchId != activeSearchId) return;
       _flushSearchEvents();
-      searchStatus = '$e';
+      searchStatus = bookSourceErrorText(e);
     }
     if (mounted && searchId == activeSearchId) update(() => searching = false);
     includeSkippedOnce = false;
@@ -324,7 +324,7 @@ extension _BookSourceSearch on _BookSourcePageState {
           '${result['cancelled'] == true ? '已停止 · ' : ''}本次请求 ${result['searched']} 个书源，累计 ${results.length} 本';
     } catch (e) {
       if (!mounted || activeSearchId != id) return;
-      searchStatus = '$e';
+      searchStatus = bookSourceErrorText(e);
     } finally {
       if (mounted && activeSearchId == id) update(() => searching = false);
     }
@@ -373,7 +373,7 @@ extension _BookSourceSearch on _BookSourcePageState {
       from.text = '1';
       to.text = '${list.length}';
     } catch (e) {
-      if (stillSelected()) detailError = '$e';
+      if (stillSelected()) detailError = bookSourceErrorText(e);
     } finally {
       if (mounted) update(() => loadingToc = false);
     }
@@ -420,7 +420,7 @@ extension _BookSourceSearch on _BookSourcePageState {
         tab = 'downloads';
       });
     } catch (e) {
-      update(() => detailError = '$e');
+      update(() => detailError = bookSourceErrorText(e));
     }
   }
 
@@ -938,7 +938,7 @@ extension _BookSourceSearch on _BookSourcePageState {
           ),
           const SizedBox(height: 10),
           const DeskLabel('书源'),
-          DropdownButton<int>(
+          DeskChoice<int>(
             key: const ValueKey('booksource-source-choice'),
             isExpanded: true,
             value: selectedSource.clamp(0, sourceList.length - 1),

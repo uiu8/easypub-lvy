@@ -59,7 +59,8 @@ impl Default for RuleSet {
             section_pattern: String::new(),
             numeric: false,
             numeric_pattern: String::new(),
-            numeric_minimum_body_lines: 5,
+            // V113：与检查页“漏识别的标题”同一门槛（原为 5）。
+            numeric_minimum_body_lines: 3,
             normalize_numeric_titles: false,
             number_corrections: "久=九".into(),
             non_heading: String::new(),

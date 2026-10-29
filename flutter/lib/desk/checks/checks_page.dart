@@ -12,6 +12,7 @@ import '../../application/library_service.dart';
 import '../controls/controls.dart';
 import 'check_view_state.dart';
 import '../dialogs.dart';
+import '../rules/numeric_dialog.dart' show showNumericChaptersDialog;
 import '../tokens.dart';
 import '../widgets.dart';
 import '../rules/rules_sheet.dart';
@@ -313,9 +314,9 @@ class _BookChecksPageState extends State<BookChecksPage> {
           tabs = ShaderMask(
             key: const ValueKey('checks-tabs-fade'),
             blendMode: BlendMode.dstIn,
-            shaderCallback: (rect) => const LinearGradient(
-              colors: [Colors.white, Colors.white, Color(0x00FFFFFF)],
-              stops: [0, .9, 1],
+            shaderCallback: (rect) => LinearGradient(
+              colors: [d.ink, d.ink, d.ink.withValues(alpha: 0)],
+              stops: const [0, .9, 1],
             ).createShader(rect),
             child: tabs,
           );
@@ -586,6 +587,17 @@ class _BookChecksPageState extends State<BookChecksPage> {
                         onRepair: widget.onRepair,
                         onRepairIssue: widget.onRepairIssue,
                         onRule: widget.onRules,
+                        onNumericHeadings: widget.library is ChapterRulesService
+                            ? () async {
+                                final applied = await showNumericChaptersDialog(
+                                  context,
+                                  service:
+                                      widget.library as ChapterRulesService,
+                                  bookId: widget.bookId,
+                                );
+                                if (applied && mounted) await check();
+                              }
+                            : null,
                         onAddNonHeading: widget.library is ChapterRulesService
                             ? (phrase) async {
                                 await showChapterRulesDialog(

@@ -17,7 +17,7 @@ use std::{
 };
 const MAX_BYTES: u64 = 65536;
 pub const MAX_EXPANDED_BYTES: usize = 4 * 1024 * 1024;
-const MAX_GENERATIONS: usize = 1024;
+const COMPACT_GENERATIONS: usize = 800;
 static NEXT: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -120,6 +120,12 @@ pub struct Configuration {
     pub update_skipped_release: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generate_cover: Option<bool>,
+    /// V109：自动把 Kindle 不支持的图片转成 JPEG / PNG（缺省为开）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub convert_kindle_images: Option<bool>,
+    /// V109：左栏可关掉的页面（overview / folders / booksource / plugins），缺省只关概览。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nav_hidden_pages: Option<Vec<String>>,
     #[serde(default, skip_serializing)]
     pub check_chapters: Option<bool>,
     #[serde(default, skip_serializing)]
@@ -485,62 +491,98 @@ fn store_blob(objects: &Path, bytes: &[u8]) -> Result<String, ApiError> {
     }
     Ok(digest)
 }
-pub fn load(directory: &Path) -> Result<Snapshot, ApiError> {
+// All readers and writers participate: a reader must not observe pruning halfway
+// through its directory scan. OS locks are released even when a process crashes.
+fn lock_store(directory: &Path) -> Result<File, ApiError> {
     if !directory.is_absolute() {
         return Err(invalid());
     }
-    let entries = match fs::read_dir(directory) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(Snapshot {
-                retired_check_fields: Vec::new(),
-                revision: 0,
-                token: None,
-                configuration: Configuration::default(),
-            });
-        }
-        Err(e) => return Err(io(e)),
-    };
+    fs::create_dir_all(directory).map_err(io)?;
+    let lock = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(directory.join("settings.lock"))
+        .map_err(io)?;
+    lock.lock().map_err(io)?;
+    Ok(lock)
+}
+
+pub fn load(directory: &Path) -> Result<Snapshot, ApiError> {
+    let _lock = lock_store(directory)?;
+    load_locked(directory)
+}
+
+fn load_locked(directory: &Path) -> Result<Snapshot, ApiError> {
     let mut revisions = Vec::new();
-    for entry in entries {
+    let mut checkpoints = Vec::new();
+    for entry in fs::read_dir(directory).map_err(io)? {
         let entry = entry.map_err(io)?;
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
+        let name = entry.file_name().to_string_lossy().into_owned();
         if name.len() == 25
             && name.ends_with(".json")
             && name.as_bytes()[..20].iter().all(u8::is_ascii_digit)
         {
             revisions.push(name[..20].parse::<u64>().map_err(|_| invalid())?);
-            if revisions.len() > MAX_GENERATIONS {
-                return Err(error(ErrorCode::TooLarge, "archive_settings_history"));
+        } else if name.starts_with("checkpoint-") && name.ends_with(".json") {
+            let stem = &name[11..name.len() - 5];
+            let (revision, digest) = stem.split_once('-').ok_or_else(invalid)?;
+            if revision.len() != 20
+                || digest.len() != 64
+                || !digest.bytes().all(|c| c.is_ascii_hexdigit())
+            {
+                return Err(invalid());
             }
+            checkpoints.push((
+                revision.parse::<u64>().map_err(|_| invalid())?,
+                digest.to_owned(),
+                entry.path(),
+            ));
         }
     }
     revisions.sort_unstable();
-    for (index, revision) in revisions.iter().enumerate() {
-        if *revision != index as u64 + 1 {
+    checkpoints.sort_unstable();
+    let mut base = 0;
+    let mut bytes = Vec::new();
+    if let Some((revision, digest, path)) = checkpoints.last() {
+        bytes = read(path)?;
+        if *revision == 0 || hash(&bytes) != *digest {
             return Err(invalid());
         }
+        let record: Record = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
+        if record.schema != 1 || record.revision != *revision {
+            return Err(invalid());
+        }
+        base = *revision;
     }
-    let Some(&revision) = revisions.last() else {
+    let mut revision = base;
+    let mut parent = if base == 0 { None } else { Some(hash(&bytes)) };
+    for next in revisions.iter().copied().filter(|r| *r > base) {
+        if revision.checked_add(1) != Some(next) {
+            return Err(invalid());
+        }
+        bytes = read(&directory.join(filename(next)))?;
+        let record: Record = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
+        if record.schema != 1 || record.revision != next || record.parent != parent {
+            return Err(invalid());
+        }
+        parent = Some(hash(&bytes));
+        revision = next;
+    }
+    if revision == 0 {
+        if !revisions.is_empty() {
+            return Err(invalid());
+        }
         return Ok(Snapshot {
             retired_check_fields: Vec::new(),
             revision: 0,
             token: None,
             configuration: Configuration::default(),
         });
-    };
-    let bytes = read(&directory.join(filename(revision)))?;
+    }
     let mut record: Record = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
     if record.schema != 1 || record.revision != revision {
-        return Err(invalid());
-    }
-    let expected_parent = if revision > 1 {
-        Some(hash(&read(&directory.join(filename(revision - 1)))?))
-    } else {
-        None
-    };
-    if record.parent != expected_parent {
         return Err(invalid());
     }
     expand_batches(directory, &mut record.configuration)?;
@@ -549,6 +591,24 @@ pub fn load(directory: &Path) -> Result<Snapshot, ApiError> {
     crate::storage::remap_value(&mut value);
     record.configuration = serde_json::from_value(value).map_err(|_| invalid())?;
     record.configuration.validate()?;
+    // Publish a byte-identical, hash-addressed checkpoint BEFORE pruning. Failure
+    // to maintain history never makes a valid current configuration unreadable.
+    if revisions.iter().filter(|r| **r > base).count() >= COMPACT_GENERATIONS {
+        let path = directory.join(format!("checkpoint-{revision:020}-{}.json", hash(&bytes)));
+        if fs::hard_link(directory.join(filename(revision)), &path).is_ok()
+            || read(&path).is_ok_and(|existing| existing == bytes)
+        {
+            base = revision;
+        }
+    }
+    if base > 0 {
+        for old in revisions.iter().filter(|r| **r < base) {
+            let _ = fs::remove_file(directory.join(filename(*old)));
+        }
+        for (_, _, path) in checkpoints.iter().filter(|(r, _, _)| *r < base) {
+            let _ = fs::remove_file(path);
+        }
+    }
     Ok(Snapshot {
         retired_check_fields,
         revision,
@@ -562,17 +622,15 @@ pub fn save(
     configuration: Configuration,
 ) -> Result<Snapshot, ApiError> {
     configuration.validate()?;
-    let current = load(directory)?;
+    let _lock = lock_store(directory)?;
+    let current = load_locked(directory)?;
     if expected != current.token.as_deref() {
         return Err(error(
             ErrorCode::StaleRevision,
             "reload_settings_before_saving",
         ));
     }
-    if current.revision >= MAX_GENERATIONS as u64 {
-        return Err(error(ErrorCode::TooLarge, "archive_settings_history"));
-    }
-    let revision = current.revision + 1;
+    let revision = current.revision.checked_add(1).ok_or_else(invalid)?;
     let mut stored = configuration.clone();
     externalize_batches(directory, &mut stored)?;
     let record = Record {
@@ -624,6 +682,94 @@ pub fn save(
 mod tests {
     use super::*;
     use std::sync::{Arc, Barrier};
+    fn legacy_history(dir: &Path, count: u64) -> Snapshot {
+        fs::create_dir_all(dir).unwrap();
+        let mut parent = None;
+        for revision in 1..=count {
+            let bytes = serde_json::to_vec(&Record {
+                schema: 1,
+                revision,
+                parent,
+                configuration: config(20),
+            })
+            .unwrap();
+            fs::write(dir.join(filename(revision)), &bytes).unwrap();
+            parent = Some(hash(&bytes));
+        }
+        Snapshot {
+            retired_check_fields: vec![],
+            revision: count,
+            token: parent,
+            configuration: config(20),
+        }
+    }
+
+    #[test]
+    fn full_legacy_history_compacts_on_open_and_keeps_tokens_and_future_writes() {
+        let dir = directory();
+        let old = legacy_history(&dir, 1024);
+        let loaded = load(&dir).unwrap();
+        assert_eq!(loaded.token, old.token);
+        assert_eq!(loaded.revision, 1024);
+        assert!(!dir.join(filename(1)).exists());
+        assert!(dir.join(filename(1024)).exists());
+        let mut current = loaded;
+        for _ in 0..805 {
+            current = save(&dir, current.token.as_deref(), config(22)).unwrap();
+        }
+        assert_eq!(load(&dir).unwrap().token, current.token);
+        assert!(fs::read_dir(&dir).unwrap().count() < 20);
+        assert_eq!(
+            save(&dir, old.token.as_deref(), config(24))
+                .unwrap_err()
+                .code,
+            ErrorCode::StaleRevision
+        );
+    }
+
+    #[test]
+    fn interrupted_checkpoint_publication_and_pruning_are_recoverable() {
+        let dir = directory();
+        let old = legacy_history(&dir, 1024);
+        fs::write(dir.join(".settings-interrupted.tmp"), b"partial").unwrap();
+        // A published checkpoint followed by partial pruning, as after a crash.
+        let checkpoint = dir.join(format!(
+            "checkpoint-{:020}-{}.json",
+            old.revision,
+            old.token.as_ref().unwrap()
+        ));
+        fs::hard_link(dir.join(filename(1024)), &checkpoint).unwrap();
+        fs::remove_file(dir.join(filename(10))).unwrap();
+        assert_eq!(load(&dir).unwrap().token, old.token);
+        let next = save(&dir, old.token.as_deref(), config(24)).unwrap();
+        assert_eq!(load(&dir).unwrap().token, next.token);
+        fs::write(&checkpoint, b"corrupt").unwrap();
+        assert!(load(&dir).is_err());
+    }
+
+    #[test]
+    fn failed_pruning_does_not_block_reads_or_saves_and_chain_damage_is_rejected() {
+        let dir = directory();
+        let old = legacy_history(&dir, 1024);
+        let checkpoint = dir.join(format!(
+            "checkpoint-{:020}-{}.json",
+            old.revision,
+            old.token.as_ref().unwrap()
+        ));
+        // A directory in place of an obsolete file cannot be removed by pruning.
+        fs::hard_link(dir.join(filename(1024)), &checkpoint).unwrap();
+        fs::remove_file(dir.join(filename(1))).unwrap();
+        fs::create_dir(dir.join(filename(1))).unwrap();
+        assert_eq!(load(&dir).unwrap().token, old.token);
+        let next = save(&dir, old.token.as_deref(), config(22)).unwrap();
+        assert_eq!(load(&dir).unwrap().token, next.token);
+        // Missing generations after the checkpoint must never be skipped.
+        let last = save(&dir, next.token.as_deref(), config(24)).unwrap();
+        fs::remove_file(dir.join(filename(next.revision))).unwrap();
+        assert!(load(&dir).is_err());
+        assert!(dir.join(filename(last.revision)).exists());
+    }
+
     #[test]
     fn folder_rules_persist_offline_and_stale_or_invalid_writes_keep_previous() {
         let dir = directory();

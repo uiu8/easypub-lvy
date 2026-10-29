@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'inline_style_service.dart';
+
 class RuleDescriptor {
   RuleDescriptor.fromJson(Map v)
     : id = v['id'] as String,
@@ -98,6 +100,9 @@ class RuleStatisticsSnapshot {
         for (final r in (v['rules'] as List).cast<Map>())
           r['id'] as String: RuleStatistic.fromJson(r),
       }),
+      inlineStyles = v['inline_styles'] == null
+          ? null
+          : InlineStyleSnapshot.fromJson(v['inline_styles'] as Map),
       layoutLines = Map.unmodifiable({
         for (final e in (v['layout_lines'] as Map? ?? const {}).entries)
           e.key as String: List<LayoutLine>.unmodifiable([
@@ -120,6 +125,7 @@ class RuleStatisticsSnapshot {
 
   /// 按当前设置逐行识别出的块（V104，LAY-148）：章节编号 → 各行。
   final Map<String, List<LayoutLine>> layoutLines;
+  final InlineStyleSnapshot? inlineStyles;
 }
 
 /// 一行的识别结果（V104，LAY-148）：本节正文行号（从 1 开始）、类别（system、verse、chat、inset、

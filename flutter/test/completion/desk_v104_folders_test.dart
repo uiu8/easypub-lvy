@@ -75,7 +75,8 @@ void main() {
   );
 
   testWidgets('收藏夹模式：顶层是收藏夹与未分类，点进去看书、返回；不出左栏（LIB-283）', (t) async {
-    final view = LibraryViewState();
+    // V110：收藏夹栏默认收起，这里先展开它。
+    final view = LibraryViewState()..railCollapsed = false;
     final (_, library) = await pumpLibrary(t, view);
     final [a, b] = library.books.value;
     final wuxia = library.createCollection('武侠');

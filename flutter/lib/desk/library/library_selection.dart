@@ -131,7 +131,7 @@ extension _LibrarySelection on _LibraryPageState {
                     );
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(deskErrorText(e, '未能移出。'))),
+                      deskSnackBar(content: Text(deskErrorText(e, '未能移出。'))),
                     );
                   }
                 },

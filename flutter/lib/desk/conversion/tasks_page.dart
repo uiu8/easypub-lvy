@@ -27,12 +27,16 @@ class TasksPage extends StatefulWidget {
     required this.onAdd,
     required this.onRetry,
     required this.onHistory,
+    this.historyButton = true,
     required this.onOutput,
   });
   final ConversionSession session;
   final ConversionDesktop desktop;
   final VoidCallback onAdd;
   final VoidCallback onHistory;
+
+  /// 页头的“转换历史”按钮；程序里由顶部切换条代替（V109），单独使用时保留。
+  final bool historyButton;
   final void Function(String taskId) onOutput;
   final void Function(List<String> bookIds) onRetry;
   @override
@@ -50,14 +54,7 @@ class _TasksPageState extends State<TasksPage> {
   final _stats = <String, FileStat?>{};
   FileStat? statOf(ConversionOutput item) {
     if (!item.complete || item.path.isEmpty) return null;
-    return _stats.putIfAbsent(item.path, () {
-      try {
-        final stat = File(item.path).statSync();
-        return stat.type == FileSystemEntityType.notFound ? null : stat;
-      } catch (_) {
-        return null;
-      }
-    });
+    return probeOutputStat(item.path, _stats);
   }
 
   @override
@@ -284,12 +281,13 @@ class _TasksPageState extends State<TasksPage> {
           title: '转换任务',
           subtitle: summary.isEmpty ? null : '最近一批 · $summary',
           actions: [
-            DeskButton(
-              '转换历史',
-              icon: Icons.history_rounded,
-              quiet: true,
-              onPressed: widget.onHistory,
-            ),
+            if (widget.historyButton)
+              DeskButton(
+                '转换历史',
+                icon: Icons.history_rounded,
+                quiet: true,
+                onPressed: widget.onHistory,
+              ),
             DeskButton(
               '新建转换',
               icon: Icons.add_rounded,
@@ -360,11 +358,9 @@ class _TasksPageState extends State<TasksPage> {
                         breakpoint: 760,
                         leadingWidth: 400,
                         leading: visible.isEmpty
-                            ? Center(
-                                child: Text(
-                                  '此分类暂无任务。',
-                                  style: ui(12.5, c: d.ink3),
-                                ),
+                            ? const DeskEmptyState(
+                                '此分类暂无任务。',
+                                icon: Icons.playlist_play_rounded,
                               )
                             : DeskScrollArea(
                                 builder: (controller) => ListView.builder(
@@ -414,7 +410,7 @@ class _TasksPageState extends State<TasksPage> {
       child: Material(
         color: on ? d.surface : Colors.transparent,
         elevation: on ? 1 : 0,
-        shadowColor: Colors.black.withValues(alpha: .25),
+        shadowColor: d.shadowInk.withValues(alpha: .25),
         borderRadius: BorderRadius.circular(9),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -787,8 +783,13 @@ class TaskStages extends StatelessWidget {
             Expanded(
               flex: 1,
               child: Padding(
-                padding: const EdgeInsets.only(top: 9),
-                child: Divider(height: 1, color: active >= i ? d.ink2 : d.line),
+                padding: const EdgeInsets.only(top: 8),
+                // 阶段之间的进度槽：走到下一阶段才填满（V105 视觉语言）。
+                child: DeskProgressTrack(
+                  value: active >= i ? 1 : 0,
+                  color: d.add,
+                  height: 3,
+                ),
               ),
             ),
           Expanded(
@@ -803,7 +804,11 @@ class TaskStages extends StatelessWidget {
                       ? Icons.sync_rounded
                       : Icons.radio_button_unchecked_rounded,
                   size: 18,
-                  color: active >= i ? d.ink : d.ink3,
+                  color: active > i
+                      ? d.add
+                      : active == i
+                      ? d.accent
+                      : d.ink3,
                 ),
                 const SizedBox(height: 4),
                 Text(

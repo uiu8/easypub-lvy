@@ -71,8 +71,8 @@ class BookSourceSettings {
 
   static BookSourceSettings load(String path) {
     try {
-      final j =
-          jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
+      final j = readBookSourceUiSettings(path);
+      if (j.isEmpty) return BookSourceSettings();
       final settings = BookSourceSettings(
         folder: '${j['folder'] ?? ''}',
         threads: ((j['threads'] as num?) ?? 8).toInt().clamp(1, 32),
@@ -132,39 +132,35 @@ class BookSourceSettings {
     }
   }
 
-  void save(String path) {
-    try {
-      File(path)
-        ..parent.createSync(recursive: true)
-        ..writeAsStringSync(
-          jsonEncode({
-            'folder': folder,
-            'resultSort': resultSort,
-            'onlyPriority': onlyPriority,
-            'multiSource': multiSource,
-            'maxAlternates': maxAlternates,
-            'updateConcurrency': updateConcurrency,
-            'alternateConcurrency': alternateConcurrency,
-            'threads': threads,
-            'autoImport': autoImport,
-            'downloadFormat': downloadFormat,
-            'favoriteSources': favoriteSources.toList(),
-            'fill': fill,
-            'maxBooks': maxBooks,
-            'searchConcurrency': searchConcurrency,
-            'quickLimit': quickLimit,
-            'checkConcurrency': checkConcurrency,
-            'skipUnhealthy': skipUnhealthy,
-            'includeWebView': includeWebView,
-            'quick': quick,
-            'filterTitle': filterTitle,
-            'removePagePrompts': removePagePrompts,
-            'groupBy': groupBy,
-            'collapsed': collapsed.toList(),
-            'recentSearches': recentSearches,
-          }),
-        );
-    } catch (_) {}
+  Map<String, dynamic> toJson() => {
+    'folder': folder,
+    'resultSort': resultSort,
+    'onlyPriority': onlyPriority,
+    'multiSource': multiSource,
+    'maxAlternates': maxAlternates,
+    'updateConcurrency': updateConcurrency,
+    'alternateConcurrency': alternateConcurrency,
+    'threads': threads,
+    'autoImport': autoImport,
+    'downloadFormat': downloadFormat,
+    'favoriteSources': favoriteSources.toList(),
+    'fill': fill,
+    'maxBooks': maxBooks,
+    'searchConcurrency': searchConcurrency,
+    'quickLimit': quickLimit,
+    'checkConcurrency': checkConcurrency,
+    'skipUnhealthy': skipUnhealthy,
+    'includeWebView': includeWebView,
+    'quick': quick,
+    'filterTitle': filterTitle,
+    'removePagePrompts': removePagePrompts,
+    'groupBy': groupBy,
+    'collapsed': collapsed.toList(),
+    'recentSearches': recentSearches,
+  };
+
+  void save(String path, {ValueChanged<Object>? onError}) {
+    saveBookSourceUiSettings(path, toJson(), onError: onError);
   }
 }
 
@@ -176,6 +172,9 @@ class DownloadTask {
   String? path, error;
   List<Map<String, dynamic>> failures = [];
   bool finished = false, cancelled = false, imported = false;
+
+  /// 书库里这本书还是下载变化前的版本（V111）。
+  bool libraryOutdated = false;
 
   /// 生成 EPUB（LIB-215）：进行中、已生成、失败原因。
   bool epubBusy = false, epubDone = false;

@@ -561,8 +561,9 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
               sideColumn(
                 heading: '目录规则 · 全局保存 · 最多 128 条',
                 list: rules.isEmpty
-                    ? Center(
-                        child: Text('还没有目录规则', style: ui(12.5, c: d.ink3)),
+                    ? const DeskEmptyState(
+                        '还没有目录规则',
+                        icon: Icons.rule_folder_outlined,
                       )
                     : ListView.builder(
                         itemCount: rules.length,

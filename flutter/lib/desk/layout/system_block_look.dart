@@ -19,12 +19,32 @@ class SystemBlockLook {
       removeBrackets = style['brackets'] == 'remove',
       title = '${style['title'] ?? 'none'}',
       size = ((style['size'] as num?) ?? 100) / 100,
-      spacing = '${style['spacing'] ?? 'medium'}';
+      spacing = '${style['spacing'] ?? 'medium'}',
+      gray = style['tone'] == 'gray',
+      kai = style['font'] == 'kai',
+      inset = '${style['inset'] ?? 'none'}',
+      radius = style['radius'] == true;
 
   /// 正文字号（1em）与 1 个 CSS 像素在预览里的大小。
   final double em, px;
   final String border, title, spacing;
   final bool doubleLine, thick, center, bold, keyBold, removeBrackets;
+
+  /// V119：灰色线、楷体、块缩进（none / small / large / narrow）、圆角。
+  final bool gray, kai, radius;
+  final String inset;
+
+  /// 线的颜色：灰色时与成品 CSS 的 #888888 相同；否则随正文。
+  Color lineColor(Color ink) => gray ? const Color(0xFF888888) : ink;
+
+  /// 块左右的缩进（预览像素）：左缩按块的字号算 em，“左右各收”按版心宽的 12%。
+  double insetLeft(double width) => switch (inset) {
+    'small' => fontEm,
+    'large' => 2 * fontEm,
+    'narrow' => .12 * width,
+    _ => 0,
+  };
+  double insetRight(double width) => inset == 'narrow' ? .12 * width : 0;
   final Color? shade;
   final double size;
 

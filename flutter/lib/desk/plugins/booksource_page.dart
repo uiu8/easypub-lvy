@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../../application/plugin_host.dart';
 import '../controls/controls.dart';
 import '../dialogs.dart';
+import '../errors.dart';
 import '../page_parts.dart';
 import '../tokens.dart';
 import '../widgets.dart';
@@ -38,6 +39,8 @@ class BookSourcePage extends StatefulWidget {
     required this.chooseSourceFile,
     required this.importToLibrary,
     this.exportEpub,
+    this.outdatedInLibrary,
+    this.refreshInLibrary,
     this.openFolder,
     this.openPlugins,
   });
@@ -52,6 +55,12 @@ class BookSourcePage extends StatefulWidget {
   /// 把下载好的 TXT 加入书库并按全局默认排版生成 EPUB（LIB-215）；不提供时不显示 EPUB 选项。
   final Future<({bool imported, String? error})> Function(String path)?
   exportEpub;
+
+  /// 加入书库后，书库里已有这本书、下载内容却变了（追更、重新整理），草稿保留没采用（V111）。
+  final bool Function(String path)? outdatedInLibrary;
+
+  /// 打开“刷新来源”对比确认；返回书库里是否已是新版本。
+  final Future<bool> Function(String path)? refreshInLibrary;
   final void Function(String path)? openFolder;
   final VoidCallback? openPlugins;
 
@@ -142,6 +151,11 @@ class _BookSourcePageState extends State<BookSourcePage> {
   };
   int autoCheckHours = 0;
 
+  /// 章节缓存位置（V107）：路径、默认路径、是否自选、占用字节与书数；旧版插件没有时为空。
+  Map<String, dynamic>? cacheLocation;
+  bool cacheMoving = false;
+  String? cacheMessage;
+
   /// 上次定时检查的时间（秒）；0 表示还没检查过。
   int autoCheckLast = 0;
 
@@ -170,7 +184,7 @@ class _BookSourcePageState extends State<BookSourcePage> {
       await _loadQueue();
       await _loadPluginPreferences();
     } catch (e) {
-      fatal = '$e';
+      fatal = bookSourceErrorText(e, '书源插件启动未完成，请检查插件文件是否完整。');
     }
     if (mounted) setState(() {});
   }

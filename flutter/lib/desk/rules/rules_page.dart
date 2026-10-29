@@ -377,12 +377,19 @@ class _RulesPageState extends State<RulesPage> {
       ),
       _ =>
         s.enabled
-            ? Text(
-                ruleCount(s),
-                style: s.count == 0
-                    ? ui(12, c: d.ink3)
-                    : ui(12.5, w: 600, c: d.ink),
-              )
+            ? s.count == 0
+                  ? Text(ruleCount(s), style: ui(12, c: d.ink3))
+                  // 有命中：计数胶囊（V105 视觉语言）。
+                  : DeskPill(
+                      Text(ruleCount(s), style: ui(12, w: 600, c: d.ink)),
+                      color: d.surface,
+                      outlined: true,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 1.5,
+                      ),
+                      radius: 5,
+                    )
             : s.hypothetical
             ? Text('开启会命中 ${ruleCount(s)}', style: ui(12, c: d.ink3))
             : Tooltip(

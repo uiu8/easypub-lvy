@@ -151,6 +151,11 @@ fn write_profile<W: Write + Seek>(
                     .css
                     .replacen(crate::publication_style::COVER_SVG_RULE, "", 1)
                     .replacen(crate::publication_style::CLASSIC_SHADOW, "", 1)
+                    .replacen(
+                        crate::publication_style::INLINE_WAVY_RULE,
+                        ".inline-wavy { text-decoration: underline; }\n",
+                        1,
+                    )
                     .into_bytes(),
             )
         } else {

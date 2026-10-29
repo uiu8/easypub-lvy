@@ -707,9 +707,19 @@ fn clean(store: &Store, kinds: &[Value]) -> Result<Value> {
     for (kind, root) in roots {
         let kind = kind.as_str();
         // 解包与历史生成封面可能被外部项目引用；先保留，不能猜测为无主缓存。
-        if matches!(kind, "imports" | "generated_covers" | "kindle_preview") {
+        if matches!(kind, "imports" | "generated_covers") {
             rows.push(json!({"kind":kind,"path":root,"deleted_bytes":0,"skipped":"persistent_reference_or_external_preview"}));
             continue;
+        }
+        // 真机预览是独立的浏览器资料目录（V107）：浏览器开着时一直占着 lockfile，删不掉就说明预览窗口还开着，整类跳过。
+        if kind == "kindle_preview" {
+            let lockfile = root.join("lockfile");
+            if lockfile.exists() && fs::remove_file(&lockfile).is_err() {
+                rows.push(
+                    json!({"kind":kind,"path":root,"deleted_bytes":0,"skipped":"preview_open"}),
+                );
+                continue;
+            }
         }
         if !root.exists() {
             rows.push(json!({"kind":kind,"path":root,"deleted_bytes":0,"deleted_files":0}));
@@ -988,6 +998,32 @@ mod tests {
             );
             let _ = fs::remove_dir_all(&self.root);
         }
+    }
+    #[test]
+    fn kindle_preview_is_cleaned_only_when_the_browser_is_closed() {
+        let f = Fixture::new();
+        let page = f.seed("kindle_preview", "Default/Cache/data_1", b"cached");
+        let lock = f.seed("kindle_preview", "lockfile", b"");
+        // 浏览器开着时占着 lockfile：用不带共享删除的方式打开来模拟，整类跳过。
+        let held = {
+            let mut o = OpenOptions::new();
+            o.read(true).write(true);
+            #[cfg(windows)]
+            std::os::windows::fs::OpenOptionsExt::share_mode(&mut o, 0x1 | 0x2);
+            o
+        }
+        .open(&lock)
+        .unwrap();
+        #[cfg(windows)]
+        {
+            let r = clean(&f.store, &[json!("kindle_preview")]).unwrap();
+            assert_eq!(r["categories"][0]["skipped"], "preview_open");
+            assert!(page.exists());
+        }
+        drop(held);
+        let r = clean(&f.store, &[json!("kindle_preview")]).unwrap();
+        assert!(r["categories"][0]["skipped"].is_null());
+        assert!(!page.exists());
     }
     #[test]
     fn migration_activates_only_after_restart_and_verifies_separate_credentials() {

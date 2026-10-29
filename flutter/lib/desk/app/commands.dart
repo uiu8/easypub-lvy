@@ -186,7 +186,7 @@ extension _CommandPalette on _RewriteAppState {
           'zjbj',
           Icons.account_tree_outlined,
           () => book('chapters'),
-          shortcut: 'Alt 3',
+          shortcut: 'Alt 4',
         ),
         page(
           'G-008',
@@ -194,7 +194,7 @@ extension _CommandPalette on _RewriteAppState {
           'jcyxf',
           Icons.fact_check_outlined,
           () => book('checks'),
-          shortcut: 'Alt 4',
+          shortcut: 'Alt 3',
         ),
         page(
           'G-024',

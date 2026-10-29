@@ -41,6 +41,37 @@ pub struct BlockStyle {
     pub brackets: String,
     /// 与前后正文的距离：tight / medium / loose
     pub spacing: String,
+    /// 边框线颜色（V119）：black 黑 / gray 灰。旧样式没有这一项时为 black，成品不变。
+    #[serde(default = "black", skip_serializing_if = "is_black")]
+    pub tone: String,
+    /// 字体（V119）：body 随正文 / kai 楷体。
+    #[serde(default = "body", skip_serializing_if = "is_body")]
+    pub font: String,
+    /// 块的缩进（V119）：none / small 左缩 1 字 / large 左缩 2 字 / narrow 左右各收 12%。
+    #[serde(default = "no_inset", skip_serializing_if = "is_no_inset")]
+    pub inset: String,
+    /// 圆角（V119）。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub radius: bool,
+}
+
+fn black() -> String {
+    "black".into()
+}
+fn is_black(v: &str) -> bool {
+    v == "black"
+}
+fn body() -> String {
+    "body".into()
+}
+fn is_body(v: &str) -> bool {
+    v == "body"
+}
+fn no_inset() -> String {
+    "none".into()
+}
+fn is_no_inset(v: &str) -> bool {
+    v == "none"
 }
 
 /// 单行提示与多行面板的样式。
@@ -86,9 +117,51 @@ pub fn validate_library(items: &[SavedStyle]) -> Result<(), ApiError> {
     Ok(())
 }
 
-/// 内置预设：(编号, 名称, 适用的类, 参数)。
+/// 内置预设：(编号, 名称, 适用的类, 参数)。适用的类为 note、panel，或两类都可用的 both。
+/// V119 新增的五种参照中文精排（多看“章前语”与色块、台湾 EPUB3 指引的框线），
+/// 只用线条、楷体与缩进；“浅灰底”在 AZW3 上不显示底色。
 pub fn presets() -> Vec<(&'static str, &'static str, &'static str, BlockStyle)> {
     vec![
+        (
+            "quiet",
+            "细线楷体",
+            "both",
+            style(
+                json!({"border":"left","line":"single","weight":"thin","shade":"none","align":"start","size":100,"bold":false,"title":"none","key_bold":false,"brackets":"keep","spacing":"medium","tone":"gray","font":"kai","inset":"small"}),
+            ),
+        ),
+        (
+            "side",
+            "左侧竖线",
+            "both",
+            style(
+                json!({"border":"left","line":"single","weight":"thick","shade":"none","align":"start","size":100,"bold":false,"title":"none","key_bold":false,"brackets":"keep","spacing":"medium","inset":"small"}),
+            ),
+        ),
+        (
+            "ruled",
+            "上下细线",
+            "both",
+            style(
+                json!({"border":"top_bottom","line":"single","weight":"thin","shade":"none","align":"center","size":100,"bold":false,"title":"none","key_bold":false,"brackets":"keep","spacing":"medium","inset":"narrow"}),
+            ),
+        ),
+        (
+            "kai",
+            "楷体缩进",
+            "both",
+            style(
+                json!({"border":"none","line":"single","weight":"thin","shade":"none","align":"start","size":100,"bold":false,"title":"none","key_bold":false,"brackets":"keep","spacing":"medium","font":"kai","inset":"large"}),
+            ),
+        ),
+        (
+            "tint",
+            "浅灰底",
+            "both",
+            style(
+                json!({"border":"none","line":"single","weight":"thin","shade":"light","align":"start","size":100,"bold":false,"title":"none","key_bold":false,"brackets":"keep","spacing":"medium","radius":true}),
+            ),
+        ),
         (
             "bar",
             "提示条",
@@ -128,7 +201,7 @@ pub fn preset(id: &str) -> Option<BlockStyle> {
     presets().into_iter().find(|p| p.0 == id).map(|p| p.3)
 }
 
-/// 新书的默认：单行“提示条”，面板“标题面板”。
+/// 新书的默认：单行“提示条”，面板“标题面板”（V119 新增的五种只作可选，默认不变）。
 pub fn default_styles() -> SystemStyles {
     SystemStyles {
         note: preset("bar").expect("bar"),
@@ -152,7 +225,10 @@ impl BlockStyle {
             )
             && (panel || self.title == "none")
             && matches!(self.brackets.as_str(), "keep" | "remove")
-            && matches!(self.spacing.as_str(), "tight" | "medium" | "loose");
+            && matches!(self.spacing.as_str(), "tight" | "medium" | "loose")
+            && matches!(self.tone.as_str(), "black" | "gray")
+            && matches!(self.font.as_str(), "body" | "kai")
+            && matches!(self.inset.as_str(), "none" | "small" | "large" | "narrow");
         if ok { Ok(()) } else { Err(invalid()) }
     }
 
@@ -188,8 +264,33 @@ impl BlockStyle {
             _ => "0.8em",
         };
         let pad = if boxed { "0.3em 0" } else { "0" };
+        // V119：块缩进、灰色线、楷体与圆角；旧样式都是默认值，生成的 CSS 与以前相同。
+        let margin = match self.inset.as_str() {
+            "small" => format!("{margin} 0 {margin} 1em"),
+            "large" => format!("{margin} 0 {margin} 2em"),
+            "narrow" => format!("{margin} 12%"),
+            _ => format!("{margin} 0"),
+        };
+        let extra = format!(
+            "{}{}{}",
+            if self.tone == "gray" && self.border != "none" {
+                " border-color: #888888;"
+            } else {
+                ""
+            },
+            if self.font == "kai" {
+                " font-family: STKai, \"楷体\", KaiTi, serif;"
+            } else {
+                ""
+            },
+            if self.radius {
+                " border-radius: 0.5em;"
+            } else {
+                ""
+            },
+        );
         let mut css = format!(
-            ".{class} {{ margin: {margin} 0; padding: {pad}; {border}{shade} font-size: {}%;{}{} }}\n",
+            ".{class} {{ margin: {margin}; padding: {pad}; {border}{shade}{extra} font-size: {}%;{}{} }}\n",
             self.size,
             if self.align == "center" {
                 " text-align: center;"
@@ -298,6 +399,29 @@ mod tests {
             s.validate(kind == "panel")
                 .unwrap_or_else(|_| panic!("{id}"));
         }
+        // V119 新增的“细线楷体”：灰色左细线、楷体、左缩 1 字。
+        let quiet = SystemStyles {
+            note: preset("quiet").unwrap(),
+            panel: preset("quiet").unwrap(),
+        }
+        .css();
+        assert!(quiet.contains(".blk-note { margin: 0.8em 0 0.8em 1em; padding: 0.3em 0; border: 0; border-left: 1px solid; border-color: #888888; font-family: STKai, \"楷体\", KaiTi, serif; font-size: 100%;"));
+        assert!(quiet.contains(".blk-panel { margin: 0.8em 0 0.8em 1em;"));
+        assert!(
+            preset("ruled")
+                .unwrap()
+                .css("blk-note")
+                .contains("margin: 0.8em 12%;")
+        );
+        assert!(
+            preset("tint")
+                .unwrap()
+                .css("blk-note")
+                .contains("background-color: #ececec; border-radius: 0.5em;")
+        );
+        // 默认（提示条 + 标题面板）没有新参数：序列化不多出字段，生成的 CSS 与 V118 以前相同。
+        let json = serde_json::to_value(&all.note).unwrap();
+        assert!(json.get("tone").is_none() && json.get("radius").is_none());
         let css = all.css();
         assert!(css.contains(".blk-note { margin: 0.8em 0; padding: 0.3em 0; border: 0; border-left: 3px solid; background-color: #ececec; font-size: 90%;"));
         assert!(css.contains(

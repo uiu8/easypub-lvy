@@ -1,5 +1,6 @@
 // 书源下载为 EPUB（LIB-215）：下载好的 TXT 加入书库后，按全局默认排版（含自动规则）转换为 EPUB，
 // 放在 TXT 同一文件夹，TXT 保留。不弹窗、不切页面；不能转换时返回原因，书仍留在书库。
+// 书库里已有这本书而下载内容变了（追更、重新整理）时不生成：草稿还是旧的，要先“刷新来源”（V111）。
 import 'dart:io';
 
 import '../../application/conversion_defaults.dart';
@@ -11,11 +12,16 @@ import '../metadata/cover_drop.dart' show bindSidecarCover;
 
 typedef DownloadEpubResult = ({bool imported, String? error});
 
+/// 书库里的这本书还是下载变化前的版本（V111）。
+const downloadOutdatedInLibrary =
+    '书库里的这本书还是之前的版本，下载的新内容没有采用，所以没有生成 EPUB。请点“刷新来源”确认采用，之后会自动生成。';
+
 Future<DownloadEpubResult> exportDownloadAsEpub({
   required LibraryService library,
   required ConversionSession session,
   required String path,
   bool conversionBusy = false,
+  void Function(List<ImportOutcome> outcomes)? onImported,
 }) async {
   try {
     final out = await library.importFiles([path]);
@@ -23,10 +29,17 @@ Future<DownloadEpubResult> exportDownloadAsEpub({
     if (failed.isNotEmpty) {
       return (imported: false, error: '加入书库失败：${failed.first.message}');
     }
+    onImported?.call(out);
+    if (out.any((o) => o.sourceChanged)) {
+      return (imported: true, error: downloadOutdatedInLibrary);
+    }
     // 插件下载的封面存为 TXT 同名图片：书还没有封面时自动设为封面。
     await bindSidecarCover(library, path);
   } catch (e) {
-    return (imported: false, error: deskErrorText(e, '加入书库失败，请重试。'));
+    return (
+      imported: false,
+      error: deskErrorText(e, '加入书库未完成：请确认下载的 TXT 文件仍在且未被占用，可在下载队列点“加入书库”重试。'),
+    );
   }
   String key(String p) => p.replaceAll('/', r'\').toLowerCase();
   final book = library.books.value

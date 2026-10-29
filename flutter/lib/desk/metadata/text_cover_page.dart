@@ -1,12 +1,12 @@
 // 迁入 desk（V5a）：逻辑与布局沿用 V5 前的同名文件，只换面板与切换样式；见 docs/evidence/v5-meta-layout-resources-20261011.md。
-import 'dart:io';
-import 'dart:ui' as ui;
+import 'dart:ui' as dart_ui;
 
 import 'package:flutter/material.dart';
 
 import '../tokens.dart';
 
 import '../../application/book_information_service.dart';
+import '../../application/conversion_desktop.dart' show readLocalFileBytes;
 import '../controls/controls.dart';
 import 'text_cover.dart';
 import 'cover_preview_stage.dart';
@@ -71,7 +71,7 @@ class _TextCoverPageState extends State<TextCoverPage> {
   late bool useBackground =
       backgroundPath != null &&
       widget.initialDesign?['style'] == 'pack-background-v1';
-  ui.Image? backgroundImage;
+  dart_ui.Image? backgroundImage;
   late String fit = widget.initialFit;
   String error = '';
   final _previewRevision = ValueNotifier<int>(0);
@@ -117,8 +117,8 @@ class _TextCoverPageState extends State<TextCoverPage> {
     final path = backgroundPath;
     if (path == null) return;
     try {
-      final codec = await ui.instantiateImageCodec(
-        await File(path).readAsBytes(),
+      final codec = await dart_ui.instantiateImageCodec(
+        await readLocalFileBytes(path),
       );
       final image = (await codec.getNextFrame()).image;
       if (!mounted) {
@@ -155,7 +155,9 @@ class _TextCoverPageState extends State<TextCoverPage> {
     try {
       final image = await painter.render();
       try {
-        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        final bytes = await image.toByteData(
+          format: dart_ui.ImageByteFormat.png,
+        );
         if (bytes == null) throw const FormatException('封面编码失败。');
         final result = await widget.session.storeGeneratedCover(
           bytes.buffer.asUint8List(),
@@ -219,14 +221,7 @@ class _TextCoverPageState extends State<TextCoverPage> {
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: d.line)),
             ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: d.ink,
-              ),
-            ),
+            child: Text(label, style: ui(14, w: 600, c: d.ink)),
           ),
           Expanded(
             child: Padding(padding: const EdgeInsets.all(18), child: child),

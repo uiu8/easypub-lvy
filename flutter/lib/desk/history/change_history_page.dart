@@ -364,6 +364,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
         ..sort((a, b) => b.time!.compareTo(a.time!));
       final records = [...timed, ...filtered.where((r) => r.time == null)];
       final rows = <Object>[];
+      final groupCounts = <String, int>{};
       String? lastGroup;
       for (final r in records) {
         final group = r.time == null ? '时间未记录' : dayLabel(r.time!);
@@ -371,6 +372,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
           rows.add(group);
           lastGroup = group;
         }
+        groupCounts[group] = (groupCounts[group] ?? 0) + 1;
         rows.add(r);
       }
       final record =
@@ -460,8 +462,9 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
             ),
             Expanded(
               child: records.isEmpty
-                  ? Center(
-                      child: Text('此范围暂无变更记录。', style: ui(13, c: d.ink2)),
+                  ? const DeskEmptyState(
+                      '此范围暂无变更记录。',
+                      icon: Icons.history_rounded,
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
@@ -469,11 +472,34 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                       itemBuilder: (context, index) {
                         final item = rows[index];
                         if (item is String) {
+                          // 日期分组用凹底横幅加条数胶囊（V105 视觉语言）。
+                          final count = groupCounts[item] ?? 0;
                           return Padding(
-                            padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
-                            child: Text(
-                              item,
-                              style: ui(11.5, w: 600, c: d.ink3),
+                            padding: const EdgeInsets.fromLTRB(2, 8, 2, 4),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: d.banner,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item,
+                                      style: ui(11.5, w: 650, c: d.ink2),
+                                    ),
+                                  ),
+                                  DeskPill(
+                                    Text(
+                                      '$count',
+                                      style: mono(10.5, w: 600, c: d.ink2),
+                                    ),
+                                    color: d.surface,
+                                    outlined: true,
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         }
@@ -510,11 +536,22 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
+                                      // 已撤销的记录淡一档并加删除线，与问题队列“已处理”一致。
                                       Text(
                                         row.title,
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
-                                        style: ui(12.5, w: 600, c: d.ink),
+                                        style:
+                                            ui(
+                                              12.5,
+                                              w: 600,
+                                              c: row.applied ? d.ink : d.ink2,
+                                            ).copyWith(
+                                              decoration: row.applied
+                                                  ? null
+                                                  : TextDecoration.lineThrough,
+                                              decorationColor: d.ink3,
+                                            ),
                                       ),
                                       Text(
                                         '${row.time == null ? '' : '${clock(row.time!)} · '}${row.category} · 版本 ${row.version}',
@@ -534,8 +571,9 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
         ),
       );
       final panel = detail == null
-          ? Center(
-              child: Text('选择一条记录查看修改前后。', style: ui(13, c: d.ink3)),
+          ? const DeskEmptyState(
+              '选择一条记录查看修改前后。',
+              icon: Icons.compare_arrows_rounded,
             )
           : Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),

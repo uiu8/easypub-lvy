@@ -6,6 +6,7 @@ import 'dart:io';
 
 import '../src/rust/api.dart' as api;
 import '../application/book_source_errors.dart';
+import '../application/plugin_host.dart' show PluginError;
 
 const _reasons = <String, String>{
   ...bookSourceErrorReasons,
@@ -172,10 +173,72 @@ const _reasons = <String, String>{
   'update_replace_failed': '替换文件失败',
   'update_staging_invalid': '下载的新版本不完整',
   'update_staging_missing': '下载的新版本不见了',
+  // R9：后端已有、界面原来没有中文说明的原因码。
+  'update_action_invalid': '更新请求不完整。请关闭本窗口后重新检查更新。',
+  'update_cancelled': '已取消更新，没有替换任何文件。',
+  'update_job_missing': '找不到这次更新任务，可能已经结束。请重新检查更新。',
+  'update_mode_invalid': '更新方式不可用。请重新检查更新，或到发布页手动下载。',
+  // 设置
+  'archive_settings_history': '设置的历史版本已到上限，暂时不能再保存设置。请把设置目录备份后反馈，等后续版本自动整理。',
+  'inspect_settings_history': '设置历史文件不完整或被改动过。请先备份设置目录，再在“设置 · 数据与迁移”里从备份恢复。',
+  'reload_settings_before_saving': '设置已在别处更新。请重新打开设置页，再改一次。',
+  'reduce_settings_size': '设置文件太大，超过了上限。请减少收藏文件夹、自定义规则等内容后再保存。',
+  'reduce_batch_history_size': '批量转换的记录太多。请清理较早的转换记录后再试。',
+  'check_settings_directory': '设置目录读写失败。请检查磁盘空间、文件夹权限，或是否被其他程序占用。',
+  'check_auto_import_folders': '自动入库的文件夹设置不正确。请在文件夹页重新选择。',
+  'check_backup_directory': '备份文件夹不可用。请重新选择一个可以写入的文件夹。',
+  'check_epub_conversion_mode': 'EPUB 转换方式的取值不正确。请在设置里重新选择。',
+  'check_favorite_folder_names': '收藏文件夹的名称有重复或为空。请改名后再保存。',
+  'check_favorite_folders': '收藏文件夹里有无效的路径。请移除后再保存。',
+  'check_import_directory': '默认导入位置不可用。请重新选择。',
+  'check_kfx_converter': 'KFX 转换工具的路径不可用。请在“设置 · 转换工具”里重新指定。',
+  'check_kindle_converter': 'AZW3 / MOBI 转换工具的路径不可用。请在“设置 · 转换工具”里重新指定。',
+  'check_output_collision_policy': '同名成品的处理方式取值不正确。请在设置里重新选择。',
+  'check_output_directory': '默认输出文件夹不可用。请重新选择一个可以写入的文件夹。',
+  'check_output_format': '默认输出格式取值不正确。请在设置里重新选择。',
+  'check_output_naming': '成品命名规则不正确。请在设置里重新填写。',
+  'check_parallel_books': '“同时处理的书”取值不正确。请在设置里重新选择。',
+  'check_ui_density': '界面密度取值不正确。请在设置里重新选择。',
+  'check_ui_scale': '界面缩放取值不正确。请在设置里重新选择。',
+  'check_ui_theme': '主题取值不正确。请在设置里重新选择。',
+  // 编码与导入
+  'choose_complete_utf16_file': '文件按 UTF-16 读取时末尾不完整，可能被截断了。请换一份完整的文件。',
+  'choose_complete_utf32_file': '文件按 UTF-32 读取时末尾不完整，可能被截断了。请换一份完整的文件。',
+  'choose_valid_utf16_file': '文件不是有效的 UTF-16 文本。请在导入时改选其他编码，或选“自动”。',
+  'choose_valid_utf32_file': '文件不是有效的 UTF-32 文本。请在导入时改选其他编码，或选“自动”。',
+  'choose_valid_utf8_or_auto': '文件不是有效的 UTF-8 文本。请在导入时改选其他编码，或选“自动”。',
+  'remove_bom_or_choose_utf8': '文件开头的编码标记与所选编码不一致。请选 UTF-8，或去掉文件开头的标记后再导入。',
+  'choose_file_under_128_mib': '文件超过 128 MB，超出处理上限。请拆分后再导入。',
+  'reduce_epub_entry_count': 'EPUB 里的文件太多，超出处理上限。请换一份 EPUB，或先用其他工具整理。',
+  'reduce_epub_file_size': 'EPUB 太大，超出处理上限。请换一份较小的 EPUB。',
+  'use_1_to_200_items': '一次读取的条数超出范围。请刷新页面后重试。',
+  'use_1_to_200_lines': '一次读取的行数超出范围。请刷新页面后重试。',
+  // 转换
+  'choose_existing_output_directory': '输出文件夹不存在。请重新选择输出位置。',
+  'choose_new_epub_path': '输出位置已有同名文件。请换一个文件名，或在设置里选择同名成品的处理方式。',
+  'choose_readable_source': '原文件读不到。请检查文件是否还在、是否被其他程序占用。',
+  'retry_source_read': '读取原文件时出错。请检查文件是否被其他程序占用，然后重试。',
+  'retry_preview': '生成预览时出错。请重试；仍不行时检查磁盘空间。',
+  'review_preview': '预览请求不完整。请关闭预览后重新打开。',
+  'review_export_log': '转换过程中出现意外错误，已停止。请查看转换记录后重试。',
+  'retry_export_worker': '无法启动转换任务。请稍后重试；电脑繁忙时可减少“同时处理的书”。',
+  'refresh_export_jobs': '找不到这个转换任务，可能已经结束。请刷新任务页。',
+  'wait_for_export_or_release_finished_jobs': '同时进行的转换太多。请等当前任务完成后再开始。',
+  'wait_for_export_to_finish': '转换还没有结束。请等它完成后再查看结果。',
+  // 统计与样式
+  'request_statistics_again': '统计已取消。需要时请重新统计。',
+  'review_collection_names_members_and_fields': '收藏夹的名称、书目或预设信息有误。请检查后再保存。',
+  'review_layout_settings': '排版设置里有不支持的取值。请检查刚改动的样式后再保存。',
+  'review_style_pack': '样式包内容不完整或格式不对。请换一个样式包，或重新导出后再导入。',
 };
 
 /// 把异常换成给用户看的说明。[fallback] 写“哪一步没有完成”，在没有更具体原因时使用。
 String deskErrorText(Object error, String fallback) {
+  if (error is PluginError) {
+    final msg = error.message.trim();
+    if (msg.isEmpty) return fallback;
+    return _reasons[msg] ?? msg;
+  }
   if (error is FormatException) return error.message.toString();
   if (error is api.ApiError) {
     try {
@@ -192,6 +255,52 @@ String deskErrorText(Object error, String fallback) {
     return os == null || os.isEmpty ? fallback : '$fallback（系统提示：$os）';
   }
   return fallback;
+}
+
+/// 书源插件错误转译（V105，P0-04）：将 PluginError、Rust 原因码或底层异常转为可读说明，
+/// 剥离 Exception/AnyhowException 等技术前缀，不吞掉插件已给出的中文原因。
+String bookSourceErrorText(Object error, [String fallback = '书源操作未完成，请重试。']) {
+  if (error is PluginError ||
+      error is FormatException ||
+      error is api.ApiError ||
+      error is FileSystemException) {
+    return deskErrorText(error, fallback);
+  }
+  var raw = '$error'.trim();
+  if (raw.startsWith('Exception:')) {
+    raw = raw.substring('Exception:'.length).trim();
+  } else if (raw.startsWith('AnyhowException(') && raw.endsWith(')')) {
+    raw = raw.substring('AnyhowException('.length, raw.length - 1).trim();
+  }
+  if (raw.isEmpty) return fallback;
+  return _reasons[raw] ?? raw;
+}
+
+/// 结构化深比较（V105，P0-05）：在内存中递归比对 Map/List/Set 与基本类型，避免高频 jsonEncode。
+bool deskDeepEquals(Object? a, Object? b) {
+  if (identical(a, b)) return true;
+  if (a is Map && b is Map) {
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      if (!b.containsKey(entry.key) ||
+          !deskDeepEquals(entry.value, b[entry.key])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (a is List && b is List) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!deskDeepEquals(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (a is Set && b is Set) {
+    if (a.length != b.length) return false;
+    return a.containsAll(b);
+  }
+  return a == b;
 }
 
 /// 对照表中的说明（测试与文档用）。

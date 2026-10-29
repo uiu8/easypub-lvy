@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/book_collection_service.dart';
+import '../dialogs.dart';
 import '../errors.dart';
 import 'collection_dialogs.dart';
 
@@ -19,7 +20,7 @@ Future<int> joinCollection(
     added = service.addToCollection(collectionId, bookIds);
   } catch (e) {
     messenger?.showSnackBar(
-      SnackBar(content: Text(deskErrorText(e, '未能加入收藏夹。'))),
+      deskSnackBar(content: Text(deskErrorText(e, '未能加入收藏夹。'))),
     );
     return 0;
   }
@@ -30,7 +31,7 @@ Future<int> joinCollection(
   final total = bookIds.toSet().length;
   if (!collection.hasTemplate || added.isEmpty) {
     messenger?.showSnackBar(
-      SnackBar(
+      deskSnackBar(
         content: Text(
           added.isEmpty
               ? '这些书都已在“${collection.name}”里。'
@@ -72,7 +73,7 @@ Future<void> applyCollectionTemplate(
     );
     if (preview.changedBooks == 0) {
       messenger?.showSnackBar(
-        SnackBar(content: Text('$prefix书籍信息已符合预设，没有改动。')),
+        deskSnackBar(content: Text('$prefix书籍信息已符合预设，没有改动。')),
       );
       return;
     }
@@ -88,7 +89,7 @@ Future<void> applyCollectionTemplate(
       );
       if (ok != true) {
         if (joined) {
-          messenger?.showSnackBar(SnackBar(content: Text('$prefix书籍信息未改。')));
+          messenger?.showSnackBar(deskSnackBar(content: Text('$prefix书籍信息未改。')));
         }
         return;
       }
@@ -96,7 +97,7 @@ Future<void> applyCollectionTemplate(
     await _apply(service, preview, messenger, prefix: prefix);
   } catch (e) {
     messenger?.showSnackBar(
-      SnackBar(content: Text('$prefix${deskErrorText(e, '预设信息未能套用，书籍信息未改。')}')),
+      deskSnackBar(content: Text('$prefix${deskErrorText(e, '预设信息未能套用，书籍信息未改。')}')),
     );
   }
 }
@@ -122,7 +123,7 @@ Future<void> setCategory(
     );
     if (preview.changedBooks == 0) {
       messenger?.showSnackBar(
-        const SnackBar(content: Text('所选书的类别已是这个值，没有改动。')),
+        deskSnackBar(content: const Text('所选书的类别已是这个值，没有改动。')),
       );
       return;
     }
@@ -137,7 +138,7 @@ Future<void> setCategory(
     await _apply(service, preview, messenger);
   } catch (e) {
     messenger?.showSnackBar(
-      SnackBar(content: Text(deskErrorText(e, '类别未能设置，书籍信息未改。'))),
+      deskSnackBar(content: Text(deskErrorText(e, '类别未能设置，书籍信息未改。'))),
     );
   }
 }
@@ -150,7 +151,7 @@ Future<void> _apply(
 }) async {
   final applied = await service.applyFields(preview);
   messenger?.showSnackBar(
-    SnackBar(
+    deskSnackBar(
       duration: const Duration(seconds: 8),
       content: Text('$prefix${applied.message}'),
       action: applied.books.isEmpty
@@ -160,10 +161,10 @@ Future<void> _apply(
               onPressed: () async {
                 try {
                   final message = await service.undoFields(applied);
-                  messenger.showSnackBar(SnackBar(content: Text(message)));
+                  messenger.showSnackBar(deskSnackBar(content: Text(message)));
                 } catch (e) {
                   messenger.showSnackBar(
-                    SnackBar(content: Text(deskErrorText(e, '撤销未完成。'))),
+                    deskSnackBar(content: Text(deskErrorText(e, '撤销未完成。'))),
                   );
                 }
               },

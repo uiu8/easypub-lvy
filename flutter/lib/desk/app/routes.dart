@@ -139,6 +139,7 @@ extension _Routes on _RewriteAppState {
             history: widget.library.openOutputHistory(),
             desktop: conversionDesktop,
             onBack: () => context.go('/tasks'),
+            backButton: false,
             onOpenBook: (id) {
               widget.library.selectBook(id);
               context.go('/');
@@ -157,6 +158,7 @@ extension _Routes on _RewriteAppState {
             desktop: conversionDesktop,
             onAdd: () => context.go('/conversion'),
             onHistory: () => context.go('/tasks/history'),
+            historyButton: false,
             onOutput: (id) =>
                 context.go('/tasks/output/${Uri.encodeComponent(id)}'),
             onRetry: (ids) => context.go(
@@ -252,6 +254,7 @@ extension _Routes on _RewriteAppState {
             importCss: importCssFile,
             pickImage: pickCoverImage,
             pickStylePack: pickStylePackFile,
+            pickStylePackFolder: pickStylePackFolder,
             pickStylePackDestination: pickStylePackDestination,
             openCssOnStart: state.uri.queryParameters['css'] == 'true',
             initialTab:
@@ -596,11 +599,15 @@ extension _Routes on _RewriteAppState {
               final out = await widget.library.importFiles([path]);
               final failed = out.where((o) => !o.succeeded && !o.skipped);
               if (failed.isNotEmpty) return failed.first.message;
+              noteDownloadImport(path, out);
               // 插件下载的封面存为 TXT 同名图片：书还没有封面时自动设为封面（用户反馈）。
               await bindSidecarCover(widget.library, path);
               return null;
             },
             exportEpub: exportDownloadedEpub,
+            outdatedInLibrary: (path) =>
+                outdatedDownloads.contains(_downloadKey(path)),
+            refreshInLibrary: refreshDownloadInLibrary,
             openFolder: (path) =>
                 Process.start('explorer.exe', ['/select,', path]),
             openPlugins: () => context.go('/plugins'),

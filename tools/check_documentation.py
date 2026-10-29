@@ -8,12 +8,13 @@ from datetime import datetime, timezone
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
-REQUIRED = ["README.md", *[f"docs/{name}.md" for name in (
-    "01_整体开发方案", "02_技术选型与验证闸门", "03_前端体验与设计规范",
-    "04_后端架构与数据契约", "05_迁移与验收矩阵", "06_实施记录")],
+REQUIRED = ["README.md", "docs/交接文档链/00_总索引_先读这里.md",
+    "docs/37_前端深度重构计划_编辑台.md", "docs/39_正式版打磨计划.md",
     "docs/templates/每轮反馈模板.md", "contracts/README.md", "design/tokens.json",
     "docs/research/2026-09-25_Flutter技术与设计调研.md",
     "docs/research/2026-09-25_Rust与桥接调研.md"]
+# 2026-10-24 移出仓库的历史文档（备份在本机），旧证据里指向它们的链接只计数，不算失效。
+ARCHIVED = ROOT / "docs/交接文档链/archived.json"
 
 
 def luminance(hex_color: str) -> float:
@@ -34,7 +35,9 @@ def main() -> None:
     # 指向它的链接只计数，不算失效。
     artifact_links = 0
     artifacts_root = (ROOT / "artifacts").resolve()
-    docs = [ROOT / "README.md", ROOT / "DEVELOPMENT.md", *sorted((ROOT / "docs").rglob("*.md")), ROOT / "contracts/README.md"]
+    archived = {(ROOT / p).resolve() for p in json.loads(ARCHIVED.read_text(encoding="utf-8"))["paths"]}
+    archived_links = 0
+    docs =[ROOT / "README.md", ROOT / "DEVELOPMENT.md", *sorted((ROOT / "docs").rglob("*.md")), ROOT / "contracts/README.md"]
     for path in docs:
         text = path.read_text(encoding="utf-8", errors="strict")
         if "\ufffd" in text:
@@ -53,6 +56,9 @@ def main() -> None:
             if artifacts_root in target.resolve().parents:
                 artifact_links += 1
                 continue
+            if target.resolve() in archived:
+                archived_links += 1
+                continue
             links_checked += 1
             if not target.exists():
                 errors.append(f"Broken local link in {path.relative_to(ROOT)}: {destination}")
@@ -69,28 +75,11 @@ def main() -> None:
     for check in checks:
         if check["ratio"] < check["minimum"]:
             errors.append("Contrast failed: " + check["pair"])
-    matrix = (ROOT / "docs/05_迁移与验收矩阵.md").read_text(encoding="utf-8")
-    scenarios = re.findall(r"^\| S[1-9] .*", matrix, re.M)
-    # R0 起矩阵为 9 个场景 × 4 个样本（M1–M4）。实施后单元格从“待实施”改写为实际进度，
-    # 因此这里校验结构与状态词，而不再要求全部为“待实施”。
-    statuses = ("待实施", "部分", "通过", "完成", "未通过", "阻塞")
-    cells = 0
-    status_counts = {}
-    for row in scenarios:
-        values = [c.strip() for c in row.strip().strip("|").split("|")][2:]
-        if len(values) != 4 or not all(v.startswith(statuses) for v in values):
-            errors.append("Scenario row malformed: " + row[:24])
-        for v in values:
-            key = next((x for x in statuses if v.startswith(x)), "其他")
-            status_counts[key] = status_counts.get(key, 0) + 1
-        cells += sum(v.startswith("待实施") for v in values)
-    if len(scenarios) != 9:
-        errors.append("Scenario matrix is not nine rows")
+    # 原 docs/05 场景矩阵（S1–S9）随旧计划一起归档，不再在这里校验。
     report = {"checked_at": datetime.now(timezone.utc).isoformat(), "passed": not errors,
               "markdown_files": len(docs), "local_links_checked": links_checked,
               "artifact_links_skipped": artifact_links,
-              "scenarios": len(scenarios), "pending_matrix_cells": cells,
-              "matrix_status_counts": status_counts,
+              "archived_links_skipped": archived_links,
               "contrast_math_only": checks, "errors": errors,
               "not_verified": ["Flutter runtime", "Rust build", "visual approval", "performance", "device"]}
     (ROOT / "docs/evidence/document-check.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

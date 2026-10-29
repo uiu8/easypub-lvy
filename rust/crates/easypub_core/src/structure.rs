@@ -70,21 +70,9 @@ impl Structure {
     /// unchanged so existing history hashes and node identities keep replaying.
     pub fn recognized(source: &SourceSnapshot) -> Self {
         let mut result = Self::new(source);
-        let mut rules = crate::chapter_rules::RuleSet::default();
-        // V91：全书主要用“001：标题”这类纯数字标题时（至少 10 个，且是常规标题的 3 倍以上），
-        // 导入时自动打开纯数字识别；用户仍可在识别规则里关掉。
-        if let Ok(regular) = rules.compile() {
-            let mut numeric_rules = rules.clone();
-            numeric_rules.numeric = true;
-            if let Ok(numeric) = numeric_rules.compile() {
-                let base = regular.recognize(source).len();
-                let extra = numeric.recognize(source).len().saturating_sub(base);
-                if extra >= 10 && extra >= base * 3 {
-                    rules = numeric_rules;
-                }
-            }
-        }
-        result.recognition_rules = Some(rules);
+        // V113：导入时不再自动打开纯数字识别（V91 曾在纯数字标题占多数时悄悄打开）。
+        // 纯数字标题改由检查页“漏识别的标题”汇总提示，用户一键识别并统一为“第X章 标题”。
+        result.recognition_rules = Some(crate::chapter_rules::RuleSet::default());
         let dominant =
             crate::recognition::dominant_marker(source.headings().iter().map(|h| h.title.as_str()));
         let mut in_volume = false;
@@ -403,16 +391,16 @@ mod tests {
             ]
         );
     }
-    /// V91：全书用纯数字标题时导入自动打开纯数字识别；正文里零星的编号列表不触发。
+    /// V113：导入不再自动打开纯数字识别，纯数字标题留给检查页提示后一键识别。
     #[test]
-    fn recognized_enables_numeric_titles_only_when_they_dominate() {
+    fn recognized_leaves_numeric_titles_to_the_check_hint() {
         let body = "正文一行。\n".repeat(6);
         let numeric: String = (1..=12)
             .map(|i| format!("{i:03}：第{i}个标题。\n{body}"))
             .collect();
         let s = SourceSnapshot::from_utf8(numeric.into_bytes(), RULE_ID, || false).unwrap();
         let structure = Structure::recognized(&s);
-        assert!(structure.recognition_rules.as_ref().unwrap().numeric);
+        assert!(!structure.recognition_rules.as_ref().unwrap().numeric);
         let chapters = structure
             .tree(&s)
             .unwrap()
@@ -420,7 +408,7 @@ mod tests {
             .iter()
             .filter(|n| n.role == Role::Chapter)
             .count();
-        assert_eq!(chapters, 12);
+        assert_eq!(chapters, 0);
         let regular: String = (1..=20)
             .map(|i| format!("第{i}章 标题\n{body}1、清单第一项\n{body}"))
             .collect();

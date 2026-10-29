@@ -170,15 +170,8 @@ void main() {
       );
       expect(Theme.of(shellContext).visualDensity, VisualDensity.compact);
       expect(MediaQuery.of(shellContext).disableAnimations, true);
-      for (final label in [
-        '概览',
-        '检查与修复',
-        '章节',
-        '书籍信息',
-        '排版',
-        '文本清理',
-        '图片与资源',
-      ]) {
+      // V109：概览默认收起，清理叫“文本”，图片与资源并进书籍信息。
+      for (final label in ['检查与修复', '章节', '书籍信息', '排版', '文本']) {
         final nav = find.byTooltip(label).first;
         await t.ensureVisible(nav);
         await t.tap(nav);
@@ -224,8 +217,9 @@ void main() {
       );
       await t.sendKeyEvent(LogicalKeyboardKey.tab);
       for (final shortcut in {
-        LogicalKeyboardKey.digit3: '/tools/chapters',
-        LogicalKeyboardKey.digit4: '/tools/checks',
+        // V109：左栏检查在章节上面，Alt+3 检查、Alt+4 章节。
+        LogicalKeyboardKey.digit3: '/tools/checks',
+        LogicalKeyboardKey.digit4: '/tools/chapters',
         LogicalKeyboardKey.digit5: '/conversion',
         LogicalKeyboardKey.digit6: '/tasks',
         LogicalKeyboardKey.digit2: '/folders',

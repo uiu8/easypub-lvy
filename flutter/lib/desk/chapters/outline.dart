@@ -652,6 +652,15 @@ class _OutlineRow extends StatelessWidget {
                   )
                 : null,
           ),
+          if (volume) ...[
+            DeskPill(
+              Text('卷', style: ui(10, w: 650, c: d.ink2, h: 1.15)),
+              color: selected ? d.surface : d.paper,
+              outlined: true,
+              padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1),
+            ),
+            const SizedBox(width: 5),
+          ],
           Expanded(
             child: Tooltip(
               message: node.title,
@@ -694,11 +703,16 @@ class _OutlineRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
         hoverColor: d.ink.withValues(alpha: .04),
         child: !selected
-            ? content
+            ? (volume
+                  ? DecoratedBox(decoration: d.banner, child: content)
+                  : content)
             : DecoratedBox(
                 decoration: BoxDecoration(
                   color: d.accentSoft,
                   borderRadius: BorderRadius.circular(6),
+                  border: volume
+                      ? Border.all(color: d.lineStrong, width: .8)
+                      : null,
                 ),
                 child: Stack(
                   children: [
@@ -707,13 +721,7 @@ class _OutlineRow extends StatelessWidget {
                       left: 0,
                       top: 7,
                       bottom: 7,
-                      child: Container(
-                        width: 2.5,
-                        decoration: BoxDecoration(
-                          color: d.accent,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
+                      child: DeskStripe(d.accent, width: 2.5),
                     ),
                   ],
                 ),

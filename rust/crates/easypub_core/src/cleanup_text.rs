@@ -77,3 +77,22 @@ pub(crate) fn join_inside(text: &str, min_chars: u32, mode: &JoinMode) -> String
     }
     result
 }
+
+/// 整行都是横线类字符（至少 10 个，最多 120 个）的分隔线，例如章节之间的“----------”（V116）。
+/// “——”这类短横线常是对白或停顿，不算。
+pub fn is_rule_line(line: &str) -> bool {
+    let mut count = 0;
+    for c in line.chars() {
+        if c.is_whitespace() {
+            continue;
+        }
+        if !matches!(c, '-' | '－' | '_' | '＿' | '─' | '━' | '—' | '=' | '＝') {
+            return false;
+        }
+        count += 1;
+        if count > 120 {
+            return false;
+        }
+    }
+    count >= 10
+}

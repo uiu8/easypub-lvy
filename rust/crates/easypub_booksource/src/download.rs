@@ -120,12 +120,151 @@ pub fn file_name(book: &Book, template: &str) -> String {
         safe_name(name.trim().trim_end_matches(['-', ' ']))
     )
 }
-pub fn cache_dir(folder: &Path, book: &Book) -> PathBuf {
-    let key = hex::encode(Sha256::digest(format!(
+/// 章节缓存的根目录（V107）。插件启动时设为数据目录下的 `chapter-cache` 或用户选的位置；
+/// 没设（单独调用下载、测试）时沿用旧位置：下载文件夹里的 `.easypub-cache`。
+static CACHE_ROOT: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+/// 旧缓存搬家时串行，免得两个线程同时搬同一本。
+static CACHE_MOVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+pub fn set_cache_root(root: Option<PathBuf>) {
+    *CACHE_ROOT.lock().unwrap() = root;
+}
+pub fn cache_root(folder: &Path) -> PathBuf {
+    CACHE_ROOT
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap_or_else(|| folder.join(".easypub-cache"))
+}
+fn cache_key(book: &Book) -> String {
+    hex::encode(Sha256::digest(format!(
         "{}\n{}",
         book.origin, book.book_url
-    )));
-    folder.join(".easypub-cache").join(&key[..16])
+    )))
+}
+/// 缓存文件夹名：`书名 - 作者 [编号前 8 位]`；同一本书从两个书源下载时靠编号区分。
+pub fn cache_name(book: &Book) -> String {
+    let label = if book.author.trim().is_empty() {
+        book.name.clone()
+    } else {
+        format!("{} - {}", book.name.trim(), book.author.trim())
+    };
+    let label: String = safe_name(&label).chars().take(60).collect();
+    format!("{} [{}]", label.trim(), &cache_key(book)[..8])
+}
+/// 某本书的章节缓存。按 `书名 - 作者 [编号]` 找；书名改过时按编号找；
+/// 还在旧位置（下载文件夹里的 `.easypub-cache/编号16位`）的，第一次用到时搬过来。
+pub fn cache_dir(folder: &Path, book: &Book) -> PathBuf {
+    let root = cache_root(folder);
+    let named = root.join(cache_name(book));
+    if named.is_dir() {
+        return named;
+    }
+    let _guard = CACHE_MOVE.lock().unwrap();
+    if named.is_dir() {
+        return named;
+    }
+    let key = cache_key(book);
+    let suffix = format!(" [{}]", &key[..8]);
+    if let Ok(entries) = std::fs::read_dir(&root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir()
+                && entry
+                    .file_name()
+                    .to_str()
+                    .is_some_and(|n| n.ends_with(&suffix))
+            {
+                return path;
+            }
+        }
+    }
+    let legacy_root = folder.join(".easypub-cache");
+    for old in [root.join(&key[..16]), legacy_root.join(&key[..16])] {
+        if old.is_dir() && old != named {
+            if move_dir(&old, &named).is_err() {
+                return old;
+            }
+            // 旧位置搬空了就把外层文件夹也去掉。
+            let _ = std::fs::remove_dir(&legacy_root);
+            return named;
+        }
+    }
+    named
+}
+/// 换缓存位置：把 `from` 里每本书的缓存搬到 `to`，返回（搬了几本、没搬动的文件夹名）。
+/// 没搬动的留在原处，不影响其他书。
+pub fn relocate_cache(from: &Path, to: &Path) -> Result<(usize, Vec<String>), String> {
+    if to.starts_with(from) && to != from {
+        return Err("新位置不能放在当前缓存文件夹里面".into());
+    }
+    std::fs::create_dir_all(to).map_err(|_| "无法创建新的缓存文件夹，请检查权限")?;
+    let _guard = CACHE_MOVE.lock().unwrap();
+    let (mut moved, mut kept) = (0, Vec::new());
+    if let Ok(entries) = std::fs::read_dir(from) {
+        for entry in entries.flatten() {
+            if !entry.path().is_dir() {
+                continue;
+            }
+            let name = entry.file_name();
+            match move_dir(&entry.path(), &to.join(&name)) {
+                Ok(()) => moved += 1,
+                Err(_) => kept.push(name.to_string_lossy().into_owned()),
+            }
+        }
+    }
+    // 旧位置搬空了就去掉（只删空文件夹）。
+    let _ = std::fs::remove_dir(from);
+    Ok((moved, kept))
+}
+/// 搬一个缓存文件夹：同盘直接改名；跨盘先完整复制、核对文件数，再删旧的。
+pub fn move_dir(from: &Path, to: &Path) -> Result<(), String> {
+    if let Some(parent) = to.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| "无法创建缓存目录")?;
+    }
+    if to.exists() {
+        return Err("目标位置已有同名缓存".into());
+    }
+    if std::fs::rename(from, to).is_ok() {
+        return Ok(());
+    }
+    fn copy(from: &Path, to: &Path) -> std::io::Result<usize> {
+        std::fs::create_dir_all(to)?;
+        let mut count = 0;
+        for entry in std::fs::read_dir(from)? {
+            let entry = entry?;
+            let target = to.join(entry.file_name());
+            if entry.file_type()?.is_dir() {
+                count += copy(&entry.path(), &target)?;
+            } else {
+                std::fs::copy(entry.path(), target)?;
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
+    fn count(dir: &Path) -> std::io::Result<usize> {
+        let mut n = 0;
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            n += if entry.file_type()?.is_dir() {
+                count(&entry.path())?
+            } else {
+                1
+            };
+        }
+        Ok(n)
+    }
+    let copied = copy(from, to);
+    match copied {
+        Ok(n) if count(from).ok() == Some(n) => {
+            std::fs::remove_dir_all(from).map_err(|_| "旧缓存已复制，但删除旧位置失败".into())
+        }
+        _ => {
+            let _ = std::fs::remove_dir_all(to);
+            Err("搬移缓存失败，原缓存保留".into())
+        }
+    }
 }
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     write_atomic_with(path, |file| file.write_all(bytes))

@@ -117,19 +117,30 @@ extension _BookSourceManagement on _BookSourcePageState {
           if (!mounted) return;
           final picked = await showDialog<Map>(
             context: context,
-            builder: (dialog) => SimpleDialog(
+            builder: (dialog) => DeskAlert(
               title: const Text('筛选组合'),
-              children: [
-                if (filters.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(18),
-                    child: Text('还没有保存筛选组合。'),
-                  ),
-                for (final raw in filters)
-                  SimpleDialogOption(
-                    onPressed: () => Navigator.pop(dialog, raw as Map),
-                    child: Text('${raw['name']}'),
-                  ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (filters.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(18),
+                      child: Text('还没有保存筛选组合。'),
+                    ),
+                  for (final raw in filters)
+                    SimpleDialogOption(
+                      onPressed: () => Navigator.pop(dialog, raw as Map),
+                      child: Text('${raw['name']}'),
+                    ),
+                ],
+              ),
+              actions: [
+                DeskButton(
+                  '关闭',
+                  quiet: true,
+                  onPressed: () => Navigator.pop(dialog),
+                ),
               ],
             ),
           );
@@ -172,154 +183,166 @@ extension _BookSourceManagement on _BookSourcePageState {
     String? error;
     final accepted = await showDialog<bool>(
       context: context,
-      builder: (dialog) => StatefulBuilder(
-        builder: (dialog, change) => AlertDialog(
-          title: Text('下载参数 · ${source['name']}'),
-          content: SizedBox(
-            width: 600,
-            height: 520,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 12,
-                    children: [
-                      _toggle(
-                        '启用书源',
-                        enabled,
-                        (v) => change(() => enabled = v),
-                      ),
-                      DropdownButton<String>(
-                        value: proxyMode,
-                        items: const [
-                          DropdownMenuItem(value: '', child: Text('跟随全局网络设置')),
-                          DropdownMenuItem(
-                            value: 'direct',
-                            child: Text('此书源始终直连'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'proxy',
-                            child: Text('此书源使用配置的代理'),
-                          ),
-                        ],
-                        onChanged: (v) => change(() => proxyMode = v!),
-                      ),
-                      DropdownButton<int>(
-                        key: const ValueKey('booksource-rating'),
-                        value: rating,
-                        items: [
-                          for (var n = -2; n <= 2; n++)
-                            DropdownMenuItem(value: n, child: Text('评分 $n')),
-                        ],
-                        onChanged: (v) => change(() => rating = v ?? 0),
-                      ),
-                    ],
-                  ),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      for (final (key, label) in _crawlFields)
-                        SizedBox(
-                          width: 260,
-                          child: TextField(
-                            key: ValueKey('booksource-profile-$key'),
-                            controller: fields[key],
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: label,
-                              hintText: '留空使用默认值',
+      builder: (dialog) => DeskControllerScope(
+        controllers: fields.values,
+        child: StatefulBuilder(
+          builder: (dialog, change) => DeskAlert(
+            title: Text('下载参数 · ${source['name']}'),
+            content: SizedBox(
+              width: 600,
+              height: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _toggle(
+                          '启用书源',
+                          enabled,
+                          (v) => change(() => enabled = v),
+                        ),
+                        DeskChoice<String>(
+                          isExpanded: false,
+                          value: proxyMode,
+                          items: const [
+                            DropdownMenuItem(
+                              value: '',
+                              child: Text('跟随全局网络设置'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'direct',
+                              child: Text('此书源始终直连'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'proxy',
+                              child: Text('此书源使用配置的代理'),
+                            ),
+                          ],
+                          onChanged: (v) => change(() => proxyMode = v!),
+                        ),
+                        DeskChoice<int>(
+                          key: const ValueKey('booksource-rating'),
+                          isExpanded: false,
+                          value: rating,
+                          items: [
+                            for (var n = -2; n <= 2; n++)
+                              DropdownMenuItem(value: n, child: Text('评分 $n')),
+                          ],
+                          onChanged: (v) => change(() => rating = v ?? 0),
+                        ),
+                      ],
+                    ),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        for (final (key, label) in _crawlFields)
+                          SizedBox(
+                            width: 260,
+                            child: TextField(
+                              key: ValueKey('booksource-profile-$key'),
+                              controller: fields[key],
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: label,
+                                hintText: '留空使用默认值',
+                              ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 10,
-                    children: [
-                      if (detail['suggestion'] is Map)
-                        DeskButton(
-                          '应用导入建议',
-                          quiet: true,
-                          onPressed: () => change(() {
-                            final suggestion = detail['suggestion'] as Map;
-                            for (final (key, _) in _crawlFields) {
-                              if (suggestion[key] != null) {
-                                fields[key]!.text = '${suggestion[key]}';
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      children: [
+                        if (detail['suggestion'] is Map)
+                          DeskButton(
+                            '应用导入建议',
+                            quiet: true,
+                            onPressed: () => change(() {
+                              final suggestion = detail['suggestion'] as Map;
+                              for (final (key, _) in _crawlFields) {
+                                if (suggestion[key] != null) {
+                                  fields[key]!.text = '${suggestion[key]}';
+                                }
                               }
-                            }
-                          }),
-                        ),
-                      if (_num((detail['learned'] as Map?)?['safeLimit']) > 0)
-                        DeskButton(
-                          '应用建议并发 ${detail['learned']['safeLimit']}',
-                          quiet: true,
-                          onPressed: () => change(
-                            () => fields['concurrency']!.text =
-                                '${detail['learned']['safeLimit']}',
+                            }),
                           ),
-                        ),
-                    ],
-                  ),
-                  TextField(
-                    controller: fields['group'],
-                    decoration: const InputDecoration(labelText: '分组（逗号分隔）'),
-                  ),
-                  TextField(
-                    controller: fields['concurrentRate'],
-                    decoration: const InputDecoration(
-                      labelText: '访问频率',
-                      hintText: '毫秒，或 次数/毫秒',
+                        if (_num((detail['learned'] as Map?)?['safeLimit']) > 0)
+                          DeskButton(
+                            '应用建议并发 ${detail['learned']['safeLimit']}',
+                            quiet: true,
+                            onPressed: () => change(
+                              () => fields['concurrency']!.text =
+                                  '${detail['learned']['safeLimit']}',
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-                  TextField(
-                    controller: fields['userAgent'],
-                    decoration: const InputDecoration(labelText: 'User-Agent'),
-                  ),
-                  TextField(
-                    controller: fields['phrases'],
-                    minLines: 2,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                      labelText: '追加限流提示词（每行一条）',
+                    TextField(
+                      controller: fields['group'],
+                      decoration: const InputDecoration(labelText: '分组（逗号分隔）'),
                     ),
-                  ),
-                  if (error != null) DeskNote(error!, tone: Tone.warn),
-                ],
+                    TextField(
+                      controller: fields['concurrentRate'],
+                      decoration: const InputDecoration(
+                        labelText: '访问频率',
+                        hintText: '毫秒，或 次数/毫秒',
+                      ),
+                    ),
+                    TextField(
+                      controller: fields['userAgent'],
+                      decoration: const InputDecoration(
+                        labelText: 'User-Agent',
+                      ),
+                    ),
+                    TextField(
+                      controller: fields['phrases'],
+                      minLines: 2,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: '追加限流提示词（每行一条）',
+                      ),
+                    ),
+                    if (error != null) DeskNote(error!, tone: Tone.warn),
+                  ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            DeskButton(
-              '取消',
-              quiet: true,
-              onPressed: () => Navigator.pop(dialog, false),
-            ),
-            DeskButton(
-              '保存',
-              key: const ValueKey('booksource-profile-save'),
-              primary: true,
-              onPressed: () {
-                for (final (key, _) in _crawlFields) {
-                  final text = fields[key]!.text.trim();
-                  if (text.isNotEmpty &&
-                      (int.tryParse(text) == null || int.parse(text) < 0)) {
-                    change(() => error = '下载参数请输入非负整数。');
+            actions: [
+              DeskButton(
+                '取消',
+                quiet: true,
+                onPressed: () => Navigator.pop(dialog, false),
+              ),
+              DeskButton(
+                '保存',
+                key: const ValueKey('booksource-profile-save'),
+                primary: true,
+                onPressed: () {
+                  for (final (key, _) in _crawlFields) {
+                    final text = fields[key]!.text.trim();
+                    if (text.isNotEmpty &&
+                        (int.tryParse(text) == null || int.parse(text) < 0)) {
+                      change(() => error = '下载参数请输入非负整数。');
+                      return;
+                    }
+                  }
+                  final min = int.tryParse(fields['minInterval']!.text) ?? 0,
+                      max = int.tryParse(fields['maxInterval']!.text) ?? 0;
+                  if (max < min) {
+                    change(() => error = '最大间隔不能小于最小间隔。');
                     return;
                   }
-                }
-                final min = int.tryParse(fields['minInterval']!.text) ?? 0,
-                    max = int.tryParse(fields['maxInterval']!.text) ?? 0;
-                if (max < min) {
-                  change(() => error = '最大间隔不能小于最小间隔。');
-                  return;
-                }
-                Navigator.pop(dialog, true);
-              },
-            ),
-          ],
+                  Navigator.pop(dialog, true);
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -350,11 +373,6 @@ extension _BookSourceManagement on _BookSourcePageState {
         'rating': rating,
       }, message: '书源参数与评分已保存。');
     }
-    Future<void>.delayed(const Duration(milliseconds: 300), () {
-      for (final c in fields.values) {
-        c.dispose();
-      }
-    });
   }
 
   Future<void> _proxyDialog() async {
@@ -366,7 +384,7 @@ extension _BookSourceManagement on _BookSourcePageState {
         builder: (_) => _NetworkDialog(api!, config),
       );
     } catch (e) {
-      if (mounted) update(() => sourceMessage = '$e');
+      if (mounted) update(() => sourceMessage = bookSourceErrorText(e));
     }
   }
 
@@ -375,7 +393,7 @@ extension _BookSourceManagement on _BookSourcePageState {
     if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (dialog) => AlertDialog(
+      builder: (dialog) => DeskAlert(
         title: Text('下载诊断 · ${task.title}'),
         content: SizedBox(
           width: 740,
@@ -417,7 +435,7 @@ extension _BookSourceManagement on _BookSourcePageState {
     if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (dialog) => AlertDialog(
+      builder: (dialog) => DeskAlert(
         title: const Text('章节来源'),
         content: SizedBox(
           width: 640,

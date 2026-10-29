@@ -186,8 +186,9 @@ class _FoldersPageState extends State<FoldersPage> {
           child: ValueListenableBuilder<List<String>>(
             valueListenable: widget.library.favoriteFolders,
             builder: (_, folders, _) => folders.isEmpty
-                ? Center(
-                    child: Text('还没有收藏文件夹', style: ui(12.5, c: d.ink3)),
+                ? const DeskEmptyState(
+                    '还没有收藏文件夹',
+                    icon: Icons.folder_open_outlined,
                   )
                 : ListView.builder(
                     itemCount: folders.length,

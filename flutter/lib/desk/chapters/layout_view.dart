@@ -1,4 +1,4 @@
-// 章节页排版视图（V104，LAY-149–151）：正文按成品的大致样子显示系统提示、诗词等识别结果，
+// 章节页排版视图（V104，LAY-149–151；V120 起按真机规则画，LAY-167）：正文按成品的样子显示系统提示、诗词等识别结果，
 // 行号旁色条区分自动识别与手工标注，悬停时出标签；拖选几行弹出与行号栏相同的标注工具条。
 // 识别结果来自规则统计（与正文生成同一套判断）；样式取本书已保存的排版设置。只看和标注，不改文字。
 import 'dart:async';
@@ -8,10 +8,12 @@ import 'package:flutter/material.dart';
 import '../../application/layout_service.dart';
 import '../../application/library_service.dart';
 import '../../application/rule_catalog_service.dart';
+import '../layout/device_preview.dart';
 import '../layout/system_block_look.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 import 'block_marks.dart';
+import 'inline_style_marks.dart';
 
 /// 一行系统提示在所属块里的位置：单行提示或面板、是否块首块尾、是否面板标题。
 typedef SystemRole = ({String role, bool start, bool end, bool heading});
@@ -25,6 +27,7 @@ class ChapterLayoutView extends ChangeNotifier {
   }) : service = rules.openRuleCatalog(bookId) {
     service.state.addListener(_changed);
     _readSettings();
+    unawaited(_readDevice());
     unawaited(_request());
   }
   final LibraryService library;
@@ -35,6 +38,86 @@ class ChapterLayoutView extends ChangeNotifier {
   /// 本书已保存的设置：系统提示方式与分类样式、诗词方式。
   String systemBlock = 'off', verseBlock = 'off';
   Map? systemStyles;
+
+  /// 排版视图按真机画（V120，LAY-167）：机型与阅读器设置取真机预览里的选择，书内设置取本书。
+  PreviewDeviceChoice device = const PreviewDeviceChoice();
+  Map<String, Object?> book = const {};
+
+  Future<void> _readDevice() async {
+    try {
+      final session = library.openLayout(bookId);
+      try {
+        if (session is LayoutPreviewDeviceStore) {
+          final raw = await (session as LayoutPreviewDeviceStore)
+              .readPreviewDevice();
+          if (raw != null) device = PreviewDeviceChoice.decode(raw);
+        }
+      } finally {
+        session.dispose();
+      }
+    } catch (_) {
+      // 读不出时按默认机型画。
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  /// 书页参数：与排版页小预览同一套真机规则（字号、行距、版心、两端对齐），页边距以外的部分。
+  KindleColumn column() {
+    const page = Desk.light;
+    double n(String key, double fallback) =>
+        (book[key] as num?)?.toDouble() ?? fallback;
+    final metrics = readerMetrics(
+      device,
+      bookScale:
+          ((book['font_size_unit'] ?? 'px') == '%'
+                  ? n('font_size', 110) / 110
+                  : n('font_size', 18) / 17.6)
+              .clamp(.3, 4.0),
+      bookLineHeight: n('line_height', 1.2).clamp(1, 2.3),
+    );
+    final size = metrics.fontPx.clamp(6.0, 96.0);
+    final face =
+        (device.serif
+                ? serif(size, c: page.ink, h: metrics.lineRatio)
+                : ui(size, c: page.ink, h: metrics.lineRatio))
+            .copyWith(letterSpacing: metrics.tracking * size);
+    double margin(String side) =>
+        (n('margin_$side', 0) *
+                (book['margin_${side}_unit'] == 'em' ? size : 1))
+            .clamp(0.0, 120.0);
+    final fullwidth = n('fullwidth_indent', 0).clamp(0, 8).toInt();
+    final align = book['text_alignment'] as String? ?? 'start';
+    final style = PreviewStyle(
+      title: face,
+      body: face,
+      align: switch (align) {
+        'center' => TextAlign.center,
+        'right' => TextAlign.right,
+        // 真机正文两端对齐（V118 实测）。
+        _ => metrics.justify ? TextAlign.justify : TextAlign.start,
+      },
+      indent: (n('paragraph_indent', 0).clamp(0, 6) + fullwidth) * size,
+      paragraphSpacing: n('paragraph_spacing', .6).clamp(0, 6) * size,
+      titleSpacing: 20,
+      padding: EdgeInsets.zero,
+      sceneBreak: book['scene_break_style'] as String? ?? 'off',
+      systemBlock: systemBlock,
+      systemStyles: systemBlock == 'styled'
+          ? (systemStyles ?? defaultSystemStyles())
+          : null,
+      verseBlock: verseBlock,
+      ruleScale: size / 17.6,
+    );
+    return KindleColumn(
+      style: style,
+      viewport: device.device.viewportWidth.toDouble(),
+      left: metrics.padding.left + margin('left'),
+      right: metrics.padding.right + margin('right'),
+      keepIndent: fullwidth == 0,
+      removeBlank: book['remove_blank_lines'] != false,
+      paper: page.paper,
+    );
+  }
 
   RuleStatisticsState get state => service.state.value;
   Map<String, List<LayoutLine>> get _lines =>
@@ -49,6 +132,7 @@ class ChapterLayoutView extends ChangeNotifier {
         verseBlock = saved['verse_block_style'] as String? ?? 'center';
         systemStyles =
             (saved['system_styles'] as Map?) ?? defaultSystemStyles();
+        book = Map.of(saved);
       } finally {
         session.dispose();
       }
@@ -157,6 +241,85 @@ class ChapterLayoutView extends ChangeNotifier {
   }
 }
 
+/// 排版视图的书页（V120，LAY-167）：按所选机型的视口宽与真机规则排（视口像素），章节页再整体缩放到纸面宽；
+/// 每行字数、分行与诗句位置同真机。[left]、[right] 为真机页边距加本书页边距；[style] 的页边距为零。
+class KindleColumn {
+  const KindleColumn({
+    required this.style,
+    required this.viewport,
+    required this.left,
+    required this.right,
+    required this.keepIndent,
+    required this.removeBlank,
+    required this.paper,
+  });
+  final PreviewStyle style;
+  final double viewport, left, right;
+
+  /// 版心宽（视口像素）。
+  double get width =>
+      viewport - left - right < 40 ? 40 : viewport - left - right;
+
+  /// 段首全角空格为 0 时保留原文段首空白；否则去掉后按缩进排。
+  final bool keepIndent;
+
+  /// 生成时去掉空行。
+  final bool removeBlank;
+  final Color paper;
+
+  /// 一行正文在书里的样子：系统提示照分类样式分块，诗句居中或缩进，署名靠右；
+  /// 书信、引文、场景等暂按不缩进的段落画。空行在生成时去掉的返回空。
+  PreviewPiece? piece(
+    String text, {
+    LayoutLine? line,
+    SystemRole? role,
+    List<InlineStyleRange> styles = const [],
+  }) {
+    if (removeBlank && text.trim().isEmpty) return null;
+    InlineSpan spans(String shown) => inlineStyledSpan(text, shown, styles);
+    switch (line?.kind) {
+      case null:
+        return PreviewPiece(keepIndent ? text : text.trimLeft(), spans: spans);
+      case 'system':
+        final values = role == null ? null : style.systemStyles?[role.role];
+        if (values is! Map) {
+          return PreviewPiece(
+            text.trimLeft(),
+            indent: false,
+            kind: 'system',
+            spans: spans,
+          );
+        }
+        final look = SystemBlockLook(
+          values,
+          style.body.fontSize ?? 16,
+          style.ruleScale,
+        );
+        return PreviewPiece(
+          look.removeBrackets || role!.heading
+              ? stripSystemBrackets(text.trim())
+              : text.trim(),
+          indent: false,
+          kind: 'system',
+          role: role!.role,
+          runStart: role.start,
+          runEnd: role.end,
+          heading: role.heading,
+          spans: spans,
+        );
+      case 'verse':
+        return PreviewPiece(
+          text.trim(),
+          indent: false,
+          kind: line!.css == 'verse-by' ? 'by' : 'verse',
+          spans: spans,
+        );
+      default:
+        return PreviewPiece(text.trim(), indent: false, spans: spans);
+    }
+  }
+}
+
 /// 自动识别结果的名称。
 String layoutLineLabel(LayoutLine line, SystemRole? role) =>
     switch (line.kind) {
@@ -172,161 +335,6 @@ String layoutLineLabel(LayoutLine line, SystemRole? role) =>
       'quote' => '引文',
       _ => line.kind,
     };
-
-/// 按排版设置画一行：系统提示的提示条、面板，诗词居中或缩进，署名靠右，引文书信与场景缩进。
-/// 只是近似，以实际生成预览和真机为准。
-class LayoutLineText extends StatelessWidget {
-  const LayoutLineText({
-    super.key,
-    required this.text,
-    required this.line,
-    required this.role,
-    required this.view,
-    required this.style,
-  });
-  final String text;
-  final LayoutLine? line;
-  final SystemRole? role;
-  final ChapterLayoutView view;
-  final TextStyle style;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = context.desk;
-    final l = line;
-    final em = style.fontSize ?? 16;
-    if (l == null) return Text(text, style: style);
-    switch (l.kind) {
-      case 'system':
-        return _system(d, em);
-      case 'verse':
-        final by = l.css == 'verse-by';
-        final center = view.verseBlock != 'indent';
-        return Padding(
-          padding: EdgeInsets.only(left: center || by ? 0 : 2 * em),
-          child: Text(
-            text.trim(),
-            textAlign: by
-                ? TextAlign.right
-                : center
-                ? TextAlign.center
-                : TextAlign.start,
-            style: style,
-          ),
-        );
-      default:
-        return Container(
-          margin: EdgeInsets.only(left: em),
-          padding: EdgeInsets.symmetric(horizontal: em * .6),
-          decoration: BoxDecoration(
-            color: l.kind == 'chat' || l.kind == 'inset' ? d.sunken : null,
-            border: Border(left: BorderSide(color: d.lineStrong, width: 2)),
-          ),
-          child: Text(text.trim(), style: style),
-        );
-    }
-  }
-
-  Widget _system(Desk d, double em) {
-    final r = role;
-    final values = r == null ? null : view.systemStyles?[r.role];
-    if (view.systemBlock == 'indent') {
-      return Padding(
-        padding: EdgeInsets.only(left: 2 * em),
-        child: Text(text.trim(), style: style),
-      );
-    }
-    if (view.systemBlock != 'styled' || values is! Map || r == null) {
-      // 加框：连续几行一个细框。
-      final side = BorderSide(color: d.ink2);
-      return Container(
-        margin: EdgeInsets.only(
-          top: r?.start ?? true ? 4 : 0,
-          bottom: r?.end ?? true ? 4 : 0,
-        ),
-        padding: EdgeInsets.fromLTRB(8, r?.start ?? true ? 3 : 0, 8, 3),
-        decoration: BoxDecoration(
-          border: Border(
-            left: side,
-            right: side,
-            top: r?.start ?? true ? side : BorderSide.none,
-            bottom: r?.end ?? true ? side : BorderSide.none,
-          ),
-        ),
-        child: Text(text.trim(), style: style),
-      );
-    }
-    final look = SystemBlockLook(values, em, 1);
-    final ink = style.color ?? d.ink;
-    final shown = look.removeBrackets || r.heading
-        ? stripSystemBrackets(text)
-        : text.trim();
-    final base = style.copyWith(
-      fontSize: look.fontEm,
-      fontWeight: look.bold || r.heading ? FontWeight.w700 : null,
-    );
-    final key = look.keyBold && !r.heading ? systemKeyEnd(shown) : null;
-    // 双线在这里画成同宽的单线；小预览与成品里是双线。
-    BorderSide rule(double w) =>
-        w <= 0 ? BorderSide.none : BorderSide(color: ink, width: w);
-    Widget body = Text.rich(
-      key == null
-          ? TextSpan(text: shown)
-          : TextSpan(
-              children: [
-                TextSpan(
-                  text: shown.substring(0, key),
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                TextSpan(text: shown.substring(key)),
-              ],
-            ),
-      textAlign: look.center ? TextAlign.center : TextAlign.start,
-      style: base,
-    );
-    if (r.heading) {
-      body = Container(
-        width: double.infinity,
-        margin: EdgeInsets.only(bottom: look.titleGap),
-        padding: EdgeInsets.symmetric(
-          horizontal: look.side,
-          vertical: look.titlePad,
-        ),
-        decoration: BoxDecoration(
-          color: look.title == 'shaded' ? const Color(0xFFE4E4E4) : null,
-          border: Border(bottom: rule(look.titleRule)),
-        ),
-        child: body,
-      );
-    } else {
-      body = Padding(
-        padding: EdgeInsets.symmetric(horizontal: look.side),
-        child: body,
-      );
-    }
-    final shadedTitle = r.heading && look.title == 'shaded';
-    return Container(
-      margin: EdgeInsets.only(
-        top: r.start ? look.margin / 2 : 0,
-        bottom: r.end ? look.margin / 2 : 0,
-      ),
-      padding: EdgeInsets.only(
-        top: r.start && !shadedTitle ? look.pad : 0,
-        bottom: r.end ? look.pad : 0,
-      ),
-      decoration: BoxDecoration(
-        color: look.shade,
-        border: Border(
-          left: rule(look.left),
-          right: rule(look.right),
-          top: r.start ? rule(look.top) : BorderSide.none,
-          bottom: r.end ? rule(look.bottom) : BorderSide.none,
-        ),
-      ),
-      child: body,
-    );
-  }
-}
 
 /// 悬停时的自动识别标签：点一下选中这一块，弹出标注工具条（可改类型或“取消识别”）。
 class LayoutAutoTag extends StatelessWidget {

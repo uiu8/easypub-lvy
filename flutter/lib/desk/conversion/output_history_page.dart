@@ -18,11 +18,15 @@ class OutputHistoryPage extends StatefulWidget {
     required this.history,
     required this.desktop,
     required this.onBack,
+    this.backButton = true,
     this.onOpenBook,
   });
   final OutputHistoryService history;
   final ConversionDesktop desktop;
   final VoidCallback onBack;
+
+  /// 页头的“返回本次任务”按钮；程序里由顶部切换条代替（V109），单独使用时保留。
+  final bool backButton;
 
   /// 在书库中查看这条记录对应的书（OUT-076）；为 null 时不显示入口。
   final void Function(String bookId)? onOpenBook;
@@ -178,12 +182,13 @@ class _OutputHistoryPageState extends State<OutputHistoryPage> {
           title: '转换历史',
           subtitle: '转换记录 ${widget.history.count} 条 · 每页 50 条',
           actions: [
-            DeskButton(
-              '返回本次任务',
-              quiet: true,
-              icon: Icons.arrow_back_rounded,
-              onPressed: widget.onBack,
-            ),
+            if (widget.backButton)
+              DeskButton(
+                '返回本次任务',
+                quiet: true,
+                icon: Icons.arrow_back_rounded,
+                onPressed: widget.onBack,
+              ),
             DeskButton(
               '刷新记录',
               icon: Icons.refresh_rounded,
@@ -256,8 +261,9 @@ class _OutputHistoryPageState extends State<OutputHistoryPage> {
             child: loading
                 ? const Center(child: CircularProgressIndicator())
                 : rows.isEmpty
-                ? Center(
-                    child: Text('暂无转换记录', style: ui(12.5, c: d.ink3)),
+                ? const DeskEmptyState(
+                    '暂无转换记录',
+                    icon: Icons.inventory_2_outlined,
                   )
                 : ListView.builder(
                     itemCount: rows.length,

@@ -183,11 +183,12 @@ class _PreflightPanelState extends State<PreflightPanel> {
                 ),
                 child: Row(
                   children: [
-                    Dot(
-                      tone == Tone.neutral ? d.ink3 : d.tone(tone).$1,
-                      size: 7,
+                    // 状态色条：必须处理朱、提醒赭、通过苔（与问题队列同一写法）。
+                    DeskStripe(
+                      tone == Tone.neutral ? d.lineStrong : d.tone(tone).$1,
+                      height: 28,
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 14),
                     Expanded(
                       flex: 3,
                       child: Text(
@@ -206,15 +207,7 @@ class _PreflightPanelState extends State<PreflightPanel> {
                         style: ui(12, c: d.ink3),
                       ),
                     ),
-                    Text(
-                      result,
-                      style: ui(
-                        12,
-                        c: tone == Tone.ok || tone == Tone.neutral
-                            ? d.ink2
-                            : d.tone(tone).$1,
-                      ),
-                    ),
+                    DeskTag(result, tone),
                     const SizedBox(width: 4),
                     Icon(
                       open

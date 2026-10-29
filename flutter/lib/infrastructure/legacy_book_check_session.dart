@@ -265,9 +265,11 @@ class LegacyBookCheckSession extends ChangeNotifier
       final options = await chapters.repairs(page);
       validate();
       safe = options.total;
+      // 摘录只取有原稿行的问题：“全书未识别标题”没有行号，以前排在第一时整个章节检查会失败（V113）。
+      final located = options.report.items.where((i) => i.lines.isNotEmpty);
       first =
-          options.report.items.where((i) => i.autoApplicable).firstOrNull ??
-          options.report.items.firstOrNull;
+          located.where((i) => i.autoApplicable).firstOrNull ??
+          located.firstOrNull;
       if (first != null) {
         evidence = await chapters.issueSource(options.report, first);
       }

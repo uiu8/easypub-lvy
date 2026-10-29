@@ -78,6 +78,8 @@ pub struct Overrides {
     /// Bokai（KFX）输入：只包一张图的 SVG（常见的封面写法）换成普通 &lt;img&gt;，
     /// 因为 Bokai 会丢掉 SVG 里的文字，校验不能通过。软件排版的 KFX 封面页也是这样做的。
     pub plain_svg_images: bool,
+    /// V109：设置里关掉“自动转换 Kindle 不支持的图片”时为真，图片保留原样。
+    pub keep_images: bool,
 }
 
 /// 读 `bokai validate all` 的日志：正文、图片、外部链接、注音全部 100% 保留，书写方向与翻页方向保留时，
@@ -296,6 +298,7 @@ impl Overrides {
             cover,
             need_cover: kindling,
             plain_svg_images: bokai,
+            keep_images: m.keep_original_images,
         }
     }
 }
@@ -397,6 +400,10 @@ pub fn rebuild(original: &[u8], overrides: &Overrides) -> Result<(Vec<u8>, Repor
     };
     let mut renames: Vec<(String, String, String)> = Vec::new(); // (id, 旧文件名, 新文件名)
     for item in &items {
+        // 关掉自动转换时图片保留原样。
+        if overrides.keep_images {
+            break;
+        }
         let Some(format) = image_format(&item.media) else {
             continue;
         };
@@ -764,6 +771,7 @@ mod tests {
                 cover: Some((encoded(ImageFormat::Png, 4, 6), "png".into())),
                 need_cover: true,
                 plain_svg_images: false,
+                keep_images: false,
             },
         )
         .unwrap();
@@ -820,6 +828,7 @@ mod tests {
             cover: None,
             need_cover: true,
             plain_svg_images: false,
+            keep_images: false,
         };
         let (_, report) = rebuild(&original, &overrides).unwrap();
         assert!(!report.cover_added);
@@ -853,6 +862,7 @@ mod tests {
             cover: None,
             need_cover: false,
             plain_svg_images: false,
+            keep_images: false,
         };
         let (bytes, report) = rebuild(&original, &base).unwrap();
         assert_eq!(report.svg_images_flattened, 0);
@@ -869,6 +879,7 @@ mod tests {
         );
         let bokai = Overrides {
             plain_svg_images: true,
+            keep_images: false,
             ..base
         };
         let (bytes, report) = rebuild(&original, &bokai).unwrap();
@@ -919,6 +930,7 @@ mod tests {
             cover: None,
             need_cover: false,
             plain_svg_images: false,
+            keep_images: false,
         };
         assert!(rebuild(&bytes, &overrides).is_err());
         assert_eq!(

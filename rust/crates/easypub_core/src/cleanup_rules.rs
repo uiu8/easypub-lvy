@@ -361,6 +361,8 @@ pub fn presets() -> serde_json::Value {
         {"id":"paragraph-v1","legacy_option":"RepairParagraphBoundaries","name":"句末缩进分段","description":"仅正文：句末标点后两个或更多全角空格改为 LF 换行和两个全角缩进；原有行末保持。需核对是否确实应该分段。","rules":[body(Rule::MultilineRegexReplace{pattern:"([。！？!?])　{2,}".into(),replace:"$1\\n　　".into()})]},
         {"id":"notices-v1","name":"广告、章末提示与页眉候选","description":"查找常见提示、网站推广及独立页码/网址页眉。仅列出候选，逐项勾选才排除；可编辑匹配和保留条件。","rules":[Rule::NoticeLines{options:NoticeOptions{include_defaults:true,include_headers:true,ignore_case:true,pattern:None,preserve_pattern:None,keywords:vec![],preserve_keywords:vec![]}}]},
         {"id":"structure-v1","legacy_option":"RemoveDuplicateChapterTitles","name":"结构重复标题","description":"只处理相邻且中间只有空白行的完全重复章节标题；正文不同或无法证明连续时保留。","rules":[Rule::RemoveDuplicateTitles]},
+        {"id":"variant-t2s-v1","name":"繁体转简体","description":"可应用修改：把繁体字转为简体（通用字形）。台湾、香港用词可在规则里改转换方向。","rules":[{"kind":"chinese_variant","direction":"t2s","dictionary_version":DICTIONARY_VERSION}]},
+        {"id":"variant-s2t-v1","name":"简体转繁体","description":"可应用修改：把简体字转为繁体（通用字形）。台湾正体、香港繁体可在规则里改转换方向。","rules":[{"kind":"chinese_variant","direction":"s2t","dictionary_version":DICTIONARY_VERSION}]},
         {"id":"typography-v1","name":"标题编号与中文标点","description":"既有标题编号转中文、正文邻近中文的标点与配对重复弯引号。默认不识别裸数字标题；网址、邮箱和数字标点保留。","rules":[Rule::ChapterNumbers{style:NumberStyle::Chinese,bare_titles:false},body(Rule::ChinesePunctuation{options:PunctuationOptions{marks:true,ellipsis:true,dashes:true,quotes:true}})]}
     ])
 }
@@ -426,12 +428,15 @@ impl Compiled {
             )).collect()),
             Rule::OcrHanSpaces => Ok(crate::cleanup_ocr::remove_han_spaces(input)),
             Rule::OcrEllipsis => Ok(crate::cleanup_ocr::normalize_ellipsis(input)),
-            Rule::ChineseVariant { .. } => {
+            Rule::ChineseVariant { direction, .. } => {
                 // Bound a single physical line before entering the dictionary engine.
                 if input.len() > 65536 {
                     return Err(budget());
                 }
-                let output = self.converter.ok_or_else(invalid)?.convert(input);
+                let mut output = self.converter.ok_or_else(invalid)?.convert(input);
+                if direction.to_simplified() {
+                    output = crate::chinese_variant::protect_simplified(input, output);
+                }
                 if output.len() > MAX_LINE {
                     return Err(budget());
                 }

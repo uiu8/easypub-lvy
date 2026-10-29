@@ -115,7 +115,7 @@ pub fn validate(notes: &[Note]) -> Result<(), ApiError> {
     }
     Ok(())
 }
-fn line_reason(a: &Anchor, book: &EffectiveBook) -> Option<&'static str> {
+pub(crate) fn line_reason(a: &Anchor, book: &EffectiveBook) -> Option<&'static str> {
     let text = &book.text;
     if a.start >= a.end || a.end > text.len() {
         return Some("note_range_out_of_bounds");

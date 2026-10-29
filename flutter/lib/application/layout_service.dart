@@ -294,23 +294,82 @@ const blockStylePresets = <String, Map<String, Object>>{
     'title': 'none', 'key_bold': false, 'brackets': 'keep',
     'spacing': 'medium',
   },
+  // V119：参照中文精排的五种（单行提示与面板都可用），与 Rust 预设逐项相同。
+  'quiet': {
+    'border': 'left', 'line': 'single', 'weight': 'thin', 'shade': 'none', //
+    'align': 'start', 'size': 100, 'bold': false, 'title': 'none',
+    'key_bold': false, 'brackets': 'keep', 'spacing': 'medium',
+    'tone': 'gray', 'font': 'kai', 'inset': 'small',
+  },
+  'side': {
+    'border': 'left', 'line': 'single', 'weight': 'thick', 'shade': 'none', //
+    'align': 'start', 'size': 100, 'bold': false, 'title': 'none',
+    'key_bold': false, 'brackets': 'keep', 'spacing': 'medium',
+    'inset': 'small',
+  },
+  'ruled': {
+    'border': 'top_bottom', 'line': 'single', 'weight': 'thin', //
+    'shade': 'none', 'align': 'center', 'size': 100, 'bold': false,
+    'title': 'none', 'key_bold': false, 'brackets': 'keep',
+    'spacing': 'medium', 'inset': 'narrow',
+  },
+  'kai': {
+    'border': 'none', 'line': 'single', 'weight': 'thin', 'shade': 'none', //
+    'align': 'start', 'size': 100, 'bold': false, 'title': 'none',
+    'key_bold': false, 'brackets': 'keep', 'spacing': 'medium',
+    'font': 'kai', 'inset': 'large',
+  },
+  'tint': {
+    'border': 'none', 'line': 'single', 'weight': 'thin', 'shade': 'light', //
+    'align': 'start', 'size': 100, 'bold': false, 'title': 'none',
+    'key_bold': false, 'brackets': 'keep', 'spacing': 'medium',
+    'radius': true,
+  },
 };
-const notePresetNames = {'bar': '提示条', 'center': '居中强调'};
-const panelPresetNames = {'titled': '标题面板', 'rules': '上下双线'};
 
-/// 新书默认（与 Rust `default_styles` 相同）：单行提示条，面板标题面板。
+/// V119 新增四项参数的默认值：旧样式没有这几项时按默认处理，成品不变。
+const blockStyleDefaults = <String, Object>{
+  'tone': 'black',
+  'font': 'body',
+  'inset': 'none',
+  'radius': false,
+};
+
+/// 两类都能用的新预设（V119）。
+const _sharedPresetNames = {
+  'quiet': '细线楷体',
+  'side': '左侧竖线',
+  'ruled': '上下细线',
+  'kai': '楷体缩进',
+  'tint': '浅灰底',
+};
+const notePresetNames = {..._sharedPresetNames, 'bar': '提示条', 'center': '居中强调'};
+const panelPresetNames = {
+  ..._sharedPresetNames,
+  'titled': '标题面板',
+  'rules': '上下双线',
+};
+
+/// 新书默认（与 Rust `default_styles` 相同）：单行提示条，面板标题面板；V119 新增的五种只作可选。
 Map<String, Object> defaultSystemStyles() => {
   'note': blockStylePresets['bar']!,
   'panel': blockStylePresets['titled']!,
 };
 
+/// 补齐 V119 新增参数的默认值，便于比较新旧样式。
+Map<String, Object?> normalizedBlockStyle(Map style) => {
+  ...blockStyleDefaults,
+  for (final e in style.entries) '${e.key}': e.value,
+};
+
 /// 某一类当前用的是哪个预设；参数被改过（V78 编辑器）时为 custom。
 String presetOf(Map? style, Map<String, String> names) {
+  if (style == null) return 'custom';
+  final current = normalizedBlockStyle(style);
   for (final id in names.keys) {
-    final p = blockStylePresets[id]!;
-    if (style != null &&
-        style.length == p.length &&
-        p.entries.every((e) => style[e.key] == e.value)) {
+    final p = normalizedBlockStyle(blockStylePresets[id]!);
+    if (current.length == p.length &&
+        p.entries.every((e) => current[e.key] == e.value)) {
       return id;
     }
   }
@@ -418,6 +477,12 @@ abstract class LayoutSession {
   Future<void> exportPresetFile(String name, String path);
   Future<void> importPreset(LayoutPreset preset);
   Future<LayoutPreset> builtinPreset();
+
+  /// 出厂默认加上 [builtinLayoutPresets]（V114）。
+  Future<List<LayoutPreset>> builtinPresets();
+
+  /// 按内置预设预览本书排版，与套用项目预设同一条路径（V114）。
+  Future<BookInformationPreview> previewBuiltin(LayoutPreset preset);
   List<LayoutPreset> get presets;
   Future<void> renamePreset(String name, String replacement);
   Future<List<LayoutPreset>> readGlobalPresets();
@@ -448,11 +513,88 @@ class CssPreview {
 }
 
 class LayoutPreset {
-  LayoutPreset(this.name, Map<String, Object?> values)
-    : values = Map.unmodifiable(values);
+  LayoutPreset(
+    this.name,
+    Map<String, Object?> values, {
+    this.description = '',
+    this.stylePack,
+  }) : values = Map.unmodifiable(values);
   final String name;
   final Map<String, Object?> values;
+
+  /// 内置预设的一句说明（V114）；其他预设为空。
+  final String description;
+
+  /// 应用内置预设时一并套用的内置章节样式包编号（V114，如 'plain'）。
+  final String? stylePack;
 }
+
+/// 内置排版预设（V114）：在出厂排版上改这些值。出厂默认不变，这几套是可选的。
+/// 依据真机预览实排（`docs/evidence/v114-layout-presets-20261026.md`）。
+const builtinLayoutPresets = <(String, String, Map<String, Object?>, String?)>[
+  (
+    '出版社纸书',
+    '宋体，行距 1.65，段间不空行；章名居中加大，配“素雅”样式包（章头花线、标题下短线、卷页单线框）；场景分隔为细线。',
+    {
+      'font_family': 'SimSun',
+      'font_size': 100.0,
+      'line_height': 1.65,
+      'paragraph_spacing': 0.0,
+      'fullwidth_indent': 2,
+      'heading_style': 'publisher',
+      'scene_break_style': 'line',
+      'first_paragraph_style': 'normal',
+      'margin_left': 4.0,
+      'margin_right': 4.0,
+    },
+    'plain',
+  ),
+  (
+    '网文舒适',
+    '黑体 105%，行距 1.8，段后 0.9；章序与章名分两行；场景分隔 ＊ ＊ ＊。',
+    {
+      'font_family': 'Microsoft YaHei',
+      'font_size': 105.0,
+      'line_height': 1.8,
+      'paragraph_spacing': 0.9,
+      'fullwidth_indent': 2,
+      'heading_style': 'two_line',
+      'scene_break_style': 'stars',
+      'first_paragraph_style': 'normal',
+    },
+    null,
+  ),
+  (
+    '古籍竖排',
+    '竖排，宋体，行距 1.75，段间不空行；章名居中加大；场景分隔 ◇ ◇ ◇。阅读器字体可选楷体。',
+    {
+      'writing_mode': 'vertical',
+      'font_family': 'SimSun',
+      'font_size': 100.0,
+      'line_height': 1.75,
+      'paragraph_spacing': 0.0,
+      'fullwidth_indent': 2,
+      'heading_style': 'publisher',
+      'scene_break_style': 'diamonds',
+    },
+    null,
+  ),
+  (
+    '简洁章首',
+    '宋体，行距 1.55，段后 0.3；章名下一道横线，每章首字放大；场景分隔 ◇ ◇ ◇。',
+    {
+      'font_family': 'SimSun',
+      'font_size': 100.0,
+      'line_height': 1.55,
+      'paragraph_spacing': 0.3,
+      'fullwidth_indent': 2,
+      'heading_style': 'light_novel',
+      'scene_break_style': 'diamonds',
+      'first_paragraph_style': 'large_initial',
+    },
+    null,
+  ),
+];
 
 /// Optional because lightweight page previews and tests need no desktop shell.
 /// 排版预览机型偏好（LAY-092）：界面偏好，存于设置目录，不写入书稿。

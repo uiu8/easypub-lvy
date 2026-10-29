@@ -96,13 +96,14 @@ void main() {
     await t.tap(find.text('打开'));
     await settle();
     final summary = find.byKey(const ValueKey('numeric-summary'));
-    // 内置规则要求数字标题后至少 5 行正文；样书每章 3 行，先找不到。
-    expect(
-      find.byKey(const ValueKey('numeric-minimum')),
-      findsOneWidget,
-    );
+    // V113：内置规则要求数字标题后至少 3 行正文（原为 5），样书每章 3 行，直接找到。
+    expect(find.byKey(const ValueKey('numeric-minimum')), findsOneWidget);
+    expect(t.widget<Text>(summary).data, '找到 3 个数字标题 · 新增章节 3 · 改写标题 0');
+    await t.enterText(find.byKey(const ValueKey('numeric-minimum')), '4');
+    await t.tap(find.text('重新预览'));
+    await settle();
     expect(t.widget<Text>(summary).data, '没有找到需要识别或改写的数字标题。');
-    await t.enterText(find.byKey(const ValueKey('numeric-minimum')), '2');
+    await t.enterText(find.byKey(const ValueKey('numeric-minimum')), '3');
     await t.tap(find.text('重新预览'));
     await settle();
     expect(t.widget<Text>(summary).data, '找到 3 个数字标题 · 新增章节 3 · 改写标题 0');

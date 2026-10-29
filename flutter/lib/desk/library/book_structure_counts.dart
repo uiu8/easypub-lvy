@@ -59,7 +59,7 @@ class _BookStructureCountsState extends State<BookStructureCounts> {
           onTap: () => setState(read),
           child: Text(
             '统计读取失败，点击重试',
-            style: TextStyle(fontSize: 12, color: context.desk.accent),
+            style: ui(12, c: context.desk.accent),
           ),
         );
       }
@@ -77,9 +77,9 @@ class _BookStructureCountsState extends State<BookStructureCounts> {
         overflow: TextOverflow.ellipsis,
         style:
             widget.style ??
-            TextStyle(
-              fontSize: widget.compact ? 12 : 14,
-              color: context.desk.ink2,
+            ui(
+              widget.compact ? 12 : 14,
+              c: context.desk.ink2,
             ),
       );
     },

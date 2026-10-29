@@ -182,7 +182,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } on FormatException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+            .showSnackBar(deskSnackBar(content: Text(error.message)));
       }
     }
   }
@@ -221,7 +221,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } on FormatException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+            .showSnackBar(deskSnackBar(content: Text(error.message)));
       }
     }
   }
@@ -249,8 +249,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final path = await picker.chooseFolder();
     if (path == null || !mounted) return;
     if (!await library.setFavorite(path, true) && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('收藏文件夹保存失败，当前列表未改变。')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(deskSnackBar(content: const Text('收藏文件夹保存失败，当前列表未改变。')));
     }
   }
 
@@ -297,12 +298,12 @@ class _SettingsPageState extends State<SettingsPage> {
       }
       if (!ok && mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('收藏修改未能保存，原设置保留。')));
+            .showSnackBar(deskSnackBar(content: const Text('收藏修改未能保存，原设置保留。')));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          deskSnackBar(
             content: Text(
               deskErrorText(
                 e,
@@ -323,7 +324,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('无法打开该收藏文件夹。')));
+            .showSnackBar(deskSnackBar(content: const Text('无法打开该收藏文件夹。')));
       }
     }
   }
@@ -439,7 +440,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   } catch (error) {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
+                      deskSnackBar(
                         content: Text(
                           deskErrorText(error, '未能打开崩溃日志文件夹：$error'),
                         ),
@@ -542,7 +543,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+      deskSnackBar(
         content: Text(
           result == null
               ? failure
@@ -712,7 +713,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        deskSnackBar(
           content: Text(path == null ? '设置备份失败，当前设置未改变。' : '设置已备份到 $path'),
         ),
       );
@@ -749,7 +750,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (inspection == null) {
       setState(() => backupInspection = null);
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('备份读取失败，当前设置未改变。')));
+          .showSnackBar(deskSnackBar(content: const Text('备份读取失败，当前设置未改变。')));
       return;
     }
     setState(() => backupInspection = inspection);
@@ -795,7 +796,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() => backupInspection = null);
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? '设置已恢复，当前书稿和成品未修改。' : '恢复失败，当前设置未改变。')),
+      deskSnackBar(content: Text(ok ? '设置已恢复，当前书稿和成品未修改。' : '恢复失败，当前设置未改变。')),
     );
   }
 
@@ -853,15 +854,16 @@ class _SettingsPageState extends State<SettingsPage> {
       final path = await licenseDesktop.licenseDirectory(category);
       if (!mounted) return;
       if (path == null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('当前运行目录没有附带这类许可文件。')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(deskSnackBar(content: const Text('当前运行目录没有附带这类许可文件。')));
         return;
       }
       await desktop.openDirectory(path);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('无法打开许可目录。')));
+            .showSnackBar(deskSnackBar(content: const Text('无法打开许可目录。')));
       }
     }
   }
@@ -891,7 +893,7 @@ class _SettingsPageState extends State<SettingsPage> {
       }
       if (mounted && !ok) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('保存失败，原设置保持不变。')));
+            .showSnackBar(deskSnackBar(content: const Text('保存失败，原设置保持不变。')));
       }
     } catch (_) {
       if (mounted) {
@@ -980,6 +982,53 @@ class _SettingsPageState extends State<SettingsPage> {
                 value: value,
                 onChanged: saving ? null : (next) => save({key: next}),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 左栏页面开关（V109）：打开为显示，存的是收起的页面列表。
+  Widget navToggle(
+    SettingsSnapshot state,
+    String page,
+    String label,
+    String detail,
+  ) {
+    final d = context.desk;
+    final hidden = navHiddenPages(state.configuration);
+    final shown = !hidden.contains(page);
+    void change(bool show) => save({
+      'nav_hidden_pages': [
+        for (final p in navOptionalPages.keys)
+          if (p == page ? !show : hidden.contains(p)) p,
+      ],
+    });
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        key: ValueKey(('settings-nav-page', page)),
+        onTap: saving ? null : () => change(!shown),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: d.line)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(label, style: ui(13, c: d.ink)),
+                    ),
+                    DeskHelp(detail),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Switch(value: shown, onChanged: saving ? null : change),
             ],
           ),
         ),
@@ -1220,6 +1269,14 @@ class _SettingsPageState extends State<SettingsPage> {
         'restore_window',
         state.configuration['restore_window'] != false,
       ),
+      const SizedBox(height: 16),
+      groupTitle(
+        '左栏显示的页面',
+        '关掉的页面从左栏收起，仍可用 Ctrl+K 打开；检查、章节、文本、信息、排版、转换、任务是主流程，不能收起。',
+      ),
+      for (final MapEntry(key: page, value: (label, detail))
+          in navOptionalPages.entries)
+        navToggle(state, page, label, detail),
     ]),
     1 => section('导入与收藏', [
       groupTitle('章节识别', '管理以后导入默认；已有书籍在章节页预览重新识别。'),
@@ -1563,6 +1620,14 @@ class _SettingsPageState extends State<SettingsPage> {
         'generate_cover',
         state.configuration['generate_cover'] != false,
       ),
+      toggle(
+        state,
+        '自动转换 Kindle 不支持的图片',
+        'WebP、GIF、BMP 转成 JPEG / PNG，过大的图片等比缩小，CMYK 与渐进式 JPEG 重新编码；原图文件不改。'
+            '关掉后封面和插图保留原图：EPUB 照常，AZW3、MOBI、KFX 里这些图片可能显示不出来。',
+        'convert_kindle_images',
+        state.configuration['convert_kindle_images'] != false,
+      ),
       if ((state.configuration['output_format'] as String?) == 'MOBI')
         note('MOBI 转换器', '默认使用随包 Kindling，可在转换工具中选择其他已支持的转换器。', warning: true),
     ]),
@@ -1608,7 +1673,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     children: [DeskText('EPUB', size: 18, bold: true)],
                   ),
                 ),
-                Chip(label: Text('随应用提供')),
+                const DeskTag('随应用提供', Tone.neutral),
               ],
             ),
             const SizedBox(height: 14),
@@ -1643,14 +1708,17 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                 ),
-                Chip(
-                  label: Text(
-                    kfxProbing
-                        ? '检测中'
-                        : kfxPath == null
-                        ? '未找到工具'
-                        : '已定位路径',
-                  ),
+                DeskTag(
+                  kfxProbing
+                      ? '检测中'
+                      : kfxPath == null
+                      ? '未找到工具'
+                      : '已定位路径',
+                  kfxProbing
+                      ? Tone.neutral
+                      : kfxPath == null
+                      ? Tone.warn
+                      : Tone.ok,
                 ),
               ],
             ),
@@ -1719,14 +1787,17 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                 ),
-                Chip(
-                  label: Text(
-                    probing
-                        ? '检测中'
-                        : converterPath == null
-                        ? '未找到工具'
-                        : '已定位路径',
-                  ),
+                DeskTag(
+                  probing
+                      ? '检测中'
+                      : converterPath == null
+                      ? '未找到工具'
+                      : '已定位路径',
+                  probing
+                      ? Tone.neutral
+                      : converterPath == null
+                      ? Tone.warn
+                      : Tone.ok,
                 ),
               ],
             ),
@@ -1792,7 +1863,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                 ),
-                Chip(label: Text('与 AZW3 共用工具')),
+                const DeskTag('与 AZW3 共用工具', Tone.neutral),
               ],
             ),
             const SizedBox(height: 14),
@@ -2356,7 +2427,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   child: Material(
                     color: on ? d.surface : Colors.transparent,
                     elevation: on ? 1 : 0,
-                    shadowColor: Colors.black.withValues(alpha: .25),
+                    shadowColor: context.desk.shadowInk.withValues(alpha: .25),
                     borderRadius: BorderRadius.circular(8),
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(

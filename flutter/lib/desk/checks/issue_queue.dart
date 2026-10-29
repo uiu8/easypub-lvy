@@ -121,35 +121,17 @@ class _IssueResultListState extends State<IssueResultList> {
     final s = segments.firstWhere((s) => s.group == group);
     final (name, detail) = chapterIssueGroups[group];
     final open = !collapsed.contains(group);
-    return InkWell(
-      key: ValueKey('check-issue-group-$group'),
-      borderRadius: BorderRadius.circular(6),
-      onTap: () => setState(() {
-        if (!collapsed.remove(group)) collapsed.add(group);
-      }),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(6, 10, 10, 4),
-        child: Row(
-          children: [
-            Icon(
-              open ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
-              size: 16,
-              color: d.ink3,
-            ),
-            const SizedBox(width: 4),
-            Text(name, style: ui(12, w: 650, c: d.ink2)),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                detail,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: ui(11, c: d.ink3),
-              ),
-            ),
-            Text('${s.count}', style: mono(11, c: d.ink3)),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      child: DeskGroupBanner(
+        key: ValueKey('check-issue-group-$group'),
+        title: name,
+        detail: detail,
+        count: s.count,
+        open: open,
+        onTap: () => setState(() {
+          if (!collapsed.remove(group)) collapsed.add(group);
+        }),
       ),
     );
   }
@@ -267,27 +249,25 @@ class _QueueItem extends StatelessWidget {
             boxShadow: selected ? d.shadow1 : null,
           ),
           child: Opacity(
-            opacity: decided == null ? 1 : .55,
+            opacity: decided == null ? 1 : .62,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Container(
-                      width: 3,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: selected ? d.accent : Colors.transparent,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+                    padding: const EdgeInsets.only(top: 4),
+                    child: DeskStripe(
+                      decided == null ? tone : (selected ? d.accent : d.line),
+                      height: 34,
                     ),
                   ),
                   const SizedBox(width: 6),
                   Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Dot(tone, size: 7),
+                    padding: EdgeInsets.only(top: decided == null ? 6 : 3),
+                    child: decided == null
+                        ? Dot(tone, size: 7)
+                        : Icon(Icons.check_rounded, size: 13, color: d.add),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -302,16 +282,27 @@ class _QueueItem extends StatelessWidget {
                                 issue.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: ui(
-                                  12.5,
-                                  w: selected ? 620 : 520,
-                                  c: d.ink,
-                                ),
+                                style:
+                                    ui(
+                                      12.5,
+                                      w: selected ? 620 : 520,
+                                      c: decided == null ? d.ink : d.ink2,
+                                    ).copyWith(
+                                      decoration: decided == null
+                                          ? null
+                                          : TextDecoration.lineThrough,
+                                      decorationColor: d.ink3,
+                                    ),
                               ),
                             ),
                             if (decided != null) ...[
                               const SizedBox(width: 6),
-                              Text(decided, style: ui(11, c: d.ink3)),
+                              DeskPill(
+                                Text(
+                                  decided,
+                                  style: ui(10.5, w: 600, c: d.ink2),
+                                ),
+                              ),
                             ],
                           ],
                         ),

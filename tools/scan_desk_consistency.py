@@ -16,6 +16,14 @@ DESK = ROOT / 'flutter' / 'lib' / 'desk'
 
 # 令牌与主题定义处允许直接写颜色、字号。
 TOKEN_FILES = {'tokens.dart', 'controls.dart', 'grain.dart', 'fonts.dart'}
+# 阅读器纸面/墨水屏/封面生成调色板及 Windows 标准关闭红底允许固定色值（不随编辑台界面主题变化）。
+PREVIEW_COLOR_FILES = TOKEN_FILES | {
+    'device_preview.dart', 'block_style_editor.dart', 'inset_style_editor.dart',
+    'system_block_look.dart', 'layout_view.dart', 'generated_cover.dart',
+    'text_cover.dart', 'text_cover_page.dart', 'widgets.dart', 'title_bar.dart',
+}
+PREVIEW_TEXTSTYLE_FILES = TOKEN_FILES | {'device_preview.dart', 'block_style_editor.dart'}
+SNACKBAR_DEF_FILES = {'dialogs.dart'}
 
 CHECKS = [
     ('material-dialog', 'Material AlertDialog（应改用 DeskDialog）',
@@ -25,21 +33,21 @@ CHECKS = [
     ('dropdown', 'DropdownButton / DropdownButtonFormField（选择框应改用 DeskChoice）',
      re.compile(r'\bDropdownButton(FormField)?\s*<'), None),
     ('raw-color', '写死的颜色 Color(0x…)（应取 context.desk 令牌）',
-     re.compile(r'\bColor\(0x[0-9A-Fa-f]{6,8}\)'), TOKEN_FILES),
+     re.compile(r'\bColor\(0x[0-9A-Fa-f]{6,8}\)'), PREVIEW_COLOR_FILES),
     ('material-colors', 'Colors.xxx 具名颜色（透明色除外，应取令牌）',
-     re.compile(r'\bColors\.(?!transparent\b)[a-z]\w*'), TOKEN_FILES),
+     re.compile(r'\bColors\.(?!transparent\b)[a-z]\w*'), PREVIEW_COLOR_FILES),
     ('raw-textstyle', 'TextStyle(fontSize: …)（应用 ui()/serif()/mono() 字体助手）',
-     re.compile(r'TextStyle\(\s*fontSize\s*:'), TOKEN_FILES),
+     re.compile(r'TextStyle\(\s*fontSize\s*:'), PREVIEW_TEXTSTYLE_FILES),
     ('generic-error', '通用错误句（应给出原因与下一步）',
      re.compile(r"'[^'\n]*(失败，请重试|操作失败|出错了|发生错误|未知错误)[^'\n]*'"), None),
     ('sync-io', '同步文件读写（在 build 或频繁调用的路径上会卡界面）',
-     re.compile(r'\.(readAsBytesSync|readAsStringSync|readAsLinesSync|writeAsStringSync|writeAsBytesSync|existsSync|listSync|statSync|lengthSync)\('), None),
+     re.compile(r'\.(readAsBytesSync|readAsStringSync|readAsLinesSync|writeAsStringSync|writeAsBytesSync|existsSync|listSync|statSync|lengthSync)\('), TOKEN_FILES),
     ('glyph-icon', '用文字符号代替图标（▾ ▼ ▸ ✓ ✕ 等，缺字时显示成方框）',
      re.compile(r"'[^'\n]*[▾▼▸▶✓✕✔✖↻][^'\n]*'"), None),
     ('raw-duration', '动画时长写死毫秒（应用 DeskMotion，并尊重“减少动画”）',
      re.compile(r'\b(AnimatedContainer|AnimatedOpacity|AnimatedSize|AnimatedAlign|AnimatedSwitcher|AnimationController)\b[^;]*?duration:\s*const\s+Duration\(milliseconds:', re.S), None),
     ('snackbar', 'SnackBar 提示（核对文案与撤销入口是否统一）',
-     re.compile(r'\bSnackBar\s*\('), None),
+     re.compile(r'\bSnackBar\s*\('), SNACKBAR_DEF_FILES),
     ('english-ui', '界面里的英文文案（核对是否应译成中文）',
      re.compile(r"Text\(\s*'[A-Za-z][A-Za-z ]{3,}'"), None),
 ]

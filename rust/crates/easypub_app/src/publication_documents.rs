@@ -896,12 +896,34 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             && m.first_paragraph_style != "normal"
             && line_block.is_none();
         // 场景分隔（V46，LAY-118）：原文留在 data-source 节点；换成装饰时原符号存于 data-original。
+        let line_styles: Vec<_> = m
+            .inline_styles
+            .iter()
+            .filter(|a| a.anchor.start == offset)
+            .collect();
         let has_note = notes.as_ref().is_some_and(|notes| notes.has_line(offset));
-        let scene = !has_note
+        // 章节分隔线（V116）：整行横线（如“----------”）紧挨下一个标题或在全文末尾时不输出，
+        // 正文中间的按场景分隔处理。
+        let rule_line = node.is_none()
+            && annotation.is_none()
+            && line_styles.is_empty()
+            && !has_note
+            && easypub_core::is_rule_line(original);
+        let rule_at_boundary = rule_line && {
+            let upcoming = book.tree.nodes[node_index.min(book.tree.nodes.len())..]
+                .iter()
+                .find(|n| n.start >= end);
+            match upcoming {
+                Some(n) => n.role != Role::Body && book.text[end..n.start].trim().is_empty(),
+                None => book.text[end..].trim().is_empty(),
+            }
+        };
+        let scene = line_styles.is_empty()
+            && !has_note
             && annotation.is_none()
             && node.is_none()
             && m.scene_break_style != "off"
-            && m.rule_options.scene(original);
+            && (m.rule_options.scene(original) || (rule_line && !rule_at_boundary));
         if scene {
             first_pending = true;
             let vertical = m.writing_mode == "vertical";
@@ -923,7 +945,10 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                     escaped(original)?
                 )),
             }
-        } else if !(!has_note && tag == "p" && m.remove_blank_lines && original.trim().is_empty()) {
+        } else if !(!has_note
+            && tag == "p"
+            && (rule_at_boundary || m.remove_blank_lines && original.trim().is_empty()))
+        {
             // 章首段落不缩进：去掉行首空白；设置了全角缩进时行首空白本来就会被替换，否则原文存于 data-original。
             let unindented = original.trim_start_matches([' ', '　', '\t']);
             let flush = first || line_block.is_some();
@@ -946,9 +971,12 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             if let Some(l) = inset {
                 attrs = attrs.replace("inset-line", &format!("inset-line inset-{}", l.role));
             }
-            let content = if notes
-                .as_ref()
-                .is_some_and(|n| n.preserve_indent(offset, original))
+            let content = if line_styles
+                .iter()
+                .any(|a| a.anchor.from < original.len() - unindented.len())
+                || notes
+                    .as_ref()
+                    .is_some_and(|n| n.preserve_indent(offset, original))
             {
                 original.to_owned()
             } else if flush {
@@ -962,6 +990,20 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             } else {
                 original.to_owned()
             };
+            let old_prefix = original.len() - unindented.len();
+            let new_prefix = content.len() - content.trim_start_matches([' ', '　', '\t']).len();
+            let adjusted: Vec<_> = line_styles
+                .iter()
+                .map(|a| {
+                    let mut a = (*a).clone();
+                    if content != original {
+                        a.anchor.from = a.anchor.from - old_prefix + new_prefix;
+                        a.anchor.to = a.anchor.to - old_prefix + new_prefix;
+                    }
+                    a
+                })
+                .collect();
+            let styles: Vec<_> = adjusted.iter().collect();
             // 注音、着重号与竖排的纵中横（V28）。
             let digits = (m.writing_mode == "vertical").then_some(m.vertical_digits);
             let label = node
@@ -976,10 +1018,16 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                     crate::inline_markup::render(&content[end..], digits)?
                 ),
                 None => match &notes {
-                    Some(notes) => notes.render(offset, original, &content, digits)?,
-                    None => crate::inline_markup::render(&content, digits)?,
+                    Some(notes) => notes.render(offset, original, &content, digits, &styles)?,
+                    None => crate::inline_styles::render(&content, 0, &styles, digits)?,
                 },
             };
+            if !styles.is_empty() && !attrs.contains(" data-original=") {
+                attrs.push_str(&format!(
+                    " data-original=\"{}\"",
+                    escaped(original)?.replace('\t', "&#9;")
+                ));
+            }
             // 首字放大：只放大开头的文字；以标点、注音等标记开头时只取消缩进。
             let inner = match inner.chars().next() {
                 Some(c)
@@ -1000,8 +1048,18 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                 Some(l) if l.role == "say" && !has_note => {
                     match crate::insets::chat_line(&content) {
                         Some(((ns, ne), (ss, se))) => {
-                            let name = escaped(&content[ns..ne])?;
-                            let say = crate::inline_markup::render(&content[ss..se], digits)?;
+                            let name = crate::inline_styles::render(
+                                &content[ns..ne],
+                                ns,
+                                &styles,
+                                digits,
+                            )?;
+                            let say = crate::inline_styles::render(
+                                &content[ss..se],
+                                ss,
+                                &styles,
+                                digits,
+                            )?;
                             if inset_styles[l.kind].names == "inline" {
                                 format!("<span class=\"inset-who\">{name}</span> ▷ {say}")
                             } else {
@@ -1281,6 +1339,30 @@ mod tests {
         assert!(page.contains("class=\"scene-break\" data-source=\"true\" data-original=\"＊＊＊\" data-eol=\"lf\">―――</p>"));
     }
 
+    /// V116：章末紧挨下一个标题的横线分隔线不输出；正文中间的横线按场景分隔。
+    #[test]
+    fn rule_lines_vanish_at_chapter_boundaries_and_split_scenes_inside() {
+        let dash = "-".repeat(40);
+        let text = format!(
+            "第一章 开始\n　　正文甲\n{dash}\n　　正文乙\n\n{dash}\n\n第二章 继续\n　　正文丙\n{dash}\n"
+        );
+        let source =
+            SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let mut req = request(&source);
+        req.settings.scene_break_style = "diamonds".into();
+        let prepared = publication_resources::prepare(&source, req).unwrap();
+        let pages = prepared.documents().unwrap().pages;
+        let all: String = pages.values().cloned().collect();
+        // 正文中的一条变成场景分隔；章末与全文末尾的两条不输出。
+        assert_eq!(all.matches("scene-break").count(), 1, "{all}");
+        assert_eq!(
+            all.matches(dash.as_str()).count(),
+            1,
+            "原符号只留在场景分隔的 data-original 里"
+        );
+        assert!(all.contains("正文丙"));
+    }
+
     #[test]
     fn first_paragraph_after_heading_and_scene_break_is_styled_and_lossless() {
         let text = "第一章 开始\n\n　　正文甲\n　　正文乙\n＊＊＊\n“对白”\n　　正文丙\n";
@@ -1312,7 +1394,7 @@ mod tests {
                     // 以引号开头时不放大。
                     assert!(
                         page.contains(
-                            "first-para\" data-source=\"true\" data-eol=\"lf\">“对白”</p>"
+                            "first-para\" data-source=\"true\" data-eol=\"lf\"><span class=\"nb\">“对</span><span class=\"nb\">白”</span></p>"
                         )
                     );
                 } else {

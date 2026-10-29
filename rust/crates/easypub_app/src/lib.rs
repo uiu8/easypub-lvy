@@ -12,6 +12,7 @@ pub mod manual_draft;
 pub mod project;
 
 pub mod block_annotations;
+pub mod inline_styles;
 pub mod manual_notes;
 pub mod production;
 pub mod rule_catalog;

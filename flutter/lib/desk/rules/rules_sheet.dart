@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import '../errors.dart';
 
 import '../../application/chapter_rules_service.dart';
-import '../controls/controls.dart' show DeskButton;
+import '../controls/controls.dart' show DeskButton, DeskChoice;
 import '../dialogs.dart';
 import '../tokens.dart';
 import '../widgets.dart';
@@ -928,11 +928,12 @@ class _RulesSheetState extends State<_RulesSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DropdownButtonFormField<String>(
-          key: ValueKey(('rules-preset', selectedPreset)),
-          initialValue: selectedPreset,
+        DeskChoice<String>(
+          key: const ValueKey('rules-preset'),
+          value: selectedPreset,
           isExpanded: true,
-          decoration: deskInput(context, hint: '载入预设'),
+          decoration: deskInput(context),
+          hint: Text('载入预设', style: ui(13, c: d.ink3)),
           items: [
             for (final name in commonRulePresets.keys)
               DropdownMenuItem(

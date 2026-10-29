@@ -126,13 +126,10 @@ class _SourceRefreshDialogState extends State<SourceRefreshDialog> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       '刷新来源',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: ui(20, w: 700, c: context.desk.ink),
                     ),
                   ),
                   IconButton(
@@ -228,7 +225,7 @@ class _SourceRefreshDialogState extends State<SourceRefreshDialog> {
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
                               border: Border.all(
-                                color: const Color(0xffddd8cf),
+                                color: context.desk.line,
                               ),
                               borderRadius: BorderRadius.circular(8),
                             ),

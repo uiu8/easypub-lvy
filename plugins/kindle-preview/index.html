@@ -12,6 +12,10 @@
   <label class="pick"><span class="sr">机型</span><select id="device" aria-label="机型"></select></label>
   <label class="pick"><span class="sr">章节</span><select id="chapter" aria-label="章节"></select></label>
   <span id="measure" class="tag"></span>
+  <button id="overlay-pick" title="把 Kindle 截图半透明盖在预览上逐像素对比（截图与机型分辨率相同时一一对应）">叠加真机截图…</button>
+  <input id="overlay-file" type="file" accept="image/png,image/jpeg" hidden>
+  <label id="overlay-tools" class="tag" hidden><input id="overlay-diff" type="checkbox"> 差异显示</label>
+  <button id="overlay-clear" hidden>取消叠加</button>
   <span class="grow"></span>
   <span id="status" role="status"></span>
 </header>
@@ -26,6 +30,7 @@
           <div id="page-head"></div>
           <iframe id="book" title="本书内容"></iframe>
           <div id="page-foot"><span id="page-no"></span><span id="progress"></span></div>
+          <img id="overlay" hidden alt="">
           <div id="note-pop" hidden role="dialog" aria-label="注释"><div id="note-body"></div><button id="note-close" aria-label="关闭注释">×</button></div>
         </div>
         <button id="tap-left" class="tap" aria-label="左侧翻页"></button>
@@ -88,9 +93,9 @@
       <div class="seg" data-key="system_block_style" data-options="off:不识别,box:加框,indent:缩进,styled:分类样式"></div>
       <div id="system-presets" hidden>
         <div class="label">单行提示</div>
-        <div class="seg" data-key="system_note_preset" data-options="bar:提示条,center:居中强调,custom:自定义"></div>
+        <div class="seg" data-key="system_note_preset" data-options="quiet:细线楷体,side:左侧竖线,ruled:上下细线,kai:楷体缩进,tint:浅灰底,bar:提示条,center:居中强调,custom:自定义"></div>
         <div class="label">多行面板</div>
-        <div class="seg" data-key="system_panel_preset" data-options="titled:标题面板,rules:上下双线,custom:自定义"></div>
+        <div class="seg" data-key="system_panel_preset" data-options="quiet:细线楷体,side:左侧竖线,ruled:上下细线,kai:楷体缩进,tint:浅灰底,titled:标题面板,rules:上下双线,custom:自定义"></div>
       </div>
       <div class="label">诗词</div>
       <div class="seg" data-key="verse_block_style" data-options="off:不识别,center:居中,indent:缩进"></div>

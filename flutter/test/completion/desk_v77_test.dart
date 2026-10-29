@@ -101,7 +101,8 @@ void main() {
     expect(presets.map((p) => p['id']).toSet(), blockStylePresets.keys.toSet());
     for (final p in presets) {
       expect(p['style'], blockStylePresets[p['id']], reason: '${p['id']}');
-      final names = p['kind'] == 'note' ? notePresetNames : panelPresetNames;
+      // V119 起有两类都可用的预设（kind 为 both），两张名称表都收了它们。
+      final names = p['kind'] == 'panel' ? panelPresetNames : notePresetNames;
       expect(names[p['id']], p['name']);
     }
     final settings = state.production.settings(id);
@@ -157,15 +158,24 @@ void main() {
     await until(t, () => note.evaluate().isNotEmpty);
     await t.ensureVisible(note);
     await t.pump();
-    await t.tap(find.descendant(of: note, matching: find.text('居中强调')));
+    // V119 起选项变多，先把要点的那一项滚到可见处。
+    final center = find.descendant(of: note, matching: find.text('居中强调'));
+    await t.ensureVisible(center);
+    await t.pump();
+    await t.tap(center);
     Map? styles() => state.production.settings(id)['system_styles'] as Map?;
     await until(t, () => (styles()?['note'] as Map?)?['align'] == 'center');
     final panel = find.byKey(const ValueKey('layout-system-panel'));
-    await t.tap(find.descendant(of: panel, matching: find.text('上下双线')));
+    final rules = find.descendant(of: panel, matching: find.text('上下双线'));
+    await t.ensureVisible(rules);
+    await t.pump();
+    await t.tap(rules);
     await until(t, () => (styles()?['panel'] as Map?)?['line'] == 'double');
     expect(styles()!['note'], blockStylePresets['center']);
     // 改回旧的“加框”：参数保留，模式换掉。
     final mode = find.byKey(const ValueKey('layout-system_block_style'));
+    await t.ensureVisible(mode);
+    await t.pump();
     await t.tap(find.descendant(of: mode, matching: find.text('加框')));
     await until(
       t,
@@ -388,6 +398,11 @@ void main() {
       expect(page, contains('data-key="system_note_preset"'));
       expect(page, contains('styled:分类样式'));
       expect(await css({}), contains('.blk-panel .blk-panel-title {'));
+      // V119 新增的细线楷体：灰色左细线、楷体。
+      expect(
+        await css({'system_panel_preset': 'quiet'}),
+        contains('border-color: #888888;'),
+      );
       expect(
         await css({'system_panel_preset': 'rules'}),
         contains('border-top: 3px double;'),

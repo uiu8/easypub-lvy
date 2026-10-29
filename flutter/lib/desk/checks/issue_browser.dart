@@ -16,6 +16,7 @@ import 'evidence_view.dart';
 import 'repair_comparison.dart';
 import '../dialogs.dart';
 import '../tokens.dart';
+import '../widgets.dart';
 import 'issue_queue.dart';
 
 class CheckIssueBrowser extends StatefulWidget {
@@ -31,6 +32,7 @@ class CheckIssueBrowser extends StatefulWidget {
     this.onChanged,
     this.onAddNonHeading,
     this.onRule,
+    this.onNumericHeadings,
   });
   final ChapterSession session;
   final bool enabled;
@@ -46,6 +48,9 @@ class CheckIssueBrowser extends StatefulWidget {
 
   /// 点问题类型名：打开规则页并定位到这类问题的规则（V64，CH-279）。
   final void Function(String ruleId)? onRule;
+
+  /// 发现纯数字标题时的汇总提示按钮（V113）：打开“数字章节”，一次识别并统一为“第X章 标题”。
+  final Future<void> Function()? onNumericHeadings;
 
   /// 队列常驻所需宽度。
   static const queueBreakpoint = 760.0;
@@ -516,7 +521,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
       }
       if (mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(
+          deskSnackBar(
             content: Text(
               result.marked > 0
                   ? '已把 ${result.marked} 项标记为“不是标题”，可在“审阅此项”中逐项撤销。'
@@ -654,12 +659,26 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                           if (progress != null) ...[
                             const SizedBox(width: 8),
                             Flexible(
-                              child: Text(
-                                '已核对 $reviewed / $all',
-                                key: const ValueKey('check-issue-progress'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: ui(11.5, c: d.ink3),
+                              child: DeskPill(
+                                color: (reviewed ?? 0) > 0
+                                    ? d.addSoft
+                                    : d.sunken,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1.5,
+                                ),
+                                radius: 5,
+                                Text(
+                                  '已核对 $reviewed / $all',
+                                  key: const ValueKey('check-issue-progress'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: mono(
+                                    11,
+                                    w: 600,
+                                    c: (reviewed ?? 0) > 0 ? d.add : d.ink2,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -739,16 +758,17 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
               ],
             ),
           ),
-          // 静态色条（不用 LinearProgressIndicator：那是“正在读取”的含义）。
+          // 静态色条（不用 LinearProgressIndicator：那是“正在读取”的含义；V105 升级为 5px 圆角双色进度槽）。
           if (progress != null)
             Container(
-              key: const ValueKey('check-issue-progress-bar'),
-              height: 2,
-              color: d.line,
-              alignment: Alignment.centerLeft,
-              child: FractionallySizedBox(
-                widthFactor: progress,
-                child: ColoredBox(color: d.accent),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 7),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: d.line)),
+              ),
+              child: DeskProgressTrack(
+                key: const ValueKey('check-issue-progress-bar'),
+                value: progress,
+                color: (reviewed ?? 0) > 0 ? d.add : d.accent,
               ),
             ),
           Expanded(
@@ -1436,6 +1456,46 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
     child: Center(child: child),
   );
 
+  /// 纯数字标题汇总提示（V113）：不再导入时悄悄打开纯数字识别，改为在这里提示，
+  /// 一个按钮打开“数字章节”，预览后一次识别并统一为“第X章 标题”，可整批撤销。
+  Widget numericHint(Desk d, int count) {
+    final example = page?.items
+        .where((i) => i.category == 'unrecognized-heading')
+        .firstOrNull;
+    final sample = example == null
+        ? ''
+        : '，例如“${example.title.replaceFirst('这行可能是章节标题：', '')}”';
+    return Container(
+      key: const ValueKey('check-numeric-hint'),
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: d.warnSoft,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.format_list_numbered_rounded, size: 18, color: d.warn),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '发现 $count 个纯数字标题没有识别为章节$sample。'
+              '可以一次识别，并统一写成“第X章 标题”。',
+              style: ui(13, c: d.ink),
+            ),
+          ),
+          const SizedBox(width: 10),
+          DeskButton(
+            '识别并统一格式…',
+            key: const ValueKey('check-numeric-apply'),
+            primary: true,
+            onPressed: busy ? null : widget.onNumericHeadings,
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, bounds) {
@@ -1507,6 +1567,10 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: DeskNote(error, title: '未能读取', tone: Tone.pen),
               ),
+            if (widget.enabled &&
+                widget.onNumericHeadings != null &&
+                (categories['unrecognized-heading'] ?? 0) > 0)
+              numericHint(d, categories['unrecognized-heading']!),
             Expanded(child: body),
             if (page != null && page!.total > 0) navigation(d),
           ],

@@ -4,7 +4,7 @@ import '../../application/workspace_leave_service.dart';
 
 import 'package:flutter/material.dart';
 
-import '../dialogs.dart' show DeskAlert;
+import '../dialogs.dart' show DeskAlert, deskSnackBar;
 
 import 'package:go_router/go_router.dart';
 
@@ -56,7 +56,7 @@ class _ProjectMenuState extends State<ProjectMenu> {
       final messenger = ScaffoldMessenger.of(context);
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
-        SnackBar(
+        deskSnackBar(
           content: Text(message),
           showCloseIcon: true,
           duration: const Duration(seconds: 4),

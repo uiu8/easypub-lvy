@@ -54,6 +54,7 @@ mod cleanup_ocr;
 mod cleanup_punctuation;
 pub mod cleanup_rules;
 mod cleanup_text;
+pub use cleanup_text::is_rule_line;
 
 pub mod manual_edit;
 

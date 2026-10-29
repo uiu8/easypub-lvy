@@ -36,6 +36,8 @@ import '../application/block_annotation_service.dart';
 import 'legacy_block_annotation_session.dart';
 import '../application/manual_note_service.dart';
 import 'legacy_manual_note_session.dart';
+import '../application/inline_style_service.dart';
+import 'legacy_inline_style_session.dart';
 import '../application/app_update_service.dart';
 import '../application/rule_catalog_service.dart';
 import 'legacy_app_update_service.dart';
@@ -81,6 +83,7 @@ class LegacyLibraryAdapter
         LibraryService,
         BlockAnnotationLibrary,
         ManualNoteLibrary,
+        InlineStyleLibrary,
         RuleCatalogLibrary,
         AppUpdateLibrary,
         SupplementalPageLibrary,
@@ -956,6 +959,10 @@ class LegacyLibraryAdapter
       LegacyBlockAnnotationSession(_backend, bookId);
 
   @override
+  InlineStyleSession openInlineStyles(String bookId) =>
+      LegacyInlineStyleSession(_backend, bookId);
+
+  @override
   ManualNoteSession openManualNotes(String bookId) =>
       LegacyManualNoteSession(_backend, bookId);
 
@@ -1199,6 +1206,7 @@ class LegacyLibraryAdapter
             succeeded,
             _backend.importStatus,
             skipped: succeeded && existed,
+            sourceChanged: succeeded && _backend.importSourceChanged,
           ),
         );
         if (succeeded &&

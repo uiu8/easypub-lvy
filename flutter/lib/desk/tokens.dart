@@ -1,6 +1,6 @@
 // 编辑台设计令牌：单色“纸与墨”。灰墨是唯一的强调色；语义色只有三种且低饱和：
 // 朱（错误/删除）、赭（提醒/过期）、苔（差异中的新增/成功）。
-// 设计来源 design_review_v37/tokens.dart（预览），见 docs/37 §14。
+// 设计来源 design_review_v37/tokens.dart（预览），见 docs/37 第 2 节。
 import 'package:flutter/material.dart';
 
 @immutable
@@ -159,6 +159,8 @@ class Desk extends ThemeExtension<Desk> {
     delSoft: Color(0xFFFBE9E7),
     grain: 0,
   );
+
+  Color get shadowInk => const Color(0xFF000000);
 
   List<BoxShadow> get shadow1 => dark
       ? [const BoxShadow(color: Color(0x14FFFFFF), spreadRadius: .5)]

@@ -75,7 +75,7 @@ extension _BookSourceInteractions on _BookSourcePageState {
       case 'notice':
         final messenger = ScaffoldMessenger.maybeOf(context);
         messenger?.showSnackBar(
-          SnackBar(
+          deskSnackBar(
             content: Text('$name：${payload['text'] ?? ''}'),
             duration: Duration(seconds: payload['long'] == true ? 6 : 3),
           ),
@@ -101,7 +101,7 @@ extension _BookSourceInteractions on _BookSourcePageState {
 
   void _navigationNotice(String text) =>
       ScaffoldMessenger.maybeOf(context)
-          ?.showSnackBar(SnackBar(content: Text(text)));
+          ?.showSnackBar(deskSnackBar(content: Text(text)));
 
   /// 书源请求搜索：切到搜索页，只在目标书源里搜这个关键词；搜索已开始才回复 true。
   Future<void> _bookSearch(Map e, Map payload, String name) async {
@@ -179,50 +179,59 @@ extension _BookSourceInteractions on _BookSourcePageState {
     final controller = TextEditingController();
     final code = await _interactionDialog<String>(
       e,
-      (dialog) => DeskAlert(
-        key: const ValueKey('booksource-verification'),
-        title: Text('$name 需要验证码'),
-        content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Image.memory(
-                  bytes,
-                  height: 72,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) =>
-                      const DeskNote('验证码图片无法显示，请取消后重试。', tone: Tone.warn),
+      (dialog) => DeskControllerScope(
+        controllers: [controller],
+        child: DeskAlert(
+          key: const ValueKey('booksource-verification'),
+          title: Text('$name 需要验证码'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Image.memory(
+                    bytes,
+                    height: 72,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) =>
+                        const DeskNote('验证码图片无法显示，请取消后重试。', tone: Tone.warn),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const ValueKey('booksource-verification-field'),
-                controller: controller,
-                autofocus: true,
-                inputFormatters: [LengthLimitingTextInputFormatter(200)],
-                decoration: const InputDecoration(hintText: '按图片填写'),
-                onSubmitted: (v) => Navigator.pop(dialog, v.trim()),
-              ),
-              const SizedBox(height: 8),
-              const DeskText('EasyPub 不会自动识别验证码。最多等待 2 分钟，超时后书源会报错。', size: 12),
-            ],
+                const SizedBox(height: 12),
+                TextField(
+                  key: const ValueKey('booksource-verification-field'),
+                  controller: controller,
+                  autofocus: true,
+                  inputFormatters: [LengthLimitingTextInputFormatter(200)],
+                  decoration: const InputDecoration(hintText: '按图片填写'),
+                  onSubmitted: (v) => Navigator.pop(dialog, v.trim()),
+                ),
+                const SizedBox(height: 8),
+                const DeskText(
+                  'EasyPub 不会自动识别验证码。最多等待 2 分钟，超时后书源会报错。',
+                  size: 12,
+                ),
+              ],
+            ),
           ),
+          actions: [
+            DeskButton(
+              '取消',
+              quiet: true,
+              onPressed: () => Navigator.pop(dialog),
+            ),
+            DeskButton(
+              '提交',
+              key: const ValueKey('booksource-verification-submit'),
+              primary: true,
+              onPressed: () => Navigator.pop(dialog, controller.text.trim()),
+            ),
+          ],
         ),
-        actions: [
-          DeskButton('取消', quiet: true, onPressed: () => Navigator.pop(dialog)),
-          DeskButton(
-            '提交',
-            key: const ValueKey('booksource-verification-submit'),
-            primary: true,
-            onPressed: () => Navigator.pop(dialog, controller.text.trim()),
-          ),
-        ],
       ),
     );
-    Future<void>.delayed(const Duration(milliseconds: 300), controller.dispose);
     if (code == null || code.isEmpty) return _reply(e, null, cancel: true);
     await _reply(e, code);
   }

@@ -73,6 +73,37 @@ class GeneratedCoverPainter extends CustomPainter {
     canvas.drawRect(Offset.zero & size, Paint()..color = paper);
     final spine = math.max(3.0, w * .07);
     canvas.drawRect(Rect.fromLTWH(0, 0, spine, h), Paint()..color = ink);
+    // V105 (V2-1)：精装书脊立体明暗与压槽折痕、右侧书口多层纸页纹理。
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, math.max(1.0, spine * .24), h),
+      Paint()..color = const Color(0x2E000000),
+    );
+    final groove = math.max(1.0, 1.1 * scale);
+    canvas.drawRect(
+      Rect.fromLTWH(spine, 0, groove, h),
+      Paint()..color = const Color(0x36000000),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(spine + groove, 0, groove, h),
+      Paint()..color = const Color(0x4DFFFFFF),
+    );
+    if (framed && !small) {
+      final pageEdgePaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(.6, .75 * scale)
+        ..color = edge.withValues(alpha: .55);
+      final topPad = math.max(2.0, 2.2 * scale);
+      canvas.drawLine(
+        Offset(w - 1.3 * scale, topPad),
+        Offset(w - 1.3 * scale, h - topPad),
+        pageEdgePaint,
+      );
+      canvas.drawLine(
+        Offset(w - 2.6 * scale, topPad),
+        Offset(w - 2.6 * scale, h - topPad),
+        pageEdgePaint,
+      );
+    }
     final inset = w * .09;
     if (small) {
       _text(
@@ -192,6 +223,51 @@ class GeneratedCoverPainter extends CustomPainter {
       old.titleColor != titleColor ||
       old.authorColor != authorColor ||
       old.framed != framed;
+}
+
+/// 图片封面的精装书脊压痕与右侧书口纸页叠层（V105 V2-1）。
+class HardcoverFinishPainter extends CustomPainter {
+  const HardcoverFinishPainter({required this.edge});
+  final Color edge;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    if (w < 60) return;
+    final scale = w / 150;
+    final spine = math.max(4.0, w * .055);
+    final groove = math.max(1.0, 1.1 * scale);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, math.max(1.2, spine * .3), h),
+      Paint()..color = const Color(0x33000000),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(spine, 0, groove, h),
+      Paint()..color = const Color(0x38000000),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(spine + groove, 0, groove, h),
+      Paint()..color = const Color(0x42FFFFFF),
+    );
+    final pageEdgePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(.6, .75 * scale)
+      ..color = edge.withValues(alpha: .55);
+    final topPad = math.max(2.0, 2.2 * scale);
+    canvas.drawLine(
+      Offset(w - 1.3 * scale, topPad),
+      Offset(w - 1.3 * scale, h - topPad),
+      pageEdgePaint,
+    );
+    canvas.drawLine(
+      Offset(w - 2.6 * scale, topPad),
+      Offset(w - 2.6 * scale, h - topPad),
+      pageEdgePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(HardcoverFinishPainter old) => old.edge != edge;
 }
 
 /// 把生成封面画成 1200 × 1600 的 PNG，供转换在书没有封面时写入成品（OUT-070）。

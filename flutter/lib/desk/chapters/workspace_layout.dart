@@ -13,11 +13,15 @@ class DeskChapterLayout extends StatefulWidget {
     required this.reader,
     required this.inspector,
     this.showAuxiliary = true,
+    this.showInspector = true,
   });
   final Widget outline, reader, inspector;
 
   /// 问题、记录页签占满工作区时为 false。
   final bool showAuxiliary;
+
+  /// 排版视图里不显示章节设置（V120），空间让给正文旁的样式片段。
+  final bool showInspector;
 
   /// 目录常驻所需的工作区宽度；以下目录改为浮层。
   static const outlineBreakpoint = 820.0;
@@ -59,7 +63,9 @@ class DeskChapterLayoutState extends State<DeskChapterLayout> {
       final hasOutline =
           aux && c.maxWidth >= DeskChapterLayout.outlineBreakpoint;
       final hasInspector =
-          aux && c.maxWidth >= DeskChapterLayout.inspectorBreakpoint;
+          aux &&
+          widget.showInspector &&
+          c.maxWidth >= DeskChapterLayout.inspectorBreakpoint;
       final lw = outlineWidth.clamp(
         240.0,
         (c.maxWidth -
@@ -155,7 +161,9 @@ class DeskChapterLayoutState extends State<DeskChapterLayout> {
             Positioned.fill(
               child: GestureDetector(
                 onTap: () => setState(() => drawer = null),
-                child: ColoredBox(color: Colors.black.withValues(alpha: .12)),
+                child: ColoredBox(
+                  color: context.desk.shadowInk.withValues(alpha: .12),
+                ),
               ),
             ),
           if (!hasOutline)
@@ -172,7 +180,7 @@ class DeskChapterLayoutState extends State<DeskChapterLayout> {
                 ),
               ),
             ),
-          if (!hasInspector)
+          if (!hasInspector && widget.showInspector)
             Positioned(
               right: 0,
               top: 0,

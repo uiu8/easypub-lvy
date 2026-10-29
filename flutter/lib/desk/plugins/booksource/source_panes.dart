@@ -591,6 +591,15 @@ extension _SourcePanes on _BookSourcePageState {
           const SizedBox(height: 8),
         ],
         DeskButton(
+          '重置设备与运行状态',
+          key: ValueKey('booksource-inspector-reset-$id'),
+          icon: Icons.restart_alt_rounded,
+          quiet: true,
+          tooltip: '丢掉这个书源本次运行里保存的设备、临时 Cookie 和缓存，下次使用时重新生成；登录信息保留。搜不到书、目录取不到时可以试试。',
+          onPressed: () => _resetSource(s),
+        ),
+        const SizedBox(height: 8),
+        DeskButton(
           '详情、评分与下载参数…',
           key: ValueKey('booksource-inspector-detail-$id'),
           quiet: true,

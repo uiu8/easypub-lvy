@@ -28,6 +28,7 @@ const _examples = [
   '东京：从租借男友开始当完美男神(圭寸笔).txt',
   '《希灵帝国》（校对版全本）作者：远瞳.txt',
   '红楼梦（上）.txt',
+  '精灵女王审讯录 - 社畜宅宅.txt',
 ];
 
 class _FileNameAuthorSettingsState extends State<FileNameAuthorSettings> {
@@ -64,7 +65,10 @@ class _FileNameAuthorSettingsState extends State<FileNameAuthorSettings> {
 
   Future<void> applyPattern() async {
     if (!isValidFileNamePattern(pattern.text)) return;
-    await widget.save({'filename_pattern': pattern.text.trim()});
+    await widget.save({
+      'filename_pattern': FileNameOptions(pattern: pattern.text).patterns
+          .join('\n'),
+    });
   }
 
   @override
@@ -73,7 +77,9 @@ class _FileNameAuthorSettingsState extends State<FileNameAuthorSettings> {
     final o = options;
     final custom = o.mode == 'custom';
     final valid = isValidFileNamePattern(pattern.text);
-    final changed = pattern.text.trim() != o.pattern;
+    final changed =
+        FileNameOptions(pattern: pattern.text).patterns.join('\n') !=
+        o.patterns.join('\n');
     Widget label(String text, [String help = '']) => SizedBox(
       width: 150,
       child: Row(
@@ -99,7 +105,7 @@ class _FileNameAuthorSettingsState extends State<FileNameAuthorSettings> {
             children: [
               label(
                 '从文件名提取作者',
-                '导入时书里没有作者信息，就从文件名里取。自动识别认“书名(作者)”“《书名》作者：某某”等写法，'
+                '导入时书里没有作者信息，就从文件名里取。自动识别认“书名(作者)”“《书名》作者：某某”“书名 - 作者”等写法，'
                     '并去掉末尾的“ (1)”重复编号；括号里是“上、下、卷、册、番外”或数字时不当作者。'
                     '只影响以后导入的书和刷新来源时的候选，不改已入库的书。',
               ),
@@ -127,7 +133,9 @@ class _FileNameAuthorSettingsState extends State<FileNameAuthorSettings> {
             children: [
               label(
                 '文件名格式',
-                '用 {书名}、{作者}、{*}（任意内容，忽略）写出文件名的样子，如 {书名}({作者})、{作者} - {书名}、[{*}]{书名}。整个文件名（不含扩展名和重复编号）都要符合，不符合时不提取。',
+                '用 {书名}、{作者}、{*}（任意内容，忽略）写出文件名的样子，如 {书名}({作者})、{作者} - {书名}、[{*}]{书名}。'
+                    '可以写多行，每行一种，按顺序逐行尝试，用第一个符合的；都不符合时按自动识别。'
+                    '整个文件名（不含扩展名和重复编号）都要符合一行才算。',
               ),
               Expanded(
                 child: TextField(
@@ -135,14 +143,22 @@ class _FileNameAuthorSettingsState extends State<FileNameAuthorSettings> {
                   controller: pattern,
                   enabled: custom && !widget.saving,
                   style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
+                  // 至少显示两行，一眼能看出可以写多行（V113）。
+                  minLines: 2,
+                  maxLines: 6,
+                  keyboardType: TextInputType.multiline,
                   decoration: InputDecoration(
                     isDense: true,
+                    hintText: '{书名}({作者})\n{作者} - {书名}',
+                    helperText: custom
+                        ? '每行写一种格式，按回车换行；从上到下逐行尝试，都不符合时按自动识别。'
+                        : '选“自定义格式”后可以编辑。每行写一种格式，可以写多行，从上到下逐行尝试。',
+                    helperMaxLines: 2,
                     errorText: custom && !valid
-                        ? '需要恰好一个 {书名}，{作者} 最多一个'
+                        ? '每行需要恰好一个 {书名}，{作者} 最多一个'
                         : null,
                   ),
                   onChanged: (_) => setState(() {}),
-                  onSubmitted: (_) => applyPattern(),
                 ),
               ),
               const SizedBox(width: 8),

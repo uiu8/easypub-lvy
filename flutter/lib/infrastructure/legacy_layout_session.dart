@@ -280,6 +280,25 @@ class LegacyLayoutSession extends LegacyBookInformationSession
     return LayoutPreset('出厂默认', values);
   }
 
+  @override
+  Future<List<LayoutPreset>> builtinPresets() async {
+    final factory = await builtinPreset();
+    return [
+      LayoutPreset(
+        factory.name,
+        factory.values,
+        description: '软件的出厂排版：微软雅黑 110%，行距 1.2，段后 0.6，经典章名。',
+      ),
+      for (final (name, description, values, pack) in builtinLayoutPresets)
+        LayoutPreset(
+          name,
+          {...factory.values, ...values},
+          description: description,
+          stylePack: pack,
+        ),
+    ];
+  }
+
   Map<String, dynamic> copyPreset(Map value) =>
       Map<String, dynamic>.from(jsonDecode(jsonEncode(value)) as Map);
 
@@ -454,6 +473,23 @@ class LegacyLayoutSession extends LegacyBookInformationSession
           .toList(),
     );
     super.saved;
+  }
+
+  @override
+  Future<BookInformationPreview> previewBuiltin(LayoutPreset preset) {
+    fresh();
+    return previewChange({
+      'op': 'apply_layout_preset',
+      'preset': {
+        'name': preset.name,
+        'values': {
+          for (final e in preset.values.entries)
+            if (e.value != null &&
+                (layoutFields.contains(e.key) || e.key == 'font_family'))
+              e.key: e.value,
+        },
+      },
+    });
   }
 
   @override

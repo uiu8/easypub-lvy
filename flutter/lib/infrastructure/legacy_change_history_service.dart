@@ -201,6 +201,7 @@ class LegacyChangeHistoryService
     'verse_block_style': '诗词',
     'block_annotations': '手工标注块',
     'manual_notes': '手工注释',
+    'inline_styles': '行内样式',
     'supplemental_pages': '前后附页',
     'actions': '操作',
     'request': '编辑方案',

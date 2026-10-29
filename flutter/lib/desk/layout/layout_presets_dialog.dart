@@ -9,6 +9,7 @@ import '../../application/layout_service.dart';
 import '../../application/book_information_service.dart';
 import '../controls/controls.dart';
 import '../tokens.dart';
+import '../widgets.dart';
 
 class LayoutPresetsDialog extends StatefulWidget {
   const LayoutPresetsDialog({
@@ -86,9 +87,16 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
     });
   });
   Future<void> preview() => run(() async {
-    final result = await widget.session.previewPreset(selected!);
+    // 内置预设（V114）不必先复制到本项目，直接按它的数值预览。
+    final result = scope == 'builtin'
+        ? await widget.session.previewBuiltin(selectedPreset!)
+        : await widget.session.previewPreset(selected!);
     if (mounted) setState(() => plan = result);
   });
+
+  LayoutPreset? get selectedPreset =>
+      presets.where((p) => p.name == selected).firstOrNull;
+  bool get canApply => local || scope == 'builtin';
   Future<void> switchScope(bool value) => run(() async {
     final next = value
         ? await widget.session.readGlobalPresets()
@@ -153,17 +161,32 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
     if (mounted) setState(() => message = '预设文件已导出；已有目标文件不会覆盖。');
   });
   Future<void> showBuiltin() => run(() async {
-    final value = await widget.session.builtinPreset();
+    final values = await widget.session.builtinPresets();
     if (mounted) {
       setState(() {
-        presets = [value];
+        presets = values;
         selected = null;
         scope = 'builtin';
       });
     }
   });
   Future<void> apply() => run(() async {
+    final pack = scope == 'builtin' ? selectedPreset?.stylePack : null;
     await widget.session.apply(plan!);
+    // 内置预设带的样式包（如“出版社纸书”配“素雅”）与排版页“章节样式包”同一条应用路径。
+    final store = widget.session;
+    if (pack != null && store is ChapterStyleStore) {
+      final result = await (store as ChapterStyleStore).chapterStyleRequest({
+        'action': 'builtin',
+        'id': pack,
+      });
+      final style = (result['style'] as Map?)?.cast<String, dynamic>();
+      if (style != null) {
+        await widget.session.apply(
+          await widget.session.preview({'chapter_style': style}),
+        );
+      }
+    }
     if (mounted) Navigator.pop(context, true);
   });
   Future<void> remove() async {
@@ -237,10 +260,10 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
             ? '先选择一个预设'
             : !widget.allowApply
             ? '先补全排版数值'
-            : !local
+            : !canApply
             ? '先复制到本项目，再应用到书籍'
             : '正在处理',
-        onPressed: busy || selected == null || !widget.allowApply || !local
+        onPressed: busy || selected == null || !widget.allowApply || !canApply
             ? null
             : plan == null
             ? preview
@@ -283,7 +306,7 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
                   quiet: true,
                   onPressed: busy ? null : loadFile,
                 ),
-                if (scope == 'file') const Chip(label: Text('已导入文件 · 待复制')),
+                if (scope == 'file') const DeskTag('已导入文件 · 待复制', Tone.warn),
               ],
             )
           else
@@ -318,7 +341,9 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
                               selectedTileColor: context.desk.accentSoft,
                               title: DeskText(preset.name, bold: true),
                               subtitle: DeskText(
-                                '排版 · ${preset.values.length} 项参数',
+                                preset.description.isNotEmpty
+                                    ? preset.description
+                                    : '排版 · ${preset.values.length} 项参数',
                                 size: 12,
                                 color: context.desk.ink2,
                               ),
