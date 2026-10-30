@@ -145,7 +145,7 @@ void main() {
     await t.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await t.pump();
     expect(find.byKey(const ValueKey('block-mark-bar')), findsOneWidget);
-    expect(find.textContaining('行标为'), findsOneWidget);
+    expect(find.byKey(const ValueKey('block-mark-bar')), findsOneWidget);
 
     // 第一步只预览，不写入。
     await t.tap(find.byKey(const ValueKey(('block-mark-choose', 'letter'))));
@@ -156,7 +156,7 @@ void main() {
           .isNotEmpty,
       '确认步骤',
     );
-    expect(find.textContaining('标为书信？'), findsOneWidget);
+    expect(find.textContaining('标为书信'), findsOneWidget);
     expect(annotations(), isEmpty, reason: '预览不写入');
     await t.tap(find.byKey(const ValueKey('block-mark-confirm')));
     await until(() => annotations().length == 1, '标注写入');
@@ -182,16 +182,23 @@ void main() {
     await until(() => annotations().single['kind'] == 'quote', '改为引文');
     await until(() => find.text('引文 · 手工').evaluate().isNotEmpty, '标签刷新');
 
-    // 已标注的行再框选：预览被拒绝，工具条写明重叠原因。
+    // 已标注的行再选（V121）：选中整条标注，面板写明现在是引文，选诗词是“改为”，不再因重叠被拒绝。
     await t.tap(lineNumber(3));
     await t.pump();
+    expect(
+      t.widget<Text>(find.byKey(const ValueKey('block-mark-current'))).data,
+      '现在：引文（手工标注）',
+    );
     await t.tap(find.byKey(const ValueKey(('block-mark-choose', 'verse'))));
     await until(
-      () =>
-          find.byKey(const ValueKey('block-mark-error')).evaluate().isNotEmpty,
-      '重叠原因',
+      () => find
+          .byKey(const ValueKey('block-mark-confirm'))
+          .evaluate()
+          .isNotEmpty,
+      '改为诗词的确认',
     );
-    expect(find.textContaining('与已有标注重叠'), findsOneWidget);
+    expect(find.textContaining('改为诗词'), findsOneWidget);
+    expect(find.byKey(const ValueKey('block-mark-remove')), findsOneWidget);
     expect(annotations().length, 1);
     await t.tap(find.byKey(const ValueKey('block-mark-cancel')));
     await t.pump();

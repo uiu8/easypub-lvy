@@ -15,6 +15,7 @@ import '../../application/chapter_service.dart';
 import '../../application/kindle_preview_server.dart';
 import '../../application/conversion_desktop.dart' show readLocalFileBytes;
 import '../../application/layout_service.dart';
+import '../../application/system_scope.dart';
 import '../../application/library_service.dart';
 import '../../application/resource_service.dart';
 import '../../application/workspace_autosave_service.dart';
@@ -34,11 +35,15 @@ import 'inset_style_editor.dart';
 import 'recognition_counts.dart';
 import '../../application/rule_catalog_service.dart';
 import '../../application/settings_service.dart';
+import '../../application/storage_locations.dart';
+
+import 'package:path/path.dart' as paths;
 
 part 'layout_page_text.dart';
 part 'layout_page_heading.dart';
 part 'layout_page_paragraph.dart';
 part 'layout_page_preview.dart';
+part 'layout_page_font.dart';
 
 class LayoutNavigationGuard {
   Future<bool> Function()? check;
@@ -55,6 +60,7 @@ class LayoutPage extends StatefulWidget {
     required this.pickPresetDestination,
     required this.importCss,
     this.pickImage,
+    this.pickFont,
     this.pickStylePack,
     this.pickStylePackFolder,
     this.pickStylePackDestination,
@@ -70,6 +76,9 @@ class LayoutPage extends StatefulWidget {
 
   /// 统一章首图的选图对话框（V54，LAY-124）；为空时不能选图。
   final Future<String?> Function()? pickImage;
+
+  /// 嵌入字体的选文件对话框（V123，LAY-179）；为空时只能选原书自带的字体。
+  final Future<String?> Function()? pickFont;
 
   /// 章节样式包文件（V74，LAY-130）：导入时选 .zip，导出时选保存位置。
   final Future<String?> Function()? pickStylePack;
@@ -121,10 +130,15 @@ class _LayoutPageState extends State<LayoutPage> {
   Map<String, dynamic>? insetStyles;
   // 统一章首图（V54，LAY-124）：图片路径单独保存，不进草稿；范围与宽度是排版字段。
   String? chapterHeadImage;
+  // 嵌入字体（V123，LAY-179）：与章首图一样单独应用；fontFamily 是检查出的字体名。
+  Map<String, dynamic>? fontResource;
+  String? fontFamily;
   // 章节样式包（V74，LAY-130）：与章首图一样单独应用，不进草稿。
   Map<String, dynamic>? chapterStyle;
   // 系统提示自定义识别规则（V78，LAY-134）：在 rule_options 里，单独应用。
   List<String> systemPatterns = const [];
+  // 系统提示识别范围（V121，LAY-169）：也在 rule_options 里，单独应用。
+  String systemScope = 'auto';
 
   /// 小预览用的章首图像素（V54）；路径变化时重新读取。
   dui.Image? chapterHeadPixels;
@@ -374,6 +388,10 @@ class _LayoutPageState extends State<LayoutPage> {
     ];
     insetStyles = (saved['inset_styles'] as Map?)?.cast<String, dynamic>();
     chapterHeadImage = saved['chapter_head_image'] as String?;
+    final font = (saved['font_resource'] as Map?)?.cast<String, dynamic>();
+    if (font?['path'] != fontResource?['path']) fontFamily = null;
+    fontResource = font;
+    unawaited(loadFontFamily());
     chapterStyle = (saved['chapter_style'] as Map?)?.cast<String, dynamic>();
     systemPatterns = [
       for (final p
@@ -381,6 +399,8 @@ class _LayoutPageState extends State<LayoutPage> {
               const [])
         '$p',
     ];
+    final scope = (saved['rule_options'] as Map?)?['system_scope'] as String?;
+    systemScope = systemScopes.containsKey(scope) ? scope! : 'auto';
     unawaited(loadChapterHeadPixels());
     chapterHeadScope = saved['chapter_head_scope'] as String? ?? 'chapter';
     chapterHeadWidth = saved['chapter_head_width'] as String? ?? 'half';

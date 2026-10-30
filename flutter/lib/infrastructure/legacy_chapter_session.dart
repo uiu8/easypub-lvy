@@ -17,7 +17,8 @@ class LegacyChapterSession
         ChapterCopySession,
         ChapterIssueMapSession,
         ChapterRepairImpactSession,
-        BatchIssueReviewSession {
+        BatchIssueReviewSession,
+        ChapterGuardSession {
   LegacyChapterSession(this.backend, this.bookId);
   final PrototypeState backend;
   final String bookId;
@@ -1167,6 +1168,10 @@ class LegacyChapterSession
     return history != null &&
         (history['cursor'] as int) + 1 < (history['history'] as List).length;
   }
+
+  @override
+  bool isCurrent(ChapterPage page) =>
+      page.guard == backend.publicationContext(bookId);
 
   void check(ChapterPage page) {
     if (page.guard != backend.publicationContext(bookId)) {

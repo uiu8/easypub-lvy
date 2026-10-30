@@ -235,6 +235,10 @@ extension _LayoutPreviewSection on _LayoutPageState {
         render: _kindleRender,
         metrics: _kindleMetrics,
         apply: _kindleApply,
+        fontDirectory: paths.join(
+          StorageLocations.directory('settings'),
+          'preview-fonts',
+        ),
       );
       await host.launch(edge, await server.start());
       if (mounted) update(() => message = '已在独立窗口打开真机预览。');
@@ -718,6 +722,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
                         body.hashCode,
                         identityHashCode(bodyImages),
                         identityHashCode(chapterHeadOverride),
+                        systemScope,
                       ].join('|');
                       if (key != _pagesKey) {
                         _pagesKey = key;
@@ -748,6 +753,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
                           page: pageSize,
                           locale: Localizations.maybeLocaleOf(context),
                           images: images,
+                          systemScope: systemScope,
                         );
                       }
                       final index = previewPage.clamp(0, _pages.length - 1);

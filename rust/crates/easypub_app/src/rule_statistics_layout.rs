@@ -144,6 +144,8 @@ pub(super) fn collect(
     let mut first_pending = false;
     // 系统提示自定义识别（V78）：统计与正文生成用同一组规则。
     let custom = settings.rule_options.system_set();
+    // 整行【】的用途（V121）：与正文生成同一判断。
+    let scope = crate::system_scope::Scope::new(&book.text, &settings.rule_options.system_scope);
     // 场景样式（V81）：自动识别的聊天记录按开启时统计（与系统提示用 box 统计相同），并优先于系统提示。
     // 规则识别（V82）按开启时统计：内置项与自定义规则都计入，便于在规则页看到“开启会命中”。
     let mut all_on = settings.rule_options.clone();
@@ -187,6 +189,7 @@ pub(super) fn collect(
                 next_line,
                 "box",
                 "center",
+                &scope,
             ),
             line,
             node.is_some() || annotation.is_some(),
@@ -264,6 +267,7 @@ pub(super) fn collect(
                 next_line,
                 &settings.system_block_style,
                 &settings.verse_block_style,
+                &scope,
             ),
             line,
             node.is_some() || annotation.is_some(),

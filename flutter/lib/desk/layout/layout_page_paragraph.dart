@@ -32,6 +32,76 @@ extension _LayoutParagraphSection on _LayoutPageState {
     }
   }
 
+  /// 系统提示识别范围（V121，LAY-169）：写进本书 rule_options，进变更记录。
+  Future<void> setSystemScope(String next) async {
+    final current = session;
+    if (current == null || next == systemScope) return;
+    update(() => busy = true);
+    try {
+      final options = Map<String, dynamic>.from(
+        (current.saved['rule_options'] as Map?) ?? const {},
+      );
+      if (next == 'auto') {
+        options.remove('system_scope');
+      } else {
+        options['system_scope'] = next;
+      }
+      await current.apply(await current.preview({'rule_options': options}));
+      if (mounted) {
+        update(() {
+          systemScope = next;
+          message = '识别范围已改为“${systemScopes[next]}”';
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        update(() => message = deskErrorText(error, '识别范围未能保存'));
+      }
+    } finally {
+      if (mounted) update(() => busy = false);
+    }
+  }
+
+  Widget systemScopeControls() {
+    final d = context.desk;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: SizedBox(
+              width: 64,
+              child: Text('识别范围', style: ui(12, c: d.ink2)),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DeskSegmented<String>(
+                  key: const ValueKey('layout-system-scope'),
+                  value: systemScope,
+                  options: systemScopes,
+                  onChanged: busy ? null : setSystemScope,
+                ),
+                const SizedBox(height: 4),
+                Text(switch (systemScope) {
+                  'all' => '每一行整行【】都按系统提示排（V121 以前的规则）。',
+                  'keyword' => '只把带系统用语（叮、任务、奖励、等级、属性等）或数值的整行【】按系统提示排。',
+                  _ =>
+                    '按内容区分：台词、聊天消息、书前标签不算系统提示；'
+                        '【】多为系统提示的书，拿不准的行也按系统提示排。',
+                }, style: ui(11.5, c: d.ink3)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget systemPatternControls() {
     final d = context.desk;
     return Padding(
@@ -601,7 +671,10 @@ extension _LayoutParagraphSection on _LayoutPageState {
             presets('note', '单行提示', note, notePresetNames),
             presets('panel', '多行面板', panel, panelPresetNames),
           ],
-          if (systemBlockStyle != 'off') systemPatternControls(),
+          if (systemBlockStyle != 'off') ...[
+            systemScopeControls(),
+            systemPatternControls(),
+          ],
           if (widget.library is RuleCatalogLibrary)
             RecognitionCounts(
               library: widget.library as RuleCatalogLibrary,

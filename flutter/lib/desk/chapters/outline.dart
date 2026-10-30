@@ -541,10 +541,10 @@ class _ChapterOutlineState extends State<ChapterOutline> {
               child: Row(
                 children: [
                   issueSummary(d, map),
-                  const Spacer(),
-                  Flexible(
-                    flex: 4,
+                  const SizedBox(width: 8),
+                  Expanded(
                     child: Text(
+                      textAlign: TextAlign.right,
                       query.trim().isEmpty
                           ? '共 $total 个标题'
                           : '${shown.length} 个匹配 · 已查 ${nodes.length}/$total',

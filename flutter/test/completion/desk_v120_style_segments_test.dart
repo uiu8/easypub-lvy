@@ -39,37 +39,38 @@ String _sample() {
 
 /// V120：章节页排版视图的“样式片段”侧栏（LAY-166）：逐处列出、筛选、点一处或上下一处跳过去、全书按章汇总。
 void main() {
+  final shots = Platform.environment['EASYPUB_SHOT_DIR'];
+  setUpAll(() async {
+    if (shots != null) {
+      for (final font in {
+        'Microsoft YaHei': 'C:/Windows/Fonts/msyh.ttc',
+        'Desk Sans': 'C:/Windows/Fonts/msyh.ttc',
+        'Desk Serif': 'C:/Windows/Fonts/msyh.ttc',
+        'Desk Mono': 'C:/Windows/Fonts/consola.ttf',
+        'MaterialIcons': 'D:/software/EasyPub-Toolchains/flutter-3.47.3/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+      }.entries) {
+        await (FontLoader(font.key)..addFont(
+              File(font.value).readAsBytes().then((b) => b.buffer.asByteData()),
+            ))
+            .load();
+      }
+    }
+    await RustLib.init(
+      externalLibrary: ExternalLibrary.open(
+        Platform.environment['EASYPUB_TEST_DLL']!,
+      ),
+    );
+  });
+
   testWidgets('样式片段侧栏：列出本章每一处套了样式的文字，点一处跳到该行，全书按章列出', (t) async {
     t.view.physicalSize = const Size(1440, 900);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.resetPhysicalSize);
     addTearDown(t.view.resetDevicePixelRatio);
-    final shots = Platform.environment['EASYPUB_SHOT_DIR'];
     late PrototypeState state;
     late LegacyLibraryAdapter library;
     late String id;
     await t.runAsync(() async {
-      if (shots != null) {
-        for (final font in {
-          'Microsoft YaHei': 'C:/Windows/Fonts/msyh.ttc',
-          'Desk Sans': 'C:/Windows/Fonts/msyh.ttc',
-          'Desk Serif': 'C:/Windows/Fonts/msyh.ttc',
-          'Desk Mono': 'C:/Windows/Fonts/consola.ttf',
-          'MaterialIcons': 'D:/software/EasyPub-Toolchains/flutter-3.47.3/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-        }.entries) {
-          await (FontLoader(font.key)..addFont(
-                File(font.value)
-                    .readAsBytes()
-                    .then((b) => b.buffer.asByteData()),
-              ))
-              .load();
-        }
-      }
-      await RustLib.init(
-        externalLibrary: ExternalLibrary.open(
-          Platform.environment['EASYPUB_TEST_DLL']!,
-        ),
-      );
       final root = (await Directory(
         '../artifacts',
       ).createTemp('v120-style-segments-')).absolute.path;
@@ -150,11 +151,18 @@ void main() {
     expect(panel, findsOneWidget);
     // 排版视图不显示章节设置，空间让给样式片段。
     expect(find.text('章节设置'), findsNothing);
+    // 排版视图不显示编辑工具条，页眉有机型与字号菜单。
+    expect(find.text('识别规则'), findsNothing);
+    expect(find.text('数字章节'), findsNothing);
+    expect(find.byKey(const ValueKey('layout-device-menu')), findsOneWidget);
     expect(find.byTooltip('章节设置'), findsNothing);
 
     // 加一处文字样式：第 5 行“那封信”加粗。
     // 正文里的那一行（侧栏摘录里也有同样的文字）。
     await t.tap(body('他把那封信看了又看，终于放下。'));
+    await t.pump();
+    // 标注面板在这一行下方，可能在屏幕外。
+    await t.ensureVisible(find.byKey(const ValueKey('inline-style-open')));
     await t.pump();
     await t.tap(find.byKey(const ValueKey('inline-style-open')));
     await settle();
@@ -243,12 +251,53 @@ void main() {
     await settle();
     await shot('jump');
 
-    // 筛选：关掉“系统提示”，只剩诗词与文字样式。
-    await t.tap(find.byKey(const ValueKey(('style-segments-group', 'system'))));
+    // 筛选（V121）：点“诗词”只看诗词，再点一次恢复全部。
+    await t.tap(find.byKey(const ValueKey(('style-segments-group', 'verse'))));
     await t.pump();
     expect(segment('system', 3), findsNothing);
     expect(segment('verse', 15), findsOneWidget);
-    await t.tap(find.byKey(const ValueKey(('style-segments-group', 'system'))));
+    await t.tap(find.byKey(const ValueKey(('style-segments-group', 'verse'))));
+    await t.pump();
+    expect(segment('system', 3), findsOneWidget);
+
+    // 识别开关（V121）：关掉诗词，写进本书设置并重新识别，诗词片段与居中消失；再打开恢复。
+    await t.tap(find.byKey(const ValueKey(('recognition-switch', 'verse'))));
+    await until(() => segment('verse', 15).evaluate().isEmpty, '诗词关掉');
+    expect(state.production.settings(id)['verse_block_style'], 'off');
+    await t.tap(find.byKey(const ValueKey(('recognition-switch', 'verse'))));
+    // 重新识别要等统计重算，多等一会儿。
+    for (var i = 0; i < 80; i++) {
+      await t.pump(const Duration(milliseconds: 50));
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+    }
+    await until(() => segment('verse', 15).evaluate().isNotEmpty, '诗词打开');
+    expect(state.production.settings(id)['verse_block_style'], 'center');
+    // 改设置会改书稿版本（V121）：章节页自动重读本页，往下滚续读正文不报“书稿已变化”。
+    await t.fling(
+      find.byType(CustomScrollView).first,
+      const Offset(0, -4000),
+      4000,
+    );
+    for (var i = 0; i < 40; i++) {
+      await t.pump(const Duration(milliseconds: 50));
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+    }
+    expect(find.textContaining('书稿已变化'), findsNothing);
+    expect(body('正文第 40 段'), findsWidgets);
+    // 展开系统提示：方式缩略图、识别范围与本书判断。
+    await t.tap(find.byKey(const ValueKey(('recognition-expand', 'system'))));
+    await t.pump();
+    expect(find.byKey(const ValueKey('recognition-scope')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey(('recognition-style', 'system', 'box'))),
+      findsOneWidget,
+    );
+    await shot('recognition');
+    await t.tap(find.byKey(const ValueKey(('recognition-expand', 'system'))));
     await t.pump();
 
     // 全书：按章列出处数，第二章有一处系统提示；点它打开第二章。
@@ -280,6 +329,189 @@ void main() {
     await t.tap(second);
     await until(() => body('天亮了。').evaluate().isNotEmpty, '打开第二章');
     await until(() => segment('system', 2).evaluate().isNotEmpty, '第二章片段');
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('加框模式：连续几行系统提示连成一个框，侧栏写“加框”；标注面板显示现状并在卡片里应用', (t) async {
+    t.view.physicalSize = const Size(1440, 900);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
+    late PrototypeState state;
+    late LegacyLibraryAdapter library;
+    await t.runAsync(() async {
+      final root = (await Directory('../artifacts').createTemp('v120-box-'))
+          .absolute
+          .path;
+      state = PrototypeState(settingsDirectory: '$root/settings');
+      library = LegacyLibraryAdapter(backend: state);
+      await library.load();
+      await library.savePatch({'check_after_import': false});
+      final source = File('$root/加框.txt')
+        ..writeAsStringSync(
+          // 要像系统提示：V121 起【】里的台词不算系统提示（LAY-169）。
+          '第一章 茶馆\n“不急着添料，来，先跟叔唠一会儿。”\n【叮！检测到宿主】\n'
+          '【任务：在三日内拜入青云门】\n【奖励：灵石一百、悟性丹一枚】\n'
+          '“……”\n好家伙，这是拎着粪叉进马厩。\n',
+        );
+      expect((await library.importFiles([source.path])).single.succeeded, true);
+      // 老书的“加框”方式（V77 前的默认）。
+      expect(
+        await state.production.confirm(
+          await state.production.previewChanges({
+            state.currentId: {
+              'op': 'patch',
+              'fields': {
+                'system_block_style': {'op': 'set', 'value': 'box'},
+              },
+            },
+          }),
+        ),
+        true,
+      );
+    });
+    addTearDown(() {
+      library.dispose();
+      state.dispose();
+    });
+    Future<void> until(bool Function() ready, String what) async {
+      for (var i = 0; i < 500; i++) {
+        await t.pump(const Duration(milliseconds: 20));
+        if (ready()) return;
+        await t.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 15)),
+        );
+      }
+      fail('未就绪：$what');
+    }
+
+    final capture = GlobalKey();
+    Future<void> shot(String name) async {
+      if (shots == null) return;
+      for (var i = 0; i < 10; i++) {
+        await t.pump(const Duration(milliseconds: 50));
+      }
+      final boundary =
+          capture.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      await t.runAsync(() async {
+        final img = await boundary.toImage();
+        final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+        File('$shots/$name.png').writeAsBytesSync(bytes!.buffer.asUint8List());
+        img.dispose();
+      });
+    }
+
+    Finder segment(String group, int line) =>
+        find.byKey(ValueKey(('style-segment', group, line)));
+    await t.pumpWidget(
+      RepaintBoundary(
+        key: capture,
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: deskTheme(),
+          home: Scaffold(
+            body: ChapterWorkspace(
+              library: library,
+              bookId: state.currentId,
+              viewState: ChapterViewState(),
+            ),
+          ),
+        ),
+      ),
+    );
+    final mode = find.byKey(const ValueKey('chapter-layout-mode'));
+    await until(() => mode.evaluate().isNotEmpty, '原文与排版切换');
+    await t.tap(find.descendant(of: mode, matching: find.text('排版')));
+    await until(() => segment('system', 2).evaluate().isNotEmpty, '系统提示片段');
+    // 三行连续的系统提示算一处，写明是加框。
+    expect(segment('system', 3), findsNothing);
+    expect(
+      find.descendant(of: segment('system', 2), matching: find.text('加框')),
+      findsOneWidget,
+    );
+    await shot('box');
+
+    // 点一行：面板写明现在的识别结果，选“面板”后在卡片里应用。
+    await t.tap(body('【叮！检测到宿主】'));
+    await t.pump();
+    expect(
+      t.widget<Text>(find.byKey(const ValueKey('block-mark-current'))).data,
+      '现在：系统提示 · 加框（自动识别）',
+    );
+    await t.ensureVisible(
+      find.byKey(const ValueKey(('block-mark-choose', 'system-panel'))),
+    );
+    await t.tap(
+      find.byKey(const ValueKey(('block-mark-choose', 'system-panel'))),
+    );
+    await until(
+      () => find
+          .byKey(const ValueKey('block-mark-confirm'))
+          .evaluate()
+          .isNotEmpty,
+      '应用按钮',
+    );
+    expect(find.textContaining('标为系统提示 · 面板'), findsOneWidget);
+    await shot('mark');
+    await t.tap(find.byKey(const ValueKey('block-mark-back')));
+    await t.pump();
+    expect(find.byKey(const ValueKey('block-mark-confirm')), findsNothing);
+
+    // 标为“不识别”后还能再改（V121）：点这一行选中整条标注，可以改类型，也可以恢复自动识别。
+    Future<void> apply(Finder button) async {
+      await t.ensureVisible(button);
+      await t.pump();
+      await t.tap(button);
+      await until(
+        () => find
+            .byKey(const ValueKey('block-mark-confirm'))
+            .evaluate()
+            .isNotEmpty,
+        '应用按钮',
+      );
+      await t.ensureVisible(find.byKey(const ValueKey('block-mark-confirm')));
+      await t.pump();
+      await t.tap(find.byKey(const ValueKey('block-mark-confirm')));
+      // 写入后标注列表还要刷新一下，刷新完才接受下一次点击。
+      for (var i = 0; i < 30; i++) {
+        await t.pump(const Duration(milliseconds: 30));
+        await t.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
+    }
+
+    List marks() =>
+        (state.production.settings(state.currentId)['block_annotations']
+            as List?) ??
+        const [];
+    await apply(find.byKey(const ValueKey(('block-mark-choose', 'none'))));
+    await until(() => marks().length == 1, '不识别写入');
+    expect(segment('system', 2), findsNothing);
+    // 不识别的行没有色条。
+    expect(
+      find.byKey(ValueKey(('layout-bar', state.currentId, 2))),
+      findsNothing,
+    );
+    await t.tap(body('【叮！检测到宿主】'));
+    await t.pump();
+    expect(
+      t.widget<Text>(find.byKey(const ValueKey('block-mark-current'))).data,
+      '现在：不识别（手工标注）',
+    );
+    // 改为单行：改的是这条标注，不会因“重叠”被拒绝。
+    await apply(
+      find.byKey(const ValueKey(('block-mark-choose', 'system-note'))),
+    );
+    await until(
+      () => marks().length == 1 && marks().single['kind'] == 'system',
+      '改为单行',
+    );
+    // 删除标注，恢复自动识别。
+    await t.tap(body('【叮！检测到宿主】'));
+    await t.pump();
+    await apply(find.byKey(const ValueKey('block-mark-remove')));
+    await until(() => marks().isEmpty, '删除标注');
     expect(t.takeException(), isNull);
   });
 }

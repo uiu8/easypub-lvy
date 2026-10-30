@@ -8,3 +8,10 @@ Future<String?> pickCoverImage() async => (await openFile(
     ),
   ],
 ))?.path;
+
+/// 嵌入字体的字体文件（V123，LAY-179）。
+Future<String?> pickFontFile() async => (await openFile(
+  acceptedTypeGroups: [
+    const XTypeGroup(label: '字体文件', extensions: ['ttf', 'otf', 'ttc']),
+  ],
+))?.path;

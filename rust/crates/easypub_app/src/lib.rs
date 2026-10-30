@@ -19,6 +19,7 @@ pub mod rule_catalog;
 pub mod rule_options;
 pub mod rule_statistics;
 pub mod rule_toggles;
+pub mod system_scope;
 pub mod supplemental_pages;
 
 pub mod assets;
@@ -48,6 +49,7 @@ pub mod css_project;
 
 pub mod css_media;
 mod woff;
+mod epub_fonts;
 
 pub mod publication_navigation;
 

@@ -468,6 +468,18 @@ final layoutFields = Set<String>.unmodifiable({
   'margin_right_unit',
 });
 
+/// 嵌入字体（V123，LAY-179）：检查字体、复制到程序数据目录、列出原书自带的字体。
+abstract interface class BookFontSource {
+  /// 字体检查报告（字体名、授权标记、哈希）；读不了时抛出。
+  Future<Map<String, dynamic>> inspectFont(String path);
+
+  /// 复制到程序数据目录，返回副本路径；授权按文件内容绑定，原文件挪走后仍有效。
+  Future<String> keepFont(String path, String sha256);
+
+  /// 原书（EPUB）自带的字体：path、href、format（ttf / otf / ttc / woff2 …）。
+  List<Map<String, Object?>> get originalFonts;
+}
+
 /// Layout uses the same guarded production-change DTO as book information.
 abstract class LayoutSession {
   Map<String, Object?> get savedCss;

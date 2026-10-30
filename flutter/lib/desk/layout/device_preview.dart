@@ -7,12 +7,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../application/layout_service.dart'
-    show
-        isSceneBreak,
-        isSystemLine,
-        isVerseAttribution,
-        isVerseLine,
-        sceneBreakText;
+    show isSceneBreak, isVerseAttribution, isVerseLine, sceneBreakText;
+import '../../application/system_scope.dart';
+import 'kindle_lines.dart';
 import 'system_block_look.dart';
 
 class KindleDevice {
@@ -1024,8 +1021,116 @@ class PreviewPieceView extends StatelessWidget {
   @override
   Widget build(BuildContext context) => CustomPaint(
     size: Size(width, PreviewPage.contentHeight([piece], style, width, locale)),
-    painter: _PagePainter([piece], style, paper, locale),
+    painter: _PagePainter([piece], style, paper, locale, single: true),
   );
+}
+
+/// 按 Kindle 规则断好的段落（V124）：每行原文的结束位置，分页时按它切开。
+final _kindleCuts = Expando<List<int>>('kindle-cuts');
+
+/// 单个字符的宽度（含正文字距），按字体、字号、字距与码点缓存。
+final _advances = <(String?, double?, double?, FontWeight?, int), double>{};
+double _advance(TextStyle body, int code) {
+  final key = (
+    body.fontFamily,
+    body.fontSize,
+    body.letterSpacing,
+    body.fontWeight,
+    code,
+  );
+  final cached = _advances[key];
+  if (cached != null) return cached;
+  if (_advances.length > 20000) _advances.clear();
+  final painter = TextPainter(
+    text: TextSpan(text: String.fromCharCode(code), style: body),
+    textDirection: TextDirection.ltr,
+    textScaler: TextScaler.noScaling,
+  )..layout();
+  final width = painter.width;
+  painter.dispose();
+  return _advances[key] = width;
+}
+
+/// 普通正文段（V124）：按 Kindle 规则自己断行（行末标点半宽、相邻挤压、中西间距、中文禁则、两端对齐），
+/// 每行一段文字，行间用换行分开。标题、系统提示、诗句、场景分隔、首字放大、带行内样式的段落仍交给 Flutter 排。
+(TextSpan, List<int>)? _kindleSpan(
+  PreviewPiece piece,
+  PreviewStyle style,
+  double width,
+) {
+  if (piece.title ||
+      piece.kind.isNotEmpty ||
+      piece.initial ||
+      piece.image != null ||
+      piece.text.isEmpty ||
+      piece.text.contains('\n') ||
+      !(style.align == TextAlign.justify ||
+          style.align == TextAlign.start ||
+          style.align == TextAlign.left)) {
+    return null;
+  }
+  final spans = piece.spans?.call(piece.text);
+  if (spans != null &&
+      !(spans is TextSpan &&
+          spans.children == null &&
+          spans.style == null &&
+          spans.text == piece.text)) {
+    return null;
+  }
+  final body = style.body;
+  final em = body.fontSize ?? 16;
+  final indent = piece.indent && style.indent > 0 ? style.indent : 0.0;
+  final lines = kindleLines(
+    piece.text,
+    width: width,
+    em: em,
+    indent: indent,
+    justify: style.align == TextAlign.justify,
+    advance: (c) => _advance(body, c),
+  );
+  final base = body.letterSpacing ?? 0;
+  final children = <InlineSpan>[
+    if (indent > 0) WidgetSpan(child: SizedBox(width: indent)),
+  ];
+  for (final (index, line) in lines.indexed) {
+    if (index > 0) children.add(const TextSpan(text: '\n'));
+    final chars = piece.text.substring(line.start, line.end).runes.toList();
+    var k = 0;
+    while (k < chars.length) {
+      var j = k + 1;
+      while (j < chars.length && line.spacing[j] == line.spacing[k]) {
+        j++;
+      }
+      final spacing = line.spacing[k];
+      children.add(
+        TextSpan(
+          text: String.fromCharCodes(chars.sublist(k, j)),
+          style: spacing == 0 ? null : TextStyle(letterSpacing: base + spacing),
+        ),
+      );
+      k = j;
+    }
+  }
+  return (
+    TextSpan(style: body, children: children),
+    [for (final l in lines) l.end],
+  );
+}
+
+/// 测试用：段落按小预览实际排出的各行原文（Kindle 断行时）与 Flutter 排出的行数。
+@visibleForTesting
+(List<String>?, int) debugPreviewLines(
+  PreviewPiece piece,
+  PreviewStyle style,
+  double width,
+) {
+  final painter = _painter(piece, style, width);
+  final cuts = _kindleCuts[painter];
+  final count = painter.computeLineMetrics().length;
+  painter.dispose();
+  if (cuts == null) return (null, count);
+  var from = 0;
+  return ([for (final c in cuts) piece.text.substring(from, from = c)], count);
 }
 
 TextPainter _painter(
@@ -1037,6 +1142,33 @@ TextPainter _painter(
   final scene =
       !piece.title && style.sceneBreak != 'off' && isSceneBreak(piece.text);
   final look = _look(piece, style);
+  final kindle = scene || look != null
+      ? null
+      : _kindleSpan(piece, style, width);
+  if (kindle != null) {
+    final painter = TextPainter(
+      text: kindle.$1,
+      textAlign: TextAlign.start,
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.noScaling,
+      locale: locale,
+    );
+    if (piece.indent && style.indent > 0) {
+      painter.setPlaceholderDimensions([
+        PlaceholderDimensions(
+          size: Size(style.indent, 0),
+          alignment: PlaceholderAlignment.bottom,
+        ),
+      ]);
+    }
+    // 行已经断好：留出一个字宽的余量，避免浮点误差让 Flutter 再折一次行。
+    painter.layout(
+      minWidth: width,
+      maxWidth: width + (style.body.fontSize ?? 16),
+    );
+    _kindleCuts[painter] = kindle.$2;
+    return painter;
+  }
   final painter = TextPainter(
     text: _span(piece, style),
     textAlign: piece.title || scene || look?.center == true
@@ -1079,6 +1211,14 @@ TextPainter _painter(
   return painter;
 }
 
+/// 一行行框下面的半个行间留白：行高减去字体上下沿后的一半（Flutter 按行高等比放大上下沿，
+/// 字体本身的上下沿按未放大的上沿换算）。
+double _lineLead(ui.LineMetrics m) {
+  if (m.ascent <= 0 || m.height <= 0) return 0;
+  final font = m.height * m.unscaledAscent / m.ascent;
+  return math.max(0, (m.height - font) / 2);
+}
+
 /// 按版面把标题与各段分到书页；放不下的段在行边界处切开，下一页续排（续排部分不再缩进）。
 List<List<PreviewPiece>> paginatePreview({
   required String title,
@@ -1089,7 +1229,11 @@ List<List<PreviewPiece>> paginatePreview({
 
   /// 正文插图（R5-01）：键是插在第几段之后（0 起），-1 表示紧接标题。
   Map<int, List<PreviewImage>> images = const {},
+
+  /// 系统提示识别范围（V121，LAY-169）：本书 rule_options.system_scope；按本章判断倾向。
+  String systemScope = 'auto',
 }) {
+  final scope = SystemScope(paragraphs, systemScope);
   final width = math.max(40.0, page.width - style.padding.horizontal);
   final height = math.max(40.0, page.height - style.padding.vertical);
   final pages = <List<PreviewPiece>>[];
@@ -1121,8 +1265,8 @@ List<List<PreviewPiece>> paginatePreview({
         styled &&
         isDingLine(p) &&
         index + 1 < paragraphs.length &&
-        isSystemLine(paragraphs[index + 1]);
-    final kind = style.systemBlock != 'off' && (isSystemLine(p) || ding)
+        scope.isSystem(paragraphs[index + 1]);
+    final kind = style.systemBlock != 'off' && (scope.isSystem(p) || ding)
         ? 'system'
         // 诗句要成联：前一行是诗句，或后一行是诗句或署名（与 Rust 相同，单独一行不算）。
         : style.verseBlock != 'off' &&
@@ -1180,17 +1324,22 @@ List<List<PreviewPiece>> paginatePreview({
           (piece.title
               ? style.titleBefore + style.titleAfter + style.headHeight(width)
               : 0);
-      if (h <= remaining) {
+      final metrics = painter.computeLineMetrics();
+      // 页底按文字下沿判断放不放得下（V124，与真机预览相同，按 KPW5 真机截图反推）：
+      // 最后一行行框下面的半个行间留白可以超出页底。
+      final tail = piece.title || after > 0 || metrics.isEmpty
+          ? 0.0
+          : _lineLead(metrics.last);
+      if (h - tail <= remaining) {
         current.add(piece);
         remaining -= h + gap;
         painter.dispose();
         break;
       }
-      final metrics = painter.computeLineMetrics();
       var fit = 0;
       var used = before;
       for (final m in metrics) {
-        if (used + m.height > remaining) break;
+        if (used + m.height - _lineLead(m) > remaining) break;
         used += m.height;
         fit++;
       }
@@ -1207,13 +1356,16 @@ List<List<PreviewPiece>> paginatePreview({
         continue;
       }
       final shift = piece.indent && style.indent > 0 ? 1 : 0;
-      final end = painter
-          .getLineBoundary(
-            painter.getPositionForOffset(
-              Offset(0, used - before - metrics[fit - 1].height / 2),
-            ),
-          )
-          .end;
+      final cuts = _kindleCuts[painter];
+      final end = cuts != null && fit <= cuts.length
+          ? cuts[fit - 1] + shift
+          : painter
+                .getLineBoundary(
+                  painter.getPositionForOffset(
+                    Offset(0, used - before - metrics[fit - 1].height / 2),
+                  ),
+                )
+                .end;
       painter.dispose();
       final cut = (end - shift).clamp(1, piece.text.length);
       current.add(
@@ -1436,7 +1588,17 @@ class PreviewPage extends StatelessWidget {
 }
 
 class _PagePainter extends CustomPainter {
-  _PagePainter(this.pieces, this.style, this.paper, this.locale);
+  _PagePainter(
+    this.pieces,
+    this.style,
+    this.paper,
+    this.locale, {
+    this.single = false,
+  });
+
+  /// 只画一段（V120，章节页排版视图逐行画）：加框的系统提示按 [PreviewPiece.runStart]、
+  /// [PreviewPiece.runEnd] 只画这一段的那部分框，连续几行在页面上连成一个框。
+  final bool single;
   final List<PreviewPiece> pieces;
   final PreviewStyle style;
   final Color paper;
@@ -1487,7 +1649,10 @@ class _PagePainter extends CustomPainter {
       painter.dispose();
       // 系统提示加框（V50，LAY-121）：连续几段画一个框。
       final next = i + 1 < pieces.length ? pieces[i + 1] : null;
-      if (boxed && next?.kind != 'system') {
+      if (boxed && single) {
+        _paintBoxPart(canvas, piece, boxTop!, y, width);
+        boxTop = null;
+      } else if (boxed && next?.kind != 'system') {
         canvas.drawRect(
           Rect.fromLTRB(
             style.padding.left - 4,
@@ -1517,6 +1682,30 @@ class _PagePainter extends CustomPainter {
       if (i < pieces.length - 1) {
         y += piece.title ? style.titleGap : style.paragraphSpacing;
       }
+    }
+  }
+
+  /// 逐行画时加框的一部分：起头一行画上边，收尾一行画下边，中间的行左右两边延到下一行（含段间距）。
+  void _paintBoxPart(
+    Canvas canvas,
+    PreviewPiece piece,
+    double top,
+    double bottom,
+    double width,
+  ) {
+    final paint = Paint()
+      ..strokeWidth = 1
+      ..color = style.body.color ?? const Color(0xFF333333);
+    final left = style.padding.left - 4, right = style.padding.left + width + 4;
+    final a = piece.runStart ? top - 3 : top;
+    final b = piece.runEnd ? bottom + 3 : bottom + style.paragraphSpacing;
+    canvas.drawLine(Offset(left, a), Offset(left, b), paint);
+    canvas.drawLine(Offset(right, a), Offset(right, b), paint);
+    if (piece.runStart) {
+      canvas.drawLine(Offset(left, a), Offset(right, a), paint);
+    }
+    if (piece.runEnd) {
+      canvas.drawLine(Offset(left, b), Offset(right, b), paint);
     }
   }
 
@@ -1681,5 +1870,6 @@ class _PagePainter extends CustomPainter {
       !identical(old.pieces, pieces) ||
       old.style != style ||
       old.paper != paper ||
-      old.locale != locale;
+      old.locale != locale ||
+      old.single != single;
 }

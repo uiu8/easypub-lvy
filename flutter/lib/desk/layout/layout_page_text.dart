@@ -208,12 +208,13 @@ extension _LayoutTextSection on _LayoutPageState {
                 children: [
                   Text(label, style: ui(12.5, w: 600, c: d.ink)),
                   help,
-                  const Spacer(),
-                  Flexible(
+                  // 当前选择贴右对齐（V121：原来 Spacer 与 Flexible 平分剩余宽度，各行错位）。
+                  Expanded(
                     child: Text(
                       current,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
                       style: ui(12, c: d.ink2),
                     ),
                   ),
@@ -488,6 +489,7 @@ extension _LayoutTextSection on _LayoutPageState {
             grid(['paragraph_indent', 'paragraph_spacing', 'fullwidth_indent']),
             const SizedBox(height: 4),
             writingControls(),
+            fontControls(),
           ]),
         ],
       },

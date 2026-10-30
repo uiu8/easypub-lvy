@@ -253,6 +253,7 @@ extension _Routes on _RewriteAppState {
             pickPresetDestination: pickPresetDestination,
             importCss: importCssFile,
             pickImage: pickCoverImage,
+            pickFont: pickFontFile,
             pickStylePack: pickStylePackFile,
             pickStylePackFolder: pickStylePackFolder,
             pickStylePackDestination: pickStylePackDestination,

@@ -5,9 +5,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../application/book_information_service.dart';
 import '../../application/layout_service.dart';
 import '../../application/library_service.dart';
 import '../../application/rule_catalog_service.dart';
+import '../errors.dart';
 import '../layout/device_preview.dart';
 import '../layout/system_block_look.dart';
 import '../tokens.dart';
@@ -59,6 +61,48 @@ class ChapterLayoutView extends ChangeNotifier {
       // 读不出时按默认机型画。
     }
     if (!_disposed) notifyListeners();
+  }
+
+  /// 在侧栏里改本书的识别设置（V121，LAY-173）：与排版页同一个写入口，进变更记录；返回失败原因。
+  /// 写入后统计会变旧，自动重读设置并重新识别。
+  Future<String?> applySettings(Map<String, Object?> patch) async {
+    try {
+      final session = library.openLayout(bookId);
+      try {
+        if (session is! BookInformationSession) return '这个书库不能在这里改排版设置。';
+        final info = session as BookInformationSession;
+        await info.apply(await info.preview(patch));
+        book = {...book, ...patch};
+        if (patch['system_block_style'] case final String v) systemBlock = v;
+        if (patch['verse_block_style'] case final String v) verseBlock = v;
+        if (!_disposed) notifyListeners();
+        return null;
+      } finally {
+        session.dispose();
+      }
+    } catch (error) {
+      return deskErrorText(error, '设置没有改成，请稍后重试。');
+    }
+  }
+
+  /// 在排版视图页眉里换机型或字号档位（V120）：与真机预览共用同一份选择。
+  Future<void> chooseDevice(PreviewDeviceChoice next) async {
+    device = next;
+    notifyListeners();
+    try {
+      final session = library.openLayout(bookId);
+      try {
+        if (session is LayoutPreviewDeviceStore) {
+          await (session as LayoutPreviewDeviceStore).savePreviewDevice(
+            next.encode(),
+          );
+        }
+      } finally {
+        session.dispose();
+      }
+    } catch (_) {
+      // 保存失败时本次照样按新选择显示。
+    }
   }
 
   /// 书页参数：与排版页小预览同一套真机规则（字号、行距、版心、两端对齐），页边距以外的部分。
@@ -191,8 +235,10 @@ class ChapterLayoutView extends ChangeNotifier {
         end++;
       }
       final variant = manual[first]?.view.variant;
-      final role =
-          variant ?? (systemBlock == 'styled' && end > i ? 'panel' : 'note');
+      // 分类样式下分单行与面板；加框、缩进时整段同一种画法，角色即方式（box / indent）。
+      final role = systemBlock == 'styled'
+          ? variant ?? (end > i ? 'panel' : 'note')
+          : systemBlock;
       final values = systemStyles?[role];
       final titled =
           systemBlock == 'styled' &&
@@ -287,6 +333,8 @@ class KindleColumn {
             text.trimLeft(),
             indent: false,
             kind: 'system',
+            runStart: role?.start ?? true,
+            runEnd: role?.end ?? true,
             spans: spans,
           );
         }
@@ -326,6 +374,8 @@ String layoutLineLabel(LayoutLine line, SystemRole? role) =>
       'system' => switch (role?.role) {
         'panel' => '系统提示 · 面板',
         'note' => '系统提示 · 单行',
+        'box' => '系统提示 · 加框',
+        'indent' => '系统提示 · 缩进',
         _ => '系统提示',
       },
       'verse' => line.css == 'verse-by' ? '诗词 · 署名' : '诗词',

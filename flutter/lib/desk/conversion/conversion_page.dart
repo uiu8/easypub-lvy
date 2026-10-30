@@ -949,7 +949,7 @@ class _ConversionPageState extends State<ConversionPage> {
               Text('本次书稿', style: ui(14, w: 650, c: d.ink)),
               const DeskHelp('转换使用各书已保存的草稿：最终章节、文本清理、书籍信息和排版都以草稿为准，原稿不变。'),
               const SizedBox(width: 6),
-              Flexible(
+              Expanded(
                 child: Text(
                   '已选 $chosenCount / 共 ${all.length}',
                   key: const ValueKey('conversion-selected-count'),
@@ -958,7 +958,6 @@ class _ConversionPageState extends State<ConversionPage> {
                   style: ui(12, c: d.ink3),
                 ),
               ),
-              const Spacer(),
               FilterChip(
                 key: const ValueKey('conversion-only-selected'),
                 label: const Text('只看已选'),

@@ -4,6 +4,7 @@ import '../../application/block_annotation_service.dart';
 import '../../application/inline_style_service.dart';
 import '../../application/layout_service.dart';
 import '../../application/rule_catalog_service.dart';
+import '../../application/system_scope.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 import 'block_marks.dart';
@@ -23,7 +24,7 @@ class StyleSegment {
     this.manual = false,
   });
 
-  /// 分组：system / verse / block / inset / style / note。
+  /// 分组：system / verse / chat / inset / block / style / note。
   final String group;
 
   /// 名称（例如“系统提示 · 面板”）与所用样式（例如“标题面板”“加粗”）。
@@ -41,15 +42,73 @@ class StyleSegment {
 const styleSegmentGroups = {
   'system': '系统提示',
   'verse': '诗词',
-  'block': '书信与引文',
+  'chat': '聊天记录',
   'inset': '场景',
+  'block': '书信与引文',
   'style': '文字样式',
   'note': '注释',
 };
 
+/// 识别与样式（V121，LAY-173）：侧栏里可开关的识别项——分组、设置字段、名称、选项、开启时默认值、图标。
+final _recognitions =
+    <(String, String, String, Map<String, String>, String, IconData)>[
+      (
+        'system',
+        'system_block_style',
+        '系统提示',
+        systemBlockStyles,
+        'styled',
+        Icons.campaign_outlined,
+      ),
+      (
+        'verse',
+        'verse_block_style',
+        '诗词',
+        verseBlockStyles,
+        'center',
+        Icons.auto_stories_outlined,
+      ),
+      (
+        'chat',
+        'chat_block_style',
+        '聊天记录',
+        chatBlockStyles,
+        'window',
+        Icons.forum_outlined,
+      ),
+      (
+        'inset',
+        'inset_detect',
+        '场景',
+        insetDetectModes,
+        'on',
+        Icons.theater_comedy_outlined,
+      ),
+      (
+        'scene',
+        'scene_break_style',
+        '场景分隔',
+        sceneBreakStyles,
+        'keep',
+        Icons.more_horiz_rounded,
+      ),
+      (
+        'rare',
+        'rare_char_ruby',
+        '生僻字注音',
+        rareCharRubyModes,
+        'chapter',
+        Icons.translate_rounded,
+      ),
+    ];
+
+/// 只有手工标注的分组：侧栏里只作筛选。
+const _manualGroups = ['block', 'style', 'note'];
+
 Tone styleSegmentTone(String group) => switch (group) {
   'system' => Tone.accent,
   'verse' => Tone.ok,
+  'chat' => Tone.info,
   'block' => Tone.info,
   'inset' => Tone.warn,
   'style' => Tone.pen,
@@ -60,6 +119,7 @@ String _groupOfKind(String kind) => switch (kind) {
   'system' => 'system',
   'verse' => 'verse',
   'letter' || 'quote' => 'block',
+  'chat' => 'chat',
   _ => 'inset',
 };
 
@@ -120,12 +180,22 @@ List<StyleSegment> chapterStyleSegments({
       StyleSegment(
         group: _groupOfKind(line.kind),
         label: switch (line.kind) {
-          'system' => role?.role == 'panel' ? '面板' : '单行提示',
+          'system' => switch (role?.role) {
+            'panel' => '面板',
+            'note' => '单行提示',
+            _ => '系统提示',
+          },
           _ => layoutLineLabel(line, role).replaceAll(' · 署名', ''),
         },
-        detail: line.kind == 'system' && style is Map
+        detail: line.kind != 'system'
+            ? ''
+            : style is Map
             ? _styleName(style, role!.role)
-            : '',
+            : switch (role?.role) {
+                'box' => '加框',
+                'indent' => '缩进',
+                _ => '',
+              },
         first: first,
         last: order[end],
         excerpt: text(first),
@@ -211,8 +281,20 @@ class StyleSegmentsPanel extends StatefulWidget {
     required this.bookChapters,
     required this.onChapter,
     this.currentChapter,
+    this.settings = const {},
+    this.brackets,
+    this.onSetting,
   });
   final List<StyleSegment> segments;
+
+  /// 本书的排版设置（V121）：识别项的开关与方式。
+  final Map<String, Object?> settings;
+
+  /// 整行【】的判断说明（V121，LAY-169）。
+  final String? brackets;
+
+  /// 改本书排版设置（进变更记录）；返回失败原因。为空时不显示开关。
+  final Future<String?> Function(Map<String, Object?> patch)? onSetting;
 
   /// 本节正文行号范围的显示文字，例如“第 9–11 行”。
   final String Function(int first, int last) lineLabel;
@@ -229,7 +311,13 @@ class StyleSegmentsPanel extends StatefulWidget {
 
 /// 侧栏的显示状态在各章之间、跳转后重建时保持（本次运行期间）。
 final _scopeMemory = <String>['chapter'];
-final _hiddenGroups = <String>{};
+
+/// 只看某一组（点识别项或手工分组）；为空时全部列出。
+final _focus = <String?>[null];
+
+/// 展开的识别项，以及各识别项关掉前用的方式（再打开时沿用）。
+final _expanded = <String?>[null];
+final _lastOn = <String, String>{};
 final _selectedMemory = <String?, (String, int)>{};
 
 class _StyleSegmentsPanelState extends State<StyleSegmentsPanel> {
@@ -239,8 +327,30 @@ class _StyleSegmentsPanelState extends State<StyleSegmentsPanel> {
 
   List<StyleSegment> get shown => [
     for (final s in widget.segments)
-      if (!_hiddenGroups.contains(s.group)) s,
+      if (_focus.first == null || s.group == _focus.first) s,
   ];
+
+  /// 正在写入的设置字段与上次失败的原因。
+  String? busy, error;
+
+  Future<void> set(String field, Map<String, Object?> patch) async {
+    final write = widget.onSetting;
+    if (write == null || busy != null) return;
+    setState(() {
+      busy = field;
+      error = null;
+    });
+    final failed = await write(patch);
+    if (!mounted) return;
+    setState(() {
+      busy = null;
+      error = failed;
+    });
+  }
+
+  void focus(String group) => setState(() {
+    _focus[0] = _focus.first == group ? null : group;
+  });
 
   int? get selected {
     final key = _selectedMemory[widget.currentChapter];
@@ -277,7 +387,7 @@ class _StyleSegmentsPanelState extends State<StyleSegmentsPanel> {
             padding: const EdgeInsets.fromLTRB(14, 12, 12, 6),
             child: Row(
               children: [
-                Text('样式片段', style: ui(13, w: 600, c: d.ink)),
+                Text('识别与样式', style: ui(13, w: 600, c: d.ink)),
                 const SizedBox(width: 6),
                 Text(
                   scope == 'chapter' ? '${shown.length} 处' : '',
@@ -297,29 +407,8 @@ class _StyleSegmentsPanelState extends State<StyleSegmentsPanel> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: [
-                for (final MapEntry(key: group, value: name)
-                    in styleSegmentGroups.entries)
-                  _GroupChip(
-                    key: ValueKey(('style-segments-group', group)),
-                    label: name,
-                    count: counts[group] ?? 0,
-                    tone: styleSegmentTone(group),
-                    on: !_hiddenGroups.contains(group),
-                    onTap: () => setState(() {
-                      _hiddenGroups.contains(group)
-                          ? _hiddenGroups.remove(group)
-                          : _hiddenGroups.add(group);
-                    }),
-                  ),
-              ],
-            ),
-          ),
+          recognitions(d, counts),
+          manualFilters(d, counts),
           Divider(height: 1, color: d.line),
           Expanded(child: scope == 'chapter' ? chapterList(d) : bookList(d)),
           if (scope == 'chapter') ...[
@@ -399,22 +488,27 @@ class _StyleSegmentsPanelState extends State<StyleSegmentsPanel> {
                     children: [
                       Row(
                         children: [
-                          Flexible(
-                            child: Text(
-                              s.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: ui(12, w: 600, c: d.ink),
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    s.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: ui(12, w: 600, c: d.ink),
+                                  ),
+                                ),
+                                if (s.detail.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
+                                  DeskPill(
+                                    Text(s.detail, style: ui(10.5, c: fg)),
+                                    color: bg,
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                          if (s.detail.isNotEmpty) ...[
-                            const SizedBox(width: 6),
-                            DeskPill(
-                              Text(s.detail, style: ui(10.5, c: fg)),
-                              color: bg,
-                            ),
-                          ],
-                          const Spacer(),
                           Text(
                             widget.lineLabel(s.first, s.last),
                             style: ui(10.5, c: d.ink3),
@@ -458,7 +552,7 @@ class _StyleSegmentsPanelState extends State<StyleSegmentsPanel> {
     final chapters = [
       for (final c in all)
         if (c.counts.entries.any(
-          (e) => e.value > 0 && !_hiddenGroups.contains(e.key),
+          (e) => e.value > 0 && (_focus.first == null || e.key == _focus.first),
         ))
           c,
     ];
@@ -500,7 +594,7 @@ class _StyleSegmentsPanelState extends State<StyleSegmentsPanel> {
                     for (final MapEntry(key: group, value: name)
                         in styleSegmentGroups.entries)
                       if ((c.counts[group] ?? 0) > 0 &&
-                          !_hiddenGroups.contains(group))
+                          (_focus.first == null || group == _focus.first))
                         DeskPill(
                           Text(
                             '$name ${c.counts[group]}',
@@ -520,10 +614,302 @@ class _StyleSegmentsPanelState extends State<StyleSegmentsPanel> {
       },
     );
   }
+
+  // ---- 识别项（V121，LAY-173）：图标、名称、本章处数、当前方式、开关；点名称只看这一组，点箭头展开方式。
+  Widget recognitions(Desk d, Map<String, int> counts) => Padding(
+    padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final r in _recognitions) recognitionRow(d, r, counts),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+            child: Text(
+              error!,
+              key: const ValueKey('recognition-error'),
+              style: ui(11.5, c: d.pen),
+            ),
+          ),
+      ],
+    ),
+  );
+
+  Widget recognitionRow(
+    Desk d,
+    (String, String, String, Map<String, String>, String, IconData) r,
+    Map<String, int> counts,
+  ) {
+    final (group, field, name, options, fallback, icon) = r;
+    final value = widget.settings[field] as String? ?? 'off';
+    final on = value != 'off';
+    final open = _expanded.first == group;
+    final focused = _focus.first == group;
+    final (fg, bg) = d.tone(styleSegmentTone(group));
+    final countable = styleSegmentGroups.containsKey(group);
+    final expandable = group == 'system' || options.length > 2;
+    final writable = widget.onSetting != null;
+    return Container(
+      key: ValueKey(('recognition', group)),
+      margin: const EdgeInsets.only(bottom: 2),
+      decoration: BoxDecoration(
+        color: open || focused ? d.sunken : null,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            key: ValueKey(('style-segments-group', group)),
+            borderRadius: BorderRadius.circular(8),
+            onTap: countable ? () => focus(group) : null,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(6, 3, 2, 3),
+              child: Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: on ? bg : d.sunken,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(icon, size: 15, color: on ? fg : d.ink3),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    name,
+                    style: ui(
+                      12.5,
+                      w: focused ? 600 : 400,
+                      c: on ? d.ink : d.ink3,
+                    ),
+                  ),
+                  if (countable) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      on ? '${counts[group] ?? 0} 处' : '',
+                      style: ui(11, c: d.ink3),
+                    ),
+                  ],
+                  const Spacer(),
+                  if (on && options.length > 2)
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 84),
+                      child: Text(
+                        options[value] ?? value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                        style: ui(11, c: d.ink2),
+                      ),
+                    ),
+                  if (expandable && writable)
+                    IconButton(
+                      key: ValueKey(('recognition-expand', group)),
+                      tooltip: open ? '收起' : '更多方式',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 30,
+                        height: 28,
+                      ),
+                      iconSize: 18,
+                      onPressed: () =>
+                          setState(() => _expanded[0] = open ? null : group),
+                      icon: Icon(
+                        open
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        color: d.ink3,
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 30),
+                  if (writable)
+                    SizedBox(
+                      width: 40,
+                      height: 24,
+                      child: busy == field
+                          ? const Center(
+                              child: SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : FittedBox(
+                              child: Switch(
+                                key: ValueKey(('recognition-switch', group)),
+                                value: on,
+                                onChanged: busy != null
+                                    ? null
+                                    : (v) {
+                                        if (!v) _lastOn[field] = value;
+                                        set(field, {
+                                          field: v
+                                              ? (_lastOn[field] ?? fallback)
+                                              : 'off',
+                                        });
+                                      },
+                              ),
+                            ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (open) recognitionDetail(d, group, field, options, value),
+        ],
+      ),
+    );
+  }
+
+  /// 展开后：系统提示用缩略图选方式、选识别范围、看本书判断；其他项选方式。
+  Widget recognitionDetail(
+    Desk d,
+    String group,
+    String field,
+    Map<String, String> options,
+    String value,
+  ) {
+    final choices = {
+      for (final e in options.entries)
+        if (e.key != 'off') e.key: e.value,
+    };
+    if (group != 'system') {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(38, 0, 8, 8),
+        child: DeskSegmented<String>(
+          key: ValueKey(('recognition-style', group)),
+          value: choices.containsKey(value) ? value : choices.keys.first,
+          options: choices,
+          onChanged: busy != null ? null : (v) => set(field, {field: v}),
+        ),
+      );
+    }
+    final ruleOptions = Map<String, Object?>.from(
+      (widget.settings['rule_options'] as Map?) ?? const {},
+    );
+    final scope = ruleOptions['system_scope'] as String? ?? 'auto';
+    Widget thumb(String id, String label, Widget sample) {
+      final picked = value == id;
+      return Expanded(
+        child: InkWell(
+          key: ValueKey(('recognition-style', 'system', id)),
+          borderRadius: BorderRadius.circular(7),
+          onTap: busy != null || picked ? null : () => set(field, {field: id}),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
+            decoration: BoxDecoration(
+              color: d.surface,
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(
+                color: picked ? d.accent : d.line,
+                width: picked ? 1.5 : 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                SizedBox(height: 14, child: sample),
+                const SizedBox(height: 3),
+                Text(label, style: ui(10.5, c: picked ? d.accent : d.ink2)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(38, 0, 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              thumb(
+                'styled',
+                '提示条与面板',
+                Container(
+                  decoration: BoxDecoration(
+                    color: d.sunken,
+                    border: Border(left: BorderSide(color: d.ink2, width: 2)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              thumb(
+                'box',
+                '加框',
+                Container(
+                  decoration: BoxDecoration(border: Border.all(color: d.ink2)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              thumb(
+                'indent',
+                '缩进',
+                Container(
+                  margin: const EdgeInsets.only(left: 10, top: 5, bottom: 5),
+                  color: d.ink3,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          DeskSegmented<String>(
+            key: const ValueKey('recognition-scope'),
+            value: systemScopes.containsKey(scope) ? scope : 'auto',
+            options: systemScopes,
+            onChanged: busy != null
+                ? null
+                : (v) => set('rule_options', {
+                    'rule_options': {...ruleOptions, 'system_scope': v}
+                      ..removeWhere(
+                        (k, x) => k == 'system_scope' && x == 'auto',
+                      ),
+                  }),
+          ),
+          if (widget.brackets != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              widget.brackets!,
+              key: const ValueKey('recognition-brackets'),
+              style: ui(11, c: d.ink2),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// 只有手工标注的分组：一行筛选。
+  Widget manualFilters(Desk d, Map<String, int> counts) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
+    child: Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text('手工', style: ui(11, c: d.ink3)),
+        for (final group in _manualGroups)
+          _ManualChip(
+            key: ValueKey(('style-segments-group', group)),
+            label: styleSegmentGroups[group]!,
+            count: counts[group] ?? 0,
+            tone: styleSegmentTone(group),
+            on: _focus.first == group,
+            onTap: () => focus(group),
+          ),
+      ],
+    ),
+  );
 }
 
-class _GroupChip extends StatelessWidget {
-  const _GroupChip({
+class _ManualChip extends StatelessWidget {
+  const _ManualChip({
     super.key,
     required this.label,
     required this.count,
@@ -544,16 +930,13 @@ class _GroupChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
           color: on ? bg : null,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: on ? fg.withValues(alpha: .35) : d.line),
         ),
-        child: Text(
-          count > 0 ? '$label $count' : label,
-          style: ui(11, c: on ? fg : d.ink3),
-        ),
+        child: Text('$label $count', style: ui(11, c: on ? fg : d.ink3)),
       ),
     );
   }

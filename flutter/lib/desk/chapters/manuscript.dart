@@ -6,6 +6,7 @@ import '../errors.dart';
 
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
+import '../../application/block_annotation_service.dart';
 import '../../application/chapter_service.dart';
 import '../../application/inline_style_service.dart';
 import '../../application/rule_catalog_service.dart';
@@ -45,6 +46,7 @@ class ChapterManuscript extends StatefulWidget {
     this.onLocateLine,
     this.styleBook,
     this.onOpenChapter,
+    this.onStale,
   });
 
   /// 排版视图（V104，LAY-149）：不为空时正文按排版设置显示识别结果，可拖选几行标注；不能选字复制。
@@ -57,6 +59,9 @@ class ChapterManuscript extends StatefulWidget {
   final ValueChanged<int>? onLocateLine;
   final Future<List<StyleSegmentChapter>> Function()? styleBook;
   final ValueChanged<String>? onOpenChapter;
+
+  /// 读正文时发现书稿版本变了（V121）：交给章节页自动重读本页，不显示错误。
+  final VoidCallback? onStale;
 
   /// 手工标注（V53，LAY-123）；书库不提供标注能力时为空，行号栏不可点。
   final BlockMarkController? marks;
@@ -224,6 +229,10 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
       });
       schedulePosition();
     } catch (e) {
+      if (e is ChapterStateChanged && widget.onStale != null) {
+        widget.onStale!();
+        return;
+      }
       if (mounted && ticket == generation) {
         setState(() {
           error = deskErrorText(e, '正文没有读出来：原稿可能被移动或占用。在书库用“刷新来源”核对原稿位置。');
@@ -336,6 +345,10 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
       });
       schedulePosition();
     } catch (e) {
+      if (e is ChapterStateChanged && widget.onStale != null) {
+        widget.onStale!();
+        return;
+      }
       if (mounted && generation == ticket) {
         setState(() => lineErrors[line] = deskErrorText(e, '本段后续内容未读取，请重试。'));
       }
@@ -667,17 +680,27 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
             ],
           ),
           // 排版视图：行号旁色条，手工标注与自动识别颜色不同；悬停时右上角出标签（V104）。
-          if (layout != null && (mark != null || auto != null))
+          // V122：色条只在悬停或选中时显示，平时不和样式自己的边线叠在一起。
+          if (layout != null &&
+              ((mark != null && mark.view.kind != BlockAnnotationKind.none) ||
+                  (mark == null && auto != null)))
             Positioned(
-              left: gutter - 8,
+              left: gutter - 12,
               top: 2,
               bottom: 2,
               width: 3,
-              child: DecoratedBox(
-                key: ValueKey(('layout-bar', entry, line + 1)),
-                decoration: BoxDecoration(
-                  color: layoutBarColor(d, manual: mark != null),
-                  borderRadius: BorderRadius.circular(2),
+              child: ValueListenableBuilder<int?>(
+                valueListenable: hoverLine,
+                builder: (context, hover, child) => Opacity(
+                  opacity: hover == line || chosen ? 1 : 0,
+                  child: child,
+                ),
+                child: DecoratedBox(
+                  key: ValueKey(('layout-bar', entry, line + 1)),
+                  decoration: BoxDecoration(
+                    color: layoutBarColor(d, manual: mark != null),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
             ),
@@ -707,7 +730,8 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
                       ),
               ),
             ),
-          if (focused)
+          // 跳转目标：原文视图左侧画竖线；排版视图只留底色，不再多一条线（V122）。
+          if (focused && layout == null)
             Positioned(
               left: 0,
               top: 3,
@@ -759,6 +783,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
             child: BlockMarkBar(
               controller: marks,
               lines: lineRange(marks.first!, marks.last!),
+              current: currentMark(marks.first!),
               onNote: widget.noteMarks == null || marks.first != marks.last
                   ? null
                   : () => addNote(line + 1, lineText),
@@ -784,6 +809,19 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
           ),
       ],
     );
+  }
+
+  /// 标注面板里“现在”的说明（V120）：手工标注、自动识别或普通段落（原文视图里不知道识别结果，只说手工标注）。
+  String? currentMark(int line) {
+    final mark = markLines[line];
+    if (mark != null) {
+      return '${blockMarkLabel(mark.view.kind, mark.view.variant)}（手工标注）';
+    }
+    final auto = layoutLines[line];
+    if (auto != null) {
+      return '${layoutLineLabel(auto, systemRoles[line])}（自动识别）';
+    }
+    return widget.layout == null ? null : '普通段落';
   }
 
   /// 本节正文行号（从 1 开始）对应的显示行号范围，例如“第 13–15 行”。
@@ -837,9 +875,14 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     final styleCount = styleLines.values.fold(0, (n, l) => n + l.length);
     return Container(
       key: const ValueKey('chapter-layout-header'),
-      padding: const EdgeInsets.fromLTRB(16, 6, 12, 0),
+      // 排版视图没有上方的编辑工具条（V120），页眉多留一点上边距。
+      padding: EdgeInsets.fromLTRB(16, layout == null ? 6 : 10, 12, 0),
       child: Row(
         children: [
+          if (layout != null) ...[
+            deviceMenu(d, layout),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: Text(
               layout == null
@@ -851,8 +894,8 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
                   : '本章 系统提示 ${counts.system} · 诗词 ${counts.verse}'
                         '${counts.manual > 0 ? ' · 手工标注 ${counts.manual}' : ''}'
                         '${styleCount > 0 ? ' · 文字样式 $styleCount' : ''}'
-                        '　按 ${kindleShortName(layout.device.device.name)} 字号 ${layout.device.level} 档排（在真机预览里换机型和字号）'
-                        '；拖选几行可标注，改字请切回原文',
+                        '${layout.state.result?.brackets?.short == null ? '' : ' · ${layout.state.result!.brackets!.short}'}'
+                        '　拖选几行可标注',
               key: const ValueKey('chapter-layout-counts'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -868,6 +911,73 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 排版视图按哪台机型、哪档字号排（V120）：点开可直接换，与真机预览共用同一份选择。
+  Widget deviceMenu(Desk d, ChapterLayoutView layout) {
+    final device = layout.device;
+    return MenuAnchor(
+      menuChildren: [
+        SubmenuButton(
+          menuChildren: [
+            for (final k in kindleDevices)
+              MenuItemButton(
+                key: ValueKey(('layout-device', k.id)),
+                leadingIcon: Icon(
+                  k.id == device.id ? Icons.check_rounded : null,
+                  size: 16,
+                ),
+                onPressed: () => layout.chooseDevice(device.copyWith(id: k.id)),
+                child: Text(k.name),
+              ),
+          ],
+          child: const Text('机型'),
+        ),
+        SubmenuButton(
+          menuChildren: [
+            for (var level = 1; level <= 14; level++)
+              MenuItemButton(
+                key: ValueKey(('layout-level', level)),
+                leadingIcon: Icon(
+                  level == device.level ? Icons.check_rounded : null,
+                  size: 16,
+                ),
+                onPressed: () =>
+                    layout.chooseDevice(device.copyWith(level: level)),
+                child: Text('$level 档'),
+              ),
+          ],
+          child: const Text('字号'),
+        ),
+      ],
+      builder: (context, menu, _) => Tooltip(
+        message: '排版视图按这台机型和字号档位的真机规则排，分行同真机；与真机预览共用',
+        child: Material(
+          color: d.sunken,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            key: const ValueKey('layout-device-menu'),
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => menu.isOpen ? menu.close() : menu.open(),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 5, 6, 5),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.tablet_android_outlined, size: 15, color: d.ink2),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${kindleShortName(device.device.name)} · 字号 ${device.level} 档',
+                    style: ui(12.5, c: d.ink),
+                  ),
+                  Icon(Icons.arrow_drop_down_rounded, size: 18, color: d.ink2),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -911,8 +1021,11 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
   final segmentText = <int, String>{};
   bool segmentReading = false;
 
+  /// 本次构建读入的正文行（行号 → 原文）；构建时算一次，系统提示分块与侧栏共用。
+  Map<int, String> loadedMap = const {};
+
   List<StyleSegment> styleSegments() {
-    final loaded = {for (final (line, text) in loadedLines()) line: text};
+    final loaded = loadedMap;
     final segments = chapterStyleSegments(
       layoutLines: layoutLines,
       roles: systemRoles,
@@ -953,7 +1066,8 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
         // 读不到的行记成空，不再反复读。
         segmentText.putIfAbsent(line, () => '');
       }
-    } catch (_) {
+    } catch (e) {
+      if (e is ChapterStateChanged) widget.onStale?.call();
       // 摘录读不出时只显示行号，片段照常列出。
     } finally {
       if (ticket == generation) segmentReading = false;
@@ -1071,9 +1185,11 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     layoutLines = layout?.linesFor(widget.node.id) ?? const {};
     systemRoles = layout == null
         ? const {}
-        : layout.systemRoles(layoutLines, markLines, {
-            for (final (line, text) in loadedLines()) line: text,
-          });
+        : layout.systemRoles(
+            layoutLines,
+            markLines,
+            loadedMap = {for (final (line, text) in loadedLines()) line: text},
+          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1128,6 +1244,9 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
                       onLocate: (s) => widget.onLocateLine?.call(s.first),
                       bookChapters: widget.styleBook,
                       onChapter: (id) => widget.onOpenChapter?.call(id),
+                      settings: layout.book,
+                      brackets: layout.state.result?.brackets?.text,
+                      onSetting: layout.applySettings,
                     ),
                   ),
                 ],

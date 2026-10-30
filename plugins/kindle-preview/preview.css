@@ -14,6 +14,7 @@ body { display: flex; flex-direction: column; }
 .bar strong { font-weight: 600; }
 .grow { flex: 1; }
 select { border: 1px solid var(--line2); border-radius: 6px; background: var(--field); padding: 3px 6px; }
+.font-tools { gap: 6px; margin-top: 6px; }
 .tag { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line2); border-radius: 4px; padding: 0 6px; }
 #status { font-size: 12px; color: var(--muted); }
 #status.error { color: var(--pen); }
@@ -35,7 +36,8 @@ main { flex: 1; display: flex; min-height: 0; }
 #logo.dark { color: #3B3B3F; }
 #screen { position: absolute; background: var(--eink); overflow: hidden; box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .28); }
 #viewport { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-#book { position: absolute; border: 0; background: transparent; }
+/* 书页内容与墨水屏底色相乘（V122）：书里的浅灰底在真机上比纸面暗，不能画得比纸还白。 */
+#book { position: absolute; border: 0; background: transparent; mix-blend-mode: multiply; }
 #page-head, #page-foot { position: absolute; left: 0; right: 0; font-size: 9px; color: #3E3C38;
   font-family: "Microsoft YaHei UI", sans-serif; display: flex; justify-content: center; align-items: center; }
 #page-foot { justify-content: space-between; }
@@ -78,6 +80,9 @@ aside h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; display: flex; ju
 .actions button:disabled { opacity: .45; cursor: default; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0 10px; }
 .note { font-size: 11.5px; color: var(--muted); margin-top: 14px; }
+/* 字体说明（V127）：没选导入的字体时醒目提示，近似字体不准。 */
+.font-hint { margin-top: 8px; }
+.font-hint.warn { color: #9a3412; background: #fff7ed; border: 1px solid #fdba74; border-radius: 6px; padding: 6px 8px; }
 #gone { position: fixed; inset: 0; background: rgba(239, 236, 230, .92); display: flex; align-items: center;
   justify-content: center; text-align: center; font-size: 14px; }
 #gone[hidden] { display: none; }

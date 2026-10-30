@@ -137,6 +137,12 @@
       <option value="kai">楷体（近似）</option>
       <option value="yuan">圆体（近似）</option>
     </select>
+    <div class="row font-tools">
+      <button id="font-import" title="选一个 TTF / OTF / TTC / WOFF 字体文件，只给预览用；Kindle 上装了同一字体时可以对照">导入字体…</button>
+      <button id="font-remove" hidden>移除这个字体</button>
+      <input id="font-file" type="file" accept=".ttf,.otf,.ttc,.woff,.woff2" hidden>
+    </div>
+    <p id="font-hint" class="note font-hint">推荐导入字体：“近似”字体是电脑自带的字体，和 Kindle 的字体字形、上下留白不同，换行和分页会有偏差，不准。要和真机对得上，请导入与 Kindle 上所用相同的字体文件；书里嵌入了字体时选“出版商字体”。</p>
     <p class="note">屏幕内容是本书实际生成的 XHTML / CSS，由 Edge 内核排版；Kindle 的排版引擎与字体不同，断页位置与字形以真机为准。</p>
   </aside>
 </main>

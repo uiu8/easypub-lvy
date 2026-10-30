@@ -145,6 +145,12 @@ class ChapterStateChanged extends FormatException {
   const ChapterStateChanged(super.message);
 }
 
+/// 能直接判断一页是否还是当前书稿版本的会话（V121）：标注、文字样式、注释与排版设置都会改版本，
+/// 章节页据此自动重读本页，不再让用户看到“书稿已变化，请刷新章节后重试”。
+abstract interface class ChapterGuardSession {
+  bool isCurrent(ChapterPage page);
+}
+
 /// 一次写入多项审阅结论（CHK-052），只用于当前编辑稿的检查结果。
 abstract interface class BatchIssueReviewSession {
   Future<ChapterIssuePage> reviewIssues(

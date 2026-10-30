@@ -23,6 +23,15 @@ const FONTS = {
   kai: '"KaiTi", "STKaiti", serif',
   yuan: '"YouYuan", "Microsoft YaHei", sans-serif',
 };
+// 导入的预览字体（V123，LAY-178）：{id, name, file}，文件放在程序数据目录，只给预览用。
+let USER_FONTS = [];
+function userFont() {
+  return S.reader.font.startsWith('user:') ? USER_FONTS.find((f) => 'user:' + f.id === S.reader.font) : null;
+}
+function readerFont() {
+  const user = userFont();
+  return user ? '"EPUser-' + user.id + '", serif' : FONTS[S.reader.font];
+}
 const GAP = 48;
 
 const $ = (id) => document.getElementById(id);
@@ -156,12 +165,18 @@ function drawDevice() {
 // · 行末的句号、逗号等后置标点压成半个字宽：标点半宽，后面跟一个半宽空格；行中两者合起来仍是一个字宽，
 //   行末的空格由浏览器去掉，所以只在行末变成半宽（Edge 不支持 text-spacing-trim 的行末挤压与 hanging-punctuation）；
 // · 横排时弯引号“”‘’用西文字体，约 0.38 个字宽（真机如此）。
-const CLOSING = '。，、；：」』）》】〉';
+// V124：按 KPW5 固件简体中文类别（docs/research 交接包“符号分类对照”），问号、叹号与句号同属类别 16，
+// 行末同样压成半宽、相邻时同样挤压（真机“这儿的？”一行排下）。
+const CLOSING = '。，、；：？！」』）》】〉';
 const QUOTES = '“”‘’';
 // 相邻标点挤压（V118，KPW5 真机）：后置标点后面紧跟后置标点时前一个占半个字宽；
 // 前置标点（引号、括号）前面是全角空格或另一个前置标点时占半个字宽。
 const CLOSING_ALL = CLOSING + '”’';
 const OPENING = '“‘「『（《【〈';
+// 中文与西文字母、数字相邻处多 0.075 个字宽（V124，固件间距描述 19；KPW5 真机“1890年”的“0”与“年”之间实测 9 像素，
+// 不加为 5.2、加上为 8.8）。只认汉字、假名与 ASCII 字母数字。
+const HAN = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
+const LATIN = /[A-Za-z0-9]/;
 const XHTML = 'http://www.w3.org/1999/xhtml';
 function kindleTypography(doc) {
   if (doc.__easypubTypography || !doc.body) return;
@@ -169,7 +184,7 @@ function kindleTypography(doc) {
   const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
     acceptNode: (n) => (n.parentElement && n.parentElement.closest('rt,rp,script,style'))
       ? NodeFilter.FILTER_REJECT
-      : [...n.data].some((c) => CLOSING.includes(c) || QUOTES.includes(c))
+      : [...n.data].some((c) => CLOSING.includes(c) || QUOTES.includes(c) || OPENING.includes(c) || LATIN.test(c))
         ? NodeFilter.FILTER_ACCEPT
         : NodeFilter.FILTER_SKIP,
   });
@@ -193,6 +208,7 @@ function kindleTypography(doc) {
       const next = chars[i + 1] || '';
       const prev = chars[i - 1] || '';
       const adjacent = next !== '' && CLOSING_ALL.includes(next);
+      const mixed = next !== '' && ((HAN.test(ch) && LATIN.test(next)) || (LATIN.test(ch) && HAN.test(next)));
       if (CLOSING.includes(ch)) {
         flush();
         frag.appendChild(span(adjacent ? 'ep-p ep-adj' : 'ep-p', ch));
@@ -203,6 +219,13 @@ function kindleTypography(doc) {
         if (CLOSING_ALL.includes(ch) && adjacent) cls.push('ep-adj');
         if (OPENING.includes(ch) && (prev === '\u3000' || (prev !== '' && OPENING.includes(prev)))) cls.push('ep-oa');
         frag.appendChild(span(cls.join(' '), ch));
+      } else if (OPENING.includes(ch) && (prev === '\u3000' || (prev !== '' && OPENING.includes(prev)))) {
+        // 括号、书名号同引号：段首全角空格或另一个前置标点之后占半个字宽（真机“　　「1890年”实测）。
+        flush();
+        frag.appendChild(span('ep-oa', ch));
+      } else if (mixed) {
+        flush();
+        frag.appendChild(span('ep-cl', ch));
       } else {
         plain += ch;
       }
@@ -246,12 +269,26 @@ function scaleCssPixels(doc, factor) {
   }
 }
 
+// Kindle 自带的字体（V123）：书里写的字体不在这里、也没有嵌入时，真机用自带宋体代替。
+const KINDLE_FONTS = /^(STSong|STSongti|Songti|SimSun|NSimSun|宋体|STKai|STKaiti|KaiTi|楷体|STHeiti|SimHei|黑体|STYuan|圆体|Bookerly|Caecilia|Georgia|Helvetica|Futura|Palatino|Baskerville|Amazon Ember|OpenDyslexic|serif|sans-serif|monospace)$/i;
+
 // 书里写了楷体的元素（V119）：第一次排版时阅读器字体还没覆盖，按样式表算出的字体标记出来。
+// 书里写的字体 Kindle 没有、书里也没嵌入的元素（V123）标成 data-ep-sub，按 Kindle 自带宋体显示：
+// 例如出厂排版写的“Microsoft YaHei”，电脑上有、Kindle 上没有，真机实际是宋体，字宽与断行都不同。
 function markKai(doc) {
   if (doc.__easypubKai || !doc.body) return;
   doc.__easypubKai = true;
+  const embedded = new Set();
+  for (const face of doc.fonts || []) embedded.add(face.family.replace(/["']/g, '').trim().toLowerCase());
   for (const el of doc.body.querySelectorAll('*')) {
-    if (/kai|楷/i.test(getComputedStyle(el).fontFamily)) el.setAttribute('data-ep-kai', '');
+    const family = getComputedStyle(el).fontFamily;
+    if (/kai|楷/i.test(family)) el.setAttribute('data-ep-kai', '');
+    const first = family.split(',')[0].replace(/["']/g, '').trim();
+    if (first && !KINDLE_FONTS.test(first) && !embedded.has(first.toLowerCase())) {
+      el.setAttribute('data-ep-sub', '');
+    } else if (first && embedded.has(first.toLowerCase())) {
+      el.setAttribute('data-ep-emb', '');
+    }
   }
 }
 
@@ -351,11 +388,33 @@ function area() {
   };
 }
 
+// 页底按文字下沿判断放不放得下（V124）：KPW5 一行能不能排进这一页，看的是文字（字体上下沿）的下沿，
+// 不算行框下面的半个行间留白。按 7 张真机截图（宋体字号 4、6、8 的章首页与第 2 页、苹方字号 5）反推，
+// 只有这种算法能让上下边距都是 63 像素；按整个行框算，苹方那页会少排一行。
+// 浏览器按行框分栏，所以把正文区往下延伸一个正文行的下留白（这段本来就是空白）。
+function bodyLead(doc) {
+  const p = [...doc.querySelectorAll('p')].find((e) => e.textContent.trim());
+  if (!p) return 0;
+  const walker = doc.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode()) && !node.data.trim()) { /* 跳过空白 */ }
+  if (!node) return 0;
+  const range = doc.createRange();
+  const i = node.data.search(/\S/);
+  range.setStart(node, i);
+  range.setEnd(node, i + 1);
+  const rect = range.getClientRects()[0];
+  const lh = parseFloat(getComputedStyle(node.parentElement).lineHeight);
+  return rect && lh ? Math.max(0, (lh - rect.height) / 2) : 0;
+}
+
 function layout(keepRatio) {
   const doc = frame.contentDocument;
   if (!doc || !doc.documentElement || !S.metrics) return;
   const a = area();
-  Object.assign(frame.style, { left: a.left + 'px', top: a.top + 'px', width: a.width + 'px', height: a.height + 'px' });
+  // 横排时正文区延伸一个正文行的下留白（见 bodyLead）。
+  const h = a.height + (doc.__epLead || 0);
+  Object.assign(frame.style, { left: a.left + 'px', top: a.top + 'px', width: a.width + 'px', height: h + 'px' });
   Object.assign($('page-head').style, { top: '0px', height: a.top + 'px' });
   Object.assign($('page-foot').style, {
     bottom: '0px', height: (S.device.viewportHeight - a.top - a.height) + 'px',
@@ -372,7 +431,8 @@ function layout(keepRatio) {
   const vertical = getComputedStyle(doc.documentElement).writingMode.startsWith('vertical');
   S.vertical = vertical;
   const m = S.metrics;
-  const font = FONTS[S.reader.font];
+  const font = readerFont();
+  const user = userFont();
   markPageBreaks(doc);
   markKai(doc);
   keywordFontSizes(doc);
@@ -381,14 +441,16 @@ function layout(keepRatio) {
   const kfx = !!m.justify;
   // 正文按列分页：横排的列向右排、竖排的列向下排；每页一列。
   style.textContent = [
+    user ? '@font-face{font-family:"EPUser-' + user.id + '";src:url("' + new URL('fonts/' + user.file, location.href) + '")}' : '',
     'html{color:#1E1E1E;font-size:' + m.rootPx + 'px!important;margin:0!important;padding:0!important;overflow:hidden!important;'
-      + 'background:transparent!important;width:' + a.width + 'px!important;height:' + a.height + 'px!important}',
+      + 'background:transparent!important;width:' + a.width + 'px!important;height:' + h + 'px!important}',
     'body{margin:0!important;padding:0!important;background:transparent!important;column-gap:' + GAP + 'px!important;'
       + 'column-fill:auto!important;' + (vertical
         ? 'width:' + a.width + 'px!important;height:auto!important;column-width:' + a.height + 'px!important}'
-        : 'height:' + a.height + 'px!important;width:auto!important;column-width:' + a.width + 'px!important}'),
+        : 'height:' + h + 'px!important;width:auto!important;column-width:' + a.width + 'px!important}'),
     // 真机规则（V118，KPW5）：阅读器行间距只乘到正文上，标题保留书里写的行高。
-    (kfx ? 'body *:not(rt):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(.heading)' : 'body *:not(rt)')
+    // 标题里面的小块（标点挤压包出的 span 等）也不乘（V124：标题带“：”“。”时整行被撑高约 24 像素）。
+    (kfx ? 'body *:not(rt):not(:is(h1,h2,h3,h4,h5,h6,.heading,h1 *,h2 *,h3 *,h4 *,h5 *,h6 *,.heading *))' : 'body *:not(rt)')
       + '{line-height:' + m.lineRatio + '!important}',
     // 真机规则（V118，KPW5）：正文两端对齐；按取整后的字宽断行，用字距补齐。
     m.justify ? 'p{text-align:justify;text-justify:inter-character}' : '',
@@ -397,17 +459,38 @@ function layout(keepRatio) {
     // 书里写了楷体的段落（书信、系统提示“细线楷体”等）保留楷体：KFX 真机上 STKai/楷体能显示（V119）。
     font ? 'body,body *:not(rt):not([data-ep-kai]){font-family:' + font + '!important}' : '',
     font ? '[data-ep-kai]{font-family:"KaiTi","STKaiti",serif!important}' : '',
+    // 出版商字体时（V123）：Kindle 没有的字体按自带宋体显示，与真机一致。
+    font ? '' : '[data-ep-sub]{font-family:' + FONTS.song + '!important}',
+    // 书里嵌入的字体与导入的字体只有一种字重（V123）：Kindle 不会伪加粗，标题仍是常规体（KPW5 实测）。
+    font ? '' : '[data-ep-emb]{font-synthesis:none!important}',
+    user ? 'body,body *{font-synthesis:none!important}' : '',
     // 用负字距而不是负外边距：负外边距加行末空格时，浏览器断行仍按整字宽计算。
     'html .ep-p{letter-spacing:-0.5em!important}',
     'html .ep-s{word-spacing:var(--ep-ws,0)!important}',
     vertical || kfx ? '' : 'html .ep-q{font-family:"Segoe UI",Arial,sans-serif!important}',
     // 相邻标点挤压（V118，KPW5）：前一个后置标点只占半个字宽；缩进后的前置引号去掉左半边。
     kfx ? 'html .ep-adj{letter-spacing:-0.5em!important}html .ep-adjs{display:none!important}'
-      + 'html .ep-oa{margin-left:-0.5em!important}' : '',
+      + 'html .ep-oa{margin-left:-0.5em!important}html .ep-cl{letter-spacing:' + (0.075 + (m.tracking || 0)) + 'em!important}' : '',
     // 真机允许段落只有一行留在页底或页顶（第四章首页实测），浏览器默认至少两行。
     kfx ? 'body *{orphans:1;widows:1}' : '',
   ].join('\n');
+  // 导入的字体异步载入：载入后按新字宽重新分页一次。
+  if (user && doc.__epUser !== user.id) {
+    doc.__epUser = user.id;
+    doc.fonts.load('16px "EPUser-' + user.id + '"', '中文')
+      .then((faces) => {
+        if (!faces.length) throw new Error('font');
+        if (frame.contentDocument === doc) layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
+      })
+      .catch(() => status('导入的字体“' + user.name + '”无法显示，请换一个字体文件。', true));
+  }
   setHalfSpace(doc, vertical);
+  const lead = vertical ? 0 : bodyLead(doc);
+  if (Math.abs(lead - (doc.__epLead || 0)) > 0.5) {
+    doc.__epLead = lead;
+    layout(keepRatio);
+    return;
+  }
   const root = doc.scrollingElement || doc.documentElement;
   const step = vertical ? a.height + GAP : a.width + GAP;
   const extent = vertical ? root.scrollHeight : root.scrollWidth;
@@ -421,6 +504,16 @@ function layout(keepRatio) {
   }
   if (keepRatio !== undefined) S.page = Math.round(keepRatio * (S.pages - 1));
   show(S.page);
+  // 字体全部载入后再完整排一次（V125）：书里嵌入的字体、导入的字体是异步载入的，
+  // 先用备用字体排出的半宽空格、行间留白和断行会留在页面上（实测导入苹方后一行少排一个字）。
+  if (!doc.__epFontsHooked && doc.fonts) {
+    doc.__epFontsHooked = true;
+    const again = () => {
+      if (frame.contentDocument === doc) layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
+    };
+    doc.fonts.addEventListener('loadingdone', () => setTimeout(again, 0));
+    doc.fonts.ready.then(() => setTimeout(again, 0));
+  }
 }
 
 function pageOf(el) {
@@ -637,7 +730,8 @@ async function refreshMetrics() {
   const d = S.device;
   S.metrics = await api('metrics', {
     device: d.id, level: S.reader.level, margin: S.reader.margin, spacing: S.reader.spacing,
-    serif: S.reader.font === 'song' || S.reader.font === 'kai', values: S.draft,
+    // 出版商字体在真机上多半落到自带宋体（书里写的雅黑等 Kindle 没有），按衬线算（V123）。
+    serif: !['hei', 'yuan'].includes(S.reader.font), values: S.draft,
   });
   $('measure').textContent = S.metrics.note;
   $('measure').title = S.metrics.measured
@@ -715,6 +809,9 @@ function syncControls() {
     el.classList.toggle('changed', dirty.has(key));
   }
   $('font').value = S.reader.font;
+  $('font-remove').hidden = !userFont();
+  // 没选导入的字体时提示近似字体不准（V127）。
+  $('font-hint').classList.toggle('warn', !userFont());
   $('dirty').textContent = dirty.size ? dirty.size + ' 项未写回' : '';
   $('apply').disabled = dirty.size === 0;
   $('revert').disabled = dirty.size === 0;
@@ -772,10 +869,33 @@ function setupControls() {
   };
   $('level-down').addEventListener('click', () => level(-1));
   $('level-up').addEventListener('click', () => level(1));
-  $('font').addEventListener('change', async () => {
-    S.reader.font = $('font').value;
-    await refreshMetrics();
-    layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
+  $('font').addEventListener('change', () => chooseFont($('font').value));
+  $('font-import').addEventListener('click', () => $('font-file').click());
+  $('font-file').addEventListener('change', async () => {
+    const file = $('font-file').files[0];
+    $('font-file').value = '';
+    if (!file) return;
+    status('正在导入字体…');
+    try {
+      const response = await fetch('api/font-import', {
+        method: 'POST', headers: { 'X-Font-Name': encodeURIComponent(file.name) }, body: file,
+      });
+      const result = response.ok ? await response.json() : { ok: false };
+      if (!result.ok) return status(result.message || '字体没有导入，请选 TTF / OTF / TTC / WOFF 字体文件。', true);
+      fillFonts(result.fonts);
+      status('已导入字体“' + result.font.name + '”，只用于预览。');
+      await chooseFont('user:' + result.font.id);
+    } catch (error) {
+      status('字体没有导入，请重试。', true);
+    }
+  });
+  $('font-remove').addEventListener('click', async () => {
+    const user = userFont();
+    if (!user) return;
+    const result = await api('font-remove', { id: user.id });
+    fillFonts(result.fonts || []);
+    status('已移除字体“' + user.name + '”。');
+    await chooseFont('publisher');
   });
   $('device').addEventListener('change', async () => {
     S.device = S.devices.find((d) => d.id === $('device').value);
@@ -888,11 +1008,38 @@ function keys(event) {
   event.preventDefault();
 }
 
+// 阅读器字体下拉：内置几种近似字体，后面是导入的字体（V123）。
+function fillFonts(fonts) {
+  USER_FONTS = fonts || [];
+  const select = $('font');
+  for (const option of [...select.querySelectorAll('option[data-user]')]) option.remove();
+  for (const f of USER_FONTS) {
+    const option = document.createElement('option');
+    option.value = 'user:' + f.id;
+    option.textContent = f.name + '（导入）';
+    option.dataset.user = '';
+    select.appendChild(option);
+  }
+}
+
+async function chooseFont(value) {
+  S.reader.font = value === 'publisher' || FONTS[value] !== undefined || USER_FONTS.some((f) => 'user:' + f.id === value)
+    ? value : 'publisher';
+  syncControls();
+  // 选择记在本机，下次打开预览沿用（只影响预览）。
+  api('font-select', { font: S.reader.font }).catch(() => {});
+  await refreshMetrics();
+  layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
+}
+
 async function start() {
   const state = await api('state');
   S.devices = state.devices;
   S.device = S.devices.find((d) => d.id === state.device) || S.devices[0];
   S.reader = { ...S.reader, ...state.reader };
+  fillFonts(state.fonts);
+  if (state.reader_font && (FONTS[state.reader_font] !== undefined
+    || USER_FONTS.some((f) => 'user:' + f.id === state.reader_font))) S.reader.font = state.reader_font;
   S.saved = pick(state.values);
   S.draft = { ...S.saved };
   S.title = state.title || '';

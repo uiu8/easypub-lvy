@@ -169,7 +169,8 @@ fn walk_content(node: Node<'_, '_>, result: &mut SpineDocument, text: &mut Strin
                 .map(|n| {
                     normalized_text(
                         &n.descendants()
-                            .filter(|&c| c.is_text()).map(|c| c.text().unwrap_or(""))
+                            .filter(|&c| c.is_text())
+                            .map(|c| c.text().unwrap_or(""))
                             .collect::<String>(),
                     )
                 })
@@ -263,11 +264,13 @@ pub fn extract(source_path: &str, output_path: &str) -> Result<String, ApiError>
         || !source
             .extension()
             .and_then(|v| v.to_str())
-            .unwrap_or("").eq_ignore_ascii_case("epub")
+            .unwrap_or("")
+            .eq_ignore_ascii_case("epub")
         || !output
             .extension()
             .and_then(|v| v.to_str())
-            .unwrap_or("").eq_ignore_ascii_case("txt")
+            .unwrap_or("")
+            .eq_ignore_ascii_case("txt")
         || source_path.len() > 32768
         || output_path.len() > 32768
     {
@@ -389,7 +392,8 @@ pub fn extract_resources(source_path: &str, resource_dir: &str) -> Result<String
         || !source
             .extension()
             .and_then(|v| v.to_str())
-            .unwrap_or("").eq_ignore_ascii_case("epub")
+            .unwrap_or("")
+            .eq_ignore_ascii_case("epub")
     {
         return Err(invalid("choose_absolute_epub_and_resource_directory"));
     }
@@ -466,9 +470,23 @@ pub fn extract_resources(source_path: &str, resource_dir: &str) -> Result<String
     let publisher = metadata_value("publisher");
     let date = metadata_value("date");
     fs::create_dir_all(root).map_err(|_| invalid("choose_writable_epub_resource_directory"))?;
+    // 原书字体的混淆声明与标识（V123，LAY-179）：提取时还原成可检查、可嵌入的字体。
+    let obfuscated = if archive.by_name("META-INF/encryption.xml").is_ok() {
+        String::from_utf8(read_entry(
+            &mut archive,
+            "META-INF/encryption.xml",
+            &mut remaining,
+        )?)
+        .map(|xml| crate::epub_fonts::obfuscated(&xml))
+        .unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+    let identifier = crate::epub_fonts::package_identifier(&opf_doc);
     let mut images = Vec::new();
     let mut css = Vec::new();
     let mut fonts = Vec::new();
+    let mut font_notes = HashMap::new();
     let mut cover_path = None;
     let mut pending_images = Vec::new();
     let mut image_paths = HashMap::new();
@@ -516,10 +534,42 @@ pub fn extract_resources(source_path: &str, resource_dir: &str) -> Result<String
                 Ok(None) => (data, media.clone(), None, false),
                 Err(_) => (data, media.clone(), None, true),
             }
-        } else {
+        } else if is_css {
             (data, media.clone(), None, false)
+        } else {
+            let mut data = data;
+            let mut note = None;
+            if let Some(&kind) = obfuscated.get(&zip_path) {
+                match crate::epub_fonts::deobfuscate(&data, kind, &identifier) {
+                    Some(plain) => {
+                        data = plain;
+                        note = Some(kind.name());
+                    }
+                    None => note = Some("unrecoverable"),
+                }
+            }
+            let mut from = None;
+            if crate::epub_fonts::format(&data) == "woff"
+                && let Some(sfnt) = crate::woff::decode(&data)
+            {
+                data = sfnt;
+                from = Some("font/woff".to_owned());
+            }
+            let format = crate::epub_fonts::format(&data);
+            if (from.is_some() || note.is_some_and(|n| n != "unrecoverable"))
+                && matches!(format, "ttf" | "otf")
+            {
+                name = format!("{name}.{format}");
+            }
+            font_notes.insert(name.clone(), (note, format));
+            let media = match format {
+                "ttf" => "font/ttf".to_owned(),
+                "otf" => "font/otf".to_owned(),
+                _ => media.clone(),
+            };
+            (data, media, from, false)
         };
-        let target = target_dir.join(name);
+        let target = target_dir.join(name.clone());
         fs::write(&target, &data).map_err(|_| invalid("write_epub_resource"))?;
         let path = target.to_string_lossy().to_string();
         let mut entry =
@@ -555,6 +605,13 @@ pub fn extract_resources(source_path: &str, resource_dir: &str) -> Result<String
         } else if is_css {
             css.push(entry);
         } else {
+            // 字体格式与还原情况（V123）：format 为 ttf / otf / ttc 的可直接嵌入。
+            if let Some((note, format)) = font_notes.get(&name) {
+                entry["format"] = json!(format);
+                if let Some(note) = note {
+                    entry["obfuscation"] = json!(note);
+                }
+            }
             fonts.push(entry);
         }
         resource_index += 1;
@@ -682,6 +739,52 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    /// V123（LAY-179）：encryption.xml 声明 IDPF 混淆的字体提取时还原，WOFF2 原样列出并标明格式。
+    #[test]
+    fn obfuscated_fonts_are_restored_on_extraction() {
+        let root = std::env::temp_dir().join(format!("easypub-epub-fonts-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let mut font = (0..4000u32)
+            .map(|i| (i * 13 % 251) as u8)
+            .collect::<Vec<_>>();
+        font[..4].copy_from_slice(&[0, 1, 0, 0]);
+        let id = "urn:uuid:12345678-1234-1234-1234-123456789abc";
+        let hidden =
+            crate::epub_fonts::deobfuscate(&font, crate::epub_fonts::Obfuscation::Idpf, id)
+                .unwrap();
+        let source = root.join("book.epub");
+        let mut zip = ZipWriter::new(fs::File::create(&source).unwrap());
+        let opts = SimpleFileOptions::default();
+        zip.start_file("META-INF/container.xml", opts).unwrap();
+        zip.write_all(br#"<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>"#).unwrap();
+        zip.start_file("META-INF/encryption.xml", opts).unwrap();
+        zip.write_all(br#"<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#"><enc:EncryptedData><enc:EncryptionMethod Algorithm="http://www.idpf.org/2008/embedding"/><enc:CipherData><enc:CipherReference URI="OEBPS/Fonts/song.ttf"/></enc:CipherData></enc:EncryptedData></encryption>"#).unwrap();
+        zip.start_file("OEBPS/content.opf", opts).unwrap();
+        zip.write_all(format!(r#"<package unique-identifier="bid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bid">{id}</dc:identifier></metadata><manifest><item id="f" href="Fonts/song.ttf" media-type="application/x-font-ttf"/><item id="w" href="Fonts/b.woff2" media-type="font/woff2"/><item id="c" href="t.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>"#).as_bytes()).unwrap();
+        zip.start_file("OEBPS/Fonts/song.ttf", opts).unwrap();
+        zip.write_all(&hidden).unwrap();
+        zip.start_file("OEBPS/Fonts/b.woff2", opts).unwrap();
+        zip.write_all(b"wOF2rest").unwrap();
+        zip.start_file("OEBPS/t.xhtml", opts).unwrap();
+        zip.write_all("<html><body><p>正文</p></body></html>".as_bytes())
+            .unwrap();
+        zip.finish().unwrap();
+        let result =
+            extract_resources(source.to_str().unwrap(), root.join("res").to_str().unwrap())
+                .unwrap();
+        let value: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let fonts = value["fonts"].as_array().unwrap();
+        assert_eq!(fonts.len(), 2);
+        assert_eq!(fonts[0]["format"], "ttf");
+        assert_eq!(fonts[0]["obfuscation"], "idpf");
+        assert_eq!(fonts[0]["media_type"], "font/ttf");
+        assert_eq!(fs::read(fonts[0]["path"].as_str().unwrap()).unwrap(), font);
+        assert_eq!(fonts[1]["format"], "woff2");
+        assert!(fonts[1].get("obfuscation").is_none());
+        let _ = fs::remove_dir_all(root);
+    }
+
     #[test]
     fn extracts_resources_with_font_review_flag() {
         let root =
@@ -756,12 +859,16 @@ mod tests {
         }
         zip.finish().unwrap();
         let value: serde_json::Value = serde_json::from_str(
-            &extract_resources(source.to_str().unwrap(), root.join("res").to_str().unwrap()).unwrap(),
+            &extract_resources(source.to_str().unwrap(), root.join("res").to_str().unwrap())
+                .unwrap(),
         )
         .unwrap();
         let cover = value["cover_path"].as_str().unwrap();
         assert!(cover.ends_with("cover.svg.png"), "{cover}");
-        assert_eq!(image::guess_format(&fs::read(cover).unwrap()).unwrap(), ImageFormat::Png);
+        assert_eq!(
+            image::guess_format(&fs::read(cover).unwrap()).unwrap(),
+            ImageFormat::Png
+        );
         let images = value["images"].as_array().unwrap();
         let by_id = |id: &str| images.iter().find(|i| i["id"] == id).unwrap();
         assert_eq!(by_id("cover")["converted_from"], "image/svg+xml");
@@ -774,7 +881,15 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .map(|p| p["path"].as_str().unwrap().rsplit(['/', '\\']).next().unwrap().to_owned())
+            .map(|p| {
+                p["path"]
+                    .as_str()
+                    .unwrap()
+                    .rsplit(['/', '\\'])
+                    .next()
+                    .unwrap()
+                    .to_owned()
+            })
             .collect();
         assert_eq!(placed.len(), 2, "{placed:?}");
         assert!(placed[0].ends_with("plate.tif.jpg") && placed[1].ends_with("anim.gif"));

@@ -147,7 +147,7 @@ void main() {
           .isNotEmpty,
       '确认步骤',
     );
-    expect(find.textContaining('标为场景 · 诏书？'), findsOneWidget);
+    expect(find.textContaining('标为场景 · 诏书'), findsOneWidget);
     expect(annotations(), isEmpty, reason: '预览不写入');
     await t.tap(find.byKey(const ValueKey('block-mark-confirm')));
     await until(() => annotations().length == 1, '标注写入');

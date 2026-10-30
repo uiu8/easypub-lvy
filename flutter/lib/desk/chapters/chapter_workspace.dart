@@ -1,6 +1,8 @@
 // 章节工作区（CH-001–044）：目录 + 纸面正文 + 检查器。
 // 所有结构修改都经现有弹窗生成预览、确认后写入并可撤销；本页只组织入口与视图。
 // 设计：design/review-20261010-v37-flutter/d2（D2-A、D2-B）；docs/37 第 6 节 V2 行的证据。
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -116,7 +118,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
           rules: widget.library as RuleCatalogLibrary,
           library: widget.library,
           bookId: widget.bookId,
-        );
+        )..addListener(checkStale);
       } else {
         layoutView?.dispose();
         layoutView = null;
@@ -161,8 +163,12 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
         rules: widget.library as RuleCatalogLibrary,
         library: widget.library,
         bookId: widget.bookId,
-      );
+      )..addListener(checkStale);
     }
+    // 标注、注释、文字样式与排版设置改了书稿版本时，自动重读本页（V121）。
+    marks?.addListener(checkStale);
+    noteMarks?.addListener(checkStale);
+    inlineStyles?.addListener(checkStale);
     read(
       explicitTarget ? widget.initialOffset : view.offset,
       bodyOffset: explicitTarget ? widget.initialBodyOffset : view.bodyOffset,
@@ -183,6 +189,58 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
   // ---------------------------------------------------------------- 读取与编辑流程
   // 与 V1 前的章节页逐行对应；只改视图，不改会话调用顺序与刷新规则。
 
+  // ---------------------------------------------------------------- 书稿版本变化（V121）
+  // 页面带着读取时的书稿版本；标注、样式、排版设置一改，版本就变。发现变了就按原位置重读本页，
+  // 阅读位置与选中章节不变，不再要用户手动刷新。
+
+  bool refreshing = false;
+
+  void checkStale() {
+    final current = page, guard = session;
+    if (!mounted || refreshing || busy || current == null) return;
+    if (guard case final ChapterGuardSession g when !g.isCurrent(current)) {
+      scheduleMicrotask(refreshStale);
+    }
+  }
+
+  Future<void> refreshStale() async {
+    final current = page, node = selected;
+    if (!mounted || refreshing || busy || current == null || node == null) {
+      return;
+    }
+    refreshing = true;
+    final ticket = generation;
+    try {
+      final next = await session.read(current.offset, preferredNodeId: node.id);
+      final fresh = node.id == chapterPrefixNode.id
+          ? chapterPrefixNode
+          : next.nodes.where((n) => n.id == node.id).firstOrNull;
+      if (!mounted || ticket != generation) return;
+      if (fresh == null) {
+        // 本章已不在这一页（结构改了）：按原来的方式整页重读。
+        refreshing = false;
+        await read(current.offset);
+        return;
+      }
+      final content = await session.body(
+        next,
+        fresh.id,
+        continuousOffset ?? body?.offset ?? 0,
+      );
+      if (!mounted || ticket != generation) return;
+      setState(() {
+        page = next;
+        selected = fresh;
+        body = content;
+      });
+      rememberView();
+    } catch (_) {
+      // 重读失败时保持原样；下次操作会再检查。
+    } finally {
+      refreshing = false;
+    }
+  }
+
   Future<void> run(Future<void> Function(int) operation) async {
     final ticket = ++generation;
     setState(() {
@@ -194,11 +252,14 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     } catch (e) {
       if (mounted && ticket == generation) {
         setState(
-          () => message = deskErrorText(
-            e,
-            '章节没有改成：书稿可能已在别处变化。重新打开本章后再试，已有内容不受影响。',
-          ),
+          () => message = e is ChapterStateChanged
+              ? '书稿刚有变化，已自动刷新本章，请再操作一次。'
+              : deskErrorText(e, '章节没有改成：书稿可能已在别处变化。重新打开本章后再试，已有内容不受影响。'),
         );
+      }
+      if (e is ChapterStateChanged) {
+        if (mounted && ticket == generation) setState(() => busy = false);
+        await refreshStale();
       }
     } finally {
       if (mounted && ticket == generation) setState(() => busy = false);
@@ -433,7 +494,9 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     final nodes = await outlineNodes();
     final layout = layoutView;
     final result = <StyleSegmentChapter>[];
-    for (final (node, _) in nodes) {
+    for (final (i, (node, _)) in nodes.indexed) {
+      // 章节多时分批算，中间把控制权还给界面，切到“全书”不卡住（V121）。
+      if (i % 40 == 39) await Future<void>.delayed(Duration.zero);
       final lines = layout?.linesFor(node.id) ?? const <int, LayoutLine>{};
       final manual = marks?.linesFor(node.id) ?? const {};
       final segments = chapterStyleSegments(
@@ -908,6 +971,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
               ? setLayoutMode
               : null,
           onLocateLine: locateLine,
+          onStale: () => scheduleMicrotask(refreshStale),
           styleBook: styleBook,
           onOpenChapter: openStyleChapter,
           page: page!,
@@ -1280,7 +1344,8 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        toolbar(),
+        // 排版视图（V120）不显示编辑工具条（修复、识别规则、数字章节等），页眉在正文组件里。
+        if (layoutView == null || showIssues || showHistory) toolbar(),
         SizedBox(
           height: 2,
           child: busy ? const LinearProgressIndicator(minHeight: 2) : null,

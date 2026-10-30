@@ -109,14 +109,27 @@ class _RecognitionCountsState extends State<RecognitionCounts> {
         );
       }
     }
+    final brackets = state.result?.brackets?.text;
     return Padding(
       key: const ValueKey('layout-recognition-counts'),
       padding: const EdgeInsets.only(top: 6),
-      child: Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('本书识别到（按已保存的设置）：', style: ui(12, c: d.ink3)),
-          ...children,
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text('本书识别到（按已保存的设置）：', style: ui(12, c: d.ink3)),
+              ...children,
+            ],
+          ),
+          // 整行【】的判断（V121，LAY-169）。
+          if (brackets != null)
+            Text(
+              brackets,
+              key: const ValueKey('layout-brackets'),
+              style: ui(12, c: d.ink3),
+            ),
         ],
       ),
     );

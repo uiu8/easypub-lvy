@@ -108,6 +108,7 @@ pub(crate) fn classify_block(
     next_line: Option<&str>,
     system_style: &str,
     verse_style: &str,
+    scope: &crate::system_scope::Scope,
 ) -> Option<(&'static str, &'static str)> {
     let (offset, end) = range;
     if let Some(a) = annotation {
@@ -141,10 +142,11 @@ pub(crate) fn classify_block(
     } else if has_node {
         None
     } else if system_style != "off"
-        && (is_system_line(line)
+        // V121：整行【】按用途分，台词、聊天、书前标签不算系统提示（LAY-169）。
+        && (scope.is_system(line)
             || (system_style == "styled"
                 && crate::block_styles::is_ding_line(line)
-                && next_line.is_some_and(is_system_line)))
+                && next_line.is_some_and(|n| scope.is_system(n))))
     {
         Some(("system", "system-line"))
     } else if verse_style != "off"
@@ -172,6 +174,7 @@ fn system_runs(
     verse_style: &str,
     custom: Option<&regex::RegexSet>,
     insets: &BTreeMap<usize, crate::insets::Line>,
+    scope: &crate::system_scope::Scope,
 ) -> BTreeMap<usize, (usize, Option<bool>)> {
     let mut runs = BTreeMap::new();
     let (mut offset, mut ni, mut ai) = (0usize, 0usize, 0usize);
@@ -213,6 +216,7 @@ fn system_runs(
                 next,
                 system_style,
                 verse_style,
+                scope,
             ),
             line,
             node || annotation.is_some(),
@@ -608,6 +612,8 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
         .as_ref()
         .filter(|_| m.system_block_style == "styled");
     let custom = m.rule_options.system_set();
+    // 整行【】的用途（V121，LAY-169）：按全文判断一次。
+    let scope = crate::system_scope::Scope::new(&book.text, &m.rule_options.system_scope);
     // 场景样式（V81，LAY-135）：手工标注的场景与自动识别的聊天记录，逐行角色。
     let inset_plan = crate::insets::plan(
         &book.text,
@@ -656,6 +662,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             &m.verse_block_style,
             custom.as_ref(),
             &inset_plan,
+            &scope,
         ),
         None => BTreeMap::new(),
     };
@@ -713,6 +720,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                 next_line,
                 &m.system_block_style,
                 &m.verse_block_style,
+                &scope,
             ),
             line,
             node.is_some() || annotation.is_some(),
@@ -1650,9 +1658,10 @@ mod tests {
         let prepared = publication_resources::prepare(&source, req).unwrap();
         let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
         assert!(!page.contains("inset"));
+        // V121（LAY-169）：【名字：内容】是聊天消息，不识别聊天时按正文排，不再当系统提示。
         assert!(
-            page.contains("blk blk-panel"),
-            "不识别聊天时【】行仍是系统提示"
+            !page.contains("blk-panel"),
+            "不识别聊天时【】聊天消息按正文排"
         );
         assert!(!prepared.manifest().stylesheet.css.contains("inset"));
         let value = serde_json::to_value(prepared.manifest()).unwrap();

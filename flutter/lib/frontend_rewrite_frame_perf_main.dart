@@ -19,6 +19,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'application/plugin_host.dart';
 import 'desk/app/rewrite_app.dart';
+import 'desk/chapters/manuscript.dart';
 import 'desk/chapters/outline.dart';
 import 'infrastructure/legacy_library_adapter.dart';
 import 'infrastructure/native_book_picker.dart';
@@ -33,6 +34,8 @@ final _samples = <Map<String, Object>>[];
 final _issues = Platform.environment['EASYPUB_FRAME_TARGET'] == 'issues';
 // V83：拖动章节页目录与正文之间的分隔条。
 final _divider = Platform.environment['EASYPUB_FRAME_TARGET'] == 'divider';
+// V121：章节页排版视图（按真机规则画的正文）滚动。
+final _layout = Platform.environment['EASYPUB_FRAME_TARGET'] == 'layout';
 final _data = <String, Object?>{};
 final _initialRss = ProcessInfo.currentRss;
 int? _scrollStartRss;
@@ -62,6 +65,11 @@ ScrollPosition? _position() {
         (_issues
             ? element.findAncestorWidgetOfExactType<ListView>()?.key ==
                   const ValueKey('check-issue-list')
+            : _layout
+            ? element.findAncestorWidgetOfExactType<CustomScrollView>() !=
+                      null &&
+                  element.findAncestorWidgetOfExactType<ChapterManuscript>() !=
+                      null
             : element.findAncestorWidgetOfExactType<ChapterOutline>() !=
                   null)) {
       result = (element.state as ScrollableState).position;
@@ -89,6 +97,8 @@ Future<void> _writeReport(String? error) async {
             ? 'issue browser'
             : _divider
             ? 'chapter divider drag (synthetic mouse events)'
+            : _layout
+            ? 'chapter layout view body'
             : 'chapter tree'} automated ${_divider ? 'drag' : 'scroll'}; no synthetic frame pump',
     'source': _source,
     'fixture': _data,
@@ -221,8 +231,49 @@ Future<void> main() async {
     ),
   );
   WidgetsBinding.instance.addPostFrameCallback(
-    (_) => _divider ? _driveDivider() : _driveScroll(),
+    (_) => _divider
+        ? _driveDivider()
+        : _layout
+        ? _openLayout().then((_) => _driveScroll())
+        : _driveScroll(),
   );
+}
+
+/// 排版视图场景：等章节页出现后点“排版”，再等正文按真机规则画好。
+Future<void> _openLayout() async {
+  Element? mode;
+  for (var i = 0; i < 150 && mode == null; i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    void visit(Element element) {
+      if (element.widget.key == const ValueKey('chapter-layout-mode')) {
+        mode = element;
+      }
+      if (mode == null) element.visitChildren(visit);
+    }
+
+    (_root.currentContext as Element?)?.visitChildren(visit);
+  }
+  if (mode == null) throw StateError('No layout switch in target scene');
+  Element? target;
+  void find(Element element) {
+    final w = element.widget;
+    if (w is Text && w.data == '排版') target = element;
+    if (target == null) element.visitChildren(find);
+  }
+
+  mode!.visitChildren(find);
+  final box = target!.renderObject! as RenderBox;
+  final center = box.localToGlobal(box.size.center(Offset.zero));
+  GestureBinding.instance.handlePointerEvent(
+    PointerDownEvent(position: center, kind: PointerDeviceKind.mouse),
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 40));
+  GestureBinding.instance.handlePointerEvent(
+    PointerUpEvent(position: center, kind: PointerDeviceKind.mouse),
+  );
+  // 识别结果在后台算，排好再测。
+  await Future<void>.delayed(const Duration(seconds: 4));
+  _data['layout_view'] = true;
 }
 
 int _count<T extends Widget>() {

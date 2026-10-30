@@ -17,10 +17,65 @@ class LegacyLayoutSession extends LegacyBookInformationSession
         LayoutPublicationPreviewSession,
         LayoutDraftPreviewSession,
         LayoutPreviewDeviceStore,
-        ChapterStyleStore {
+        ChapterStyleStore,
+        BookFontSource {
   LegacyLayoutSession(super.backend, super.bookId, {this.launchPreview});
   final Future<void> Function(String path)? launchPreview;
   LayoutPublicationPreview? _generatedPreview;
+
+  @override
+  Future<Map<String, dynamic>> inspectFont(String path) async =>
+      Map<String, dynamic>.from(
+        jsonDecode(
+          await api.inspectFontText(
+            path: File(path).absolute.path,
+            faceIndex: 0,
+            sample: await _bookCharacters(),
+          ),
+        ) as Map,
+      );
+
+  /// 书里用到的字（去重）：检查报告据此列出字体里没有的字（V123）。读不了原文时为空。
+  Future<String> _bookCharacters() async {
+    try {
+      final source = backend.shelf.books
+          .firstWhere((b) => b.id == bookId && !b.isDemo)
+          .source!;
+      final text = utf8.decode(
+        await File(source.path).readAsBytes(),
+        allowMalformed: true,
+      );
+      return String.fromCharCodes(
+        text.runes.where((r) => r >= 0x20 && r != 0xFFFD).toSet(),
+      );
+    } catch (_) {
+      return '';
+    }
+  }
+
+  @override
+  Future<String> keepFont(String path, String sha256) async {
+    final base = backend.settingsDirectory ?? Directory.systemTemp.path;
+    final dir = Directory('$base/embedded-fonts')..createSync(recursive: true);
+    final dot = path.lastIndexOf('.');
+    final ext = dot > path.lastIndexOf(RegExp(r'[\\/]'))
+        ? path.substring(dot).toLowerCase()
+        : '.ttf';
+    final target = File(
+      '${dir.absolute.path}${Platform.pathSeparator}$sha256$ext',
+    );
+    if (!await target.exists()) await File(path).copy(target.path);
+    return target.path;
+  }
+
+  @override
+  List<Map<String, Object?>> get originalFonts => [
+    for (final f
+        in (backend.production.importedResourcesFor(bookId)?['fonts']
+                as List?) ??
+            const [])
+      if (f is Map) f.cast<String, Object?>(),
+  ];
 
   File? get _deviceFile => backend.settingsDirectory == null
       ? null
@@ -121,6 +176,8 @@ class LegacyLayoutSession extends LegacyBookInformationSession
       throw FormatException(
         detail['error'] == 'Io'
             ? '无法读取预览所需的文件，请检查本书图片与字体资源。'
+            : detail['operation'] == 'font_resource'
+            ? '嵌入的字体用不了（文件已改动或授权不允许），请在排版页“文字”里换一个字体或选“不嵌入”。'
             : '实际预览未生成，请检查本书排版设置与资源。',
       );
     }
@@ -150,6 +207,8 @@ class LegacyLayoutSession extends LegacyBookInformationSession
   Set<String> get allowedFields => {
     ...layoutFields,
     'chapter_head_image',
+    // 嵌入字体（V123，LAY-179）：与章首图一样属于本书，不进草稿与预设。
+    'font_resource',
     'chapter_style',
     // 系统提示自定义识别规则在 rule_options.system_patterns（V78），单独应用。
     'rule_options',

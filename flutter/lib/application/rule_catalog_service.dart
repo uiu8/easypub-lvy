@@ -87,6 +87,43 @@ class RuleStatistic {
   final List<RuleLineRange> changedRanges, candidateRanges;
 }
 
+/// 整行【】的判断（V121，LAY-169）：识别范围、全书倾向与各类行数。
+class BracketSummary {
+  BracketSummary.fromJson(Map v)
+    : mode = v['mode'] as String? ?? 'auto',
+      systemBook = v['system_book'] == true,
+      system = v['system'] as int? ?? 0,
+      speech = v['speech'] as int? ?? 0,
+      chat = v['chat'] as int? ?? 0,
+      note = v['note'] as int? ?? 0,
+      unsure = v['unsure'] as int? ?? 0;
+  final String mode;
+  final bool systemBook;
+  final int system, speech, chat, note, unsure;
+  int get total => system + speech + chat + note + unsure;
+
+  /// 给用户看的一句话；没有整行【】时为空。
+  String? get text {
+    if (total == 0) return null;
+    return switch (mode) {
+      'all' => '整行【】$total 行都按系统提示排（识别范围：所有整行【】）。',
+      'keyword' => '整行【】$total 行里，带系统用语的 $system 行按系统提示排，其余按正文排。',
+      _ =>
+        systemBook
+            ? '整行【】$total 行，多为系统提示：拿不准的也按系统提示排'
+                  '${chat + note > 0 ? '；聊天消息、书前标签与说明 ${chat + note} 行按正文排' : ''}。'
+            : '整行【】$total 行，多为台词或聊天：只把带系统用语的 $system 行按系统提示排，其余按正文排。',
+    };
+  }
+
+  /// 排版视图页眉里的短说明。
+  String? get short => total == 0 || mode != 'auto'
+      ? null
+      : systemBook
+      ? '【】多为系统提示'
+      : '【】多为台词，按正文排';
+}
+
 class RuleStatisticsSnapshot {
   RuleStatisticsSnapshot.fromJson(Map v)
     : contentId = v['content_id'] as String,
@@ -100,6 +137,9 @@ class RuleStatisticsSnapshot {
         for (final r in (v['rules'] as List).cast<Map>())
           r['id'] as String: RuleStatistic.fromJson(r),
       }),
+      brackets = v['brackets'] == null
+          ? null
+          : BracketSummary.fromJson(v['brackets'] as Map),
       inlineStyles = v['inline_styles'] == null
           ? null
           : InlineStyleSnapshot.fromJson(v['inline_styles'] as Map),
@@ -125,6 +165,9 @@ class RuleStatisticsSnapshot {
 
   /// 按当前设置逐行识别出的块（V104，LAY-148）：章节编号 → 各行。
   final Map<String, List<LayoutLine>> layoutLines;
+
+  /// 整行【】的用途与全书倾向（V121，LAY-169）；旧版本统计没有时为空。
+  final BracketSummary? brackets;
   final InlineStyleSnapshot? inlineStyles;
 }
 

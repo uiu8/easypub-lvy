@@ -202,10 +202,9 @@ pub fn prepare_subset(
     }
     let bytes = read_font(path)?;
     let original = inspect_bytes(&bytes, index, text)?;
-    if original.sha256 != expected_sha256
-        || !original.embedding.subset_allowed
-        || original.missing_count != 0
-    {
+    // 字体里没有的字不阻止嵌入（V123）：成品里这些字回落到阅读器字体，书里只要有一个生僻符号
+    // 不在字体里（如日文中点）以前就整本不能嵌入、真机预览也生成不了。裁剪后不能比原字体多缺字。
+    if original.sha256 != expected_sha256 || !original.embedding.subset_allowed {
         return Err(invalid());
     }
     let font = FontRef::from_index(&bytes, index).map_err(|_| invalid())?;
@@ -236,7 +235,7 @@ pub fn prepare_subset(
         return Err(invalid());
     }
     let subset = inspect_bytes(&output, 0, text)?;
-    if subset.missing_count != 0
+    if subset.missing_count != original.missing_count
         || subset.license_text != original.license_text
         || subset.license_url != original.license_url
     {
@@ -266,10 +265,7 @@ pub fn prepare_selected(selection: &Selection, text: &str) -> Result<PreparedSub
     }
     let bytes = read_font(&selection.path)?;
     let original = inspect_bytes(&bytes, selection.face_index, text)?;
-    if original.sha256 != selection.sha256
-        || !original.embedding.outline_allowed
-        || original.missing_count != 0
-    {
+    if original.sha256 != selection.sha256 || !original.embedding.outline_allowed {
         return Err(invalid());
     }
     let output = if bytes.starts_with(b"ttcf") {
@@ -279,7 +275,7 @@ pub fn prepare_selected(selection: &Selection, text: &str) -> Result<PreparedSub
     };
     let subset = inspect_bytes(&output, 0, text)?;
     if subset.glyph_count != original.glyph_count
-        || subset.missing_count != 0
+        || subset.missing_count != original.missing_count
         || subset.license_text != original.license_text
         || subset.license_url != original.license_url
     {

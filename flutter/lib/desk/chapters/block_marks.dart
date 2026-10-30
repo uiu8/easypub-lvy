@@ -21,7 +21,7 @@ const blockMarkChoices = <(BlockAnnotationKind, String?, String)>[
   (BlockAnnotationKind.system, null, '系统提示'),
   (BlockAnnotationKind.system, 'note', '系统提示 · 单行'),
   (BlockAnnotationKind.system, 'panel', '系统提示 · 面板'),
-  (BlockAnnotationKind.none, null, '取消识别'),
+  (BlockAnnotationKind.none, null, '不识别'),
 ];
 
 /// 场景（V81，LAY-135）：工具条与菜单里收在“场景”下面，九种场景各一项。
@@ -211,6 +211,33 @@ class BlockMarkController extends ChangeNotifier {
   BlockAnnotationPreview? pending;
   BlockAnnotationKind? pendingKind;
   String? pendingVariant;
+
+  /// 确认步骤是删除选区上的手工标注（V121）。
+  bool pendingRemove = false;
+
+  /// 选区正好是一条有效手工标注时为它（V121）：这时选类型就是改为该类型，还可以删除。
+  BlockAnnotationView? get existing {
+    final (e, a, b) = (entryId, first, last);
+    if (e == null || a == null || b == null) return null;
+    for (final v in snapshot?.annotations ?? const <BlockAnnotationView>[]) {
+      if (v.valid && v.entryId == e && v.firstLine == a && v.lastLine == b) {
+        return v;
+      }
+    }
+    return null;
+  }
+
+  /// 某行所在的有效手工标注（V121）：点这一行时选中整条标注。
+  BlockAnnotationView? _markAt(String entry, int line) {
+    for (final v in snapshot?.annotations ?? const <BlockAnnotationView>[]) {
+      final (a, b) = (v.firstLine, v.lastLine);
+      if (v.valid && v.entryId == entry && a != null && b != null) {
+        if (line >= a && line <= b) return v;
+      }
+    }
+    return null;
+  }
+
   bool busy = false;
   String error = '';
   Timer? _debounce;
@@ -265,12 +292,23 @@ class BlockMarkController extends ChangeNotifier {
     pending = null;
     pendingKind = null;
     pendingVariant = null;
+    pendingRemove = false;
     error = '';
+    final mark = _markAt(entry, line);
     if (extend && entryId == entry && anchor != null) {
       first = line < anchor! ? line : anchor;
       last = line < anchor! ? anchor : line;
-    } else if (entryId == entry && first == line && last == line) {
+    } else if (entryId == entry &&
+        ((first == line && last == line) ||
+            (mark != null &&
+                first == mark.firstLine &&
+                last == mark.lastLine))) {
       _clearSelection();
+    } else if (mark != null) {
+      // 点手工标注里的一行：选中整条标注，面板里可以改类型或删除（V121）。
+      entryId = entry;
+      anchor = first = mark.firstLine;
+      last = mark.lastLine;
     } else {
       entryId = entry;
       anchor = first = last = line;
@@ -284,6 +322,7 @@ class BlockMarkController extends ChangeNotifier {
     pending = null;
     pendingKind = null;
     pendingVariant = null;
+    pendingRemove = false;
     error = '';
     entryId = entry;
     anchor = from;
@@ -296,6 +335,7 @@ class BlockMarkController extends ChangeNotifier {
     entryId = anchor = first = last = null;
     pending = null;
     pendingKind = null;
+    pendingRemove = false;
   }
 
   void clearSelection() {
@@ -324,6 +364,15 @@ class BlockMarkController extends ChangeNotifier {
   /// 工具条第一步：解析选区并预览新增，进入确认步骤。
   Future<void> choose(BlockAnnotationKind kind, [String? variant]) =>
       _run(() async {
+        // 选区正好是一条手工标注：改它的类型（V121），不再因“重叠”被拒绝。
+        final mark = existing;
+        if (mark != null) {
+          pending = await previewChange(mark, kind, variant);
+          pendingKind = kind;
+          pendingVariant = variant;
+          pendingRemove = false;
+          return;
+        }
         final snap = snapshot ?? await session.list();
         final range = await session.resolveLines(
           snap,
@@ -342,6 +391,16 @@ class BlockMarkController extends ChangeNotifier {
         pendingVariant = variant;
       });
 
+  /// 删除选区上的手工标注（V121）：“不识别”删除后恢复自动识别，其他类型删除后按普通正文。
+  Future<void> chooseRemove() => _run(() async {
+    final mark = existing;
+    if (mark == null) return;
+    pending = await session.previewDelete(mark.id);
+    pendingKind = null;
+    pendingVariant = null;
+    pendingRemove = true;
+  });
+
   /// 工具条第二步：确认写入，完成后清除选区。
   Future<void> confirmPending() => _run(() async {
     await session.confirm(pending!);
@@ -359,6 +418,7 @@ class BlockMarkController extends ChangeNotifier {
     pending = null;
     pendingKind = null;
     pendingVariant = null;
+    pendingRemove = false;
     error = '';
     notifyListeners();
   }
@@ -589,58 +649,125 @@ class BlockTag extends StatelessWidget {
   }
 }
 
-/// 选区最后一行下方的浮动工具条：先选类型（预览），再确认写入。
+/// 标注面板（V120 重做）：所选行现在是什么、按类别分组的选项（图标 + 名称）、选中后在同一张卡片里应用。
 class BlockMarkBar extends StatelessWidget {
   const BlockMarkBar({
     super.key,
     required this.controller,
     required this.lines,
+    this.current,
     this.onNote,
     this.onStyle,
   });
   final BlockMarkController controller;
   final String lines;
 
+  /// 所选行现在的识别结果（V120），例如“系统提示 · 单行（自动识别）”；为空时不显示。
+  final String? current;
+
   /// “文字样式…”（V106，LAY-152）：单行或跨行都可用；书库不提供样式能力时为空。
   final VoidCallback? onStyle;
 
   /// 选中单行时的“注释…”（V62，LAY-128）；书库不提供注释能力或选了多行时为空。
   final VoidCallback? onNote;
+
+  static const _icons = {
+    'letter': Icons.mail_outline_rounded,
+    'quote': Icons.format_quote_rounded,
+    'verse': Icons.auto_stories_outlined,
+  };
+
   @override
   Widget build(BuildContext context) {
     final d = context.desk;
     final c = controller;
     final kind = c.pendingKind;
     final variant = c.pendingVariant;
-    return SelectionContainer.disabled(
-      child: Container(
-        key: const ValueKey('block-mark-bar'),
-        margin: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-        padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
-        decoration: BoxDecoration(
-          color: d.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: d.line),
-          boxShadow: d.shadow1,
+    final mark = c.existing;
+    bool picked(BlockAnnotationKind k, String? v) => kind == k && variant == v;
+    bool now(BlockAnnotationKind k, String? v) =>
+        mark != null && mark.kind == k && mark.variant == v;
+    void choose(BlockAnnotationKind k, String? v) {
+      if (c.busy || picked(k, v) || now(k, v)) return;
+      c.choose(k, v);
+    }
+
+    Widget option(
+      BlockAnnotationKind k,
+      String? v,
+      String label,
+      IconData? icon,
+    ) => _MarkOption(
+      key: ValueKey(('block-mark-choose', blockMarkKey(k, v))),
+      label: label,
+      icon: icon,
+      selected: picked(k, v),
+      current: now(k, v),
+      onTap: c.busy ? null : () => choose(k, v),
+    );
+    Widget group(String title, List<Widget> children) => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 64,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 7),
+            child: Text(title, style: ui(12, c: d.ink3)),
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
+        Expanded(child: Wrap(spacing: 6, runSpacing: 6, children: children)),
+      ],
+    );
+    final insetPicked = kind == BlockAnnotationKind.inset;
+    return SelectionContainer.disabled(
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Container(
+            key: const ValueKey('block-mark-bar'),
+            margin: const EdgeInsets.fromLTRB(0, 6, 0, 10),
+            padding: const EdgeInsets.fromLTRB(14, 8, 8, 12),
+            decoration: BoxDecoration(
+              color: d.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: d.line),
+              boxShadow: d.shadow2,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (kind == null) ...[
-                  Text('$lines标为', style: ui(12.5, c: d.ink2)),
-                  for (final (k, v, label) in blockMarkChoices)
-                    DeskButton(
-                      label,
-                      key: ValueKey(('block-mark-choose', blockMarkKey(k, v))),
-                      quiet: true,
-                      busy: c.busy,
-                      onPressed: c.busy ? null : () => c.choose(k, v),
+                Row(
+                  children: [
+                    Text(lines, style: ui(13, w: 600, c: d.ink)),
+                    if (current != null) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '现在：$current',
+                          key: const ValueKey('block-mark-current'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: ui(12, c: d.ink3),
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    IconButton(
+                      key: const ValueKey('block-mark-cancel'),
+                      tooltip: '关闭',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: c.busy ? null : c.clearSelection,
+                      icon: Icon(Icons.close_rounded, size: 18, color: d.ink2),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                group('标为', [
+                  for (final (k, v, label) in blockMarkChoices)
+                    if (k != BlockAnnotationKind.system &&
+                        k != BlockAnnotationKind.none)
+                      option(k, v, label, _icons[k.name]),
                   // 场景（V81）：九种收在一个菜单里。
                   MenuAnchor(
                     menuChildren: [
@@ -650,73 +777,195 @@ class BlockMarkBar extends StatelessWidget {
                             'block-mark-choose',
                             blockMarkKey(k, v),
                           )),
-                          onPressed: c.busy ? null : () => c.choose(k, v),
+                          onPressed: c.busy ? null : () => choose(k, v),
                           child: Text(label.substring(5)),
                         ),
                     ],
-                    builder: (context, menu, _) => DeskButton(
-                      '场景…',
+                    builder: (context, menu, _) => _MarkOption(
                       key: const ValueKey('block-mark-inset'),
-                      quiet: true,
-                      busy: c.busy,
-                      onPressed: c.busy
+                      label: insetPicked
+                          ? blockMarkLabel(kind!, variant)
+                          : '场景',
+                      icon: Icons.forum_outlined,
+                      menu: true,
+                      selected: insetPicked,
+                      onTap: c.busy
                           ? null
                           : () => menu.isOpen ? menu.close() : menu.open(),
                     ),
                   ),
+                ]),
+                const SizedBox(height: 8),
+                group('系统提示', [
+                  option(
+                    BlockAnnotationKind.system,
+                    null,
+                    '按行数',
+                    Icons.auto_awesome_outlined,
+                  ),
+                  option(
+                    BlockAnnotationKind.system,
+                    'note',
+                    '单行',
+                    Icons.short_text_rounded,
+                  ),
+                  option(
+                    BlockAnnotationKind.system,
+                    'panel',
+                    '面板',
+                    Icons.view_agenda_outlined,
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                group('其他', [
+                  option(
+                    BlockAnnotationKind.none,
+                    null,
+                    '不识别',
+                    Icons.block_rounded,
+                  ),
+                  // 已有手工标注时可以删除（V121）：“不识别”删除后恢复自动识别。
+                  if (mark != null)
+                    _MarkOption(
+                      key: const ValueKey('block-mark-remove'),
+                      label: mark.kind == BlockAnnotationKind.none
+                          ? '恢复自动识别'
+                          : '删除标注',
+                      icon: mark.kind == BlockAnnotationKind.none
+                          ? Icons.restart_alt_rounded
+                          : Icons.delete_outline_rounded,
+                      selected: c.pendingRemove,
+                      onTap: c.busy || c.pendingRemove ? null : c.chooseRemove,
+                    ),
                   if (onNote != null)
-                    DeskButton(
-                      '注释…',
+                    _MarkOption(
                       key: const ValueKey('note-open'),
+                      label: '注释…',
                       icon: Icons.sticky_note_2_outlined,
-                      onPressed: c.busy ? null : onNote,
+                      onTap: c.busy ? null : onNote,
                     ),
                   if (onStyle != null)
-                    DeskButton(
-                      '文字样式…',
+                    _MarkOption(
                       key: const ValueKey('inline-style-open'),
+                      label: '文字样式…',
                       icon: Icons.format_bold_rounded,
-                      onPressed: c.busy ? null : onStyle,
+                      onTap: c.busy ? null : onStyle,
                     ),
-                  DeskButton(
-                    '取消',
-                    key: const ValueKey('block-mark-cancel'),
-                    quiet: true,
-                    onPressed: c.busy ? null : c.clearSelection,
-                  ),
-                ] else ...[
-                  Text(
-                    kind == BlockAnnotationKind.none
-                        ? '确认让$lines不参与自动识别？'
-                        : '确认将$lines标为${blockMarkLabel(kind, variant)}？',
-                    style: ui(12.5, c: d.ink, w: 600),
-                  ),
-                  DeskButton(
-                    '确认',
-                    key: const ValueKey('block-mark-confirm'),
-                    primary: true,
-                    busy: c.busy,
-                    onPressed: c.busy ? null : c.confirmPending,
-                  ),
-                  DeskButton(
-                    '返回',
-                    key: const ValueKey('block-mark-back'),
-                    quiet: true,
-                    onPressed: c.busy ? null : c.back,
+                ]),
+                if (kind != null || c.pendingRemove) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+                    decoration: BoxDecoration(
+                      color: d.accentSoft,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            c.pendingRemove
+                                ? (mark?.kind == BlockAnnotationKind.none
+                                      ? '$lines恢复自动识别'
+                                      : '删除$lines的手工标注，按普通正文排')
+                                : kind == BlockAnnotationKind.none
+                                ? '$lines不参与自动识别'
+                                : '$lines${mark != null ? '改为' : '标为'}${blockMarkLabel(kind!, variant)}',
+                            style: ui(12.5, c: d.ink, w: 600),
+                          ),
+                        ),
+                        DeskButton(
+                          '返回',
+                          key: const ValueKey('block-mark-back'),
+                          quiet: true,
+                          onPressed: c.busy ? null : c.back,
+                        ),
+                        const SizedBox(width: 4),
+                        DeskButton(
+                          '应用',
+                          key: const ValueKey('block-mark-confirm'),
+                          primary: true,
+                          busy: c.busy,
+                          onPressed: c.busy ? null : c.confirmPending,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
+                if (c.error.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      c.error,
+                      key: const ValueKey('block-mark-error'),
+                      style: ui(12, c: d.pen),
+                    ),
+                  ),
               ],
             ),
-            if (c.error.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  c.error,
-                  key: const ValueKey('block-mark-error'),
-                  style: ui(12, c: d.pen),
-                ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 标注面板里的一个选项：图标 + 名称，选中时为强调色底。
+class _MarkOption extends StatelessWidget {
+  const _MarkOption({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.selected = false,
+    this.current = false,
+    this.menu = false,
+  });
+  final String label;
+  final IconData? icon;
+
+  /// [current]：所选行现在就是这个类型（V121），描边标出，点了不动。
+  final bool selected, current, menu;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desk;
+    final fg = onTap == null
+        ? d.ink3
+        : selected
+        ? d.accentInk
+        : d.ink;
+    return Material(
+      color: selected ? d.accent : d.sunken,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: current && !selected
+            ? BorderSide(color: d.accent, width: 1.2)
+            : BorderSide.none,
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 16, color: fg),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: ui(12.5, c: fg, w: selected ? 600 : 400),
               ),
-          ],
+              if (menu) ...[
+                const SizedBox(width: 2),
+                Icon(Icons.arrow_drop_down_rounded, size: 18, color: fg),
+              ],
+            ],
+          ),
         ),
       ),
     );
