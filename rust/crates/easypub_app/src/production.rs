@@ -64,7 +64,7 @@ pub fn default_first_paragraph_style() -> String {
     "normal".into()
 }
 /// 生僻字注音（V73，LAY-129）：off 不标；chapter 每章首次；book 全书首次；every 每次。
-/// 旧项目缺少字段时为 off（输出不变）；新书出厂默认 chapter，见 layout_settings::factory。
+/// 旧项目缺少字段和新书出厂默认均为 off；显式开启的已有设置保留。
 pub const RARE_CHAR_RUBY_MODES: [&str; 4] = ["off", "chapter", "book", "every"];
 pub fn default_rare_char_ruby() -> String {
     "off".into()

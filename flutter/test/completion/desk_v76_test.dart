@@ -194,7 +194,7 @@ void main() {
       final values = stateJson['values'] as Map;
       expect(values['chapter_style_on'], 'on');
       expect(values['chapter_style_volume_frame'], 'double');
-      expect(values['rare_char_ruby'], 'chapter');
+      expect(values['rare_char_ruby'], 'off');
       final page = await get(url);
       for (final key in [
         'rare_char_ruby',
@@ -206,9 +206,11 @@ void main() {
       }
       expect(page, contains('id="chapter-style-name"'));
 
-      // 当前设置：注音、章头图、装饰线、章末装饰、双线卷框；图片能取到。
+      // 默认不注音；章头图、装饰线、章末装饰、双线卷框和图片仍正常。
       final (base, body, css) = await render({});
-      expect(body, contains('<rt>dá</rt>'));
+      expect(body, isNot(contains('<ruby>')));
+      final (_, annotated, _) = await render({'rare_char_ruby': 'chapter'});
+      expect(annotated, contains('<rt>dá</rt>'));
       expect(body, contains('chapter-head-image'));
       expect(body, contains('class="title-rule"'));
       expect(body, contains('class="chapter-end"'));

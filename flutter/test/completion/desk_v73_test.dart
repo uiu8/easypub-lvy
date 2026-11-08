@@ -59,7 +59,7 @@ void main() {
     ),
   );
 
-  testWidgets('排版页：新书默认“每章首次 · 表外字”，改为“每次”和“表外字和三级字”后自动保存', (t) async {
+  testWidgets('排版页：新书默认“不标”，改为“每次”和“表外字和三级字”后自动保存', (t) async {
     t.view.physicalSize = const Size(1100, 760);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.resetPhysicalSize);
@@ -82,7 +82,7 @@ void main() {
       state.dispose();
     });
     final id = state.currentId;
-    expect(state.production.settings(id)['rare_char_ruby'], 'chapter');
+    expect(state.production.settings(id)['rare_char_ruby'], 'off');
     expect(state.production.settings(id)['rare_char_scope'], 'outside');
     await t.pumpWidget(
       MaterialApp(
@@ -105,10 +105,7 @@ void main() {
     await t.pump();
     final row = find.byKey(const ValueKey('layout-row-rare_char_ruby'));
     await t.ensureVisible(row);
-    expect(
-      find.descendant(of: row, matching: find.text('每章首次 · 表外字')),
-      findsOneWidget,
-    );
+    expect(find.descendant(of: row, matching: find.text('不标')), findsOneWidget);
     await t.tap(row);
     await t.pump();
     final mode = find.byKey(const ValueKey('layout-rare_char_ruby'));
@@ -174,6 +171,20 @@ void main() {
       final original = file.readAsBytesSync();
       expect((await library.importFiles([file.path])).single.succeeded, true);
       final id = state.currentId;
+      expect(state.production.settings(id)['rare_char_ruby'], 'off');
+      expect(
+        await state.production.confirm(
+          await state.production.previewChanges({
+            id: {
+              'op': 'patch',
+              'fields': {
+                'rare_char_ruby': {'op': 'set', 'value': 'chapter'},
+              },
+            },
+          }),
+        ),
+        true,
+      );
       final outputs = <String, String>{};
       for (final format in ['EPUB', 'AZW3', 'KFX']) {
         final session = LegacyConversionSession(state);
@@ -208,7 +219,7 @@ void main() {
           .where((e) => e.key.endsWith('.xhtml'))
           .map((e) => e.value)
           .join('\n');
-      // 新书默认每章首次、只标表外字：两章各标一次“龘”，“囧”一次；三级字“喆”不标；标题不标。
+      // 显式开启每章首次、只标表外字：两章各标一次“龘”，“囧”一次；三级字“喆”不标；标题不标。
       expect(ruby('龘', 'dá').allMatches(xhtml).length, 2);
       expect(xhtml, contains(ruby('囧', 'jiǒng')));
       expect(xhtml, isNot(contains('<rt>zhé</rt>')));
