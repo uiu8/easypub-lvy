@@ -57,9 +57,9 @@ extension _LayoutTextSection on _LayoutPageState {
                           : key == 'font_size'
                           ? '%、em：相对阅读器字号；12pt = 16px。'
                           : '%：正文区宽度；em：正文字号。',
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        isDense: true,
+                      child: DeskChoice<String>(
+                        compact: true,
+                        searchable: false,
                         value: units[unitKey],
                         items: [
                           for (final u in [
@@ -71,7 +71,10 @@ extension _LayoutTextSection on _LayoutPageState {
                           ])
                             DropdownMenuItem(
                               value: u,
-                              child: Text(u == 'number' ? '倍' : u),
+                              child: Text(
+                                u == 'number' ? '倍' : u,
+                                style: ui(14, c: d.ink),
+                              ),
                             ),
                         ],
                         onChanged: busy

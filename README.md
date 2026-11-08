@@ -2,7 +2,7 @@
 
 Windows 上把小说整理成 Kindle 电子书的桌面工具。导入 TXT、EPUB、AZW3、MOBI，识别章节、检查修复、清理文字、排版，再生成 EPUB、AZW3、MOBI、KFX 或 TXT。
 
-**当前版本：测试版 5**。下载请到 [Releases](https://github.com/uiu8/easypub-lvy/releases/latest)。
+**当前版本：测试版 6**。下载请到 [Releases](https://github.com/uiu8/easypub-lvy/releases/latest)。
 
 ![书库](screenshots/01-library.png)
 
