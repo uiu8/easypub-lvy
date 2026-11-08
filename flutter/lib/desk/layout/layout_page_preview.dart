@@ -436,23 +436,15 @@ extension _LayoutPreviewSection on _LayoutPageState {
     const page = Desk.light;
     if (loading) return const Center(child: CircularProgressIndicator());
     // 字号与行高按机型和阅读器设置换算（LAY-096）：书内字号以 110% 为基准缩放。
-    final metrics = readerMetrics(
-      device,
-      bookScale:
-          (units['font_size_unit'] == '%'
-                  ? number('font_size', 110) / 110
-                  : number('font_size', 18) / 17.6)
-              .clamp(.3, 4.0),
-      bookLineHeight: number('line_height', 1.2).clamp(1, 2.3),
-    );
-    final size = metrics.fontPx.clamp(6.0, 96.0);
+    final lengths = LayoutUnits(values, device);
+    final metrics = lengths.metrics;
+    final size = lengths.modern
+        ? metrics.fontPx
+        : metrics.fontPx.clamp(6.0, 96.0);
     TextStyle face(double s, {FontWeight? w}) => device.serif
         ? serif(s, w: w == null ? 400 : 650, c: page.ink, h: metrics.lineRatio)
         : ui(s, w: w == null ? 400 : 650, c: page.ink, h: metrics.lineRatio);
-    double margin(String side) =>
-        (number('margin_$side', 0) *
-                (units['margin_${side}_unit'] == 'em' ? size : 1))
-            .clamp(0.0, 120.0);
+    double margin(String side) => lengths.margin(side);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
       child: Column(
@@ -687,10 +679,10 @@ extension _LayoutPreviewSection on _LayoutPageState {
                           'right' => TextAlign.right,
                           _ => TextAlign.justify,
                         },
-                        indent:
-                            number('paragraph_indent', 2).clamp(0, 6) * size,
-                        paragraphSpacing:
-                            number('paragraph_spacing', .5).clamp(0, 6) * size,
+                        indent: lengths.paragraph('paragraph_indent'),
+                        paragraphSpacing: lengths.paragraph(
+                          'paragraph_spacing',
+                        ),
                         titleSpacing: 20,
                         padding:
                             metrics.padding +

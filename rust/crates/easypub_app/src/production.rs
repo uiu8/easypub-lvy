@@ -16,21 +16,13 @@ pub fn default_font_size_unit() -> String {
     "px".into()
 }
 pub fn valid_font_size(value: f64, unit: &str) -> bool {
-    match unit {
-        "%" => (50.0..=200.0).contains(&value),
-        "px" => (14.0..=26.0).contains(&value),
-        _ => false,
-    }
+    crate::layout_units::valid_font(value, unit, false)
 }
 pub fn default_margin_unit() -> String {
     "em".into()
 }
 fn valid_margin(value: f64, unit: &str) -> bool {
-    match unit {
-        "em" => (0.0..=6.0).contains(&value),
-        "px" => (0.0..=1000.0).contains(&value),
-        _ => false,
-    }
+    crate::layout_units::valid(value, unit, false)
 }
 pub fn default_text_alignment() -> String {
     "start".into()
@@ -227,6 +219,8 @@ pub struct Settings {
     pub font_resource: Option<crate::fonts::Selection>,
     #[serde(default = "crate::production::default_font_size_unit")]
     pub font_size_unit: String,
+    #[serde(default)]
+    pub layout_units_version: u8,
     /// 保持原格式时对原书样式的改动（G-112）；没改时不写，旧版本还能打开。
     #[serde(
         default,
@@ -254,6 +248,8 @@ pub struct Settings {
     pub remove_blank_lines: bool,
     pub font_size: f64,
     pub line_height: f64,
+    #[serde(default = "crate::layout_units::number")]
+    pub line_height_unit: String,
     #[serde(default = "crate::production::default_text_alignment")]
     pub text_alignment: String,
     /// 书写方向（V28，LAY-104）：horizontal 横排、vertical 竖排（从右往左翻页）。
@@ -324,8 +320,12 @@ pub struct Settings {
     pub css_font_permissions: Vec<String>,
     #[serde(default = "crate::production::default_paragraph_indent")]
     pub paragraph_indent: f64,
+    #[serde(default = "crate::layout_units::em")]
+    pub paragraph_indent_unit: String,
     #[serde(default = "crate::production::default_paragraph_spacing")]
     pub paragraph_spacing: f64,
+    #[serde(default = "crate::layout_units::em")]
+    pub paragraph_spacing_unit: String,
     #[serde(default)]
     pub margin_top: f64,
     #[serde(default = "crate::production::default_margin_unit")]
@@ -385,17 +385,21 @@ impl From<&crate::project::ProjectBook> for Settings {
             output_options: book.output_options.clone(),
             navigation_options: book.navigation_options.clone(),
             font_size_unit: book.font_size_unit.clone(),
+            layout_units_version: book.layout_units_version,
             fullwidth_indent: book.fullwidth_indent,
             remove_blank_lines: book.remove_blank_lines,
             font_size: book.font_size,
             line_height: book.line_height,
+            line_height_unit: book.line_height_unit.clone(),
             text_alignment: book.text_alignment.clone(),
             additional_css: book.additional_css.clone(),
             additional_css_base: book.additional_css_base.clone(),
             additional_css_bundle: book.additional_css_bundle.clone(),
             css_font_permissions: book.css_font_permissions.clone(),
             paragraph_indent: book.paragraph_indent,
+            paragraph_indent_unit: book.paragraph_indent_unit.clone(),
             paragraph_spacing: book.paragraph_spacing,
+            paragraph_spacing_unit: book.paragraph_spacing_unit.clone(),
             margin_top: book.margin_top,
             margin_top_unit: book.margin_top_unit.clone(),
             margin_right: book.margin_right,
@@ -637,9 +641,18 @@ impl Settings {
             || !self.output_options.valid()
             || !self.navigation_options.valid()
             || self.description.len() > 65536
-            || !valid_font_size(self.font_size, &self.font_size_unit)
+            || !crate::layout_units::valid_font(
+                self.font_size,
+                &self.font_size_unit,
+                self.layout_units_version == 1,
+            )
             || self.fullwidth_indent > 8
-            || !(1.0..=2.3).contains(&self.line_height)
+            || !crate::layout_units::valid_line(
+                self.line_height,
+                &self.line_height_unit,
+                self.layout_units_version == 1,
+            )
+            || self.layout_units_version > 1
             || !matches!(
                 self.text_alignment.as_str(),
                 "start" | "left" | "right" | "center" | "justify"
@@ -663,8 +676,16 @@ impl Settings {
                 self.font_family.as_str(),
                 "Microsoft YaHei" | "SimSun" | "Segoe UI"
             )
-            || !(0.0..=6.0).contains(&self.paragraph_indent)
-            || !(0.0..=6.0).contains(&self.paragraph_spacing)
+            || !crate::layout_units::valid(
+                self.paragraph_indent,
+                &self.paragraph_indent_unit,
+                false,
+            )
+            || !crate::layout_units::valid(
+                self.paragraph_spacing,
+                &self.paragraph_spacing_unit,
+                false,
+            )
             || !valid_margin(self.margin_top, &self.margin_top_unit)
             || !valid_margin(self.margin_right, &self.margin_right_unit)
             || !valid_margin(self.margin_bottom, &self.margin_bottom_unit)
@@ -1477,9 +1498,14 @@ pub fn run(
     if value["op"] == "image_estimate" && !apply {
         if value.get("publication").is_some() && value.get("original_epub").is_none() {
             let input = value["publication"].clone();
-            let request: crate::publication_resources::Request = serde_json::from_value(input.clone()).map_err(|_| invalid())?;
+            let request: crate::publication_resources::Request =
+                serde_json::from_value(input.clone()).map_err(|_| invalid())?;
             let source = service.source(&request.source_id, request.revision)?;
-            return crate::kindle_images::estimate_publication(&source, input, value["options"].clone());
+            return crate::kindle_images::estimate_publication(
+                &source,
+                input,
+                value["options"].clone(),
+            );
         }
         return crate::kindle_images::estimate(value);
     }

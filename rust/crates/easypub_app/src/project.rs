@@ -101,11 +101,15 @@ pub struct ProjectBook {
     #[serde(default = "crate::production::default_font_size_unit")]
     pub font_size_unit: String,
     #[serde(default)]
+    pub layout_units_version: u8,
+    #[serde(default)]
     pub fullwidth_indent: u8,
     #[serde(default)]
     pub remove_blank_lines: bool,
     pub font_size: f64,
     pub line_height: f64,
+    #[serde(default = "crate::layout_units::number")]
+    pub line_height_unit: String,
     #[serde(default = "crate::production::default_text_alignment")]
     pub text_alignment: String,
     /// 书写方向（V28，LAY-104）：horizontal 横排、vertical 竖排（从右往左翻页）。
@@ -172,8 +176,12 @@ pub struct ProjectBook {
     pub css_font_permissions: Vec<String>,
     #[serde(default = "crate::production::default_paragraph_indent")]
     pub paragraph_indent: f64,
+    #[serde(default = "crate::layout_units::em")]
+    pub paragraph_indent_unit: String,
     #[serde(default = "crate::production::default_paragraph_spacing")]
     pub paragraph_spacing: f64,
+    #[serde(default = "crate::layout_units::em")]
+    pub paragraph_spacing_unit: String,
     #[serde(default)]
     pub margin_top: f64,
     #[serde(default = "crate::production::default_margin_unit")]
@@ -433,9 +441,18 @@ impl Project {
                 || b.title.len() > 4096
                 || b.author.len() > 4096
                 || b.description.len() > 65536
-                || !crate::production::valid_font_size(b.font_size, &b.font_size_unit)
+                || !crate::layout_units::valid_font(
+                    b.font_size,
+                    &b.font_size_unit,
+                    b.layout_units_version == 1,
+                )
                 || b.fullwidth_indent > 8
-                || !(1.0..=2.3).contains(&b.line_height)
+                || !crate::layout_units::valid_line(
+                    b.line_height,
+                    &b.line_height_unit,
+                    b.layout_units_version == 1,
+                )
+                || b.layout_units_version > 1
             {
                 return Err(invalid());
             }
@@ -1099,10 +1116,12 @@ mod tests {
             language: String::new(),
 
             font_size_unit: "px".into(),
+            layout_units_version: 0,
             fullwidth_indent: 0,
             remove_blank_lines: false,
             font_size: 22.0,
             line_height: 2.0,
+            line_height_unit: crate::layout_units::number(),
             text_alignment: crate::production::default_text_alignment(),
             writing_mode: crate::production::default_writing_mode(),
             vertical_digits: crate::production::default_vertical_digits(),
@@ -1150,7 +1169,9 @@ mod tests {
             output_options: Default::default(),
             navigation_options: Default::default(),
             paragraph_indent: 2.0,
+            paragraph_indent_unit: crate::layout_units::em(),
             paragraph_spacing: 0.5,
+            paragraph_spacing_unit: crate::layout_units::em(),
             margin_top: 0.0,
             margin_top_unit: "em".into(),
             margin_right: 0.0,

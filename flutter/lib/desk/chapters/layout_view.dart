@@ -11,6 +11,7 @@ import '../../application/library_service.dart';
 import '../../application/rule_catalog_service.dart';
 import '../errors.dart';
 import '../layout/device_preview.dart';
+import '../layout/layout_units.dart';
 import '../layout/system_block_look.dart';
 import '../tokens.dart';
 import '../widgets.dart';
@@ -110,25 +111,17 @@ class ChapterLayoutView extends ChangeNotifier {
     const page = Desk.light;
     double n(String key, double fallback) =>
         (book[key] as num?)?.toDouble() ?? fallback;
-    final metrics = readerMetrics(
-      device,
-      bookScale:
-          ((book['font_size_unit'] ?? 'px') == '%'
-                  ? n('font_size', 110) / 110
-                  : n('font_size', 18) / 17.6)
-              .clamp(.3, 4.0),
-      bookLineHeight: n('line_height', 1.2).clamp(1, 2.3),
-    );
-    final size = metrics.fontPx.clamp(6.0, 96.0);
+    final lengths = LayoutUnits(book, device);
+    final metrics = lengths.metrics;
+    final size = lengths.modern
+        ? metrics.fontPx
+        : metrics.fontPx.clamp(6.0, 96.0);
     final face =
         (device.serif
                 ? serif(size, c: page.ink, h: metrics.lineRatio)
                 : ui(size, c: page.ink, h: metrics.lineRatio))
             .copyWith(letterSpacing: metrics.tracking * size);
-    double margin(String side) =>
-        (n('margin_$side', 0) *
-                (book['margin_${side}_unit'] == 'em' ? size : 1))
-            .clamp(0.0, 120.0);
+    double margin(String side) => lengths.margin(side);
     final fullwidth = n('fullwidth_indent', 0).clamp(0, 8).toInt();
     final align = book['text_alignment'] as String? ?? 'start';
     final style = PreviewStyle(
@@ -140,8 +133,8 @@ class ChapterLayoutView extends ChangeNotifier {
         // 真机正文两端对齐（V118 实测）。
         _ => metrics.justify ? TextAlign.justify : TextAlign.start,
       },
-      indent: (n('paragraph_indent', 0).clamp(0, 6) + fullwidth) * size,
-      paragraphSpacing: n('paragraph_spacing', .6).clamp(0, 6) * size,
+      indent: lengths.paragraph('paragraph_indent') + fullwidth * size,
+      paragraphSpacing: lengths.paragraph('paragraph_spacing'),
       titleSpacing: 20,
       padding: EdgeInsets.zero,
       sceneBreak: book['scene_break_style'] as String? ?? 'off',

@@ -99,9 +99,9 @@ pub fn prepare_with(
     // 封面页（OUT-074）：SVG 规则见 COVER_SVG_RULE；KFX 的封面页仍是普通图片、高度随宽度。
     let mut css = format!(
         "/* EasyPub publication styles v3 */\n\
-         @page {{ margin: {}px {}px {}px {}px; }}\n\
-         body {{ margin: 0; font-family: \"{}\", {}; font-size: {}{}; line-height: {}; }}\n\
-         p {{ margin: 0 0 {}em; text-indent: {}em; }}\n\
+         @page {{ margin: {} {} {} {}; }}\n\
+         body {{ margin: 0; font-family: \"{}\", {}; font-size: {}; line-height: {}; }}\n\
+         p {{ margin: 0 0 {}; text-indent: {}; }}\n\
          h1, h2, h3 {{ text-indent: 0; break-after: avoid; }}\n\
          figure {{ margin: 1em 0; text-indent: 0; text-align: center; break-inside: avoid; }}\n\
          figure img {{ max-width: 100%; height: auto; }}\n\
@@ -109,54 +109,55 @@ pub fn prepare_with(
          .cover {{ width: 100%; height: 100%; margin: 0; padding: 0; text-indent: 0; }}\n\
          .cover img {{ width: 100%; height: auto; }}\n\
          .nb {{ white-space: nowrap; }}\n",
-        settings.margin_top
-            * if settings.margin_top_unit == "em" {
-                if settings.font_size_unit == "%" {
-                    16.0 * settings.font_size / 100.0
-                } else {
-                    settings.font_size
-                }
-            } else {
-                1.0
-            },
-        settings.margin_right
-            * if settings.margin_right_unit == "em" {
-                if settings.font_size_unit == "%" {
-                    16.0 * settings.font_size / 100.0
-                } else {
-                    settings.font_size
-                }
-            } else {
-                1.0
-            },
-        settings.margin_bottom
-            * if settings.margin_bottom_unit == "em" {
-                if settings.font_size_unit == "%" {
-                    16.0 * settings.font_size / 100.0
-                } else {
-                    settings.font_size
-                }
-            } else {
-                1.0
-            },
-        settings.margin_left
-            * if settings.margin_left_unit == "em" {
-                if settings.font_size_unit == "%" {
-                    16.0 * settings.font_size / 100.0
-                } else {
-                    settings.font_size
-                }
-            } else {
-                1.0
-            },
+        if settings.layout_units_version == 0 && settings.margin_top_unit == "em" {
+            format!(
+                "{}px",
+                settings.margin_top
+                    * crate::layout_units::font_px(settings.font_size, &settings.font_size_unit)
+            )
+        } else {
+            crate::layout_units::css(settings.margin_top, &settings.margin_top_unit)
+        },
+        if settings.layout_units_version == 0 && settings.margin_right_unit == "em" {
+            format!(
+                "{}px",
+                settings.margin_right
+                    * crate::layout_units::font_px(settings.font_size, &settings.font_size_unit)
+            )
+        } else {
+            crate::layout_units::css(settings.margin_right, &settings.margin_right_unit)
+        },
+        if settings.layout_units_version == 0 && settings.margin_bottom_unit == "em" {
+            format!(
+                "{}px",
+                settings.margin_bottom
+                    * crate::layout_units::font_px(settings.font_size, &settings.font_size_unit)
+            )
+        } else {
+            crate::layout_units::css(settings.margin_bottom, &settings.margin_bottom_unit)
+        },
+        if settings.layout_units_version == 0 && settings.margin_left_unit == "em" {
+            format!(
+                "{}px",
+                settings.margin_left
+                    * crate::layout_units::font_px(settings.font_size, &settings.font_size_unit)
+            )
+        } else {
+            crate::layout_units::css(settings.margin_left, &settings.margin_left_unit)
+        },
         settings.font_family,
         fallback,
-        settings.font_size,
-        settings.font_size_unit,
-        settings.line_height,
-        settings.paragraph_spacing,
-        settings.paragraph_indent,
+        crate::layout_units::css(settings.font_size, &settings.font_size_unit),
+        crate::layout_units::css(settings.line_height, &settings.line_height_unit),
+        crate::layout_units::css(settings.paragraph_spacing, &settings.paragraph_spacing_unit),
+        crate::layout_units::css(settings.paragraph_indent, &settings.paragraph_indent_unit),
     );
+    if settings.layout_units_version == 1 {
+        css.push_str(&format!(
+            "@page {{ font-size: {}; }}\n",
+            crate::layout_units::css(settings.font_size, &settings.font_size_unit)
+        ));
+    }
     css.push_str(COVER_SVG_RULE);
     css.push_str(&format!(
         "p {{ text-align: {}; }}\n",
@@ -333,6 +334,35 @@ mod tests {
             "line_height":2.0,"include_toc":true,"illustrations":[]}),
         )
         .unwrap()
+    }
+    #[test]
+    fn units_roundtrip_and_export_preserve_relative_semantics() {
+        let mut s = settings();
+        s.layout_units_version = 1;
+        s.font_size = 12.0;
+        s.font_size_unit = "pt".into();
+        s.line_height = 120.0;
+        s.line_height_unit = "%".into();
+        s.paragraph_indent = 5.0;
+        s.paragraph_indent_unit = "%".into();
+        s.paragraph_spacing = 6.0;
+        s.paragraph_spacing_unit = "pt".into();
+        s.margin_top = 5.0;
+        s.margin_top_unit = "%".into();
+        s.margin_right = 2.0;
+        s.margin_right_unit = "em".into();
+        let encoded = serde_json::to_value(&s).unwrap();
+        let decoded: Settings = serde_json::from_value(encoded).unwrap();
+        let a = prepare(&decoded).unwrap().css;
+        assert!(a.contains("font-size: 16px; line-height: 120%;"));
+        assert!(a.contains("p { margin: 0 0 8px; text-indent: 5%; }"));
+        assert!(a.contains("@page { margin: 5% 2em"));
+        s.font_size = 16.0;
+        s.font_size_unit = "px".into();
+        assert_eq!(a, prepare(&s).unwrap().css);
+        s.line_height = 1.2;
+        s.line_height_unit = "number".into();
+        assert!(prepare(&s).unwrap().css.contains("line-height: 1.2;"));
     }
     #[test]
     fn fixed_pixel_margins_do_not_scale_with_body_font() {

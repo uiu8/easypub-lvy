@@ -92,6 +92,10 @@ class BookDraft {
   };
   double fontSize = 18, lineHeight = 1.2;
   String fontSizeUnit = '%';
+  int layoutUnitsVersion = 0;
+  String lineHeightUnit = 'number',
+      paragraphIndentUnit = 'em',
+      paragraphSpacingUnit = 'em';
   int fullwidthIndent = 2;
   bool removeBlankLines = true;
   String textAlignment = 'start';
@@ -996,6 +1000,13 @@ class PrototypeState extends ChangeNotifier {
                 ?.cast<String, dynamic>()
             ..fontSize = (v['font_size'] as num).toDouble()
             ..fontSizeUnit = v['font_size_unit'] as String? ?? 'px'
+            ..layoutUnitsVersion =
+                (v['layout_units_version'] as num?)?.toInt() ?? 0
+            ..lineHeightUnit = v['line_height_unit'] as String? ?? 'number'
+            ..paragraphIndentUnit =
+                v['paragraph_indent_unit'] as String? ?? 'em'
+            ..paragraphSpacingUnit =
+                v['paragraph_spacing_unit'] as String? ?? 'em'
             ..fullwidthIndent = (v['fullwidth_indent'] as num? ?? 0).toInt()
             ..removeBlankLines = v['remove_blank_lines'] == true
             ..lineHeight = (v['line_height'] as num).toDouble()
@@ -1300,6 +1311,10 @@ class PrototypeState extends ChangeNotifier {
           ...d.bibliographic,
           'font_size': d.fontSize,
           'font_size_unit': d.fontSizeUnit,
+          'layout_units_version': d.layoutUnitsVersion,
+          'line_height_unit': d.lineHeightUnit,
+          'paragraph_indent_unit': d.paragraphIndentUnit,
+          'paragraph_spacing_unit': d.paragraphSpacingUnit,
           'fullwidth_indent': d.fullwidthIndent,
           'remove_blank_lines': d.removeBlankLines,
           'line_height': d.lineHeight,
@@ -1587,6 +1602,13 @@ class PrototypeState extends ChangeNotifier {
           }
           ..fontSize = (row['font_size'] as num).toDouble()
           ..fontSizeUnit = row['font_size_unit'] as String? ?? 'px'
+          ..layoutUnitsVersion =
+              (row['layout_units_version'] as num?)?.toInt() ?? 0
+          ..lineHeightUnit = row['line_height_unit'] as String? ?? 'number'
+          ..paragraphIndentUnit =
+              row['paragraph_indent_unit'] as String? ?? 'em'
+          ..paragraphSpacingUnit =
+              row['paragraph_spacing_unit'] as String? ?? 'em'
           ..fullwidthIndent = (row['fullwidth_indent'] as num? ?? 0).toInt()
           ..removeBlankLines = row['remove_blank_lines'] == true
           ..lineHeight = (row['line_height'] as num).toDouble()

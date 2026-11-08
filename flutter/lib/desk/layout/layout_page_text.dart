@@ -4,11 +4,7 @@ part of 'layout_page.dart';
 extension _LayoutTextSection on _LayoutPageState {
   Widget field(String key) {
     final d = context.desk;
-    final unitKey = key == 'font_size'
-        ? 'font_size_unit'
-        : key.startsWith('margin_')
-        ? '${key}_unit'
-        : null;
+    final unitKey = key == 'fullwidth_indent' ? null : '${key}_unit';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -51,26 +47,56 @@ extension _LayoutTextSection on _LayoutPageState {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: KeyedSubtree(
                   key: ValueKey('layout-$unitKey'),
-                  child: DeskSegmented<String>(
-                    value: units[unitKey]!,
-                    options: key == 'font_size'
-                        ? const {'%': '%', 'px': 'px'}
-                        : const {'em': 'em', 'px': 'px'},
-                    onChanged: busy
-                        ? null
-                        : (value) => key == 'font_size'
-                              ? edit(() {
-                                  if (value == units['font_size_unit']) return;
-                                  final old =
-                                      double.tryParse(numbers[key]!.text) ?? 18;
-                                  numbers[key]!.text =
-                                      (value == '%'
-                                              ? old / 16 * 100
-                                              : old * 16 / 100)
-                                          .toStringAsFixed(1);
-                                  units['font_size_unit'] = value;
-                                })
-                              : edit(() => units[unitKey] = value),
+                  child: SizedBox(
+                    width: 76,
+                    child: Tooltip(
+                      message: key == 'line_height'
+                          ? '倍：跟随字号；% 和 em：本元素字号；px/pt：固定行高。'
+                          : key.startsWith('margin_')
+                          ? '%：上下按页高、左右按页宽；em：正文字号。'
+                          : key == 'font_size'
+                          ? '%、em：相对阅读器字号；12pt = 16px。'
+                          : '%：正文区宽度；em：正文字号。',
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        isDense: true,
+                        value: units[unitKey],
+                        items: [
+                          for (final u in [
+                            if (key == 'line_height') 'number',
+                            '%',
+                            'em',
+                            'px',
+                            'pt',
+                          ])
+                            DropdownMenuItem(
+                              value: u,
+                              child: Text(u == 'number' ? '倍' : u),
+                            ),
+                        ],
+                        onChanged: busy
+                            ? null
+                            : (value) {
+                                if (value == null || value == units[unitKey]) {
+                                  return;
+                                }
+                                final previous = units[unitKey]!;
+                                final old = double.tryParse(numbers[key]!.text);
+                                if (old == null) return;
+                                final converted = LayoutUnits(
+                                  values,
+                                  device,
+                                ).convert(key, old, previous, value);
+                                edit(() {
+                                  numbers[key]!.text = converted
+                                      .toStringAsFixed(4)
+                                      .replaceFirst(RegExp(r'\.?0+$'), '');
+                                  units[unitKey] = value;
+                                  layoutUnitsVersion = 1;
+                                });
+                              },
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -470,6 +496,13 @@ extension _LayoutTextSection on _LayoutPageState {
         _ => [
           group('文字', [
             grid(['font_size', 'line_height']),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                '切换单位按当前预览换算；em、% 会随字号或页面大小变化。',
+                style: TextStyle(fontSize: 11, color: Color(0xff77716a)),
+              ),
+            ),
             const DeskLabel('对齐'),
             Align(
               alignment: Alignment.centerLeft,

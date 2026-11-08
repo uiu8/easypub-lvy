@@ -266,6 +266,28 @@ fn render_preview(service: &ImportService, request: &str) -> Result<String, ApiE
     }
     let req: Preview = serde_json::from_str(request)
         .map_err(|_| invalid(ErrorCode::InvalidRule, "review_preview"))?;
+    // Screen preview is a scrolling viewport, not a print page. Project author
+    // page margins into viewport padding only in extracted preview documents.
+    // The Kindle reader overrides this padding and applies its own page area.
+    let s = &req.publication.settings;
+    let preview_margins = if s.layout_units_version == 1 {
+        let length = |v, u: &str, vertical| {
+            if u == "%" {
+                format!("{v}{}", if vertical { "vh" } else { "vw" })
+            } else {
+                crate::layout_units::css(v, u)
+            }
+        };
+        format!(
+            "<style id=\"easypub-screen-margins\">@media screen {{ body {{ box-sizing:border-box; padding:{} {} {} {}; }} }}</style>",
+            length(s.margin_top, &s.margin_top_unit, true),
+            length(s.margin_right, &s.margin_right_unit, false),
+            length(s.margin_bottom, &s.margin_bottom_unit, true),
+            length(s.margin_left, &s.margin_left_unit, false)
+        )
+    } else {
+        String::new()
+    };
     let source = service.source(&req.publication.source_id, req.publication.revision)?;
     let prepared = publication_resources::prepare(&source, req.publication)?;
     // 只打包不压缩：随后马上解开（V83）。
@@ -312,6 +334,9 @@ fn render_preview(service: &ImportService, request: &str) -> Result<String, ApiE
             let mut text = String::new();
             item.read_to_string(&mut text)
                 .map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+            if !preview_margins.is_empty() {
+                text = text.replacen("</head>", &format!("{preview_margins}</head>"), 1);
+            }
             use std::io::Write;
             file.write_all(text.as_bytes())
                 .map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;

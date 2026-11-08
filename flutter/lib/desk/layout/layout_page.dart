@@ -31,6 +31,7 @@ import '../widgets.dart';
 import 'book_batch_dialog.dart';
 import 'css_dialog.dart';
 import 'device_preview.dart';
+import 'layout_units.dart';
 import 'layout_origins_dialog.dart';
 import 'layout_presets_dialog.dart';
 import 'block_style_editor.dart';
@@ -119,6 +120,7 @@ class _LayoutPageState extends State<LayoutPage> {
   final numbers = <String, TextEditingController>{};
   final flags = <String, bool>{};
   final units = <String, String>{};
+  int layoutUnitsVersion = 0;
   Map<String, Object?> savedValues = {};
   String alignment = 'justify', baseline = '', message = '';
   // 书写方向与纵中横位数（V28，LAY-104）。
@@ -234,6 +236,7 @@ class _LayoutPageState extends State<LayoutPage> {
     for (final key in numbers.keys) key: numbers[key]!.text,
     ...flags,
     ...units,
+    'layout_units_version': layoutUnitsVersion,
     'text_alignment': alignment,
     'writing_mode': writingMode,
     'vertical_digits': verticalDigits,
@@ -276,6 +279,8 @@ class _LayoutPageState extends State<LayoutPage> {
     for (final key in flags.keys) {
       if (draft.containsKey(key)) flags[key] = draft[key] as bool;
     }
+    layoutUnitsVersion =
+        (draft['layout_units_version'] as num?)?.toInt() ?? layoutUnitsVersion;
     for (final key in units.keys) {
       if (draft.containsKey(key)) units[key] = draft[key] as String;
     }
@@ -329,6 +334,7 @@ class _LayoutPageState extends State<LayoutPage> {
           : double.tryParse(numbers[key]!.text),
     ...flags,
     ...units,
+    'layout_units_version': layoutUnitsVersion,
     'text_alignment': alignment,
     'writing_mode': writingMode,
     'vertical_digits': verticalDigits,
@@ -355,6 +361,7 @@ class _LayoutPageState extends State<LayoutPage> {
     for (final key in numbers.keys) key: numbers[key]!.text,
     ...flags,
     ...units,
+    'layout_units_version': layoutUnitsVersion,
     'text_alignment': alignment,
     'writing_mode': writingMode,
     'vertical_digits': verticalDigits,
@@ -422,6 +429,16 @@ class _LayoutPageState extends State<LayoutPage> {
       units['margin_${side}_unit'] = saved['margin_${side}_unit'] as String;
     }
     units['font_size_unit'] = saved['font_size_unit'] as String? ?? 'px';
+    layoutUnitsVersion = (saved['layout_units_version'] as num?)?.toInt() ?? 0;
+    for (final key in [
+      'line_height',
+      'paragraph_indent',
+      'paragraph_spacing',
+    ]) {
+      units['${key}_unit'] =
+          saved['${key}_unit'] as String? ??
+          (key == 'line_height' ? 'number' : 'em');
+    }
     alignment = saved['text_alignment'] as String;
     writingMode = saved['writing_mode'] as String? ?? 'horizontal';
     verticalDigits = (saved['vertical_digits'] as num? ?? 2).toInt();
@@ -829,16 +846,28 @@ class _LayoutPageState extends State<LayoutPage> {
       serif: request['serif'] == true,
     );
     final draft = (request['values'] as Map?) ?? const {};
-    final line = (draft['line_height'] as num?)?.toDouble() ?? 1.2;
-    // 书内字号相对 110% 的倍数（只认 %）：真机规则按实际正文字号算行距与版心（V118）。
-    final percent = draft['font_size_unit'] == '%'
-        ? (draft['font_size'] as num?)?.toDouble()
-        : null;
-    final scale = percent == null || percent <= 0 ? 1.0 : percent / 110;
-    final m = readerMetrics(choice, bookScale: scale, bookLineHeight: line);
+    final lengths = LayoutUnits(draft, choice);
+    final scale = draft['font_size_unit'] == '%'
+        ? ((draft['font_size'] as num?)?.toDouble() ?? 110) / 110
+        : 1.0;
+    final m = lengths.modern
+        ? lengths.metrics
+        : readerMetrics(
+            choice,
+            bookScale: scale,
+            bookLineHeight: (draft['line_height'] as num?)?.toDouble() ?? 1.2,
+          );
     return {
       // 校准点是书内字号 110% 时的正文字号；根字号按此还原，书内 % 字号再在其上缩放。
-      'rootPx': m.fontPx / (1.1 * scale),
+      'rootPx': lengths.modern ? lengths.baseFont : m.fontPx / (1.1 * scale),
+      'unitsVersion': lengths.modern ? 1 : 0,
+      'linePixels': m.fontPx * m.lineRatio,
+      'bookMargins': {
+        'left': lengths.margin('left'),
+        'right': lengths.margin('right'),
+        'top': lengths.margin('top'),
+        'bottom': lengths.margin('bottom'),
+      },
       'lineRatio': m.lineRatio,
       'padding': {
         'left': m.padding.left,
@@ -887,19 +916,11 @@ class _LayoutPageState extends State<LayoutPage> {
     return value != null && value.isFinite ? value : fallback;
   }
 
-  String? suffix(String key) => key == 'font_size'
-      ? null
-      : key == 'fullwidth_indent'
-      ? '个'
-      : key == 'line_height'
-      ? '倍'
-      : key.startsWith('margin_')
-      ? null
-      : 'em';
+  String? suffix(String key) => key == 'fullwidth_indent' ? '个' : null;
 
   static const _indentHelp = {
     'paragraph_indent':
-        '首行缩进：生成 CSS 的 text-indent，单位为字号的倍数（em）。'
+        '首行缩进：生成 CSS 的 text-indent，可选择 em、px、pt 或 %；em 跟随字号，% 按正文区宽度计算。'
         '与“段首全角空格”同时设置时两者叠加，例如 2em + 2 个全角空格约等于缩进 4 个字；通常只用其一。',
     'fullwidth_indent':
         '段首全角空格：生成时先去掉每段原有的段首空白，再写入 N 个全角空格（最多 8 个）；0 为关闭，保留原文段首空白。'
@@ -918,7 +939,7 @@ class _LayoutPageState extends State<LayoutPage> {
     )..layout();
     final text = painter.width;
     painter.dispose();
-    final unit = key == 'font_size' || key.startsWith('margin_');
+    final unit = key != 'fullwidth_indent';
     return text + (_indentHelp.containsKey(key) ? 26 : 0) + (unit ? 84 : 0) + 8;
   }
 

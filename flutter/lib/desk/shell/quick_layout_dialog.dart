@@ -130,7 +130,7 @@ class _QuickLayoutDialogState extends State<QuickLayoutDialog> {
   String summary(LayoutPreset preset) {
     final v = preset.values;
     final size = v['font_size'];
-    final unit = v['font_size_unit'] == '%' ? '%' : 'px';
+    final unit = v['font_size_unit'] as String? ?? 'px';
     return [
       if (size is num) '字号 ${_num(size)}$unit',
       if (v['line_height'] is num) '行距 ${_num(v['line_height'] as num)}',

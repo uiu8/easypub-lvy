@@ -29,6 +29,7 @@ pub mod assets;
 pub mod publication_resources;
 
 pub mod publication_style;
+pub mod layout_units;
 
 pub mod fonts;
 

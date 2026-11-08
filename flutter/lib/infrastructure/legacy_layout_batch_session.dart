@@ -44,8 +44,19 @@ class LegacyLayoutBatchSession implements LayoutBatchSession {
     guards = {};
     check(ticket);
     final keys = Set<String>.of(fields);
-    if (keys.contains('font_size') || keys.contains('font_size_unit')) {
-      keys.addAll({'font_size', 'font_size_unit'});
+    for (final field in [
+      'font_size',
+      'line_height',
+      'paragraph_indent',
+      'paragraph_spacing',
+      'margin_top',
+      'margin_right',
+      'margin_bottom',
+      'margin_left',
+    ]) {
+      if (keys.contains(field) || keys.contains('${field}_unit')) {
+        keys.addAll({field, '${field}_unit', 'layout_units_version'});
+      }
     }
     final ids = List<String>.of(targets);
     if (keys.isEmpty ||

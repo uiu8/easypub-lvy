@@ -94,8 +94,19 @@ class LegacyBookBatchSession implements BookBatchSession {
     }
     final values = backend.production.settings(bookId);
     final expanded = {...keys}..remove('cover');
-    if (keys.contains('font_size') || keys.contains('font_size_unit')) {
-      expanded.addAll({'font_size', 'font_size_unit'});
+    for (final field in [
+      'font_size',
+      'line_height',
+      'paragraph_indent',
+      'paragraph_spacing',
+      'margin_top',
+      'margin_right',
+      'margin_bottom',
+      'margin_left',
+    ]) {
+      if (keys.contains(field) || keys.contains('${field}_unit')) {
+        expanded.addAll({field, '${field}_unit', 'layout_units_version'});
+      }
     }
     if (keys.contains('cover')) {
       expanded.addAll({

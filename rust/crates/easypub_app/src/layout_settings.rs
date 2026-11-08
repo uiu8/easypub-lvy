@@ -82,6 +82,7 @@ pub struct Resolved {
 }
 pub fn factory() -> BTreeMap<String, Value> {
     serde_json::from_value(json!({
+        "layout_units_version":0,"line_height_unit":"number","paragraph_indent_unit":"em","paragraph_spacing_unit":"em",
         "font_size":110.0,"font_size_unit":"%","fullwidth_indent":2,"remove_blank_lines":true,"line_height":1.2,"text_alignment":"start",
         "font_family":"Microsoft YaHei","paragraph_indent":0.0,"paragraph_spacing":0.6,
         "margin_top":0.0,"margin_right":3.0,"margin_bottom":0.0,"margin_left":3.0,
@@ -126,6 +127,17 @@ impl Layers {
                 values.insert("font_size_unit".into(), json!("px"));
                 origins.insert("font_size_unit".into(), name);
             }
+            for (field, unit) in [
+                ("line_height", "number"),
+                ("paragraph_indent", "em"),
+                ("paragraph_spacing", "em"),
+            ] {
+                let key = format!("{field}_unit");
+                if layer.contains_key(field) && !layer.contains_key(&key) {
+                    values.insert(key.clone(), json!(unit));
+                    origins.insert(key, name);
+                }
+            }
             for (key, value) in layer {
                 values.insert(key.clone(), value.clone());
                 origins.insert(key.clone(), name);
@@ -134,10 +146,10 @@ impl Layers {
         for side in ["top", "right", "bottom", "left"] {
             let key = format!("margin_{side}");
             let unit = values[&format!("{key}_unit")].as_str().unwrap_or("");
-            let max = if unit == "px" { 1000.0 } else { 6.0 };
+
             if !values[&key]
                 .as_f64()
-                .is_some_and(|v| (0.0..=max).contains(&v))
+                .is_some_and(|v| crate::layout_units::valid(v, unit, false))
             {
                 return Err(ApiError::new(
                     ErrorCode::InvalidRule,
@@ -194,6 +206,24 @@ pub fn restore_fields(
             },
         );
     }
+    for field in ["line_height", "paragraph_indent", "paragraph_spacing"] {
+        if fields.iter().any(|f| f == field) {
+            let key = format!("{field}_unit");
+            edits.insert(
+                key.clone(),
+                crate::production::Edit::Set {
+                    value: defaults.get(&key).cloned().unwrap_or(json!(
+                        if field == "line_height" {
+                            "number"
+                        } else {
+                            "em"
+                        }
+                    )),
+                },
+            );
+        }
+    }
+
     Ok(edits)
 }
 

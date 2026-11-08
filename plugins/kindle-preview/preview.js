@@ -5,6 +5,7 @@
 //   POST api/apply    {values} → 写回本书
 'use strict';
 
+const CONTEXT_KEYS = ['layout_units_version','font_size_unit','line_height_unit','paragraph_indent_unit','paragraph_spacing_unit','paragraph_indent','margin_top','margin_right','margin_bottom','margin_left','margin_top_unit','margin_right_unit','margin_bottom_unit','margin_left_unit'];
 const BOOK_KEYS = ['writing_mode', 'vertical_digits', 'font_size', 'line_height',
   'fullwidth_indent', 'paragraph_spacing', 'text_alignment', 'heading_style', 'scene_break_style', 'first_paragraph_style', 'chapter_head_scope', 'chapter_head_width', 'system_block_style', 'verse_block_style', 'note_style',
   // V76：生僻字注音；章节样式包的开关与卷页边框（只在本书用了样式包时出现）。
@@ -97,7 +98,7 @@ function status(text, error) {
 
 function pick(values) {
   const out = {};
-  for (const key of BOOK_KEYS) if (values[key] !== undefined) out[key] = values[key];
+  for (const key of [...BOOK_KEYS, ...CONTEXT_KEYS]) if (values[key] !== undefined) out[key] = values[key];
   return out;
 }
 
@@ -444,11 +445,13 @@ function markPageBreaks(doc) {
 
 function area() {
   const d = S.device;
-  const p = S.metrics.padding;
+  const original = S.metrics.padding;
+  const extra = S.metrics.unitsVersion === 1 ? S.metrics.bookMargins : {};
+  const p = Object.fromEntries(['left','right','top','bottom'].map(k=>[k, original[k]+(extra[k]||0)]));
   return {
     left: p.left, top: p.top,
-    width: Math.floor(d.viewportWidth - p.left - p.right),
-    height: Math.floor(d.viewportHeight - p.top - p.bottom),
+    width: Math.max(1, Math.floor(d.viewportWidth - p.left - p.right)),
+    height: Math.max(1, Math.floor(d.viewportHeight - p.top - p.bottom)),
   };
 }
 
@@ -518,8 +521,9 @@ function layout(keepRatio) {
         : 'height:' + h + 'px!important;width:auto!important;column-width:' + a.width + 'px!important}'),
     // 真机规则（V118，KPW5）：阅读器行间距只乘到正文上，标题保留书里写的行高。
     // 标题里面的小块（标点挤压包出的 span 等）也不乘（V124：标题带“：”“。”时整行被撑高约 24 像素）。
+    m.unitsVersion === 1 ? 'body{line-height:' + (S.draft.line_height_unit === 'number' || !S.draft.line_height_unit ? m.lineRatio : m.linePixels+'px') + '!important}' : (
     (kfx ? 'body *:not(rt):not(:is(h1,h2,h3,h4,h5,h6,.heading,h1 *,h2 *,h3 *,h4 *,h5 *,h6 *,.heading *))' : 'body *:not(rt)')
-      + '{line-height:' + m.lineRatio + '!important}',
+      + '{line-height:' + m.lineRatio + '!important}'),
     // 真机规则（V118，KPW5）：正文两端对齐；按取整后的字宽断行，用字距补齐。
     m.justify ? 'p{text-align:justify;text-justify:inter-character}' : '',
     m.tracking ? 'p{letter-spacing:' + m.tracking + 'em}' : '',
@@ -1134,7 +1138,9 @@ async function start() {
   S.title = state.title || '';
   document.title = '真机预览 · ' + S.title;
   $('book-title').textContent = '真机预览 · ' + S.title;
-  $('font-unit').textContent = state.font_size_unit || '';
+  $('font-unit').textContent = state.values.font_size_unit || state.font_size_unit || '';
+  $('line-unit').textContent = state.values.line_height_unit === 'number' || !state.values.line_height_unit ? '倍' : state.values.line_height_unit;
+  $('paragraph-unit').textContent = state.values.paragraph_spacing_unit || 'em';
   // 章首图的范围与宽度只在本书设了章首图时显示（图片本身在排版页选择）。
   $('chapter-head').hidden = !state.chapter_head;
   showStyle(state);

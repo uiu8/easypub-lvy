@@ -30,12 +30,16 @@ impl Preset {
         for (key, value) in &self.values {
             let valid = match key.as_str() {
                 "font_size" => value.as_f64().is_some_and(|v| {
-                    crate::production::valid_font_size(
+                    crate::layout_units::valid_font(
                         v,
                         self.values
                             .get("font_size_unit")
                             .and_then(Value::as_str)
                             .unwrap_or("px"),
+                        self.values
+                            .get("layout_units_version")
+                            .and_then(Value::as_u64)
+                            == Some(1),
                     )
                 }),
                 "navigation_options" => serde_json::from_value::<
@@ -46,18 +50,44 @@ impl Preset {
                     serde_json::from_value::<crate::kindle_images::Options>(value.clone())
                         .is_ok_and(|v| v.valid())
                 }
-                "font_size_unit" => matches!(value.as_str(), Some("px" | "%")),
+                "font_size_unit" => value.as_str().is_some_and(crate::layout_units::valid_unit),
                 "fullwidth_indent" => value.as_u64().is_some_and(|v| v <= 8),
                 "remove_blank_lines" => value.is_boolean(),
-                "line_height" => value.as_f64().is_some_and(|v| (1.0..=2.3).contains(&v)),
-                "paragraph_indent" | "paragraph_spacing" => {
-                    value.as_f64().is_some_and(|v| (0.0..=6.0).contains(&v))
+                "layout_units_version" => value.as_u64().is_some_and(|v| v <= 1),
+                "line_height_unit" => value
+                    .as_str()
+                    .is_some_and(|u| u == "number" || crate::layout_units::valid_unit(u)),
+                "paragraph_indent_unit" | "paragraph_spacing_unit" => {
+                    value.as_str().is_some_and(crate::layout_units::valid_unit)
                 }
+                "line_height" => value.as_f64().is_some_and(|v| {
+                    crate::layout_units::valid_line(
+                        v,
+                        self.values
+                            .get("line_height_unit")
+                            .and_then(Value::as_str)
+                            .unwrap_or("number"),
+                        self.values
+                            .get("layout_units_version")
+                            .and_then(Value::as_u64)
+                            == Some(1),
+                    )
+                }),
+                "paragraph_indent" | "paragraph_spacing" => value.as_f64().is_some_and(|v| {
+                    crate::layout_units::valid(
+                        v,
+                        self.values
+                            .get(&format!("{key}_unit"))
+                            .and_then(Value::as_str)
+                            .unwrap_or("em"),
+                        false,
+                    )
+                }),
                 "margin_top" | "margin_right" | "margin_bottom" | "margin_left" => {
                     value.as_f64().is_some_and(|v| (0.0..=1000.0).contains(&v))
                 }
                 "margin_top_unit" | "margin_right_unit" | "margin_bottom_unit"
-                | "margin_left_unit" => matches!(value.as_str(), Some("em" | "px")),
+                | "margin_left_unit" => value.as_str().is_some_and(crate::layout_units::valid_unit),
                 "text_alignment" => matches!(
                     value.as_str(),
                     Some("start" | "left" | "right" | "center" | "justify")
@@ -147,6 +177,21 @@ impl Preset {
                     value: Value::String("px".into()),
                 },
             );
+        }
+        for (field, unit) in [
+            ("line_height", "number"),
+            ("paragraph_indent", "em"),
+            ("paragraph_spacing", "em"),
+        ] {
+            let key = format!("{field}_unit");
+            if self.values.contains_key(field) && !self.values.contains_key(&key) {
+                edits.insert(
+                    key,
+                    Edit::Set {
+                        value: Value::String(unit.into()),
+                    },
+                );
+            }
         }
         Ok(edits)
     }

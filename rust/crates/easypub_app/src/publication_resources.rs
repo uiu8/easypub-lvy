@@ -85,16 +85,24 @@ pub struct Manifest {
     #[serde(default = "crate::production::default_font_size_unit")]
     pub font_size_unit: String,
     #[serde(default)]
+    pub layout_units_version: u8,
+    #[serde(default)]
     pub fullwidth_indent: u8,
     #[serde(default)]
     pub remove_blank_lines: bool,
     pub font_size: f64,
     pub line_height: f64,
+    #[serde(default = "crate::layout_units::number")]
+    pub line_height_unit: String,
     pub text_alignment: String,
     pub additional_css: String,
     pub additional_css_base: String,
     pub paragraph_indent: f64,
+    #[serde(default = "crate::layout_units::em")]
+    pub paragraph_indent_unit: String,
     pub paragraph_spacing: f64,
+    #[serde(default = "crate::layout_units::em")]
+    pub paragraph_spacing_unit: String,
     pub margin_top: f64,
     pub margin_right: f64,
     pub margin_bottom: f64,
@@ -651,15 +659,19 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         cover_fit: settings.cover_fit,
         font_family: settings.font_family,
         font_size_unit: settings.font_size_unit.clone(),
+        layout_units_version: settings.layout_units_version,
         fullwidth_indent: settings.fullwidth_indent,
         remove_blank_lines: settings.remove_blank_lines,
         font_size: settings.font_size,
         line_height: settings.line_height,
+        line_height_unit: settings.line_height_unit.clone(),
         text_alignment: settings.text_alignment,
         additional_css: settings.additional_css,
         additional_css_base: settings.additional_css_base,
         paragraph_indent: settings.paragraph_indent,
+        paragraph_indent_unit: settings.paragraph_indent_unit.clone(),
         paragraph_spacing: settings.paragraph_spacing,
+        paragraph_spacing_unit: settings.paragraph_spacing_unit.clone(),
         margin_top: settings.margin_top,
         margin_right: settings.margin_right,
         margin_bottom: settings.margin_bottom,
