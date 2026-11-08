@@ -1,28 +1,56 @@
 # easypub-lvy
 
-Windows 上把 TXT 小说整理成 Kindle 电子书的桌面工具：识别章节、检查与修复、文本清理、排版，再一键生成 EPUB、AZW3、MOBI、KFX。
+Windows 上把小说整理成 Kindle 电子书的桌面工具。导入 TXT、EPUB、AZW3、MOBI，识别章节、检查修复、清理文字、排版，再生成 EPUB、AZW3、MOBI、KFX 或 TXT。
 
-下载发布包请到 [Releases](https://github.com/uiu8/easypub-lvy/releases)。
+**当前版本：测试版 1**。下载请到 [Releases](https://github.com/uiu8/easypub-lvy/releases/latest)。
 
-本仓库是程序源码（Rust 核心 + Flutter 桌面界面），构建方法见下方“开发”一节。
+![书库](screenshots/01-library.png)
 
 ## 主要功能
 
-- **章节**：自动识别卷、章、节，检查重复标题、编号跳跃、漏识别的标题等问题，先预览再修复。
-- **文本清理**：去广告、合并硬换行、规范标点、简繁转换等，每条规则都可以单独开关，原稿不改。
-- **排版**：字号、行距、缩进、标题样式、章首图、场景分隔、章首段落，系统提示框与诗词自动识别，弹出注释，前后附页（版权页、献词、后记等）。
-- **真机预览**：按所选 Kindle 机型的真实尺寸翻页预览，内容就是生成出来的成品。
-- **输出**：EPUB、AZW3 / MOBI（内置 Kindling）、KFX（内置 Bokai）。
-- **书源下载（可选插件）**：导入常见格式的文字书源，搜索并下载为 TXT，再直接导入书库整理。插件单独发布，需要时再装。
+| 功能 | 说明 |
+| --- | --- |
+| 导入 | TXT 自动判断编码，也能手动选 GBK、GB18030、Big5、Shift_JIS、EUC-KR；EPUB 和没有 DRM 的 AZW3、MOBI 会保留粗体、斜体、链接、脚注和表格 |
+| 章节 | 自动识别卷、章、节，查出编号跳跃、重复标题、漏识别，先预览再修复，能一键修复 |
+| 检查 | 按章节、文本、书籍信息分类列出问题，底部进度条跟着走，点问题直达要改的地方 |
+| 文本清理 | 去广告、合并空行、规范标点、简繁转换，每条规则单独开关，原稿不改 |
+| 排版 | 字号、行距、缩进、标题样式、章首图、场景分隔，系统提示框和诗词自动识别，弹出注释，嵌入字体，图片压缩 |
+| 真机预览 | 按 Kindle 机型的真实尺寸翻页看成品，12 款机型按各自固件的字号、边距、行距和页脚 |
+| 保持原格式 | EPUB 可以直接用原书排版，并能去除原书字体和样式、改目录和起始位置 |
+| 输出 | EPUB（2 或 3）、AZW3 和 MOBI（内置 Kindling）、KFX（内置 Bokai）、TXT |
+| 书源下载 | 可选插件，导入文字书源后搜索并下载成 TXT，单独发布 |
+
+## 界面
+
+**章节**：识别结果和正文并排，左侧标出有问题的章节。
+
+![章节](screenshots/02-chapters.png)
+
+**检查与修复**：按怎么处理分类，前后两章对照着看。
+
+![检查与修复](screenshots/03-checks.png)
+
+**文本清理**：每条规则改了哪里，清理前后逐处对照，确认才写入。
+
+![文本清理](screenshots/04-cleanup.png)
+
+**排版**：改设置马上看到书页效果，支持夜间主题。
+
+![排版](screenshots/05-layout.png)
+
+**转换**：一次选多本书，选格式和输出位置。
+
+![转换](screenshots/06-conversion.png)
 
 ## 使用
 
-1. 从 Releases 下载 `easypub-lvy-…-win-x64.zip`，**完整解压**。
+1. 从 [Releases](https://github.com/uiu8/easypub-lvy/releases/latest) 下载 `easypub-lvy-…-win-x64.zip`，**完整解压**。
 2. 运行 `easypub_desktop.exe`。同目录下的 DLL、`data`、`converters`、`plugins`、`third_party` 都要保留，不要把 exe 单独移出来。
-3. 包里附有使用说明（`先读我.txt`），写了每版新增的功能和尚未验证的内容。
-4. 需要书源下载时，从同一个 Release 另外下载 `easypub-lvy-booksource-…-win-x64.zip`，解压后在程序的“插件”页点“从文件夹安装…”，选中解压出来的 `booksource` 文件夹，再启用即可。
+3. 需要书源下载时，从同一个 Release 另外下载 `easypub-lvy-booksource-…-win-x64.zip`，解压后在程序的“插件”页点“从文件夹安装…”。
 
-系统要求：Windows 10 / 11 x64；“真机预览”需要系统自带的 Microsoft Edge。
+系统要求：Windows 10 / 11 x64；真机预览需要系统自带的 Microsoft Edge。
+
+这是测试版：原稿不会被改，但转换结果请先在设备上看一遍。已知情况见 Release 说明。
 
 ## 开发
 
