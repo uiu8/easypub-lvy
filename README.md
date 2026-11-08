@@ -48,13 +48,10 @@ Windows 上把小说整理成 Kindle 电子书的桌面工具。导入 TXT、EPU
 
 ## 使用
 
-1. 从 [Releases](https://github.com/uiu8/easypub-lvy/releases/latest) 下载 `easypub-lvy-…-win-x64.zip`，**完整解压**。
-2. 运行 `easypub_desktop.exe`。同目录下的 DLL、`data`、`converters`、`plugins`、`third_party` 都要保留，不要把 exe 单独移出来。
-3. 需要书源下载时，从同一个 Release 另外下载 `easypub-lvy-booksource-…-win-x64.zip`，解压后在程序的“插件”页点“从文件夹安装…”。
-
-系统要求：Windows 10 / 11 x64；真机预览需要系统自带的 Microsoft Edge。
-
-这是测试版：原稿不会被改，但转换结果请先在设备上看一遍。已知情况见 Release 说明。
+1. 从 [Releases](https://github.com/uiu8/easypub-lvy/releases/latest) 下载 `…-setup.exe` 安装版，按提示安装；也可以下载 ZIP 便携版，完整解压后运行 `easypub_desktop.exe`。
+2. 安装版按当前用户安装，支持开始菜单、可选桌面快捷方式和卸载。书库、设置和用户安装的插件在卸载时保留。
+3. 书源下载为可选插件：下载独立的 `easypub-lvy-booksource-…zip`，解压后在软件“插件 → 从文件夹安装”选择 `booksource` 文件夹，再启用。已安装的插件无需重装。
+4. 安装版与便携版使用相同的自动更新。安装程序目前尚未进行 Windows 发布者证书签名。
 
 ## 开发
 
