@@ -91,6 +91,10 @@ pub struct Configuration {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_format: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kindle_content_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kindle_content_type_explained: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_directory: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_language: Option<String>,
@@ -262,6 +266,9 @@ impl Configuration {
             .is_some_and(|format| !matches!(format, "EPUB" | "AZW3" | "MOBI" | "KFX"))
         {
             return Err(error(ErrorCode::InvalidRule, "check_output_format"));
+        }
+        if self.kindle_content_type.as_deref().is_some_and(|v| !matches!(v, "EBOK" | "PDOC")) {
+            return Err(error(ErrorCode::InvalidRule, "check_kindle_content_type"));
         }
         if self
             .output_directory
@@ -1020,6 +1027,8 @@ mod tests {
         configuration.filename_strip_author = Some(false);
         configuration.import_directory = Some(r"D:\书稿\待制作".into());
         configuration.output_format = Some("AZW3".into());
+        configuration.kindle_content_type = Some("PDOC".into());
+        configuration.kindle_content_type_explained = Some(true);
         configuration.output_directory = Some(r"D:\书稿\成品".into());
         configuration.diagnostic_logging = Some(true);
         configuration.output_collision_policy = Some("ask".into());
@@ -1046,6 +1055,8 @@ mod tests {
             Some(r"D:\书稿\待制作")
         );
         assert_eq!(loaded.configuration.output_format.as_deref(), Some("AZW3"));
+        assert_eq!(loaded.configuration.kindle_content_type.as_deref(), Some("PDOC"));
+        assert_eq!(loaded.configuration.kindle_content_type_explained, Some(true));
         assert_eq!(
             loaded.configuration.output_directory.as_deref(),
             Some(r"D:\书稿\成品")

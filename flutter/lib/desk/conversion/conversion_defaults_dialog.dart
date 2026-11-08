@@ -45,6 +45,13 @@ class ConversionDefaultsDialog extends StatelessWidget {
   static const _nameWidth = 116.0, _stateWidth = 84.0;
 
   String shown(String key, Object? value) {
+    if (key == 'kindle_content_type') {
+      return value == 'PDOC'
+          ? '个人文档（PDOC）'
+          : value == 'EBOK'
+          ? '书籍（EBOK）'
+          : '沿用旧行为';
+    }
     if (value is bool) return value ? '开启' : '关闭';
     if (value == null || value == '') return '未设置';
     final text = '$value';

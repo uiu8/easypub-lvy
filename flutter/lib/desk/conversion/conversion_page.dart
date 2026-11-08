@@ -30,6 +30,7 @@ import 'output_folder_dialog.dart';
 import 'conversion_defaults_dialog.dart';
 import 'conversion_options_dialog.dart';
 import 'conversion_form_draft.dart';
+import 'kindle_content_type.dart';
 
 export 'conversion_form_draft.dart';
 
@@ -89,6 +90,7 @@ class _ConversionPageState extends State<ConversionPage> {
   Map<String, Object> get formDefaults => {
     'output_directory': destination.text,
     'output_format': format,
+    'kindle_content_type': widget.draft.kindleContentType,
     'kindle_converter': engine.text,
     'generate_cover': generateCover,
     'check_before_conversion': autoCheck,
@@ -118,6 +120,10 @@ class _ConversionPageState extends State<ConversionPage> {
     preview = draft.pendingPreview;
     draft.pendingPreview = null;
     final previous = reconfigure ? null : session.request;
+    if (draft.initialized &&
+        !(draft.defaultValues?.containsKey('kindle_content_type') ?? false)) {
+      draft.manualDefaults.add('kindle_content_type');
+    }
     if (draft.initialized) {
       destination.text = draft.directory;
       engine.text = draft.engine;
@@ -136,6 +142,9 @@ class _ConversionPageState extends State<ConversionPage> {
       destination.text = previous.directory;
       engine.text = previous.engine;
       format = previous.format;
+      draft.outputOptions = Map.of(previous.outputOptions);
+      draft.kindleContentType =
+          previous.outputOptions['document_type'] as String? ?? 'default';
       language = previous.language;
       generateCover = previous.generateCover;
       autoCheck = previous.runChecks;
@@ -310,6 +319,10 @@ class _ConversionPageState extends State<ConversionPage> {
                     : values['kindling_path'])
                 as String? ??
             values['kindle_converter'] as String;
+      }
+      if (!draft.manualDefaults.contains('kindle_content_type')) {
+        draft.kindleContentType =
+            values['kindle_content_type'] as String? ?? 'EBOK';
       }
       if (!draft.manualDefaults.contains('generate_cover')) {
         generateCover = values['generate_cover'] as bool;
@@ -531,7 +544,8 @@ class _ConversionPageState extends State<ConversionPage> {
   Future<void> selectFormat(String name) async {
     final changesEngine = (format == 'KFX') != (name == 'KFX');
     editForm(() => format = name, field: 'output_format');
-    if (!changesEngine) return;
+    await explainContentType();
+    if (!mounted || !changesEngine) return;
     widget.draft.manualDefaults.remove('kindle_converter');
     final ticket = ++defaultsGeneration;
     setState(() => resolvingDefaults = true);
@@ -566,6 +580,46 @@ class _ConversionPageState extends State<ConversionPage> {
     }
   }
 
+  bool explainingContentType = false;
+  Future<bool> explainContentType({bool force = false}) async {
+    if (!supportsKindleContentType(format)) return true;
+    if (explainingContentType) return false;
+    final draft = widget.draft;
+    if (!force &&
+        (draft.contentTypeExplained ||
+            settings
+                    ?.snapshot
+                    .value
+                    .configuration['kindle_content_type_explained'] ==
+                true)) {
+      return true;
+    }
+    explainingContentType = true;
+    try {
+      final value = await showKindleContentTypeIntro(
+        context,
+        keepExisting: draft.kindleContentType != 'EBOK',
+      );
+      if (!mounted || value == null) return false;
+      // “保持默认”不改变已有任务的显式选择；仅 PDOC 按钮修改本次任务。
+      if (value == 'PDOC') {
+        editForm(
+          () => draft.kindleContentType = value,
+          field: 'kindle_content_type',
+        );
+      }
+      draft.contentTypeExplained = true;
+      if (settings != null &&
+          !await settings!.savePatch({'kindle_content_type_explained': true}) &&
+          mounted) {
+        setState(() => message = '本次选择已保留，首次提示记录未能保存。');
+      }
+      return true;
+    } finally {
+      explainingContentType = false;
+    }
+  }
+
   Future<void> advancedOptions() async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -586,8 +640,9 @@ class _ConversionPageState extends State<ConversionPage> {
         widget.draft.manualDefaults.add('kindle_converter');
       }
       engine.text = result['engine'] as String;
-      widget.draft.outputOptions = (result['outputOptions'] as Map)
-          .cast<String, dynamic>();
+      widget.draft.outputOptions =
+          (result['outputOptions'] as Map?)?.cast<String, dynamic>() ??
+          widget.draft.outputOptions;
     });
   }
 
@@ -669,6 +724,7 @@ class _ConversionPageState extends State<ConversionPage> {
       await reviewDefaults();
       return;
     }
+    if (!await explainContentType() || !mounted) return;
     final revision = formRevision;
     final outputDirectory = destination.text.trim();
     setState(() => message = runChecks ? '正在检查书稿和输出路径…' : '正在准备转换…');
@@ -679,7 +735,7 @@ class _ConversionPageState extends State<ConversionPage> {
           directory: outputDirectory,
           format: format,
           engine: engine.text,
-          outputOptions: widget.draft.outputOptions,
+          outputOptions: widget.draft.effectiveOutputOptions,
           language: language,
           generateCover: generateCover,
           runChecks: runChecks,
@@ -1131,6 +1187,19 @@ class _ConversionPageState extends State<ConversionPage> {
               ),
             ],
           ),
+          if (supportsKindleContentType(format)) ...[
+            const SizedBox(height: 16),
+            KindleContentTypeControl(
+              value: widget.draft.kindleContentType,
+              format: format,
+              enabled: !busy,
+              onChanged: (value) => editForm(
+                () => widget.draft.kindleContentType = value,
+                field: 'kindle_content_type',
+              ),
+              onHelp: () => explainContentType(force: true),
+            ),
+          ],
           const SizedBox(height: 10),
           Text(
             'MOBI 不用于 Send to Kindle。兼容输出会限制部分样式，检查结果将列出需要调整的项目。可先转换，之后再处理检查中的建议。',
@@ -1319,6 +1388,11 @@ class _ConversionPageState extends State<ConversionPage> {
                 : '$format · $converter（$engineName）',
           ),
           row('书籍语言', languageLabel),
+          if (supportsKindleContentType(format))
+            row(
+              '内容类型',
+              kindleContentTypeLabel(widget.draft.kindleContentType, format),
+            ),
         ],
       ),
     );

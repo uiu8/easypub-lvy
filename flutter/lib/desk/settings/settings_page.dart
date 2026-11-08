@@ -1621,6 +1621,33 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       const Divider(height: 24),
       const SizedBox(height: 12),
+      DeskChoice<String>(
+        key: ValueKey(
+          'kindle-content-type-${state.configuration['kindle_content_type']}-$saving',
+        ),
+        isExpanded: true,
+        initialValue:
+            state.configuration['kindle_content_type'] as String? ?? 'EBOK',
+        decoration: const InputDecoration(
+          labelText: 'Kindle 内容类型（仅 KFX / AZW3）',
+        ),
+        items: const [
+          DropdownMenuItem(value: 'EBOK', child: Text('书籍（EBOK，默认）')),
+          DropdownMenuItem(value: 'PDOC', child: Text('个人文档（PDOC）')),
+        ],
+        onChanged: saving
+            ? null
+            : (value) =>
+                  value == null ? null : save({'kindle_content_type': value}),
+      ),
+      const SizedBox(height: 8),
+      const DeskText(
+        'EBOK：联网同步时，有些自己传进去的书可能被删除。\n'
+        'PDOC：担心删书可以选这个，但不保证完全避免。\n'
+        '只改分类，不改排版，不会上传书籍。此默认值用于以后的转换，已创建的任务保持原设置。',
+        size: 12,
+      ),
+      const SizedBox(height: 16),
       toggle(
         state,
         '开始转换后打开转换任务页',

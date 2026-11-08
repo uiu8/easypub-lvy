@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
+import 'kindle_content_type.dart';
 
 import '../dialogs.dart' show DeskAlert;
 
@@ -52,7 +53,9 @@ class _QuickConversionDialogState extends State<QuickConversionDialog> {
   @override
   void initState() {
     super.initState();
-    prepare();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) prepare();
+    });
   }
 
   Future<void> prepare() async {
@@ -65,7 +68,9 @@ class _QuickConversionDialogState extends State<QuickConversionDialog> {
     };
     try {
       final service = widget.library;
-      Map<String, dynamic> config = {};
+      Map<String, dynamic> config = service is SettingsService
+          ? Map.of((service as SettingsService).snapshot.value.configuration)
+          : {};
       if (widget.outputRequest == null && service is SettingsService) {
         final settings = service as SettingsService;
         if (!await settings.load()) {
@@ -98,9 +103,47 @@ class _QuickConversionDialogState extends State<QuickConversionDialog> {
             directory: defaults!['output_directory'] as String,
             format: defaults['output_format'] as String,
             engine: defaults['kindle_converter'] as String,
+            outputOptions: {
+              if (supportsKindleContentType(
+                defaults['output_format'] as String,
+              ))
+                'document_type': defaults['kindle_content_type'],
+            },
             generateCover: defaults['generate_cover'] as bool,
             runChecks: defaults['check_before_conversion'] as bool,
           );
+      if (supportsKindleContentType(request!.format) &&
+          config['kindle_content_type_explained'] != true) {
+        final selected = await showKindleContentTypeIntro(
+          context,
+          keepExisting: request!.outputOptions['document_type'] != 'EBOK',
+        );
+        if (!mounted) return;
+        if (selected == null) {
+          Navigator.pop(context);
+          return;
+        }
+        if (selected == 'PDOC') {
+          final old = request!;
+          request = ConversionRequest(
+            books: old.books,
+            directory: old.directory,
+            format: old.format,
+            engine: old.engine,
+            language: old.language,
+            outputOptions: {...old.outputOptions, 'document_type': 'PDOC'},
+            generateCover: old.generateCover,
+            runChecks: old.runChecks,
+            keepOriginalEpub: old.keepOriginalEpub,
+          );
+        }
+        if (service is SettingsService) {
+          await (service as SettingsService).savePatch({
+            'kindle_content_type_explained': true,
+          });
+          if (!mounted) return;
+        }
+      }
       startedPreview = true;
       final result = await widget.session.preview(request!);
       if (!mounted) return;

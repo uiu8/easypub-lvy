@@ -420,6 +420,9 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
       if (!draft.manualDefaults.contains('kindle_converter')) {
         draft.engine = values['kindle_converter'] as String;
       }
+      if (!draft.manualDefaults.contains('kindle_content_type')) {
+        draft.kindleContentType = values['kindle_content_type'] as String;
+      }
       if (!draft.manualDefaults.contains('generate_cover')) {
         draft.generateCover = values['generate_cover'] as bool;
       }
@@ -456,6 +459,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
       ..directory = values['output_directory'] as String
       ..format = values['output_format'] as String
       ..engine = values['kindle_converter'] as String
+      ..kindleContentType = values['kindle_content_type'] as String
       ..generateCover = values['generate_cover'] as bool
       ..autoCheck = values['check_before_conversion'] as bool
       ..defaultValues = Map.unmodifiable(values);
@@ -744,11 +748,17 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
       );
       if (!mounted || epoch != workspaceGeneration || choice == null) return;
       if (choice.request != null) {
+        final typeChanged =
+            choice.request!.outputOptions['document_type'] !=
+            conversionDraft.effectiveOutputOptions['document_type'];
         conversionDraft.adoptRequest(
           choice.request!,
           choice.plan,
           preserveDefaults: true,
         );
+        if (typeChanged) {
+          conversionDraft.manualDefaults.add('kindle_content_type');
+        }
       }
       if (choice.action == 'start') {
         if (choice.plan == null || !session.isCurrent(choice.plan!)) {

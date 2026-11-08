@@ -40,6 +40,12 @@ class ConversionFormDraft extends ChangeNotifier {
   bool selectionInitialized = false;
   String directory = '', engine = '', format = 'EPUB', language = '';
   Map<String, dynamic> outputOptions = {};
+  String kindleContentType = 'EBOK';
+  bool contentTypeExplained = false;
+  Map<String, dynamic> get effectiveOutputOptions => {
+    ...outputOptions,
+    if (format == 'KFX' || format == 'AZW3') 'document_type': kindleContentType,
+  };
   bool generateCover = true;
   bool autoCheck = false;
   Set<String> selected = {};
@@ -51,6 +57,7 @@ class ConversionFormDraft extends ChangeNotifier {
   static const defaultLabels = {
     'output_directory': '输出目录',
     'output_format': '输出格式',
+    'kindle_content_type': 'Kindle 内容类型',
     'kindle_converter': '转换器',
     'generate_cover': '缺少封面时生成',
     'check_before_conversion': '转换前检查',
@@ -113,7 +120,7 @@ class ConversionFormDraft extends ChangeNotifier {
     directory: directory,
     format: format,
     engine: engine,
-    outputOptions: outputOptions,
+    outputOptions: effectiveOutputOptions,
     language: language,
     generateCover: generateCover,
     runChecks: autoCheck,
@@ -134,11 +141,18 @@ class ConversionFormDraft extends ChangeNotifier {
     final previousManual = Set<String>.of(manualDefaults);
     final previousDefaults = defaultValues;
     final previousOpenWhenDone = openWhenDone;
+    final previousContentType = kindleContentType;
     reset();
     initialized = true;
     directory = request.directory;
     engine = request.engine;
     format = request.format;
+    outputOptions = Map.of(request.outputOptions);
+    kindleContentType =
+        request.outputOptions['document_type'] as String? ??
+        (preserveDefaults && format != 'KFX' && format != 'AZW3'
+            ? previousContentType
+            : 'default');
     language = request.language;
     generateCover = request.generateCover;
     autoCheck = request.runChecks;
@@ -165,6 +179,8 @@ class ConversionFormDraft extends ChangeNotifier {
     openWhenDone = autoCheck = false;
     directory = engine = language = '';
     format = 'EPUB';
+    outputOptions = {};
+    kindleContentType = 'EBOK';
     generateCover = true;
     selected = {};
     selectionInitialized = false;

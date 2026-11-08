@@ -82,6 +82,13 @@ void main() {
     await t.ensureVisible(find.text('KFX').first);
     await t.tap(find.text('KFX').first);
     await t.pumpAndSettle();
+    expect(find.text('担心 Kindle 联网后删书？'), findsOneWidget);
+    await t.tap(find.text('保持默认'));
+    await t.pumpAndSettle();
+    expect(
+      l.snapshot.value.configuration['kindle_content_type_explained'],
+      true,
+    );
     expect(d.format, 'KFX');
     expect(d.engine, 'D:/bokai.exe');
     await t.ensureVisible(find.text('AZW3').first);

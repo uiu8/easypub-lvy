@@ -3,6 +3,7 @@ import 'conversion_desktop.dart';
 Map<String, Object> readConversionDefaults(Map<String, dynamic> config) => {
   'output_directory': config['output_directory'] as String? ?? '',
   'output_format': config['output_format'] as String? ?? 'EPUB',
+  'kindle_content_type': config['kindle_content_type'] as String? ?? 'EBOK',
   'kindle_converter': config['kindle_converter'] as String? ?? '',
   'kfx_converter': config['kfx_converter'] as String? ?? '',
   'generate_cover': config['generate_cover'] as bool? ?? true,

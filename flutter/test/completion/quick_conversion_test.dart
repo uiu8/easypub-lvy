@@ -255,6 +255,13 @@ void main() {
         action.onPressed!();
         action.onPressed!();
         t.printToConsole('quick44 preparing: $format');
+        if (format == 'AZW3') {
+          await until(
+            () => find.text('担心 Kindle 联网后删书？').evaluate().isNotEmpty,
+          );
+          await t.tap(find.text('保持默认'));
+          await t.pump();
+        }
         await until(
           () =>
               find.byType(QuickConversionDialog).evaluate().isEmpty &&

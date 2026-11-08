@@ -110,16 +110,6 @@ class _ConversionOptionsDialogState extends State<ConversionOptionsDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (final entry in <String, (String, Map<String, String>, String)>{
-              if (['AZW3', 'MOBI', 'KFX'].contains(widget.format))
-                'document_type': (
-                  '文档类型',
-                  {
-                    'default': '沿用原行为',
-                    'EBOK': '书籍（EBOK）',
-                    'PDOC': '个人文档（PDOC）',
-                  },
-                  'default',
-                ),
               if (widget.format == 'EPUB')
                 'epub_version': (
                   'EPUB 版本',

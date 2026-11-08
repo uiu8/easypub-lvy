@@ -2,7 +2,7 @@
 
 Windows 上把小说整理成 Kindle 电子书的桌面工具。导入 TXT、EPUB、AZW3、MOBI，识别章节、检查修复、清理文字、排版，再生成 EPUB、AZW3、MOBI、KFX 或 TXT。
 
-**当前版本：测试版 2**。下载请到 [Releases](https://github.com/uiu8/easypub-lvy/releases/latest)。
+**当前版本：测试版 3**。下载请到 [Releases](https://github.com/uiu8/easypub-lvy/releases/latest)。
 
 ![书库](screenshots/01-library.png)
 
@@ -17,7 +17,7 @@ Windows 上把小说整理成 Kindle 电子书的桌面工具。导入 TXT、EPU
 | 排版 | 字号、行距、缩进、标题样式、章首图、场景分隔，系统提示框和诗词自动识别，弹出注释，嵌入字体，图片压缩 |
 | 真机预览 | 按 Kindle 机型的真实尺寸翻页看成品，12 款机型按各自固件的字号、边距、行距和页脚 |
 | 保持原格式 | EPUB 可以直接用原书排版，并能去除原书字体和样式、改目录和起始位置 |
-| 输出 | EPUB（2 或 3）、AZW3 和 MOBI（内置 Kindling）、KFX（内置 Bokai）、TXT |
+| 输出 | EPUB（2 或 3）、AZW3 和 MOBI（内置 Kindling）、KFX（内置 Bokai）、TXT；KFX/AZW3 可选书籍（EBOK，默认）或个人文档（PDOC） |
 | 书源下载 | 可选插件，导入文字书源后搜索并下载成 TXT，单独发布 |
 
 ## 界面
@@ -48,10 +48,11 @@ Windows 上把小说整理成 Kindle 电子书的桌面工具。导入 TXT、EPU
 
 ## 使用
 
-1. 从 [Releases](https://github.com/uiu8/easypub-lvy/releases/latest) 下载 `…-setup.exe` 安装版，按提示安装；也可以下载 ZIP 便携版，完整解压后运行 `easypub_desktop.exe`。
+1. 从 [Releases](https://github.com/uiu8/easypub-lvy/releases/latest) 下载 `…-setup-r2.exe` 安装版，按提示安装；也可以下载 ZIP 便携版，完整解压后运行 `easypub_desktop.exe`。
 2. 安装版按当前用户安装，支持开始菜单、可选桌面快捷方式和卸载。书库、设置和用户安装的插件在卸载时保留。
-3. 书源下载为可选插件：下载独立的 `easypub-lvy-booksource-…zip`，解压后在软件“插件 → 从文件夹安装”选择 `booksource` 文件夹，再启用。已安装的插件无需重装。
+3. 书源下载为可选插件：可在安装时勾选，也可下载独立的 `easypub-lvy-booksource-…zip`，解压后在软件“插件 → 从文件夹安装”选择 `booksource` 文件夹，再启用。已有插件会保留，无需重装。
 4. 安装版与便携版使用相同的自动更新。安装程序目前尚未进行 Windows 发布者证书签名。
+5. 担心 Kindle 联网同步删除自己传入的书，可在 KFX/AZW3 转换设置中选择 PDOC；不保证完全避免删除。该选项只改内容分类，不改排版，也不会上传书籍。
 
 ## 开发
 

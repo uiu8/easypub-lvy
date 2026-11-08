@@ -372,6 +372,8 @@ void main() {
       await t.pumpAndSettle();
       expect(find.text('转换当前书'), findsOneWidget);
       await t.tap(find.text('转换当前书'));
+      await until(t, () => find.text('担心 Kindle 联网后删书？').evaluate().isNotEmpty);
+      await t.tap(find.text('保持默认'));
       await until(t, () => library.session.request != null);
       expect(library.session.request!.format, 'KFX');
       expect(library.session.request!.engine, 'D:/software/test/bokai.exe');

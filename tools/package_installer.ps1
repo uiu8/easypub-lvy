@@ -1,6 +1,9 @@
 param(
   [Parameter(Mandatory = $true)][string]$PackageZip,
   [Parameter(Mandatory = $true)][string]$PackageEvidence,
+  [Parameter(Mandatory = $true)][string]$BookSourceZip,
+  [Parameter(Mandatory = $true)][string]$BookSourceEvidence,
+  [string]$Revision = 'r2',
   [string]$Compiler = 'D:/software/InnoSetup-6.7.3/ISCC.exe',
   [string]$OutputRoot = 'artifacts/release',
   [string]$EvidencePath = '',
@@ -17,16 +20,26 @@ if (-not $proof.passed -or $proof.zip_sha256 -ne $zipHash) {
 $work = Join-Path $root ('artifacts/installer-build-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
 Expand-Archive -LiteralPath $zip -DestinationPath $work
+$pluginProof = Get-Content -LiteralPath $BookSourceEvidence -Raw -Encoding UTF8 | ConvertFrom-Json
+$pluginHash = (Get-FileHash -LiteralPath $BookSourceZip).Hash.ToLowerInvariant()
+if (-not $pluginProof.passed -or $pluginProof.zip_sha256 -ne $pluginHash) { throw '书源插件与验包记录不一致。' }
+$pluginWork = Join-Path $work 'plugin'
+Expand-Archive -LiteralPath $BookSourceZip -DestinationPath $pluginWork
+$pluginDir = Join-Path $pluginWork 'booksource'
+if (-not (Test-Path -LiteralPath (Join-Path $pluginDir 'plugin.json'))) { throw '书源包缺少 booksource/plugin.json。' }
 $package = Join-Path $work $proof.package_name
 $version = Get-Content -LiteralPath (Join-Path $package 'version.json') -Raw | ConvertFrom-Json
 if ($version.release -ne $proof.release) { throw '版本号与验包记录不一致。' }
 $output = [IO.Path]::GetFullPath((Join-Path $root $OutputRoot))
 $name = $proof.package_name + '-setup'
+if ($Revision -notmatch '^[a-zA-Z0-9-]+$') { throw '安装器修订号只能包含字母、数字和连字符。' }
+$name += '-' + $Revision
 if ($SmokeTest) { $name += '-smoke' }
 $installer = Join-Path $output ($name + '.exe')
 if (Test-Path -LiteralPath $installer) { throw "安装包已经存在，不覆盖：$installer" }
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $arguments = @('/Q', "/O$output", "/DPackageDir=$package", "/DRelease=$($version.release)", "/DOutputName=$name")
+$arguments += "/DBookSourceDir=$pluginDir"
 if ($SmokeTest) { $arguments += '/DSmokeTest' }
 & $Compiler @arguments (Join-Path $PSScriptRoot 'installer/easypub.iss') *> (Join-Path $work 'compile.log')
 if ($LASTEXITCODE -ne 0) { throw "安装包编译失败：$work/compile.log" }
@@ -34,6 +47,8 @@ $record = [ordered]@{
   release = $version.release
   source_commit = $version.commit
   source_zip_sha256 = $zipHash
+  booksource_zip_sha256 = $pluginHash
+  helper_sha256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'installer/install_booksource.ps1')).Hash.ToLowerInvariant()
   installer = $installer
   bytes = (Get-Item -LiteralPath $installer).Length
   sha256 = (Get-FileHash -LiteralPath $installer).Hash.ToLowerInvariant()

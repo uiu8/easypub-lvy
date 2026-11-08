@@ -21,6 +21,10 @@ abstract final class ConversionDraftPersistence {
       ..engine = value['engine'] as String? ?? ''
       ..outputOptions =
           (value['outputOptions'] as Map?)?.cast<String, dynamic>() ?? {}
+      ..kindleContentType =
+          value['kindleContentType'] as String? ??
+          draft.outputOptions['document_type'] as String? ??
+          'default'
       ..language = value['language'] as String? ?? ''
       ..generateCover = value['generateCover'] != false
       ..autoCheck = value['autoCheck'] == true
@@ -33,6 +37,9 @@ abstract final class ConversionDraftPersistence {
     if (value['defaultValues'] case final Map values) {
       draft.defaultValues = Map<String, Object>.from(values);
     }
+    if (draft.initialized && !value.containsKey('kindleContentType')) {
+      draft.manualDefaults.add('kindle_content_type');
+    }
   }
 
   static void save(LibraryService library, ConversionFormDraft draft) {
@@ -44,6 +51,7 @@ abstract final class ConversionDraftPersistence {
       'format': draft.format,
       'engine': draft.engine,
       if (draft.outputOptions.isNotEmpty) 'outputOptions': draft.outputOptions,
+      'kindleContentType': draft.kindleContentType,
       'language': draft.language,
       'generateCover': draft.generateCover,
       'autoCheck': draft.autoCheck,
