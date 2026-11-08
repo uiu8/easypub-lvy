@@ -1,0 +1,49 @@
+[package]
+name = "kindling-mobi"
+version = "0.45.6"
+edition = "2024"
+rust-version = "1.85"
+description = "Kindle MOBI/AZW3 builder for dictionaries, books, and comics. Drop-in kindlegen replacement."
+license = "MIT"
+repository = "https://github.com/ciscoriordan/kindling"
+homepage = "https://github.com/ciscoriordan/kindling"
+readme = "README.md"
+keywords = ["kindle", "mobi", "azw3", "epub", "ebook"]
+categories = ["command-line-utilities", "encoding", "multimedia"]
+
+[lib]
+name = "kindling"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kindling-cli"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+# ego-tree is scraper's tree backing store; depended on directly so the EPUB
+# entry-body XHTML serializer can walk `NodeRef<Node>` nodes by name. Pinned to
+# the version scraper already resolves so no extra crate is pulled in.
+ego-tree = "0.11"
+# zlib for KF8 FONT resource records (already in the tree via zip's deflate
+# feature, so this adds no new crates).
+flate2 = "1"
+image = "0.25"
+memchr = "2"
+quick-xml = "0.36"
+rayon = "1.10"
+regex = "1"
+scraper = "0.26"
+lightningcss = "1.0.0-alpha.71"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+# Same version the library already pulls in, so this adds no crate to the
+# build; integration tests are separate crates and cannot borrow it otherwise.
+image = "0.25"
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[workspace]

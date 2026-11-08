@@ -1,0 +1,108 @@
+{
+  "bookSourceComment": "久久小说下载网, 修复女生/男生/纯美翻页",
+  "bookSourceGroup": "快速书源 ⚡,通常书源 📂",
+  "bookSourceName": "⚡📂爱久久小说",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://m.ijjxsxzw.com/",
+  "bookUrlPattern": "https://www.ijjjxsxzw.com/txt/\\d+\\.html",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 823,
+  "easypub": {
+    "check": {
+      "at": 1792475993,
+      "chapters": 64,
+      "chars": 591,
+      "error": "",
+      "kind": "check",
+      "ms": 3798,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 10,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1315-20261020-133713.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792475993,
+      "ms": [
+        3798
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://m.ijjxsxzw.com/",
+    "importWarnings": [],
+    "importedAt": 1792475778,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "[\n  {\"title\":\"女生小说\",\"url\":\"/txt/toplist-p_{{page - 1}}-c_1-n_0-l_10-t_6-p_1-s_0-q_0-r_1-m_0.html\",\"style\":{}},\n  {\"title\":\"男生小说\",\"url\":\"/txt/toplist-p_{{page - 1}}-c_2-n_0-l_10-t_6-p_1-s_0-q_0-r_1-m_0.html\",\"style\":{}},\n  {\"title\":\"纯美小说\",\"url\":\"/txt/toplist-p_{{page - 1}}-c_3-n_0-l_10-t_6-p_1-s_0-q_0-r_1-m_0.html\",\"style\":{}},\n  {\"title\":\"悬疑小说\",\"url\":\"/txt/kongbu/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"穿越小说\",\"url\":\"/txt/chuanyue/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"重生小说\",\"url\":\"/txt/chongshengxiaoshuo/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"历史架空\",\"url\":\"/txt/lsjs/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"现代言情\",\"url\":\"/txt/young/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"总裁豪门\",\"url\":\"/txt/qinggan/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"仙侠幻想\",\"url\":\"/txt/wuxia/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"同人衍生\",\"url\":\"/txt/tongrenxiaoshuo/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"耽于纯美\",\"url\":\"/txt/dmtr/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"玄幻魔法\",\"url\":\"/txt/xuanhuan/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"都市异能\",\"url\":\"/txt/dushi/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"历史军事\",\"url\":\"/txt/tiexue/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"网游小说\",\"url\":\"/txt/juben/index_{{page}}.html\",\"style\":{}},\n  {\"title\":\"名著\",\"url\":\"/txt/gdmz/index_{{page}}.html\",\"style\":{}}\n]",
+  "header": "{\"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36\"}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1785042856967,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 4441,
+  "ruleBookInfo": {
+    "author": "p:contains(书籍作者) a@text",
+    "coverUrl": "div.pic img@src",
+    "intro": "div.desc@text",
+    "kind": "p:contains(书籍分类)@text##书籍分类：",
+    "name": "h3@text",
+    "tocUrl": "<js>\nvar id = baseUrl.match(/\\/(\\d+)\\.html/)[1];\n'/read/' + id + '/';\n</js>"
+  },
+  "ruleContent": {
+    "content": "#Content@html",
+    "nextContentUrl": "a:contains(下一页)@href"
+  },
+  "ruleExplore": {
+    "author": "div.meta a:nth-child(2)@text||span.author@text",
+    "bookUrl": "h4 a@href||span.title a@href||span.line-main a@href",
+    "coverUrl": "img@src",
+    "kind": "div.meta small:nth-of-type(1)@text||span.cat@text",
+    "name": "h4 a@text||span.title a@text||span.line-main a@text"
+  },
+  "ruleSearch": {
+    "author": "text.作者@text##.*作者：",
+    "bookList": ".list_a",
+    "bookUrl": "a.0@href",
+    "coverUrl": "img@src",
+    "intro": ".intro@text",
+    "kind": "span.2@a@text",
+    "name": "a.1@text",
+    "wordCount": "span.2@text##大小:?：?(.*)##$1###"
+  },
+  "ruleToc": {
+    "chapterList": "ul.chapter-list a",
+    "chapterName": "text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "/e/search/index.php,{\"charset\": \"utf-8\", \"method\": \"POST\", \"body\": \"show=title,writer&keyboard={{key}}\"}",
+  "variableComment": "",
+  "weight": 0
+}

@@ -1,0 +1,25 @@
+[package]
+name = "easypub_updater"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# V68 自动更新：更新清单与签名校验、程序目录替换（主程序与更新程序共用），
+# 以及随发布包分发的 easypub_updater.exe。release_sign 只在发布者本机使用，不进发布包。
+[[bin]]
+name = "easypub_updater"
+path = "src/main.rs"
+
+[[bin]]
+name = "release_sign"
+path = "src/bin/release_sign.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std", "fast", "zeroize"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Security_Cryptography"] }

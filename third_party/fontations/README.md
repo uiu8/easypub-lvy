@@ -1,0 +1,1 @@
+Fontations dependencies for Rust font subsetting. Versions and Cargo.lock crates.io checksums are in provenance.json. Upstream licenses are copied verbatim per package. No system font files or generated font subsets are included.

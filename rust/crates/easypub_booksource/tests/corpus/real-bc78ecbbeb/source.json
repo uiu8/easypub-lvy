@@ -1,0 +1,98 @@
+{
+  "bookSourceComment": "by猿神启动",
+  "bookSourceGroup": "快速书源 ⚡,通常书源 📂",
+  "bookSourceName": "⚡📂9559小说",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://www.95590.org",
+  "bookUrlPattern": "https://www.95590.org/books/.*",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 101,
+  "easypub": {
+    "check": {
+      "at": 1792475800,
+      "chapters": 1214,
+      "chars": 2991,
+      "error": "",
+      "kind": "check",
+      "ms": 3434,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 10,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1315-20261020-133713.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792475800,
+      "ms": [
+        3434
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://www.95590.org",
+    "importWarnings": [],
+    "importedAt": 1792475778,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "[{\"title\":\"官场小说\",\"url\":\"/?p={{page}}\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"影视小说\",\"url\":\"/yingshi/?p={{page}}\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"文学小说\",\"url\":\"/wenxue/?p={{page}}\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"玄幻小说\",\"url\":\"/xuanhuan/?p={{page}}\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"网络小说\",\"url\":\"/wangluo/?p={{page}}\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"职场小说\",\"url\":\"/zhichang/?p={{page}}\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}}]",
+  "header": "{\"User-Agent\": \"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36\"}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1789964083566,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 5631,
+  "ruleBookInfo": {
+    "intro": "meta[name=description]@content||meta[property=og:description]@content",
+    "name": "h2.entry-title a@text||h1.entry-title a@text||h1.entry-title@text",
+    "tocUrl": "{{baseUrl}}"
+  },
+  "ruleContent": {
+    "content": ".entry-content@html",
+    "nextContentUrl": "a[rel='next']@href"
+  },
+  "ruleExplore": {
+    "bookList": "article.hentry",
+    "bookUrl": "h2.entry-title a@href",
+    "name": "h2.entry-title a@text"
+  },
+  "ruleSearch": {
+    "bookList": "article.hentry",
+    "bookUrl": "h2.entry-title a@href",
+    "name": "h2.entry-title a@text"
+  },
+  "ruleToc": {
+    "chapterList": ".entry-content ul li a",
+    "chapterName": "a@text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "/?s={{key}}",
+  "variableComment": "",
+  "weight": 0
+}

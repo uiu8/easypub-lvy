@@ -1,0 +1,107 @@
+{
+  "bookSourceComment": "//阅友同库",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "随心看吧",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://m.suixkan.com",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 1296,
+  "easypub": {
+    "check": {
+      "at": 1792476077,
+      "chapters": 1102,
+      "chars": 1955,
+      "error": "",
+      "kind": "check",
+      "ms": 551,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 5,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476077,
+      "ms": [
+        551
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://m.suixkan.com",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": false,
+  "enabledExplore": true,
+  "exploreUrl": "[\n{\"title\":\"🔹男频🔹\",\"url\":\"\",\"style\":{\"layout_flexBasisPercent\":1,\"layout_flexGrow\":1}},\n{\"title\":\"都市人生\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=1100&page={{page}}&_=1729559275027\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"玄幻奇幻\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=1101&page={{page}}&_=1729560085745\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"武侠仙侠\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=1102&page={{page}}&_=1729560142327\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"历史军事\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=1103&page={{page}}&_=1729560242269\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"科幻军事\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=1104&page={{page}}&_=1729560277727\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"游戏体育\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=1105&page={{page}}&_=1729560368809\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"玄幻灵异\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=1107&page={{page}}&_=1729560396522\",\"style\":{\"layout_flexBasisPercent\":0.29,\"layout_flexGrow\":-1}},{\"title\":\"脑洞大开\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=1108&page={{page}}&_=1729560457021\",\"style\":{\"layout_flexBasisPercent\":0.29,\"layout_flexGrow\":-1}},\n{\"title\":\"🔹女频🔹\",\"url\":\"\",\"style\":{\"layout_flexBasisPercent\":1,\"layout_flexGrow\":1}},\n{\"title\":\"现代言情\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=2100&page={{page}}&_=1729560701541\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"古代言情\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=2101&page={{page}}&_=1729560797358\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"幻想言情\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=2102&page={{page}}&_=1729560832295\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"穿越时空\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=2104&page={{page}}&_=1729560866848\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"宫闱争斗\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=2105&page={{page}}&_=1729560894904\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"豪门总裁\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=2106&page={{page}}&_=1729560955476\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"婚念爱情\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=2107&page={{page}}&_=1729560983197\",\"style\":{\"layout_flexBasisPercent\":0.29,\"layout_flexGrow\":-1}},{\"title\":\"经商种田\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=2108&page={{page}}&_=1729561018094\",\"style\":{\"layout_flexBasisPercent\":0.29,\"layout_flexGrow\":-1}},\n{\"title\":\"🔹图书🔹\",\"url\":\"\",\"style\":{\"layout_flexBasisPercent\":1,\"layout_flexGrow\":1}},\n{\"title\":\"学习强国\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=3104&page={{page}}&_=1729561135519\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"文学小说\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=3102&page={{page}}&_=1729559596\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"出版读物\",\"url\":\"http://m.suixkan.com/api/book/classify?site_id=&classify_id=3101&page={{page}}&_=1729561178656\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}}\n]",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1734879773305,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 18122,
+  "ruleBookInfo": {
+    "tocUrl": "class.sumchapter@a@href"
+  },
+  "ruleContent": {
+    "content": ".con@html",
+    "replaceRegex": "##\\s*.*?本章.*?完.*\\s*"
+  },
+  "ruleExplore": {
+    "author": "$.authorName",
+    "bookList": "$.data.list",
+    "bookUrl": "https://m.suixkan.com/b/{$.wapBookId}.html",
+    "coverUrl": "$.bookPic",
+    "intro": "$.intro",
+    "kind": "$.classifySecondName&&$.copyrightName&&$.classifyName",
+    "lastChapter": "$.latestChapterName",
+    "name": "$.bookName",
+    "wordCount": "$.words"
+  },
+  "ruleSearch": {
+    "author": ".v-author@text",
+    "bookList": "class.v-list-item",
+    "bookUrl": "##=\"newWebView\\('([^']+)'##$1###",
+    "coverUrl": "img@src",
+    "intro": ".v-intro@text",
+    "kind": "tag.div.-1@text",
+    "name": ".v-title@text",
+    "wordCount": ".v-words@text"
+  },
+  "ruleToc": {
+    "chapterList": ".catalog_ls li a",
+    "chapterName": "text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "https://m.suixkan.com/s/1.html?keyword={{key}}",
+  "variableComment": "",
+  "weight": 0
+}

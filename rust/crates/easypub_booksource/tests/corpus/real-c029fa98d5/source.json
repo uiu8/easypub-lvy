@@ -1,0 +1,99 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "随心看吧",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://m.suixkan.com已校验",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 2976,
+  "easypub": {
+    "check": {
+      "at": 1792476134,
+      "chapters": 1102,
+      "chars": 1955,
+      "error": "",
+      "kind": "check",
+      "ms": 978,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 5,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476134,
+      "ms": [
+        978
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://m.suixkan.com已校验",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1721326317705,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 10931,
+  "ruleBookInfo": {
+    "lastChapter": "class.chapter-entrance@text",
+    "tocUrl": "class.sumchapter@a@href"
+  },
+  "ruleContent": {
+    "content": "class.con@html",
+    "replaceRegex": "##\\s*.*?本章.*?完.*\\s*"
+  },
+  "ruleExplore": {},
+  "ruleSearch": {
+    "author": ".v-author@text",
+    "bookList": "class.v-list-item",
+    "bookUrl": "##=\"newWebView\\('([^']+)'##$1###",
+    "coverUrl": "img@src",
+    "intro": ".v-intro@text",
+    "kind": "tag.div.-1@text",
+    "lastChapter": "##=\"newWebView\\('([^']+)'##$1###\n<js>java.ajax('https://m.suixkan.com'+result)</js>\nclass.chapter-entrance@text",
+    "name": ".v-title@text",
+    "wordCount": ".v-words@text"
+  },
+  "ruleToc": {
+    "chapterList": "class.catalog_ls@li@a",
+    "chapterName": "text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "https://m.suixkan.com/s/1.html?keyword={{key}}",
+  "variableComment": "",
+  "weight": 0
+}

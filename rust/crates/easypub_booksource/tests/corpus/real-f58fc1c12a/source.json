@@ -1,0 +1,95 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "快速书源 ⚡,通常书源 📂",
+  "bookSourceName": "⚡📂风扇枕说",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://kakuyomu.jp/",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 243,
+  "easypub": {
+    "check": {
+      "at": 1792475845,
+      "chapters": 25,
+      "chars": 3916,
+      "error": "",
+      "kind": "check",
+      "ms": 3597,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 20,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1315-20261020-133713.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792475845,
+      "ms": [
+        3597
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://kakuyomu.jp/",
+    "importWarnings": [],
+    "importedAt": 1792475778,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": false,
+  "exploreUrl": "",
+  "header": "{\"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\"}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1786785762712,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 3437,
+  "ruleBookInfo": {
+    "intro": "class.CollapseTextWithKakuyomuLinks_lineHeight-m__sr9Tu@text"
+  },
+  "ruleContent": {
+    "content": "class.widget-episode-inner@tag.p@text"
+  },
+  "ruleExplore": {},
+  "ruleSearch": {
+    "author": "class.WorkTitle_workLabelAuthor__Kxy5E@children@text",
+    "bookList": "class.NewBox_borderSize-bb-m__wEqyb",
+    "bookUrl": "class. Gap_size-4s__F67Nf Gap_direction-x__RsHk8@tag.a@href",
+    "checkKeyWord": "僕",
+    "kind": "class.Meta_metaTruncatedItem__X_PoQ@text",
+    "name": "class. Gap_size-4s__F67Nf Gap_direction-x__RsHk8@text",
+    "wordCount": "class.WorkMetaBasicInformation_bg-none__s41TO@children@children@class.Meta_metaItemWrapper__JzV2P.3@children@text"
+  },
+  "ruleToc": {
+    "chapterList": "class.WorkTocSection_link__ocg9K",
+    "chapterName": "class.WorkTocSection_title__H2007@text##《　|　》",
+    "chapterUrl": "tag.a@href"
+  },
+  "searchUrl": "/search?q={{key}}&page={{page}}",
+  "variableComment": "",
+  "weight": 0
+}

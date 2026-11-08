@@ -1,0 +1,29 @@
+{
+  "purpose": "生僻字注音（V73，LAY-129）：判断哪些字在《通用规范汉字表》外或属三级字，并给出读音。编译进 easypub_core（include_str!）。",
+  "sources": [
+    {
+      "files": ["kMandarin.txt", "LICENSE", "README.md"],
+      "repository": "https://github.com/mozillazg/pinyin-data",
+      "commit": "9193766130af24d2ac54230be979b2e98ac66223",
+      "license": "MIT（数据来自 Unicode Unihan 数据库 kMandarin 字段，Unicode License）",
+      "sha256": {
+        "kMandarin.txt": "9ff1798ff0a69d5a501fd23c371d2faed019832a9f2cdb0de36cf9c11a5cd9e6",
+        "LICENSE": "9c048697be2502a16e8bcb282d5d465a07295b2def0ffb05a269c5d39dbe1586",
+        "README.md": "9915c8385a34372bc6d95fccf2389e161c6058988f06c0bc39e5265a892ef833"
+      },
+      "use": "表外字读音，只取第一个读音"
+    },
+    {
+      "files": ["general_table/characters.csv", "general_table/LICENSE"],
+      "repository": "https://github.com/jaywcjlove/table-of-general-standard-chinese-characters",
+      "commit": "ea539bfb164946a7aa71048954ac2bd4833098e7",
+      "license": "MIT",
+      "sha256": {
+        "general_table/characters.csv": "465139a4848b7ecebd95c5c466affe678d5a45783461b9fc549d68ab22bc21fd",
+        "general_table/LICENSE": "d65f906c8116c14921f841867969d6dc3f9dd7b99fca34071671ff5896a3fa94"
+      },
+      "use": "《通用规范汉字表》（2013）8105 字与读音。行序即字表字序：1–3500 一级，3501–6500 二级，6501–8105 三级（已核对第 3500/3501、6500/6501 行的分界）"
+    }
+  ],
+  "downloaded": "2026-10-17，用户同意下载"
+}

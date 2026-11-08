@@ -1,0 +1,105 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "🌹已检26.10.15",
+  "bookSourceName": "独步小说",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://www.dbxsd.com",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 61,
+  "easypub": {
+    "check": {
+      "at": 1792476011,
+      "chapters": 103,
+      "chars": 2405,
+      "error": "",
+      "kind": "check",
+      "ms": 2680,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 461,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1316-20261020-133502.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792476011,
+      "ms": [
+        2680
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://www.dbxsd.com::e58fe87184cf",
+    "importWarnings": [],
+    "importedAt": 1792475779,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "玄幻奇幻::/nav/xh-qh-{{page}}.html\n科幻游戏::/nav/kh-yx-{{page}}.html\n仙侠武侠::/nav/xx-wx-{{page}}.html\n女生言情::/nav/ns-yq-{{page}}.html\n都市娱乐::/nav/ds-yl-{{page}}.html\n历史军事::/nav/ls-js-{{page}}.html\n悬疑灵异::/nav/xy-ly-{{page}}.html\n耽美纯爱::/nav/dm-ca-{{page}}.html\n成长励志::/nav/cz-lz-{{page}}.html\n散文随笔::/nav/sw-sb-{{page}}.html\n轻の小说::/nav/qxs-{{page}}.html\n国外文学::/nav/gwwx-{{page}}.html\n文学名著::/nav/wxmz-{{page}}.html\n现代当代::/nav/xddwx-{{page}}.html",
+  "header": "{\n  'User-Agent': 'Mozilla/5.0 (Linux; Android 9; PDBM00 Build/PPR1.180610.011; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/70.0.3538.110 Mobile Safari/537.36'\n}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1766423680981,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 9806,
+  "ruleBookInfo": {
+    "author": ".media-body@a.1@text",
+    "coverUrl": ".book-img-middel@src",
+    "intro": ".book-detail@text##(^|[。！？]+[”」）】]?)##$1<br>",
+    "kind": ".col-md-4@text##.*：|\\s..:.*",
+    "lastChapter": ".media-body@a.2@text",
+    "name": ".book-name@a@text"
+  },
+  "ruleContent": {
+    "content": "id.cont-body@html  ",
+    "nextContentUrl": ".page@a@href"
+  },
+  "ruleExplore": {
+    "bookList": ".media",
+    "bookUrl": "a.1@href",
+    "coverUrl": "img@src",
+    "intro": ".media-info@text",
+    "name": "a.1@text"
+  },
+  "ruleSearch": {
+    "author": "td.1@text",
+    "bookList": ".table@tbody@tr",
+    "bookUrl": "a.0@href",
+    "coverUrl": "a.0@href<js>\nvar id = result.match(/(\\d+)\\/?$/)[1];\n'/uploads/cover/'+id+'s.jpg';\n</js>",
+    "name": "a.0@text##《|》"
+  },
+  "ruleToc": {
+    "chapterList": "id.all-chapter@div@a",
+    "chapterName": "text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "/plus/search.php?q={{key}}",
+  "variableComment": "",
+  "weight": -5
+}

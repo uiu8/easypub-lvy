@@ -1,0 +1,107 @@
+{
+  "bookSourceComment": "改进版 · 基于实际页面结构优化选择器与净化规则",
+  "bookSourceGroup": "代理书源 🌍,特殊书源 🔞",
+  "bookSourceName": "🌍🔞爱丽丝书屋",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://www.alicesw1.homes",
+  "bookUrlPattern": "https?://www\\.alicesw1\\.homes/novel/\\d+\\.html",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 85,
+  "easypub": {
+    "check": {
+      "at": 1792475794,
+      "chapters": 1956,
+      "chars": 4406,
+      "error": "",
+      "kind": "check",
+      "ms": 4174,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 10,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1315-20261020-133713.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792475794,
+      "ms": [
+        4174
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://www.alicesw1.homes",
+    "importWarnings": [],
+    "importedAt": 1792475778,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "[{\"title\":\"乱伦\",\"url\":\"https://www.alicesw1.homes/lists/65.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"都市\",\"url\":\"https://www.alicesw1.homes/lists/64.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"玄幻\",\"url\":\"https://www.alicesw1.homes/lists/62.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"同人\",\"url\":\"https://www.alicesw1.homes/lists/73.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"校园\",\"url\":\"https://www.alicesw1.homes/lists/61.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"穿越\",\"url\":\"https://www.alicesw1.homes/lists/70.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"系统\",\"url\":\"https://www.alicesw1.homes/lists/69.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"NTR\",\"url\":\"https://www.alicesw1.homes/lists/54.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"熟女\",\"url\":\"https://www.alicesw1.homes/lists/56.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"调教\",\"url\":\"https://www.alicesw1.homes/lists/58.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"武侠\",\"url\":\"https://www.alicesw1.homes/lists/68.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"乡村\",\"url\":\"https://www.alicesw1.homes/lists/63.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"科幻\",\"url\":\"https://www.alicesw1.homes/lists/71.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"奇幻\",\"url\":\"https://www.alicesw1.homes/lists/75.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"百合\",\"url\":\"https://www.alicesw1.homes/lists/47.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"耽美\",\"url\":\"https://www.alicesw1.homes/lists/82.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}},{\"title\":\"重口\",\"url\":\"https://www.alicesw1.homes/lists/21.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}}]",
+  "header": "{\"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\"}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1789964647324,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 9131,
+  "ruleBookInfo": {
+    "author": "@css:.novel_info a[href*='f=author']@text||@css:a[href*='f=author']@text",
+    "coverUrl": "@css:meta[property=og:image]@content||@css:img.lazyload_book_cover@src",
+    "intro": "@css:.info_ddg > p@text##爱丽丝书屋所有小说.*",
+    "lastChapter": "@css:.book_newchap .con li:first-child a@text",
+    "name": "@css:img.lazyload_book_cover@alt||@css:title@text##-.*",
+    "tocUrl": "@css:a[href*='other/chapters']@href"
+  },
+  "ruleContent": {
+    "content": "@css:div.read-content p@text##爱丽丝书屋.*|所有小说中出现的人物均为.*|请收藏.*|本章未完.*|天才一秒记住.*|本站域名.*"
+  },
+  "ruleExplore": {
+    "author": "@css:li.four@text",
+    "bookList": "@css:.rec_rullist > ul",
+    "bookUrl": "@css:li.two a@href",
+    "kind": "@css:li.sev a@text",
+    "lastChapter": "@css:li.three a@text",
+    "name": "@css:li.two a@text",
+    "wordCount": "@css:li.five@text"
+  },
+  "ruleSearch": {
+    "author": "@css:a[href*='f=author']@text",
+    "bookList": "@css:.list-group-item",
+    "bookUrl": "@css:h5 a@href",
+    "intro": "@css:.content-txt@text",
+    "kind": "@css:a[href*='f=tag']@text",
+    "name": "@css:h5 a@text"
+  },
+  "ruleToc": {
+    "chapterList": "@css:ul.mulu_list a",
+    "chapterName": "text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "https://www.alicesw1.homes/search.html?q={{key}}&f=_all&sort=relevance&p={{page}}",
+  "variableComment": "",
+  "weight": 0
+}

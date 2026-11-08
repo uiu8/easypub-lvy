@@ -1,0 +1,37 @@
+[
+  {
+    "name": "skera",
+    "version": "0.7.0",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/googlefonts/fontations",
+    "crate_sha256": "1793356c03f41587b77c8358124ecf2af32ee681df7305096099e368a4f5cec6"
+  },
+  {
+    "name": "write-fonts",
+    "version": "0.53.0",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/googlefonts/fontations",
+    "crate_sha256": "4c2feba63177f6f6b51d646b78fafd5ff65f0581814155eb36ef620133d245c4"
+  },
+  {
+    "name": "read-fonts",
+    "version": "0.44.0",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/googlefonts/fontations",
+    "crate_sha256": "d5a0cf4bb6cbce4c29756270d189a5e400ac05e91192161d83a0bcb6e68492e8"
+  },
+  {
+    "name": "skrifa",
+    "version": "0.47.0",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/googlefonts/fontations",
+    "crate_sha256": "526e654b303ff4ad73a5a40b25de2b3ce3d039c5e3b6da5f89ae6e57004cb40f"
+  },
+  {
+    "name": "font-types",
+    "version": "0.12.5",
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/googlefonts/fontations",
+    "crate_sha256": "b8eb065f3251655b3c90e22e5e363f310fc5332fb3402e37bbc94752283248f6"
+  }
+]

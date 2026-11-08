@@ -1,0 +1,16 @@
+[package]
+name = "easypub-opencc-memory-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+dictionary = ["dep:ferrous-opencc"]
+
+[dependencies]
+ferrous-opencc = { version = "=0.4.0", default-features = false, features = ["s2t-conversion", "t2s-conversion"], optional = true }
+
+[profile.release]
+strip = "symbols"

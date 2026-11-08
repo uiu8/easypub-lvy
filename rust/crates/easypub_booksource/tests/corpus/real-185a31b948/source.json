@@ -1,0 +1,95 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "快速书源 ⚡,通常书源 📂",
+  "bookSourceName": "⚡📂笔趣阁#41",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://biquge42.com",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 665,
+  "easypub": {
+    "check": {
+      "at": 1792475953,
+      "chapters": 200,
+      "chars": 2452,
+      "error": "",
+      "kind": "check",
+      "ms": 4052,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 100,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1315-20261020-133713.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792475953,
+      "ms": [
+        4052
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://biquge42.com",
+    "importWarnings": [],
+    "importedAt": 1792475778,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": false,
+  "enabledExplore": false,
+  "exploreUrl": "",
+  "header": "{\n\"referer\": \"https://biquge42.com/\"\n}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 0,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 9205,
+  "ruleBookInfo": {
+    "intro": ".col-md-10@p.-3@text",
+    "lastChapter": ".col-md-10@p.-6@a@text"
+  },
+  "ruleContent": {
+    "content": "#htmlContent@p@html"
+  },
+  "ruleExplore": {},
+  "ruleSearch": {
+    "author": "small@text##\\/.*",
+    "bookList": "class.col-md-4 col-xs-4 book-coverlist@.row",
+    "bookUrl": "a@href",
+    "coverUrl": "img@src",
+    "intro": "p@text",
+    "name": "h4@a@text"
+  },
+  "ruleToc": {
+    "chapterList": ".col-md-3@a",
+    "chapterName": "text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "https://biquge42.com/search/?searchkey={{key}}",
+  "variableComment": "",
+  "weight": 0
+}

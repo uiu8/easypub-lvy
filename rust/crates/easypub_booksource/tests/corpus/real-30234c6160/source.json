@@ -1,0 +1,112 @@
+{
+  "bookSourceComment": "//By情无羁25.02.19",
+  "bookSourceGroup": "通常书源 📂,快速书源 ⚡",
+  "bookSourceName": "📂爱读书吧",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://www.aidushu8.com",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 624,
+  "easypub": {
+    "check": {
+      "at": 1792475942,
+      "chapters": 235,
+      "chars": 2828,
+      "error": "",
+      "kind": "check",
+      "ms": 3895,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 5,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1315-20261020-133713.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792475942,
+      "ms": [
+        3895
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://www.aidushu8.com",
+    "importWarnings": [],
+    "importedAt": 1792475778,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": false,
+  "enabledExplore": true,
+  "exploreUrl": "[\n{\n    \"title\": \"♕ 连载 ♕\",\n    \"url\": \"\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 1\n    }\n  },\n  {\n    \"title\": \"玄幻\",\n    \"url\": \"/sort/1/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"修真\",\n    \"url\": \"/sort/2/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"都市\",\n    \"url\": \"/sort/3/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"穿越\",\n    \"url\": \"/sort/4/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"网游\",\n    \"url\": \"/sort/5/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"科幻\",\n    \"url\": \"/sort/6/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"其他\",\n    \"url\": \"/sort/7/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"♕ 全本 ♕\",\n    \"url\": \"\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 1\n    }\n  },\n  {\n    \"title\": \"玄幻\",\n    \"url\": \"/quanben/sort/1/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"修真\",\n    \"url\": \"/quanben/sort/2/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"都市\",\n    \"url\": \"/quanben/sort/3/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"穿越\",\n    \"url\": \"/quanben/sort/4/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"网游\",\n    \"url\": \"/quanben/sort/5/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"科幻\",\n    \"url\": \"/quanben/sort/6/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  },\n  {\n    \"title\": \"其他\",\n    \"url\": \"/quanben/sort/7/{{page}}/\",\n    \"style\": {\n      \"layout_flexGrow\": 1,\n      \"layout_flexBasisPercent\": 0.25\n    }\n  }\n]",
+  "header": "{\n  \"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36\"\n}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1787323693910,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 6221,
+  "ruleBookInfo": {
+    "author": "[property=\"og:novel:author\"]@content",
+    "intro": "[property=\"og:description\"]@content##[\\S\\s]*观看小说\\:",
+    "kind": "[property~=category|status|update_time]@content",
+    "lastChapter": "[property~=las?test_chapter_name]@content",
+    "name": "[property=\"og:novel:book_name\"]@content",
+    "tocUrl": "text.目录"
+  },
+  "ruleContent": {
+    "content": "#article@p@html##.*更新速度全网最快.*",
+    "nextContentUrl": "#next_url@href"
+  },
+  "ruleExplore": {
+    "author": ".fa-user-circle-o@text",
+    "bookList": ".flex@li",
+    "bookUrl": "a.0@href",
+    "coverUrl": "img@data-original",
+    "intro": "p.0@text##[\\S\\s]*观看小说\\:",
+    "kind": "span.0@text",
+    "name": "h2@text",
+    "wordCount": "em.0@text"
+  },
+  "ruleSearch": {
+    "author": "p.0@ownText",
+    "bookList": ".flex@li",
+    "bookUrl": "a.0@href",
+    "coverUrl": "img@data-original",
+    "intro": "p.1@text##[\\S\\s]*观看小说\\:",
+    "kind": "span.0@text",
+    "lastChapter": "p.-1@text",
+    "name": "img@title||h3@text",
+    "wordCount": "span.2@text##字.*##字"
+  },
+  "ruleToc": {
+    "chapterList": "#ul_all_chapters@li a",
+    "chapterName": "text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "{{cookie.removeCookie(source.key)}}/searchs/,{\n  \"body\": \"searchkey={{key}}&page={{page}}&searchtype=all&Submit=\",\n  \"method\": \"POST\"\n}",
+  "variableComment": "",
+  "weight": 0
+}

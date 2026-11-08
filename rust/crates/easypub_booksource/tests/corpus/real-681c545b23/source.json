@@ -1,0 +1,89 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "通常书源 📂",
+  "bookSourceName": "📂xx短篇",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://book.qingse.site/",
+  "bookUrlPattern": "",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 729,
+  "easypub": {
+    "check": {
+      "at": 1792475970,
+      "chapters": 1,
+      "chars": 14605,
+      "error": "",
+      "kind": "check",
+      "ms": 3291,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 100,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1315-20261020-133713.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792475970,
+      "ms": [
+        3291
+      ],
+      "retryAfter": 0
+    },
+    "id": "https://book.qingse.site/",
+    "importWarnings": [],
+    "importedAt": 1792475778,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": false,
+  "exploreUrl": "",
+  "header": "",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1777064181077,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 8293,
+  "ruleBookInfo": {},
+  "ruleContent": {
+    "content": "id.content@html"
+  },
+  "ruleExplore": {},
+  "ruleSearch": {
+    "bookList": "class.list-group@tag.li",
+    "bookUrl": "tag.a@href",
+    "name": "text"
+  },
+  "ruleToc": {
+    "chapterList": "@js:\n[{\"title\":\"全一章\", \"href\":baseUrl}]",
+    "chapterName": "title",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "article/index?q={{key}}",
+  "variableComment": "",
+  "weight": 0
+}

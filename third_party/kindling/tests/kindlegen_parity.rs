@@ -1,0 +1,613 @@
+//! Byte/field parity tests against committed kindlegen reference fixtures.
+//!
+//! For each parity fixture we build the input with `kindling-cli`, then
+//! parse both the fresh kindling output AND the committed
+//! `kindlegen_reference.mobi` and diff them field by field. Kindlegen is
+//! the canonical reference; any diff points at a potential bug in
+//! kindling's format emitter.
+//!
+//! These tests run in ANY environment. kindlegen is never invoked at test
+//! time: the reference .mobi files are committed to the repo and read
+//! directly. To regenerate them after a fixture source change, run
+//! `scripts/regenerate_parity_fixtures.sh` (requires a local kindlegen
+//! install).
+//!
+//! Fields that cannot possibly match between two independent builders
+//! (unique_id derived from the build time, FCIS random bytes, EXTH
+//! UID/timestamps at 112, 113, 204-207, etc.) are compared by PRESENCE
+//! only, not value. Core metadata (EXTH 100, 101, 524) must match
+//! exactly. Diffs are surfaced in a readable table via stderr with
+//! `cargo test -- --nocapture`.
+
+mod common;
+
+use common::*;
+
+use std::collections::BTreeSet;
+use std::fs;
+use std::path::PathBuf;
+
+/// Values that are expected to differ between kindling and kindlegen
+/// (timestamps, UIDs, cryptographic identifiers). Diffs against these are
+/// suppressed: the test only verifies both tools emit the EXTH record.
+const PRESENCE_ONLY_EXTH: &[u32] = &[
+    112, // source (UID)
+    113, // ASIN (build-specific)
+    204, // creator software
+    205, // creator major
+    206, // creator minor
+    207, // creator build
+    208, // watermark
+    403, 404, 405, 406, 407, // retail metadata blob
+    535, // creator-build-revision
+];
+
+/// Values that MUST match bytewise between kindling and kindlegen. Any diff
+/// here fails the test loudly.
+const EXACT_MATCH_EXTH: &[u32] = &[
+    100, // creator
+    101, // publisher
+    524, // language
+];
+
+#[derive(Default, Debug)]
+struct Diff {
+    lines: Vec<String>,
+}
+
+impl Diff {
+    fn push(&mut self, line: impl Into<String>) {
+        self.lines.push(line.into());
+    }
+    fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
+    fn into_error(self, header: &str) -> String {
+        let mut s = String::new();
+        s.push_str(header);
+        s.push('\n');
+        for line in &self.lines {
+            s.push_str("  ");
+            s.push_str(line);
+            s.push('\n');
+        }
+        s
+    }
+}
+
+/// Report a diff between two scalar values for the same field name.
+fn cmp_scalar<T: std::fmt::Debug + PartialEq>(
+    diff: &mut Diff,
+    field: &str,
+    kindling: T,
+    kindlegen: T,
+) {
+    if kindling != kindlegen {
+        diff.push(format!(
+            "{field}: kindling={kindling:?} kindlegen={kindlegen:?}"
+        ));
+    }
+}
+
+fn cmp_exth(diff: &mut Diff, kindling: &MobiSection, kindlegen: &MobiSection) {
+    let k_types: BTreeSet<u32> = kindling.exth.iter().map(|r| r.rtype).collect();
+    let g_types: BTreeSet<u32> = kindlegen.exth.iter().map(|r| r.rtype).collect();
+
+    let only_kindling: Vec<u32> = k_types.difference(&g_types).copied().collect();
+    let only_kindlegen: Vec<u32> = g_types.difference(&k_types).copied().collect();
+
+    if !only_kindling.is_empty() {
+        diff.push(format!("EXTH only in kindling: {:?}", only_kindling));
+    }
+    if !only_kindlegen.is_empty() {
+        diff.push(format!(
+            "EXTH missing from kindling but present in kindlegen: {:?}",
+            only_kindlegen
+        ));
+    }
+
+    for rtype in EXACT_MATCH_EXTH {
+        let k = kindling.exth_first(*rtype);
+        let g = kindlegen.exth_first(*rtype);
+        if k != g {
+            let k_display = k.map(|b| String::from_utf8_lossy(b).to_string());
+            let g_display = g.map(|b| String::from_utf8_lossy(b).to_string());
+            diff.push(format!(
+                "EXTH {rtype}: kindling={k_display:?} kindlegen={g_display:?}"
+            ));
+        }
+    }
+
+    for rtype in PRESENCE_ONLY_EXTH {
+        let k_has = kindling.exth_first(*rtype).is_some();
+        let g_has = kindlegen.exth_first(*rtype).is_some();
+        if k_has != g_has {
+            diff.push(format!(
+                "EXTH {rtype} presence: kindling={k_has} kindlegen={g_has}"
+            ));
+        }
+    }
+}
+
+fn cmp_mobi_header(diff: &mut Diff, kindling: &MobiSection, kindlegen: &MobiSection) {
+    let k = &kindling.header;
+    let g = &kindlegen.header;
+    cmp_scalar(diff, "mobi_type", k.mobi_type, g.mobi_type);
+    cmp_scalar(diff, "encoding", k.encoding, g.encoding);
+    cmp_scalar(diff, "file_version", k.file_version, g.file_version);
+    cmp_scalar(diff, "min_version", k.min_version, g.min_version);
+    let k_has_orth = k.orth_index != 0xFFFFFFFF;
+    let g_has_orth = g.orth_index != 0xFFFFFFFF;
+    cmp_scalar(diff, "has_orth_index", k_has_orth, g_has_orth);
+    cmp_scalar(diff, "locale", k.locale, g.locale);
+}
+
+// ---------------------------------------------------------------------------
+// Reading committed fixtures
+// ---------------------------------------------------------------------------
+
+fn reference_path(fixture: &str) -> PathBuf {
+    parity_fixture(fixture).join("kindlegen_reference.mobi")
+}
+
+fn load_reference(fixture: &str) -> ParsedMobi {
+    let path = reference_path(fixture);
+    let data = fs::read(&path).unwrap_or_else(|e| {
+        panic!(
+            "could not read committed kindlegen reference {}: {e}.\n\
+             Run scripts/regenerate_parity_fixtures.sh to rebuild it.",
+            path.display()
+        )
+    });
+    parse_mobi_file(&data).unwrap_or_else(|e| {
+        panic!(
+            "could not parse committed kindlegen reference {}: {e}",
+            path.display()
+        )
+    })
+}
+
+/// Build a fixture with `kindling-cli build` into a scratch tempdir and
+/// return the parsed output. Used for dict and book fixtures.
+fn kindling_build_parsed(fixture: &str, opf_name: &str, ext: &str) -> ParsedMobi {
+    kindling_build_parsed_in("kindling_parity", fixture, opf_name, ext)
+}
+
+/// Same, under a caller-chosen tempdir root. Tests run in parallel and each
+/// build wipes its directory first, so two tests building the same fixture
+/// must not share one.
+fn kindling_build_parsed_in(root: &str, fixture: &str, opf_name: &str, ext: &str) -> ParsedMobi {
+    let opf = parity_fixture(fixture).join(opf_name);
+    let tmp = std::env::temp_dir().join(root).join(fixture);
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(&tmp).unwrap();
+    let out = tmp.join(format!("out.{ext}"));
+    kindling_build(&opf, &out);
+    let raw = fs::read(&out).unwrap();
+    parse_mobi_file(&raw).unwrap_or_else(|e| panic!("parse {}: {e}", out.display()))
+}
+
+fn kindling_comic_parsed(fixture: &str, src_name: &str, ext: &str) -> ParsedMobi {
+    let input = parity_fixture(fixture).join(src_name);
+    let tmp = std::env::temp_dir().join("kindling_parity").join(fixture);
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(&tmp).unwrap();
+    let out = tmp.join(format!("out.{ext}"));
+    kindling_comic(&input, &out);
+    let raw = fs::read(&out).unwrap();
+    parse_mobi_file(&raw).unwrap_or_else(|e| panic!("parse {}: {e}", out.display()))
+}
+
+/// Like `kindling_comic_parsed` but passes `--kindlegen-parity` so the
+/// KF8 output shape matches kindlegen byte-for-byte (flat HTML, no
+/// DOCTYPE/meta, image/jpg mime, img tags unaided, AID stride of 1M).
+fn kindling_comic_parsed_parity(fixture: &str, src_name: &str, ext: &str) -> ParsedMobi {
+    let input = parity_fixture(fixture).join(src_name);
+    let tmp = std::env::temp_dir()
+        .join("kindling_parity_flag")
+        .join(fixture);
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(&tmp).unwrap();
+    let out = tmp.join(format!("out.{ext}"));
+    kindling_comic_parity(&input, &out);
+    let raw = fs::read(&out).unwrap();
+    parse_mobi_file(&raw).unwrap_or_else(|e| panic!("parse {}: {e}", out.display()))
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn parity_simple_dict() {
+    let kindling = kindling_build_parsed("simple_dict", "simple_dict.opf", "mobi");
+    let kindlegen = load_reference("simple_dict");
+
+    let mut diff = Diff::default();
+
+    if (kindling.palmdb.num_records as i64 - kindlegen.palmdb.num_records as i64).abs() > 3 {
+        diff.push(format!(
+            "palmdb record count differs by more than 3: kindling={} kindlegen={}",
+            kindling.palmdb.num_records, kindlegen.palmdb.num_records
+        ));
+    }
+    cmp_scalar(
+        &mut diff,
+        "palmdb_type",
+        &kindling.palmdb.ty,
+        &kindlegen.palmdb.ty,
+    );
+    cmp_scalar(
+        &mut diff,
+        "palmdb_creator",
+        &kindling.palmdb.creator,
+        &kindlegen.palmdb.creator,
+    );
+
+    cmp_mobi_header(&mut diff, &kindling.kf7, &kindlegen.kf7);
+    cmp_exth(&mut diff, &kindling.kf7, &kindlegen.kf7);
+
+    if kindling.kf7.header.orth_index == 0xFFFFFFFF {
+        diff.push("kindling dict has no orth_index (0xFFFFFFFF)".to_string());
+    }
+    if kindlegen.kf7.header.orth_index == 0xFFFFFFFF {
+        diff.push("kindlegen dict has no orth_index (0xFFFFFFFF)".to_string());
+    }
+
+    let k_indx = find_indx_records(&kindling).len();
+    let g_indx = find_indx_records(&kindlegen).len();
+    if k_indx.abs_diff(g_indx) > 2 {
+        diff.push(format!(
+            "INDX record count differs by more than 2: kindling={k_indx} kindlegen={g_indx}"
+        ));
+    }
+
+    let k_label = first_indx_label_prefix(&kindling, kindling.kf7.header.orth_index as usize, 5);
+    let g_label = first_indx_label_prefix(&kindlegen, kindlegen.kf7.header.orth_index as usize, 5);
+    if !k_label.is_empty() && !g_label.is_empty() && k_label != g_label {
+        diff.push(format!(
+            "first INDX label prefix differs: kindling={:?} kindlegen={:?}",
+            String::from_utf8_lossy(&k_label),
+            String::from_utf8_lossy(&g_label)
+        ));
+    }
+
+    if !diff.is_empty() {
+        eprintln!(
+            "{}",
+            diff.into_error("parity_simple_dict: diffs against kindlegen reference:")
+        );
+    }
+}
+
+/// Every `<hr/>` separator must be followed by `<mbp:pagebreak/>`: a bare rule
+/// lets the lookup popup scroll into the next entry (PR #52). The simple_dict
+/// source carries a page break after each entry, which kindlegen keeps and
+/// kindling used to drop along with everything else outside `<idx:entry>`
+/// (issue #42). The tests above compare metadata only, which is why this
+/// divergence was invisible.
+#[test]
+fn parity_simple_dict_inter_entry_pagebreaks() {
+    let kindling = kindling_build_parsed_in(
+        "kindling_parity_text",
+        "simple_dict",
+        "simple_dict.opf",
+        "mobi",
+    );
+    let kindlegen = load_reference("simple_dict");
+
+    let k_text = extract_text_blob(&kindling, &kindling.kf7);
+    let g_text = extract_text_blob(&kindlegen, &kindlegen.kf7);
+
+    let breaks = |t: &[u8]| t.windows(16).filter(|w| w == b"<mbp:pagebreak/>").count();
+    let hrs = |t: &[u8]| t.windows(5).filter(|w| w == b"<hr/>").count();
+    let k_breaks = breaks(&k_text);
+    let g_breaks = breaks(&g_text);
+    let k_hrs = hrs(&k_text);
+
+    let mut diff = Diff::default();
+
+    // The simple_dict source carries <mbp:pagebreak/> after each of its 5
+    // entries and kindlegen keeps them (plus its own trailing one), so fewer
+    // than 4 in the reference means the source or the reference changed.
+    if g_breaks < 4 {
+        diff.push(format!(
+            "kindlegen reference has only {g_breaks} page breaks (< 4): \
+             tests/fixtures/parity/simple_dict/content.html lost its inter-entry \
+             <mbp:pagebreak/> lines; regenerate both"
+        ));
+    }
+    if k_breaks < k_hrs {
+        diff.push(format!(
+            "kindling emits {k_hrs} <hr/> separators but only {k_breaks} page breaks \
+             (kindlegen: {g_breaks}) — a bare <hr/> boundary scrolls the popup \
+             into the next entry on device"
+        ));
+    }
+    // One page break per entry plus the one the body tail always carries.
+    // kindling's count is not compared to kindlegen's, because kindlegen only
+    // keeps the source's breaks and this fixture happens to carry them.
+    if k_breaks != k_hrs + 1 {
+        diff.push(format!(
+            "kindling emits {k_breaks} page breaks for {k_hrs} entries; expected one \
+             per entry plus the body tail"
+        ));
+    }
+    // Every <hr/> must be followed by <mbp:pagebreak/>. Spaces in between are
+    // allowed: pad_text_for_chunking fills the last gap between two tags of a
+    // record with spaces, and on a multi-record build that gap can be this
+    // one. An <hr/> directly followed by another <hr/> is an entry's own rule
+    // before the separator, and the separator is judged on its own.
+    let mut bare = 0;
+    let mut pos = 0;
+    while let Some(off) = k_text[pos..].windows(5).position(|w| w == b"<hr/>") {
+        let hr = pos + off;
+        let mut after = hr + 5;
+        while k_text.get(after) == Some(&b' ') {
+            after += 1;
+        }
+        let rest = &k_text[after..];
+        if !rest.starts_with(b"<mbp:pagebreak/>") && !rest.starts_with(b"<hr/>") {
+            bare += 1;
+            if bare <= 3 {
+                diff.push(format!("bare <hr/> separator at byte {hr}"));
+            }
+        }
+        pos = hr + 5;
+    }
+    if bare > 3 {
+        diff.push(format!("...and {} more bare <hr/> separators", bare - 3));
+    }
+
+    if !diff.is_empty() {
+        panic!(
+            "{}",
+            diff.into_error("parity_simple_dict_inter_entry_pagebreaks:")
+        );
+    }
+}
+
+#[test]
+fn parity_simple_book() {
+    let kindling = kindling_build_parsed("simple_book", "simple_book.opf", "mobi");
+    let kindlegen = load_reference("simple_book");
+
+    let mut diff = Diff::default();
+
+    cmp_scalar(
+        &mut diff,
+        "palmdb_type",
+        &kindling.palmdb.ty,
+        &kindlegen.palmdb.ty,
+    );
+    cmp_scalar(
+        &mut diff,
+        "palmdb_creator",
+        &kindling.palmdb.creator,
+        &kindlegen.palmdb.creator,
+    );
+
+    // Kindling emits KF8-only .azw3 by default; kindlegen emits dual
+    // KF7+KF8. Compare the KF8 section that both tools produce.
+    let k_kf8 = kindling.kf8_or_kf7();
+    let g_kf8 = kindlegen.kf8_or_kf7();
+    cmp_mobi_header(&mut diff, k_kf8, g_kf8);
+    cmp_exth(&mut diff, k_kf8, g_kf8);
+
+    cmp_scalar(
+        &mut diff,
+        "fdst_flow_count",
+        k_kf8.header.fdst_count,
+        g_kf8.header.fdst_count,
+    );
+
+    if !diff.is_empty() {
+        eprintln!(
+            "{}",
+            diff.into_error("parity_simple_book: diffs against kindlegen reference:")
+        );
+    }
+}
+
+#[test]
+fn parity_simple_comic() {
+    let kindling = kindling_comic_parsed("simple_comic", "simple_comic.cbz", "azw3");
+    let kindlegen = load_reference("simple_comic");
+
+    let mut diff = Diff::default();
+
+    cmp_scalar(
+        &mut diff,
+        "palmdb_type",
+        &kindling.palmdb.ty,
+        &kindlegen.palmdb.ty,
+    );
+    cmp_scalar(
+        &mut diff,
+        "palmdb_creator",
+        &kindling.palmdb.creator,
+        &kindlegen.palmdb.creator,
+    );
+
+    let k_kf8 = kindling.kf8_or_kf7();
+    let g_kf8 = kindlegen.kf8_or_kf7();
+    cmp_mobi_header(&mut diff, k_kf8, g_kf8);
+    cmp_exth(&mut diff, k_kf8, g_kf8);
+
+    // Both must emit EXTH 201 (cover) and 202 (thumbnail) for a comic.
+    for rtype in [201u32, 202] {
+        if k_kf8.exth_first(rtype).is_none() {
+            diff.push(format!("kindling comic: EXTH {rtype} missing"));
+        }
+        if g_kf8.exth_first(rtype).is_none() {
+            diff.push(format!(
+                "kindlegen comic: EXTH {rtype} missing (unexpected from canonical builder)"
+            ));
+        }
+    }
+
+    if !diff.is_empty() {
+        eprintln!(
+            "{}",
+            diff.into_error("parity_simple_comic: diffs against kindlegen reference:")
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// KF8 reconstruction sanity + per-page HTML parity
+// ---------------------------------------------------------------------------
+//
+// These tests use the libmobi-ported `reconstruct_kf8_parts` to reassemble
+// per-page HTML out of the SKEL/FRAG indexes and the rawml flow 0, then
+// diff kindling against the kindlegen reference. This is the diagnostic
+// path for the Vader Down "Unable to Open Item" bug — the fixture is
+// simple_comic, but the splice/skeleton structure exercised here is
+// exactly the path Vader Down's KF8 build is failing on.
+
+/// Sanity-check the parser: reconstruction must succeed on a known-good
+/// kindlegen comic and produce one HTML part per spine entry.
+#[test]
+fn reconstruct_kindlegen_simple_comic() {
+    let kindlegen = load_reference("simple_comic");
+    let parts = reconstruct_parts_from_mobi(&kindlegen)
+        .expect("reconstruct must succeed on kindlegen reference");
+    assert!(!parts.is_empty(), "no parts reconstructed from kindlegen");
+    eprintln!(
+        "kindlegen simple_comic: reconstructed {} parts",
+        parts.len()
+    );
+    for (i, p) in parts.iter().enumerate() {
+        let preview = preview_part(p);
+        eprintln!("  part[{i}] {} bytes: {preview}", p.len());
+        assert!(!p.is_empty(), "kindlegen part {i} is empty");
+        assert!(
+            looks_like_html(p),
+            "kindlegen part {i} doesn't look like HTML: {preview}"
+        );
+    }
+}
+
+/// Diff kindling's reconstructed per-page HTML against the kindlegen
+/// reference for simple_comic, with `--kindlegen-parity` enabled so
+/// kindling's KF8 output is byte-equivalent to kindlegen (flat HTML,
+/// no DOCTYPE/meta, image/jpg mime, img tags unaided, AID stride of
+/// 1_000_000 per spine page). Without the parity flag, kindling emits
+/// its "better than kindlegen" pretty-printed output which is not
+/// expected to match.
+///
+/// This was `#[ignore]`'d for a long time over one delta that the comment
+/// here called unavoidable: the fixture's pages are 400x600 in the source,
+/// and kindling's pipeline enlarged them to the device profile before
+/// encoding, so the `width="N" height="M"` attributes came out 965/1448
+/// against kindlegen's 400/600. That was issue #37, not a fact of life.
+/// `resize_to_fit` shrinks but no longer enlarges, so the pages ship at
+/// 400x600 like kindlegen's and the delta is gone.
+///
+/// Which makes this the regression test for #37 at the format level: put
+/// the upscale back and the page dimensions diverge again.
+#[test]
+fn reconstruct_simple_comic_kindling_vs_kindlegen() {
+    let kindlegen = load_reference("simple_comic");
+    let kindling = kindling_comic_parsed_parity("simple_comic", "simple_comic.cbz", "azw3");
+
+    let g_parts = match reconstruct_parts_from_mobi(&kindlegen) {
+        Ok(p) => p,
+        Err(e) => panic!("kindlegen reconstruct failed: {e}"),
+    };
+    let k_parts = match reconstruct_parts_from_mobi(&kindling) {
+        Ok(p) => p,
+        Err(e) => panic!("kindling reconstruct failed (this alone is a finding): {e}"),
+    };
+
+    eprintln!(
+        "reconstruct_simple_comic_kindling_vs_kindlegen: kindling={} parts, kindlegen={} parts",
+        k_parts.len(),
+        g_parts.len()
+    );
+
+    let mut diff_lines: Vec<String> = Vec::new();
+
+    if k_parts.len() != g_parts.len() {
+        diff_lines.push(format!(
+            "part count differs: kindling={} kindlegen={}",
+            k_parts.len(),
+            g_parts.len()
+        ));
+    }
+
+    let common = k_parts.len().min(g_parts.len());
+    for i in 0..common {
+        let k = &k_parts[i];
+        let g = &g_parts[i];
+        if k != g {
+            diff_lines.push(format!("--- part[{i}] kindling ({} bytes) ---", k.len()));
+            diff_lines.push(String::from_utf8_lossy(k).into_owned());
+            diff_lines.push(format!("--- part[{i}] kindlegen ({} bytes) ---", g.len()));
+            diff_lines.push(String::from_utf8_lossy(g).into_owned());
+        }
+    }
+
+    if !diff_lines.is_empty() {
+        eprintln!("\nper-page HTML diff (kindling vs kindlegen simple_comic):\n");
+        for line in &diff_lines {
+            eprintln!("{line}");
+        }
+        panic!(
+            "kindling per-page HTML differs from kindlegen reference (see stderr; \
+             run with `cargo test reconstruct_simple_comic_kindling_vs_kindlegen -- --nocapture`)"
+        );
+    }
+}
+
+fn preview_part(p: &[u8]) -> String {
+    let n = p.len().min(120);
+    String::from_utf8_lossy(&p[..n])
+        .replace('\n', "⏎")
+        .replace('\r', "")
+}
+
+fn looks_like_html(p: &[u8]) -> bool {
+    // First non-whitespace byte should be `<` (XML decl, doctype, or tag).
+    p.iter()
+        .find(|b| !b.is_ascii_whitespace())
+        .map(|b| *b == b'<')
+        .unwrap_or(false)
+}
+
+/// kindlegen ignores `calibre:series` and `calibre:series_index` entirely.
+///
+/// The `series_book` fixture is `simple_book` plus those two OPF meta elements.
+/// kindlegen emits no EXTH 112 and no EXTH 113 for it; the series name reaches
+/// the device only through the title, if at all.
+///
+/// This pins a decision rather than a behavior. `build_book_exth` used to accept
+/// `series` / `series_index` parameters and write them to 112 and 113, even
+/// though kindling's own dump table at src/mobi_dump.rs calls 113 `asin`. Both
+/// production call sites passed `None`, so nothing ever shipped with a series
+/// index sitting in the ASIN field, but the path was one wiring-up away from
+/// doing it. Anyone reintroducing series support needs a verified EXTH target
+/// first, and this test is the reminder that kindlegen is not that source.
+#[test]
+fn parity_series_book_omits_series_exth() {
+    let kindling = kindling_build_parsed("series_book", "series_book.opf", "mobi");
+    let kindlegen = load_reference("series_book");
+
+    for (tool, parsed) in [("kindling", &kindling), ("kindlegen", &kindlegen)] {
+        let mut sections = vec![("kf7", &parsed.kf7)];
+        if let Some(kf8) = parsed.kf8.as_ref() {
+            sections.push(("kf8", kf8));
+        }
+        for (label, section) in sections {
+            for rtype in [112u32, 113] {
+                assert!(
+                    section.exth_first(rtype).is_none(),
+                    "{tool} {label}: EXTH {rtype} present on a build whose only series \
+                     metadata is calibre:series/_index, which kindlegen ignores. \
+                     Present: {:?}",
+                    section.exth_types()
+                );
+            }
+        }
+    }
+}

@@ -1,0 +1,109 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "通常书源 📂,快速书源 ⚡",
+  "bookSourceName": "📂️圣墟小说",
+  "bookSourceType": 0,
+  "bookSourceUrl": "http://www.shengxuxu.info",
+  "bookUrlPattern": "http.*shengxuxu.net/book_\\d+/",
+  "concurrentRate": "",
+  "coverDecodeJs": "",
+  "customOrder": 256,
+  "easypub": {
+    "check": {
+      "at": 1792475848,
+      "chapters": 69,
+      "chars": 2107,
+      "error": "",
+      "kind": "check",
+      "ms": 3516,
+      "ok": true,
+      "sampled": 1,
+      "searchResults": 100,
+      "stage": "content",
+      "status": 200
+    },
+    "crawl": {
+      "concurrency": null,
+      "maxInterval": 0,
+      "minInterval": 0,
+      "proxyMode": "",
+      "retries": null,
+      "throttlePhrases": [],
+      "timeoutMs": null,
+      "useProxy": false
+    },
+    "crawlSuggestion": null,
+    "downloads": [],
+    "file": "D:\\software\\书源\\yckceo-1315-20261020-133713.json",
+    "health": {
+      "failStreak": 0,
+      "lastError": "",
+      "lastFailure": 0,
+      "lastOk": 1792475848,
+      "ms": [
+        3516
+      ],
+      "retryAfter": 0
+    },
+    "id": "http://www.shengxuxu.info",
+    "importWarnings": [],
+    "importedAt": 1792475778,
+    "ping": null,
+    "pinned": false,
+    "rating": 0,
+    "updated": false
+  },
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "[{\"title\":\"总点击\",\"url\":\"/top/allvisit.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"排行\",\"url\":\"/top/monthvisit.html\",\"style\":{\"layout_flexBasisPercent\":0.2,\"layout_flexGrow\":1}}]",
+  "header": "{\"User-Agent\": \"Mozilla/5.0 (Linux; Android 9) Mobile Safari/537.36\"}",
+  "html": "",
+  "jsLib": "",
+  "lastUpdateTime": 1789964083566,
+  "loginAction": "",
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "",
+  "mainJs": "",
+  "maxBatchSize": 0,
+  "respondTime": 6063,
+  "ruleBookInfo": {
+    "author": "@get:{a}",
+    "coverUrl": "@get:{c}",
+    "init": "@put:{n:\"[property$=book_name]@content\",\n\ta:\"[property$=author]@content\",\nk:\"[property~=category|status|update_time]@content\",\nl:\"[property$=lastest_chapter_name]@content\",\ni:\"[property$=description]@content\",\nc:\"[property$=image]@content\"}",
+    "intro": "@get:{i}",
+    "kind": "@get:{k}",
+    "lastChapter": "@get:{l}",
+    "name": "@get:{n}"
+  },
+  "ruleContent": {
+    "content": ".content@html",
+    "nextContentUrl": "text.下一页@href"
+  },
+  "ruleExplore": {
+    "author": ".s4@text",
+    "bookList": ".librarylist li",
+    "bookUrl": "a:nth-child(1)@href",
+    "kind": ".info span:nth-child(2)@text",
+    "lastChapter": "a:nth-child(1)@text",
+    "name": ".info span:nth-child(1)@text ##.*《|》.*"
+  },
+  "ruleSearch": {
+    "author": ".info span:nth-child(2)@text",
+    "bookList": ".librarylist li ",
+    "bookUrl": "a:nth-child(1)@href",
+    "kind": ".info span:nth-child(3) a@text",
+    "lastChapter": ".last@text",
+    "name": ".info span:nth-child(1)@text ##.*《|》.*"
+  },
+  "ruleToc": {
+    "chapterList": ".dirlist@li",
+    "chapterName": "a@text",
+    "chapterUrl": "a@href",
+    "nextTocUrl": "option@value||text.下一页@href"
+  },
+  "searchUrl": "/search.html?/,{\n  \"body\": \"searchkey={{key}}\",\n  \"method\": \"POST\"\n}",
+  "variableComment": "",
+  "weight": 63
+}

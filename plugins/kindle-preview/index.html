@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>真机预览</title>
+<link rel="stylesheet" href="preview.css">
+</head>
+<body>
+<header class="bar">
+  <strong id="book-title">真机预览</strong>
+  <label class="pick"><span class="sr">机型</span><select id="device" aria-label="机型"></select></label>
+  <label class="pick"><span class="sr">章节</span><select id="chapter" aria-label="章节"></select></label>
+  <span id="measure" class="tag"></span>
+  <span class="grow"></span>
+  <span id="status" role="status"></span>
+</header>
+<main>
+  <section id="stage">
+    <div id="device-body">
+      <div id="grip-buttons" hidden><i></i><i></i></div>
+      <div id="press-marks" hidden><i></i><i></i><i></i><i></i></div>
+      <div id="logo" hidden>kindle</div>
+      <div id="screen">
+        <div id="viewport">
+          <div id="page-head"></div>
+          <iframe id="book" title="本书内容"></iframe>
+          <div id="page-foot"><span id="page-no"></span><span id="progress"></span></div>
+          <div id="note-pop" hidden role="dialog" aria-label="注释"><div id="note-body"></div><button id="note-close" aria-label="关闭注释">×</button></div>
+        </div>
+        <button id="tap-left" class="tap" aria-label="左侧翻页"></button>
+        <button id="tap-right" class="tap" aria-label="右侧翻页"></button>
+      </div>
+    </div>
+    <div id="dims"></div>
+    <nav>
+      <button id="prev">‹ 上一页</button>
+      <span id="hint"></span>
+      <button id="next">下一页 ›</button>
+    </nav>
+  </section>
+  <aside>
+    <h2>本书排版 <span id="dirty"></span></h2>
+    <div class="label">书写方向</div>
+    <div class="seg" data-key="writing_mode" data-options="horizontal:横排,vertical:竖排"></div>
+    <div class="label">竖排中数字横排</div>
+    <div class="seg" data-key="vertical_digits" data-number="1" data-options="0:不横排,1:1 位,2:2 位,3:3 位,4:4 位"></div>
+    <div class="label">字号 · 行距</div>
+    <div class="row">
+      <label class="num"><input data-key="font_size" type="number" step="1" min="1"><span id="font-unit"></span></label>
+      <label class="num"><input data-key="line_height" type="number" step="0.05" min="0.5"><span>倍</span></label>
+    </div>
+    <div class="label">段首全角空格 · 段后间距</div>
+    <div class="row">
+      <label class="num"><input data-key="fullwidth_indent" type="number" step="1" min="0" max="8"><span>字</span></label>
+      <label class="num"><input data-key="paragraph_spacing" type="number" step="0.1" min="0"><span>em</span></label>
+    </div>
+    <div class="label">对齐</div>
+    <div class="seg" data-key="text_alignment" data-options="start:随方向,justify:两端,left:左,center:居中,right:右"></div>
+    <div class="label">章节标题</div>
+    <select data-key="heading_style" aria-label="章节标题样式">
+      <option value="classic">EasyPub 经典</option>
+      <option value="amazon">亚马逊官方</option>
+      <option value="publisher">出版社</option>
+      <option value="two_line">精排两行</option>
+      <option value="light_novel">日系轻小说</option>
+    </select>
+    <div id="chapter-head" hidden>
+      <div class="label">章首图 · 用于</div>
+      <div class="seg" data-key="chapter_head_scope" data-options="chapter:每章,volume:每卷,both:卷和章"></div>
+      <div class="label">章首图 · 宽度</div>
+      <div class="seg" data-key="chapter_head_width" data-options="third:三分之一,half:一半,full:满宽"></div>
+    </div>
+    <div id="chapter-style" hidden>
+      <div class="label">章节样式包 · <span id="chapter-style-name"></span></div>
+      <div class="seg" data-key="chapter_style_on" data-options="on:使用,off:不使用"></div>
+      <div class="label">卷页边框</div>
+      <div class="seg" data-key="chapter_style_volume_frame" data-options="none:无,single:单线,double:双线"></div>
+    </div>
+    <details id="blocks">
+      <summary>段落与识别</summary>
+      <div class="label">章首段落</div>
+      <div class="seg" data-key="first_paragraph_style" data-options="normal:同正文,no_indent:首段不缩进,large_initial:首字放大"></div>
+      <div class="label">场景分隔</div>
+      <div class="seg" data-key="scene_break_style" data-options="off:不识别,keep:原符号,stars:＊＊＊,diamonds:◇◇◇,line:细线"></div>
+      <div class="label">系统提示</div>
+      <div class="seg" data-key="system_block_style" data-options="off:不识别,box:加框,indent:缩进,styled:分类样式"></div>
+      <div id="system-presets" hidden>
+        <div class="label">单行提示</div>
+        <div class="seg" data-key="system_note_preset" data-options="quiet:细线楷体,side:左侧竖线,ruled:上下细线,kai:楷体缩进,tint:浅灰底,bar:提示条,center:居中强调,custom:自定义"></div>
+        <div class="label">多行面板</div>
+        <div class="seg" data-key="system_panel_preset" data-options="quiet:细线楷体,side:左侧竖线,ruled:上下细线,kai:楷体缩进,tint:浅灰底,titled:标题面板,rules:上下双线,custom:自定义"></div>
+      </div>
+      <div class="label">诗词</div>
+      <div class="seg" data-key="verse_block_style" data-options="off:不识别,center:居中,indent:缩进"></div>
+      <div class="label">生僻字注音</div>
+      <div class="seg" data-key="rare_char_ruby" data-options="off:不标,chapter:每章首次,book:全书首次,every:每次"></div>
+      <div class="label">生僻字范围</div>
+      <div class="seg" data-key="rare_char_scope" data-options="outside:表外字,level3:含三级字"></div>
+      <div class="label">聊天记录</div>
+      <div class="seg" data-key="chat_block_style" data-options="off:不识别,window:群聊窗口,script:剧本对白,channel:通讯频道"></div>
+      <div class="label">书信</div>
+      <div class="seg" data-key="letter_block_style" data-options="plain:普通,ruled:信笺格线"></div>
+      <div class="label">场景识别</div>
+      <div class="seg" data-key="inset_detect" data-options="off:不识别,on:识别"></div>
+      <div class="label">场景字体</div>
+      <div class="seg" data-key="inset_font" data-options="kai:楷体,body:正文字体"></div>
+      <div class="label">弹出注释（自动识别）</div>
+      <div class="seg" data-key="note_style" data-options="off:关闭,popup:弹出注释"></div>
+    </details>
+    <div class="row actions">
+      <button id="apply" class="primary" disabled>写回本书</button>
+      <button id="revert" disabled>还原</button>
+    </div>
+    <hr>
+    <h2>Kindle 阅读器 <span class="muted">只影响预览</span></h2>
+    <div class="label">字号</div>
+    <div class="row">
+      <div class="seg static"><button id="level-down" aria-label="字号减小">‹</button><span id="level" class="on"></span><button id="level-up" aria-label="字号增大">›</button></div>
+    </div>
+    <div class="label">页边距</div>
+    <div class="seg" data-reader="margin" data-options="narrow:窄,medium:中,wide:宽"></div>
+    <div class="label">行距</div>
+    <div class="seg" data-reader="spacing" data-options="small:小,medium:中,large:大"></div>
+    <div class="label">字体</div>
+    <select id="font" aria-label="字体">
+      <option value="publisher">出版商字体</option>
+      <option value="song">宋体（近似）</option>
+      <option value="hei">黑体（近似）</option>
+      <option value="kai">楷体（近似）</option>
+      <option value="yuan">圆体（近似）</option>
+    </select>
+    <div class="row font-tools">
+      <button id="font-import" title="可一次选多个 TTF / OTF / TTC / WOFF 字体文件，只给预览用；Kindle 自带的宋体、黑体、楷体、圆体会自动对应到同名选项">导入字体…</button>
+      <button id="font-remove" hidden>移除这个字体</button>
+      <input id="font-file" type="file" accept=".ttf,.otf,.ttc,.woff,.woff2" multiple hidden>
+    </div>
+    <p id="font-hint" class="note font-hint" hidden title="“近似”字体是电脑自带的字体，字形和上下留白与 Kindle 不同。导入 Kindle 自带的字体文件（可一次全选，常规和粗体都选上）后会自动对应到宋体、黑体等选项；书里嵌入了字体时选“出版商字体”。">近似字体，换行和分页与真机有偏差；导入 Kindle 字体后可对上。</p>
+  </aside>
+</main>
+<div id="gone" hidden><div>排版页已关闭或程序已退出，预览连接已断开。<br>请回到排版页重新打开真机预览。</div></div>
+<script src="preview.js"></script>
+</body>
+</html>
