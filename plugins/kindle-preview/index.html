@@ -11,7 +11,6 @@
   <strong id="book-title">真机预览</strong>
   <label class="pick"><span class="sr">机型</span><select id="device" aria-label="机型"></select></label>
   <label class="pick"><span class="sr">章节</span><select id="chapter" aria-label="章节"></select></label>
-  <span id="measure" class="tag"></span>
   <span class="grow"></span>
   <span id="status" role="status"></span>
 </header>
@@ -125,17 +124,16 @@
     <div class="label">字体</div>
     <select id="font" aria-label="字体">
       <option value="publisher">出版商字体</option>
-      <option value="song">宋体（近似）</option>
-      <option value="hei">黑体（近似）</option>
-      <option value="kai">楷体（近似）</option>
-      <option value="yuan">圆体（近似）</option>
+      <option value="song">宋体</option>
+      <option value="hei">黑体</option>
+      <option value="kai">楷体</option>
+      <option value="yuan">圆体</option>
     </select>
     <div class="row font-tools">
       <button id="font-import" title="可一次选多个 TTF / OTF / TTC / WOFF 字体文件，只给预览用；Kindle 自带的宋体、黑体、楷体、圆体会自动对应到同名选项">导入字体…</button>
       <button id="font-remove" hidden>移除这个字体</button>
       <input id="font-file" type="file" accept=".ttf,.otf,.ttc,.woff,.woff2" multiple hidden>
     </div>
-    <p id="font-hint" class="note font-hint" hidden title="“近似”字体是电脑自带的字体，字形和上下留白与 Kindle 不同。导入 Kindle 自带的字体文件（可一次全选，常规和粗体都选上）后会自动对应到宋体、黑体等选项；书里嵌入了字体时选“出版商字体”。">近似字体，换行和分页与真机有偏差；导入 Kindle 字体后可对上。</p>
   </aside>
 </main>
 <div id="gone" hidden><div>排版页已关闭或程序已退出，预览连接已断开。<br>请回到排版页重新打开真机预览。</div></div>

@@ -458,7 +458,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 预览设置收成一行（LAY-098）：章节、机型、阅读器设置（弹出面板）、实测 / 推算、实际生成预览。
+          // 预览设置收成一行（LAY-098）：章节、机型、阅读器设置（弹出面板）、实际生成预览。
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -542,15 +542,6 @@ extension _LayoutPreviewSection on _LayoutPageState {
                 ),
               ),
               readerMenu(metrics),
-              Tooltip(
-                message: metrics.measured
-                    ? '与真机照片或你的校准一致'
-                    : '${metrics.note}。固件资源不等于真机分页验收；断行与页脚位置仍是近似模型，可“按真机校准”。',
-                child: DeskTag(
-                  metrics.note,
-                  metrics.measured ? Tone.ok : Tone.warn,
-                ),
-              ),
               if (session is LayoutDraftPreviewSession)
                 iconOnlyPreview
                     ? IconButton(
@@ -587,7 +578,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
                             : generatePreview,
                       ),
               DeskHelp(
-                '近似分页，以真机为准；不渲染附加 CSS，插图按版心宽度近似画出。实际生成预览在浏览器打开。'
+                '小预览不显示附加 CSS；插图按版心宽度显示。实际生成预览在浏览器打开。'
                 '${bodyPartial ? '\n本章较长，只预览开头一部分。' : ''}',
               ),
             ],
@@ -629,7 +620,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
               children: [
                 Expanded(
                   child: Text(
-                    '竖排书：这里按横排近似显示，竖排、注音与着重号请在真机预览中查看。',
+                    '竖排书：这里按横排显示，竖排、注音与着重号请在真机预览中查看。',
                     style: ui(12, c: d.ink2),
                   ),
                 ),
@@ -964,11 +955,6 @@ extension _LayoutPreviewSection on _LayoutPageState {
                 ),
                 Divider(height: 1, color: d.line),
                 const SizedBox(height: 10),
-                Text(
-                  metrics.measured ? '当前设置与真机照片或你的校准一致。' : '只有 KPW5 的 4、8、12 档（窄边距、中行距、书内 110% / 1.2）是实测，其余按 Kindle 固件的字号表与页边距推算。',
-                  style: ui(11.5, c: d.ink2, h: 1.5),
-                ),
-                const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: DeskButton(

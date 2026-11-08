@@ -55,11 +55,6 @@ function readerFont() {
   if (user) return '"EPUser-' + user.id + '", serif';
   return FACE_NAMES[S.reader.font] ? faceFont(S.reader.font) : FONTS[S.reader.font];
 }
-// 当前预览是否用上了与真机相同的字体：导入的字体，或导入了对应的 Kindle 字体。
-function exactFont() {
-  if (userFont()) return true;
-  return !!kindleFace(S.reader.font === 'publisher' ? 'song' : S.reader.font);
-}
 const GAP = 48;
 
 const $ = (id) => document.getElementById(id);
@@ -828,12 +823,6 @@ async function refreshMetrics() {
     // 出版商字体在真机上多半落到自带宋体（书里写的雅黑等 Kindle 没有），按衬线算（V123）。
     serif: !['hei', 'yuan'].includes(S.reader.font), values: S.draft,
   });
-  $('measure').textContent = S.metrics.note;
-  $('measure').title = S.metrics.measured
-    ? '与真机截图或校准一致'
-    : (S.device && S.device.id === 'kpw5'
-      ? 'KPW5 按真机规则计算；这一档没有逐张实测，每行字数可能差一字'
-      : S.metrics.note + '。参数来源以当前标注为准；断行与页脚位置仍是近似模型，未经本机真机核对。');
   $('level').textContent = S.reader.level;
 }
 
@@ -908,10 +897,6 @@ function syncControls() {
   const face = FACE_NAMES[S.reader.font] && kindleFace(S.reader.font);
   $('font-remove').hidden = !userFont() && !face;
   $('font-remove').textContent = face ? '移除导入的' + FACE_NAMES[S.reader.font] : '移除这个字体';
-  // 没用上与真机相同的字体时提示近似字体不准（V127）。
-  // 只在用的是近似字体时提示（V134）。
-  $('font-hint').hidden = exactFont();
-  $('font-hint').classList.toggle('warn', !exactFont());
   $('dirty').textContent = dirty.size ? dirty.size + ' 项未写回' : '';
   $('apply').disabled = dirty.size === 0;
   $('revert').disabled = dirty.size === 0;
@@ -1024,7 +1009,7 @@ function setupControls() {
     let result = {};
     for (const f of gone) result = await api('font-remove', { id: f.id });
     fillFonts(result.fonts || []);
-    status(user ? '已移除字体“' + user.name + '”。' : '已移除导入的' + face + '，改用电脑上的近似字体。');
+    status(user ? '已移除字体“' + user.name + '”。' : '已移除导入的' + face + '，改用系统字体。');
     await chooseFont(user ? 'publisher' : S.reader.font);
   });
   $('device').addEventListener('change', async () => {
@@ -1114,7 +1099,7 @@ function fillFonts(fonts) {
   // 导入了对应 Kindle 字体的选项标成“Kindle 字体”，没导入的仍是电脑上的近似字体（V128）。
   for (const [face, label] of Object.entries(FACE_NAMES)) {
     const option = select.querySelector('option[value="' + face + '"]');
-    if (option) option.textContent = label + (kindleFace(face) ? '（Kindle 字体）' : '（近似）');
+    if (option) option.textContent = label + (kindleFace(face) ? '（Kindle 字体）' : '');
   }
   for (const f of USER_FONTS) {
     if (f.kindle) continue;

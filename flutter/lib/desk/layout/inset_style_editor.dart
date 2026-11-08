@@ -208,7 +208,7 @@ class _EditorState extends State<_Editor> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('预览（近似，以真机预览为准）', style: ui(11.5, c: d.ink3)),
+                Text('预览', style: ui(11.5, c: d.ink3)),
                 const SizedBox(height: 6),
                 InsetStylePreview(scene: widget.scene, style: style),
               ],

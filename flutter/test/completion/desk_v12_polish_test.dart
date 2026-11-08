@@ -410,8 +410,8 @@ void main() {
       await until(t, () => settings.evaluate().isNotEmpty);
       await idle(t);
       await t.pumpAndSettle();
-      // 默认机型 KPW6 已取本机固件资源，仍明确不等于真机核对。
-      expect(find.text('按 KPW6 固件 5.20.1 · 未经真机核对'), findsOneWidget);
+      // 数据来源保留在模型中，不再作为界面状态标签。
+      expect(find.text('按 KPW6 固件 5.20.1 · 未经真机核对'), findsNothing);
       // V13：阅读器设置收进弹出面板，先打开面板再校准。
       await t.tap(settings);
       await t.pumpAndSettle();
@@ -421,7 +421,25 @@ void main() {
       await t.enterText(find.byKey(const ValueKey('calibrate-page')), '13');
       await t.tap(find.byKey(const ValueKey('calibrate-save')));
       await t.pumpAndSettle();
-      expect(find.text('按真机校准'), findsOneWidget);
+      expect(find.text('按真机校准'), findsNothing);
+      await t.tap(settings);
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('layout-reader-calibrate')));
+      await t.pumpAndSettle();
+      expect(
+        t
+            .widget<TextField>(find.byKey(const ValueKey('calibrate-line')))
+            .controller!
+            .text,
+        '18',
+      );
+      expect(
+        t
+            .widget<TextField>(find.byKey(const ValueKey('calibrate-page')))
+            .controller!
+            .text,
+        '13',
+      );
       expect(t.takeException(), isNull);
       await t.pumpWidget(const SizedBox());
     });
