@@ -1584,11 +1584,12 @@ class _ConversionPageState extends State<ConversionPage> {
                     ? books.where((b) => selected.contains(b.id)).length
                     : books.length;
                 final natural = (rows * 44.0).clamp(44.0, double.infinity);
-                // 宽屏：列表占去格式卡片后剩余的高度（至少 4 行）；窄屏保持原高度上限。
+                // 宽屏：左栏只放书稿和本次输出，列表占去输出汇总后剩余的高度（至少 4 行）；
+                // 格式、输出位置、转换前检查在右栏从上到下排。窄屏保持原顺序和高度上限。
                 final listHeight = wide
                     ? natural.clamp(
                         44.0,
-                        (bounds.maxHeight - 28 - 120 - 12 - 330 * scale).clamp(
+                        (bounds.maxHeight - 28 - 70 - 12 - 170 * scale).clamp(
                           176.0,
                           double.infinity,
                         ),
@@ -1597,10 +1598,10 @@ class _ConversionPageState extends State<ConversionPage> {
                 final left = [
                   booksCard(books, busy, listHeight: listHeight),
                   const SizedBox(height: 12),
-                  formatsCard(busy),
+                  wide ? summaryCard(books) : formatsCard(busy),
                 ];
                 final right = [
-                  summaryCard(books),
+                  wide ? formatsCard(busy) : summaryCard(books),
                   const SizedBox(height: 12),
                   outputCard(busy),
                   const SizedBox(height: 12),

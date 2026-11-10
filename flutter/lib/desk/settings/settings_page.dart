@@ -906,6 +906,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // 分区只留标题；说明一律收进各组标题旁的“?”（SET-068）。
+  static const settingsWidth = 720.0;
+
   Widget section(String title, List<Widget> children) {
     final d = context.desk;
     return Column(
@@ -921,9 +923,16 @@ class _SettingsPageState extends State<SettingsPage> {
             controller: widget.performanceScrollController,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 4, 24, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: children,
+              // 内容限宽靠左：窗口再宽，开关和选择框也紧跟文字。
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: settingsWidth),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: children,
+                  ),
+                ),
               ),
             ),
           ),
@@ -1032,6 +1041,26 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// 下拉选项一行：名称在左，选择框定宽靠右（不再横跨整页）。
+  Widget choiceRow(String label, Widget choice) {
+    final d = context.desk;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: d.line)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label, style: ui(13, c: d.ink)),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(width: 240, child: choice),
+        ],
       ),
     );
   }
@@ -1145,7 +1174,7 @@ class _SettingsPageState extends State<SettingsPage> {
             '宣纸：浅色（默认）。夜墨：深色，夜里用不刺眼。高对比：白底纯黑字、线条加深，给看不清浅灰的人用，固定用黑色强调。'
             '跟随系统：按 Windows 的深浅色自动在宣纸与夜墨之间切换。只影响软件界面，不影响生成的书。',
           ),
-          const SizedBox(width: 16),
+          const Spacer(),
           KeyedSubtree(
             key: const ValueKey('settings-theme'),
             child: DeskSegmented<String>(
@@ -1218,22 +1247,24 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
       const SizedBox(height: 12),
-      DeskChoice<double>(
-        key: ValueKey(state.configuration['ui_scale']),
-        initialValue:
-            (state.configuration['ui_scale'] as num?)?.toDouble() ?? 1,
-        decoration: const InputDecoration(labelText: '应用文字比例'),
-        items: const [
-          DropdownMenuItem(value: 1, child: Text('标准 · 100%')),
-          DropdownMenuItem(value: 1.15, child: Text('较大 · 115%')),
-          DropdownMenuItem(value: 1.3, child: Text('大 · 130%')),
-          DropdownMenuItem(value: 1.5, child: Text('特大 · 150%')),
-        ],
-        onChanged: saving
-            ? null
-            : (v) {
-                if (v != null) save({'ui_scale': v});
-              },
+      choiceRow(
+        '应用文字比例',
+        DeskChoice<double>(
+          key: ValueKey(state.configuration['ui_scale']),
+          initialValue:
+              (state.configuration['ui_scale'] as num?)?.toDouble() ?? 1,
+          items: const [
+            DropdownMenuItem(value: 1, child: Text('标准 · 100%')),
+            DropdownMenuItem(value: 1.15, child: Text('较大 · 115%')),
+            DropdownMenuItem(value: 1.3, child: Text('大 · 130%')),
+            DropdownMenuItem(value: 1.5, child: Text('特大 · 150%')),
+          ],
+          onChanged: saving
+              ? null
+              : (v) {
+                  if (v != null) save({'ui_scale': v});
+                },
+        ),
       ),
       toggle(
         state,
@@ -1242,18 +1273,20 @@ class _SettingsPageState extends State<SettingsPage> {
         'ui_follow_system_scale',
         state.configuration['ui_follow_system_scale'] != false,
       ),
-      DeskChoice<String>(
-        value: state.configuration['ui_density'] as String? ?? 'standard',
-        decoration: const InputDecoration(labelText: '控件密度'),
-        items: const [
-          DropdownMenuItem(value: 'standard', child: Text('标准')),
-          DropdownMenuItem(value: 'compact', child: Text('紧凑')),
-        ],
-        onChanged: saving
-            ? null
-            : (value) {
-                if (value != null) save({'ui_density': value});
-              },
+      choiceRow(
+        '控件密度',
+        DeskChoice<String>(
+          value: state.configuration['ui_density'] as String? ?? 'standard',
+          items: const [
+            DropdownMenuItem(value: 'standard', child: Text('标准')),
+            DropdownMenuItem(value: 'compact', child: Text('紧凑')),
+          ],
+          onChanged: saving
+              ? null
+              : (value) {
+                  if (value != null) save({'ui_density': value});
+                },
+        ),
       ),
       toggle(
         state,
@@ -1421,21 +1454,25 @@ class _SettingsPageState extends State<SettingsPage> {
         saving: saving,
         save: save,
       ),
-      DeskChoice<String>(
-        key: ValueKey(
-          'language-${state.configuration['default_language']}-$saving',
+      choiceRow(
+        '缺少语言信息时使用',
+        DeskChoice<String>(
+          key: ValueKey(
+            'language-${state.configuration['default_language']}-$saving',
+          ),
+          isExpanded: true,
+          initialValue:
+              state.configuration['default_language'] as String? ?? 'zh-CN',
+          items: const [
+            DropdownMenuItem(value: 'zh-CN', child: Text('简体中文')),
+            DropdownMenuItem(value: 'zh-TW', child: Text('繁体中文')),
+            DropdownMenuItem(value: 'en', child: Text('英语')),
+            DropdownMenuItem(value: 'ja', child: Text('日语')),
+          ],
+          onChanged: saving
+              ? null
+              : (value) => save({'default_language': value}),
         ),
-        isExpanded: true,
-        initialValue:
-            state.configuration['default_language'] as String? ?? 'zh-CN',
-        decoration: const InputDecoration(labelText: '缺少语言信息时使用'),
-        items: const [
-          DropdownMenuItem(value: 'zh-CN', child: Text('简体中文')),
-          DropdownMenuItem(value: 'zh-TW', child: Text('繁体中文')),
-          DropdownMenuItem(value: 'en', child: Text('英语')),
-          DropdownMenuItem(value: 'ja', child: Text('日语')),
-        ],
-        onChanged: saving ? null : (value) => save({'default_language': value}),
       ),
     ]),
     2 => section('成品与输出', [
@@ -1542,64 +1579,71 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
       const SizedBox(height: 12),
-      DeskFormGrid(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          DeskChoice<String>(
-            key: ValueKey(
-              'collision-${state.configuration['output_collision_policy']}-$saving',
+          choiceRow(
+            '同名文件处理',
+            DeskChoice<String>(
+              key: ValueKey(
+                'collision-${state.configuration['output_collision_policy']}-$saving',
+              ),
+              isExpanded: true,
+              initialValue:
+                  (state.configuration['output_collision_policy'] as String?) ??
+                  'preserve',
+              items: const [
+                DropdownMenuItem(value: 'preserve', child: Text('保留并编号')),
+                DropdownMenuItem(value: 'ask', child: Text('每次询问')),
+              ],
+              onChanged: saving
+                  ? null
+                  : (value) => value == null
+                        ? null
+                        : save({'output_collision_policy': value}),
             ),
-            isExpanded: true,
-            initialValue:
-                (state.configuration['output_collision_policy'] as String?) ??
-                'preserve',
-            decoration: const InputDecoration(labelText: '同名文件处理'),
-            items: const [
-              DropdownMenuItem(value: 'preserve', child: Text('保留并编号')),
-              DropdownMenuItem(value: 'ask', child: Text('每次询问')),
-            ],
-            onChanged: saving
-                ? null
-                : (value) => value == null
-                      ? null
-                      : save({'output_collision_policy': value}),
           ),
-          DeskChoice<String>(
-            key: ValueKey(
-              'naming-${state.configuration['output_naming']}-$saving',
+          choiceRow(
+            '命名方式',
+            DeskChoice<String>(
+              key: ValueKey(
+                'naming-${state.configuration['output_naming']}-$saving',
+              ),
+              isExpanded: true,
+              initialValue:
+                  (state.configuration['output_naming'] as String?) ?? 'title',
+              items: const [
+                DropdownMenuItem(value: 'title_author', child: Text('书名·作者')),
+                DropdownMenuItem(value: 'title', child: Text('仅书名')),
+                DropdownMenuItem(value: 'filename', child: Text('原文件名')),
+              ],
+              onChanged: saving
+                  ? null
+                  : (value) =>
+                        value == null ? null : save({'output_naming': value}),
             ),
-            isExpanded: true,
-            initialValue:
-                (state.configuration['output_naming'] as String?) ?? 'title',
-            decoration: const InputDecoration(labelText: '命名方式'),
-            items: const [
-              DropdownMenuItem(value: 'title_author', child: Text('书名·作者')),
-              DropdownMenuItem(value: 'title', child: Text('仅书名')),
-              DropdownMenuItem(value: 'filename', child: Text('原文件名')),
-            ],
-            onChanged: saving
-                ? null
-                : (value) =>
-                      value == null ? null : save({'output_naming': value}),
           ),
           // EPUB 的默认转换路径（V27，OUT-080）；转换页每本书还可以单独切换。
-          DeskChoice<String>(
-            key: ValueKey(
-              'epub-mode-${state.configuration['epub_conversion_mode']}-$saving',
+          choiceRow(
+            'EPUB 原稿转换',
+            DeskChoice<String>(
+              key: ValueKey(
+                'epub-mode-${state.configuration['epub_conversion_mode']}-$saving',
+              ),
+              isExpanded: true,
+              initialValue:
+                  (state.configuration['epub_conversion_mode'] as String?) ??
+                  'layout',
+              items: const [
+                DropdownMenuItem(value: 'layout', child: Text('使用软件排版')),
+                DropdownMenuItem(value: 'original', child: Text('保持原格式')),
+              ],
+              onChanged: saving
+                  ? null
+                  : (value) => value == null
+                        ? null
+                        : save({'epub_conversion_mode': value}),
             ),
-            isExpanded: true,
-            initialValue:
-                (state.configuration['epub_conversion_mode'] as String?) ??
-                'layout',
-            decoration: const InputDecoration(labelText: 'EPUB 原稿转换'),
-            items: const [
-              DropdownMenuItem(value: 'layout', child: Text('使用软件排版')),
-              DropdownMenuItem(value: 'original', child: Text('保持原格式')),
-            ],
-            onChanged: saving
-                ? null
-                : (value) => value == null
-                      ? null
-                      : save({'epub_conversion_mode': value}),
           ),
         ],
       ),
@@ -1621,24 +1665,24 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       const Divider(height: 24),
       const SizedBox(height: 12),
-      DeskChoice<String>(
-        key: ValueKey(
-          'kindle-content-type-${state.configuration['kindle_content_type']}-$saving',
+      choiceRow(
+        'Kindle 内容类型（仅 KFX / AZW3）',
+        DeskChoice<String>(
+          key: ValueKey(
+            'kindle-content-type-${state.configuration['kindle_content_type']}-$saving',
+          ),
+          isExpanded: true,
+          initialValue:
+              state.configuration['kindle_content_type'] as String? ?? 'EBOK',
+          items: const [
+            DropdownMenuItem(value: 'EBOK', child: Text('书籍（EBOK，默认）')),
+            DropdownMenuItem(value: 'PDOC', child: Text('个人文档（PDOC）')),
+          ],
+          onChanged: saving
+              ? null
+              : (value) =>
+                    value == null ? null : save({'kindle_content_type': value}),
         ),
-        isExpanded: true,
-        initialValue:
-            state.configuration['kindle_content_type'] as String? ?? 'EBOK',
-        decoration: const InputDecoration(
-          labelText: 'Kindle 内容类型（仅 KFX / AZW3）',
-        ),
-        items: const [
-          DropdownMenuItem(value: 'EBOK', child: Text('书籍（EBOK，默认）')),
-          DropdownMenuItem(value: 'PDOC', child: Text('个人文档（PDOC）')),
-        ],
-        onChanged: saving
-            ? null
-            : (value) =>
-                  value == null ? null : save({'kindle_content_type': value}),
       ),
       const SizedBox(height: 8),
       const DeskText(

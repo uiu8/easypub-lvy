@@ -215,8 +215,6 @@ class _Workspace extends StatelessWidget {
                               ),
                             ),
                           ),
-                        if (_PageSwitcher.groupFor(title) case final group?)
-                          _PageSwitcher(group: group, current: title!),
                         Expanded(
                           // 内容区贴边（V135）：不再四周留白、套圆角框；与顶栏、左栏只隔一条淡线，
                           // 页面最外层的卡片自动拉平（DeskEdgeScope）。
@@ -229,7 +227,17 @@ class _Workspace extends StatelessWidget {
                               ),
                             ),
                             child: DeskEdgeScope(
-                              child: _AccessibleCanvas(child: child),
+                              // 页内页签并进页头标题行（原来在页面上方单独占一行）。
+                              child: switch (_PageSwitcher.groupFor(title)) {
+                                final group? => DeskPageTabsScope(
+                                  tabs: _PageSwitcher(
+                                    group: group,
+                                    current: title!,
+                                  ),
+                                  child: _AccessibleCanvas(child: child),
+                                ),
+                                null => _AccessibleCanvas(child: child),
+                              },
                             ),
                           ),
                         ),
@@ -491,7 +499,8 @@ class _AccessibleCanvas extends StatelessWidget {
   Widget build(BuildContext context) => child;
 }
 
-/// 合并页面顶部的窄切换条（V109）：书籍信息 | 图片与资源；任务 | 转换历史 | 修改记录。
+/// 合并页面的页内页签（V109）：书籍信息 | 图片与资源；任务 | 转换历史 | 修改记录。
+/// 显示在页头标题的位置（DeskPageTitle），当前页签加底色。
 class _PageSwitcher extends StatelessWidget {
   const _PageSwitcher({required this.group, required this.current});
   final List<(String label, String title, String Function(GoRouterState) route)>
@@ -525,42 +534,38 @@ class _PageSwitcher extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = context.desk;
     final state = GoRouterState.of(context);
-    return Container(
+    return Row(
       key: const ValueKey('page-switcher'),
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: d.line)),
-      ),
-      child: Row(
-        children: [
-          for (final (label, title, route) in group)
-            InkWell(
-              key: ValueKey(('page-switcher', title)),
-              onTap: title == current ? null : () => context.go(route(state)),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: title == current ? d.accent : Colors.transparent,
-                      width: 2,
-                    ),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final (label, title, route) in group)
+          Padding(
+            padding: const EdgeInsets.only(right: 2),
+            child: Material(
+              color: title == current ? d.accentSoft : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              child: InkWell(
+                key: ValueKey(('page-switcher', title)),
+                borderRadius: BorderRadius.circular(8),
+                onTap: title == current ? null : () => context.go(route(state)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
                   ),
-                ),
-                child: Text(
-                  label,
-                  style: ui(
-                    13,
-                    w: title == current ? 620 : 480,
-                    c: title == current ? d.ink : d.ink2,
+                  child: Text(
+                    label,
+                    style: ui(
+                      title == current ? 15 : 14,
+                      w: title == current ? 650 : 480,
+                      c: title == current ? d.ink : d.ink2,
+                    ),
                   ),
                 ),
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }

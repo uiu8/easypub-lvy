@@ -113,11 +113,13 @@ void main() {
         of: find.byType(DeskPageHeader),
         matching: find.text('转换历史'),
       ),
-      findsNothing,
+      // 页签并进了页头标题行：页头里只有页签这一个“转换历史”，没有重复的按钮。
+      findsOneWidget,
     );
     await t.tap(find.byKey(const ValueKey(('page-switcher', '记录'))));
     await settle();
-    expect(find.text('变更记录'), findsWidgets);
+    expect(router.state.uri.path, '/history');
+    expect(find.byKey(const ValueKey(('page-switcher', '记录'))), findsOneWidget);
     // 页面不在左栏时用 Ctrl+K 或地址仍能打开：概览页本身照常可用。
     router.go('/books/$book/overview');
     await settle();

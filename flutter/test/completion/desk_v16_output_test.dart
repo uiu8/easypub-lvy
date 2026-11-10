@@ -202,7 +202,8 @@ void main() {
     again.go('/tasks');
     await settle();
     // 标题与筛选（TASK-024）：只显示有数量的分类，空闲时没有“停止队列”。
-    expect(find.text('转换任务'), findsWidgets);
+    // 页头标题位置是页内页签（任务 | 转换历史 | 修改记录），不再另有“转换任务”标题。
+    expect(find.byKey(const ValueKey(('page-switcher', '任务'))), findsOneWidget);
     expect(find.textContaining('失败 0'), findsNothing);
     expect(find.text('停止队列'), findsNothing);
     expect(find.text('新建转换'), findsOneWidget);

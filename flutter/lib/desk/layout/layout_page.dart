@@ -939,8 +939,7 @@ class _LayoutPageState extends State<LayoutPage> {
     )..layout();
     final text = painter.width;
     painter.dispose();
-    final unit = key != 'fullwidth_indent';
-    return text + (_indentHelp.containsKey(key) ? 26 : 0) + (unit ? 84 : 0) + 8;
+    return text + (_indentHelp.containsKey(key) ? 26 : 0) + 8;
   }
 
   Future<void> discardInput() async {

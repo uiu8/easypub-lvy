@@ -82,7 +82,7 @@ import '../../infrastructure/native_catalog_picker.dart';
 import '../shell/page_menu.dart';
 import '../grain.dart';
 import '../tokens.dart';
-import '../page_parts.dart' show DeskEdgeScope;
+import '../page_parts.dart' show DeskEdgeScope, DeskPageTabsScope;
 import '../widgets.dart';
 import '../shell/command_palette.dart';
 import '../shell/rail.dart';

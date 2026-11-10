@@ -14,6 +14,7 @@ import '../../application/library_service.dart';
 import '../controls/controls.dart' show DeskButton, DeskChoice, DeskFilter;
 import '../dialogs.dart';
 import '../tokens.dart';
+import '../page_parts.dart' show DeskPageTitle;
 import '../widgets.dart';
 import 'tree_comparison.dart';
 
@@ -711,10 +712,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                 border: Border(bottom: BorderSide(color: d.line)),
               ),
               child: Row(
-                children: [
-                  Text('变更记录', style: ui(16, w: 650, c: d.ink)),
-                  const Spacer(),
-                ],
+                children: [const DeskPageTitle('变更记录'), const Spacer()],
               ),
             ),
             Expanded(

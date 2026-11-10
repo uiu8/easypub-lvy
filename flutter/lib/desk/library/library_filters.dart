@@ -120,9 +120,19 @@ extension _LibraryFilters on _LibraryPageState {
         (collectionService != null ? 40 : 0);
     final compactFilters = width - 46 < (200 + full) * scale;
     filtersCompact = compactFilters;
+    // 够宽时全选、排序、收藏夹、视图四个按钮带文字（约多占 200）；放不下就只留图标。
+    const labelRoom = 200;
+    final labeled =
+        !compactFilters && width - 46 >= (200 + full + labelRoom) * scale;
     final search = SizedBox(
       width:
-          (width - 40 - 6 - (compactFilters ? 184 + railToggle : full) * scale)
+          (width -
+                  40 -
+                  6 -
+                  (compactFilters
+                          ? 184 + railToggle
+                          : full + (labeled ? labelRoom : 0)) *
+                      scale)
               .clamp(compactFilters ? 140.0 : 200.0, 300.0),
       height: filterRowHeight(context),
       child: TextField(
@@ -183,20 +193,37 @@ extension _LibraryFilters on _LibraryPageState {
             FilterChip(
               label: const Text('仅看已勾选'),
               selected: onlySelected,
+              // 未选中时透明底加细线：原来的灰底像不可点。
+              backgroundColor: Colors.transparent,
+              side: BorderSide(color: onlySelected ? d.lineStrong : d.line),
               onSelected: (value) => changeFilter(checkedOnly: value),
             ),
           // 全选当前筛选结果（原在书架上方单独一行，移到这里后两栏封面顶端对齐）。
-          IconButton(
-            key: const ValueKey('library-select-visible'),
-            tooltip: allVisible ? '取消筛选结果勾选' : '全选筛选结果',
-            onPressed: visible.isEmpty
-                ? null
-                : () => checkMany(visible.map((b) => b.id), !allVisible),
-            icon: Icon(
-              allVisible ? Icons.deselect_rounded : Icons.select_all_rounded,
-              color: d.ink2,
+          if (labeled)
+            DeskButton(
+              allVisible ? '取消全选' : '全选',
+              key: const ValueKey('library-select-visible'),
+              quiet: true,
+              tooltip: allVisible ? '取消筛选结果勾选' : '全选筛选结果',
+              icon: allVisible
+                  ? Icons.deselect_rounded
+                  : Icons.select_all_rounded,
+              onPressed: visible.isEmpty
+                  ? null
+                  : () => checkMany(visible.map((b) => b.id), !allVisible),
+            )
+          else
+            IconButton(
+              key: const ValueKey('library-select-visible'),
+              tooltip: allVisible ? '取消筛选结果勾选' : '全选筛选结果',
+              onPressed: visible.isEmpty
+                  ? null
+                  : () => checkMany(visible.map((b) => b.id), !allVisible),
+              icon: Icon(
+                allVisible ? Icons.deselect_rounded : Icons.select_all_rounded,
+                color: d.ink2,
+              ),
             ),
-          ),
           if (scopeChoice && !compactFilters)
             Tooltip(
               message: '显示范围：全部、收藏夹或类别',
@@ -256,31 +283,77 @@ extension _LibraryFilters on _LibraryPageState {
                   ),
                 ),
             ],
-            icon: Icon(
-              Icons.sort_rounded,
-              color: sort == 'default' && !descending ? d.ink2 : d.ink,
-            ),
+            icon: labeled
+                ? null
+                : Icon(
+                    Icons.sort_rounded,
+                    color: sort == 'default' && !descending ? d.ink2 : d.ink,
+                  ),
+            child: !labeled
+                ? null
+                : Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.sort_rounded,
+                          size: 18,
+                          color: sort == 'default' && !descending
+                              ? d.ink2
+                              : d.ink,
+                        ),
+                        const SizedBox(width: 6),
+                        Text('排序', style: ui(13, c: d.ink)),
+                      ],
+                    ),
+                  ),
           ),
           if (collectionService != null)
+            if (labeled)
+              DeskButton(
+                '收藏夹',
+                key: const ValueKey('library-folder-toggle'),
+                quiet: true,
+                tooltip: folderMode ? '切换到平铺模式' : '切换到收藏夹模式',
+                icon: folderMode ? Icons.folder_rounded : Icons.folder_outlined,
+                onPressed: toggleFolders,
+              )
+            else
+              IconButton(
+                key: const ValueKey('library-folder-toggle'),
+                tooltip: folderMode ? '切换到平铺模式' : '切换到收藏夹模式',
+                isSelected: folderMode,
+                onPressed: toggleFolders,
+                icon: Icon(
+                  folderMode ? Icons.folder_rounded : Icons.folder_outlined,
+                  color: folderMode ? d.ink : d.ink2,
+                ),
+              ),
+          if (labeled)
+            DeskButton(
+              compact ? '列表' : '封面',
+              key: const ValueKey('library-view-toggle'),
+              quiet: true,
+              tooltip: compact ? '切换书架视图' : '切换列表视图',
+              icon: compact
+                  ? Icons.view_list_outlined
+                  : Icons.grid_view_rounded,
+              onPressed: changeView,
+            )
+          else
             IconButton(
-              key: const ValueKey('library-folder-toggle'),
-              tooltip: folderMode ? '切换到平铺模式' : '切换到收藏夹模式',
-              isSelected: folderMode,
-              onPressed: toggleFolders,
+              key: const ValueKey('library-view-toggle'),
+              tooltip: compact ? '切换书架视图' : '切换列表视图',
+              onPressed: changeView,
               icon: Icon(
-                folderMode ? Icons.folder_rounded : Icons.folder_outlined,
-                color: folderMode ? d.ink : d.ink2,
+                compact ? Icons.grid_view_rounded : Icons.view_list_outlined,
+                color: d.ink2,
               ),
             ),
-          IconButton(
-            key: const ValueKey('library-view-toggle'),
-            tooltip: compact ? '切换书架视图' : '切换列表视图',
-            onPressed: changeView,
-            icon: Icon(
-              compact ? Icons.grid_view_rounded : Icons.view_list_outlined,
-              color: d.ink2,
-            ),
-          ),
         ],
       ),
     );

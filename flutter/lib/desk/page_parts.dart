@@ -4,6 +4,32 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
+/// 合并页面的页内页签（书籍信息 | 图片与资源；任务 | 转换历史 | 修改记录）：
+/// 由工作区放进来，页头的 [DeskPageTitle] 在标题位置显示它，不再单独占一行。
+class DeskPageTabsScope extends InheritedWidget {
+  const DeskPageTabsScope({
+    super.key,
+    required this.tabs,
+    required super.child,
+  });
+  final Widget tabs;
+  @override
+  bool updateShouldNotify(DeskPageTabsScope old) => false;
+}
+
+/// 页头标题：所在页面有页内页签时显示页签（当前页签就是标题），否则显示标题文字。
+class DeskPageTitle extends StatelessWidget {
+  const DeskPageTitle(this.title, {super.key});
+  final String title;
+  @override
+  Widget build(BuildContext context) {
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<DeskPageTabsScope>();
+    return scope?.tabs ??
+        Text(title, style: ui(16, w: 650, c: context.desk.ink));
+  }
+}
+
 /// 页头：标题、说明与右侧操作；窄窗时操作换到第二行。
 class DeskPageHeader extends StatelessWidget {
   const DeskPageHeader({
@@ -23,7 +49,7 @@ class DeskPageHeader extends StatelessWidget {
     final d = context.desk;
     final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
     final lead = [
-      Text(title, style: ui(16, w: 650, c: d.ink)),
+      DeskPageTitle(title),
       if (status != null) ...[const SizedBox(width: 10), status!],
       if (subtitle != null) ...[
         const SizedBox(width: 10),

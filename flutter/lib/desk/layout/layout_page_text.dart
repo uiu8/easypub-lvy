@@ -42,67 +42,6 @@ extension _LayoutTextSection on _LayoutPageState {
                 ],
               ),
             ),
-            if (unitKey != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: KeyedSubtree(
-                  key: ValueKey('layout-$unitKey'),
-                  child: SizedBox(
-                    width: 76,
-                    child: Tooltip(
-                      message: key == 'line_height'
-                          ? '倍：跟随字号；% 和 em：本元素字号；px/pt：固定行高。'
-                          : key.startsWith('margin_')
-                          ? '%：上下按页高、左右按页宽；em：正文字号。'
-                          : key == 'font_size'
-                          ? '%、em：相对阅读器字号；12pt = 16px。'
-                          : '%：正文区宽度；em：正文字号。',
-                      child: DeskChoice<String>(
-                        compact: true,
-                        searchable: false,
-                        value: units[unitKey],
-                        items: [
-                          for (final u in [
-                            if (key == 'line_height') 'number',
-                            '%',
-                            'em',
-                            'px',
-                            'pt',
-                          ])
-                            DropdownMenuItem(
-                              value: u,
-                              child: Text(
-                                u == 'number' ? '倍' : u,
-                                style: ui(14, c: d.ink),
-                              ),
-                            ),
-                        ],
-                        onChanged: busy
-                            ? null
-                            : (value) {
-                                if (value == null || value == units[unitKey]) {
-                                  return;
-                                }
-                                final previous = units[unitKey]!;
-                                final old = double.tryParse(numbers[key]!.text);
-                                if (old == null) return;
-                                final converted = LayoutUnits(
-                                  values,
-                                  device,
-                                ).convert(key, old, previous, value);
-                                edit(() {
-                                  numbers[key]!.text = converted
-                                      .toStringAsFixed(4)
-                                      .replaceFirst(RegExp(r'\.?0+$'), '');
-                                  units[unitKey] = value;
-                                  layoutUnitsVersion = 1;
-                                });
-                              },
-                      ),
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
         TextField(
@@ -114,6 +53,79 @@ extension _LayoutTextSection on _LayoutPageState {
           decoration: deskInput(context).copyWith(
             suffixText: suffix(key),
             suffixStyle: ui(12, c: d.ink3),
+            // 单位收在输入框右端：标题行不再放单位，一行能排两项。
+            suffixIcon: unitKey == null
+                ? null
+                : KeyedSubtree(
+                    key: ValueKey('layout-$unitKey'),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 1),
+                      decoration: BoxDecoration(
+                        border: Border(left: BorderSide(color: d.line)),
+                      ),
+                      child: Tooltip(
+                        message:
+                            '${key == 'line_height'
+                                ? '倍：跟随字号；% 和 em：本元素字号；px/pt：固定行高。'
+                                : key.startsWith('margin_')
+                                ? '%：上下按页高、左右按页宽；em：正文字号。'
+                                : key == 'font_size'
+                                ? '%、em：相对阅读器字号；12pt = 16px。'
+                                : '%：正文区宽度；em：正文字号。'}'
+                            '\n切换单位按当前预览换算。',
+                        child: DeskChoice<String>(
+                          compact: true,
+                          searchable: false,
+                          value: units[unitKey],
+                          items: [
+                            for (final u in [
+                              if (key == 'line_height') 'number',
+                              '%',
+                              'em',
+                              'px',
+                              'pt',
+                            ])
+                              DropdownMenuItem(
+                                value: u,
+                                child: Text(
+                                  u == 'number' ? '倍' : u,
+                                  style: ui(14, c: d.ink),
+                                ),
+                              ),
+                          ],
+                          onChanged: busy
+                              ? null
+                              : (value) {
+                                  if (value == null ||
+                                      value == units[unitKey]) {
+                                    return;
+                                  }
+                                  final previous = units[unitKey]!;
+                                  final old = double.tryParse(
+                                    numbers[key]!.text,
+                                  );
+                                  if (old == null) return;
+                                  final converted = LayoutUnits(
+                                    values,
+                                    device,
+                                  ).convert(key, old, previous, value);
+                                  edit(() {
+                                    numbers[key]!.text = converted
+                                        .toStringAsFixed(4)
+                                        .replaceFirst(RegExp(r'\.?0+$'), '');
+                                    units[unitKey] = value;
+                                    layoutUnitsVersion = 1;
+                                  });
+                                },
+                        ),
+                      ),
+                    ),
+                  ),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 66,
+              maxWidth: 66,
+              minHeight: 30,
+            ),
           ),
         ),
       ],
@@ -126,7 +138,7 @@ extension _LayoutTextSection on _LayoutPageState {
       builder: (context, c) {
         // 列数按最长的标题行决定（LAY-103）：标题、帮助图标与单位切换都放得下才分列，
         // 输入框至少 120 宽；否则减少列数（设置区收窄后见 LAY-100）。
-        final widest = keys.map(labelRowWidth).fold(120.0, math.max);
+        final widest = keys.map(labelRowWidth).fold(130.0, math.max);
         var columns = keys.length;
         while (columns > 1 &&
             (c.maxWidth - 10 * (columns - 1)) / columns < widest) {
@@ -499,13 +511,6 @@ extension _LayoutTextSection on _LayoutPageState {
         _ => [
           group('文字', [
             grid(['font_size', 'line_height']),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 10),
-              child: Text(
-                '切换单位按当前预览换算；em、% 会随字号或页面大小变化。',
-                style: TextStyle(fontSize: 11, color: Color(0xff77716a)),
-              ),
-            ),
             const DeskLabel('对齐'),
             Align(
               alignment: Alignment.centerLeft,

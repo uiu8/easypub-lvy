@@ -19,6 +19,7 @@ import '../../application/workspace_autosave_service.dart';
 import '../controls/controls.dart' show DeskButton;
 import '../dialogs.dart';
 import '../tokens.dart';
+import '../page_parts.dart' show DeskPageTitle;
 import '../widgets.dart';
 import 'cover_editor_page.dart';
 import 'cover_drop.dart';
@@ -730,7 +731,7 @@ class _BookInformationPageState extends State<BookInformationPage> {
             ),
             child: Row(
               children: [
-                Text('书籍信息', style: ui(16, w: 650, c: d.ink)),
+                const DeskPageTitle('书籍信息'),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Align(
