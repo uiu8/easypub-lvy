@@ -396,7 +396,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                       value: id,
                       compact: true,
                       searchable: true,
-                      hint: const Text('选择记录书籍'),
+                      hint: const Text('选择书稿'),
                       items: [
                         for (final b in books)
                           DropdownMenuItem(value: b.id, child: Text(b.title)),

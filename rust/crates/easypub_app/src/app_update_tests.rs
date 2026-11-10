@@ -1,5 +1,7 @@
 use super::*;
-use easypub_updater::{PRODUCT, PackageFile, sha256_hex};
+use easypub_updater::{
+    PLUGIN_MANIFEST_NAME, PLUGIN_SIGNATURE_NAME, PRODUCT, PackageFile, sha256_hex,
+};
 use ed25519_dalek::{Signer, SigningKey};
 use std::{
     collections::HashMap,
@@ -361,4 +363,230 @@ fn download_can_be_cancelled_and_launch_requires_a_ready_package() {
     );
     launch["mode"] = json!("rollback");
     assert_eq!(call(launch).unwrap_err().next_action, "update_no_backup");
+}
+
+const PLUGIN_ZIP: &str = "easypub-lvy-booksource-test-win-x64.zip";
+
+/// 插件压缩包：`booksource/` 下是插件文件，顶层另有一份说明（解压时跳过）。
+fn plugin_zip(exe: &[u8], listed_sha: &str) -> Vec<u8> {
+    let info = json!({"id":"booksource","name":"书源下载","version":"0.2.0",
+        "executable":"easypub_plugin_booksource.exe","sha256":listed_sha,
+        "permissions":["network"],"protocol":1});
+    let mut buf = std::io::Cursor::new(Vec::new());
+    {
+        let mut zip = zip::ZipWriter::new(&mut buf);
+        let opts = zip::write::SimpleFileOptions::default();
+        for (name, data) in [
+            ("booksource/plugin.json", info.to_string().into_bytes()),
+            ("booksource/easypub_plugin_booksource.exe", exe.to_vec()),
+            ("readme.txt", b"install notes".to_vec()),
+        ] {
+            zip.start_file(name, opts).unwrap();
+            zip.write_all(&data).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+    buf.into_inner()
+}
+
+fn plugin_source(release: u32, exe_sha: &str, zip: Vec<u8>) -> String {
+    let m = easypub_updater::PluginManifest {
+        schema: 1,
+        product: PRODUCT.into(),
+        release,
+        tag: format!("beta{release}-20261110"),
+        plugins: vec![easypub_updater::PluginPackage {
+            id: "booksource".into(),
+            version: "0.2.0".into(),
+            executable: "easypub_plugin_booksource.exe".into(),
+            exe_sha256: exe_sha.into(),
+            permissions: vec!["network".into()],
+            name: PLUGIN_ZIP.into(),
+            bytes: zip.len() as u64,
+            sha256: sha256_hex(&zip),
+        }],
+    };
+    let bytes = serde_json::to_vec_pretty(&m).unwrap();
+    let sig = easypub_updater::hex(&key().sign(&bytes).to_bytes());
+    serve(
+        HashMap::from([
+            (PLUGIN_MANIFEST_NAME.into(), bytes),
+            (PLUGIN_SIGNATURE_NAME.into(), sig.into_bytes()),
+            (PLUGIN_ZIP.into(), zip),
+        ]),
+        false,
+    )
+}
+
+#[test]
+fn plugin_update_downloads_signed_plugin_and_rejects_tampering() {
+    let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = installed(8);
+    let exe = b"plugin program v2".to_vec();
+    let sha = sha256_hex(&exe);
+    let base = plugin_source(8, &sha, plugin_zip(&exe, &sha));
+    let offer = call(req("plugin_check", &dir, &base)).unwrap();
+    assert_eq!(offer["release"], 8);
+    assert_eq!(offer["plugins"][0]["id"], "booksource");
+    assert_eq!(offer["plugins"][0]["exe_sha256"], sha.as_str());
+    assert_eq!(offer["plugins"][0]["permissions"][0], "network");
+
+    let target = temp("plugin").join("staged");
+    let mut download = req("plugin_download", &dir, &base);
+    download["id"] = json!("booksource");
+    download["target"] = json!(target.to_string_lossy());
+    let done = call(download.clone()).unwrap();
+    assert_eq!(done["folder"], target.to_string_lossy().as_ref());
+    assert_eq!(
+        fs::read(target.join("easypub_plugin_booksource.exe")).unwrap(),
+        exe
+    );
+    assert!(target.join("plugin.json").is_file());
+    assert!(!target.join("readme.txt").exists());
+    // 目标已经存在时不覆盖。
+    assert_eq!(
+        call(download).unwrap_err().next_action,
+        "update_package_invalid"
+    );
+
+    // 清单签了名，但包里的程序和清单登记的校验值不一样：拒绝，并且不留下文件夹。
+    let other = b"swapped program".to_vec();
+    let base = plugin_source(8, &sha, plugin_zip(&other, &sha));
+    call(req("plugin_check", &dir, &base)).unwrap();
+    let target = temp("plugin").join("staged");
+    let mut download = req("plugin_download", &dir, &base);
+    download["id"] = json!("booksource");
+    download["target"] = json!(target.to_string_lossy());
+    assert_eq!(
+        call(download).unwrap_err().next_action,
+        "update_package_invalid"
+    );
+    assert!(!target.exists());
+
+    // 不带测试公钥：签名不被信任。
+    let mut untrusted = req("plugin_check", &dir, &base);
+    untrusted.as_object_mut().unwrap().remove("test_public_key");
+    assert_eq!(
+        call(untrusted).unwrap_err().next_action,
+        "update_signature_invalid"
+    );
+
+    // 旧 Release 没有插件清单：按“没有可更新的”返回，不算错。
+    let zip = package(68, &[], |_| ());
+    let base = source(&manifest(68, &zip), zip, false);
+    let none = call(req("plugin_check", &dir, &base)).unwrap();
+    assert!(none["release"].is_null());
+    assert_eq!(none["plugins"].as_array().unwrap().len(), 0);
+    let mut download = req("plugin_download", &dir, &base);
+    download["id"] = json!("booksource");
+    download["target"] = json!(temp("plugin").join("staged").to_string_lossy());
+    assert_eq!(
+        call(download).unwrap_err().next_action,
+        "update_check_first"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn installed_version_in_registry_follows_version_json() {
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_ALL_ACCESS, REG_SZ, RRF_RT_REG_SZ, RegCloseKey,
+        RegCreateKeyExW, RegDeleteKeyW, RegGetValueW, RegSetValueExW,
+    };
+    fn wide(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+    struct Key(HKEY, String);
+    impl Key {
+        fn set(&self, name: &str, value: &str) {
+            let data = wide(value);
+            // SAFETY: 数据指针与字节数来自同一个缓冲区。
+            let status = unsafe {
+                RegSetValueExW(
+                    self.0,
+                    wide(name).as_ptr(),
+                    0,
+                    REG_SZ,
+                    data.as_ptr().cast(),
+                    (data.len() * 2) as u32,
+                )
+            };
+            assert_eq!(status, 0);
+        }
+        fn get(&self, name: &str) -> String {
+            let mut buf = vec![0u16; 512];
+            let mut size = (buf.len() * 2) as u32;
+            // SAFETY: 缓冲区长度与传入的字节数一致。
+            let status = unsafe {
+                RegGetValueW(
+                    self.0,
+                    std::ptr::null(),
+                    wide(name).as_ptr(),
+                    RRF_RT_REG_SZ,
+                    std::ptr::null_mut(),
+                    buf.as_mut_ptr().cast(),
+                    &mut size,
+                )
+            };
+            assert_eq!(status, 0);
+            String::from_utf16_lossy(&buf[..size as usize / 2])
+                .trim_end_matches('\0')
+                .to_string()
+        }
+    }
+    impl Drop for Key {
+        fn drop(&mut self) {
+            // SAFETY: 句柄来自 RegCreateKeyExW；删除的是本测试自己建的键。
+            unsafe {
+                RegCloseKey(self.0);
+                RegDeleteKeyW(HKEY_CURRENT_USER, wide(&self.1).as_ptr());
+            }
+        }
+    }
+    let subkey = format!(
+        "Software\\easypub-lvy-test-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let mut handle: HKEY = std::ptr::null_mut();
+    // SAFETY: 子键名以 0 结尾；句柄由 Key 关闭。
+    let status = unsafe {
+        RegCreateKeyExW(
+            HKEY_CURRENT_USER,
+            wide(&subkey).as_ptr(),
+            0,
+            std::ptr::null(),
+            0,
+            KEY_ALL_ACCESS,
+            std::ptr::null(),
+            &mut handle,
+            std::ptr::null_mut(),
+        )
+    };
+    assert_eq!(status, 0);
+    let key = Key(handle, subkey.clone());
+    let dir = installed(8);
+    key.set("DisplayVersion", "测试版 6");
+    key.set("DisplayName", "easypub-lvy 测试版 6");
+
+    // 登记的安装位置是别处（例如压缩包解压的副本在运行）：不改。
+    key.set("InstallLocation", "C:\\somewhere-else\\");
+    assert!(!sync_installed_version(&dir, &subkey));
+    assert_eq!(key.get("DisplayVersion"), "测试版 6");
+
+    // 登记的位置就是本程序目录（安装程序写的路径带结尾的反斜杠）：改成当前版本。
+    key.set(
+        "InstallLocation",
+        &format!("{}\\", dir.to_string_lossy().to_uppercase()),
+    );
+    assert!(sync_installed_version(&dir, &subkey));
+    assert_eq!(key.get("DisplayVersion"), "测试版 8");
+    assert_eq!(key.get("DisplayName"), "easypub-lvy 测试版 8");
+    // 已经一致：不重复写。
+    assert!(!sync_installed_version(&dir, &subkey));
+    // 没有登记项（没用安装包装过）：什么都不做。
+    assert!(!sync_installed_version(&dir, &format!("{subkey}-missing")));
 }

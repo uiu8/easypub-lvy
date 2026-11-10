@@ -115,7 +115,7 @@ class _DeskTitleBarState extends State<DeskTitleBar> with WindowListener {
                       width: 22,
                       height: 22,
                       filterQuality: FilterQuality.medium,
-                      semanticLabel: 'EasyPub',
+                      semanticLabel: 'easypub-lvy',
                     ),
                     const SizedBox(width: 10),
                     if (widget.crumbs != null)

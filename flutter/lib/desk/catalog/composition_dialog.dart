@@ -403,7 +403,7 @@ class _CatalogCompositionDialogState extends State<CatalogCompositionDialog> {
                 key: const ValueKey('catalog-composition-view'),
                 child: DeskSegmented<bool>(
                   value: after,
-                  options: const {false: '当前有效草稿', true: '按勾选方案修复后'},
+                  options: const {false: '当前草稿', true: '按勾选方案修复后'},
                   onChanged: busy
                       ? null
                       : (value) {

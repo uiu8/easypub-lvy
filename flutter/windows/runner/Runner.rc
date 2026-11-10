@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.easypub" "\0"
-            VALUE "FileDescription", "easypub_desktop" "\0"
+            VALUE "CompanyName", "easypub-lvy" "\0"
+            VALUE "FileDescription", "easypub-lvy" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "easypub_desktop" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.easypub. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 easypub-lvy contributors. MIT License." "\0"
             VALUE "OriginalFilename", "easypub_desktop.exe" "\0"
-            VALUE "ProductName", "easypub_desktop" "\0"
+            VALUE "ProductName", "easypub-lvy" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

@@ -147,7 +147,7 @@ void main() {
         expect(find.byType(CheckIssueBrowser), findsOneWidget);
         expect(find.byKey(const ValueKey('check-category')), findsOneWidget);
         expect(find.byTooltip('对照方式'), findsOneWidget);
-        expect(find.byTooltip('审阅此项'), findsOneWidget);
+        expect(find.byTooltip('标记结论'), findsOneWidget);
         await t.tap(find.byKey(const ValueKey('check-category')));
         await t.pumpAndSettle();
         await t.tap(find.textContaining('编号跳跃 (').last);
@@ -192,21 +192,21 @@ void main() {
         await t.tap(find.text('追溯原稿').last);
         await settle();
         expect(find.text('导入原稿'), findsOneWidget);
-        expect(find.text('当前编辑稿'), findsOneWidget);
+        expect(find.text('当前草稿'), findsOneWidget);
         expect(find.text('查看修复方案'), findsNothing);
-        await t.tap(find.byTooltip('审阅此项'));
+        await t.tap(find.byTooltip('标记结论'));
         await t.pumpAndSettle();
-        await t.tap(find.text('本项已核实正常'));
+        await t.tap(find.text('本项核对无误'));
         await settle();
-        expect(find.text('已核实正常'), findsOneWidget);
-        await t.tap(find.byTooltip('审阅此项'));
+        expect(find.text('核对无误'), findsWidgets);
+        await t.tap(find.byTooltip('标记结论'));
         await t.pumpAndSettle();
         await t.tap(find.text('撤销本项结论'));
         await settle();
         expect(find.text('待核对'), findsOneWidget);
-        await t.tap(find.byTooltip('审阅此项'));
+        await t.tap(find.byTooltip('标记结论'));
         await t.pumpAndSettle();
-        await t.tap(find.text('本项已核实正常'));
+        await t.tap(find.text('本项核对无误'));
         await settle();
         await t.tap(find.text('更多'));
         await t.pumpAndSettle();
@@ -220,7 +220,7 @@ void main() {
               .value,
           'number-gap',
         );
-        expect(find.text('已核实正常'), findsOneWidget);
+        expect(find.text('核对无误'), findsWidgets);
         late String reviewedId;
         await t.runAsync(() async {
           final tree = await session.read(0);
@@ -239,12 +239,12 @@ void main() {
         await t.pumpAndSettle();
         await t.tap(find.text('核对问题').last);
         await settle();
-        expect(find.byTooltip('审阅此项'), findsOneWidget);
+        expect(find.byTooltip('标记结论'), findsOneWidget);
         await t.tap(find.byTooltip('对照方式'));
         await t.pumpAndSettle();
         await t.tap(find.text('追溯原稿').last);
         await settle();
-        expect(find.text('已核实正常'), findsOneWidget);
+        expect(find.text('核对无误'), findsWidgets);
         await t.pumpWidget(const SizedBox());
         await t.runAsync(() async {
           final path = '${root.path}/reviewed.easypub.json';

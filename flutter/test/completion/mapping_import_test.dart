@@ -251,7 +251,7 @@ void main() {
       );
       expect(tester.widget<TextButton>(previewButton).onPressed, isNull);
       await tester.tap(find.text('保存规则配置'));
-      final saved = find.text('规则已保存；之后导入自动匹配，已有书籍请先预览差异。');
+      final saved = find.text('规则已保存；之后导入自动匹配，已有书稿请先预览差异。');
       final clock = Stopwatch()..start();
       // 保存走真实磁盘 I/O；并发回归不能假设 400ms 后已结束。
       while (saved.evaluate().isEmpty &&
@@ -263,7 +263,7 @@ void main() {
       }
       expect(saved, findsOneWidget);
       await tester.pumpAndSettle();
-      expect(find.text('规则已保存；之后导入自动匹配，已有书籍请先预览差异。'), findsOneWidget);
+      expect(find.text('规则已保存；之后导入自动匹配，已有书稿请先预览差异。'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },

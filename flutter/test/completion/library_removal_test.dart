@@ -224,7 +224,7 @@ void main() {
         ),
       );
       final first = library.books.value.first;
-      await t.tap(find.byTooltip('书籍操作：${first.title}'));
+      await t.tap(find.byTooltip('书稿操作：${first.title}'));
       await t.pumpAndSettle();
       await t.tap(find.text('从书库移除'));
       await t.pumpAndSettle();
@@ -280,7 +280,7 @@ void main() {
       ),
     );
     final first = library.books.value.first;
-    await t.tap(find.byTooltip('书籍操作：${first.title}'));
+    await t.tap(find.byTooltip('书稿操作：${first.title}'));
     await t.pumpAndSettle();
     await t.tap(find.text('彻底删除（原文件进回收站）…'));
     await t.pumpAndSettle();
@@ -290,7 +290,7 @@ void main() {
     await t.pumpAndSettle();
     expect(library.books.value, hasLength(2));
     expect(recycled, isEmpty);
-    await t.tap(find.byTooltip('书籍操作：${first.title}'));
+    await t.tap(find.byTooltip('书稿操作：${first.title}'));
     await t.pumpAndSettle();
     await t.tap(find.text('彻底删除（原文件进回收站）…'));
     await t.pumpAndSettle();

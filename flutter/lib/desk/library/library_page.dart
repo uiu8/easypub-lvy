@@ -604,7 +604,7 @@ class _LibraryPageState extends State<LibraryPage> {
         : await showDialog<int>(
             context: context,
             builder: (context) => DeskAlert(
-              title: const Text('恢复移除的书籍'),
+              title: const Text('恢复移除的书稿'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -830,7 +830,7 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   Widget bookMenu(BookSummary book) => DeskCommandMenu<String>(
-    tooltip: '书籍操作：${book.title}',
+    tooltip: '书稿操作：${book.title}',
     onSelected: (action) => bookAction(book, action),
     itemBuilder: (_) => [
       for (final item in const [
@@ -1120,7 +1120,7 @@ class _LibraryPageState extends State<LibraryPage> {
                                 )
                                 .firstOrNull) {
                               final c? => '松开以导入并加入“${c.name}”',
-                              null => '松开以导入书籍或文件夹',
+                              null => '松开以导入书或文件夹',
                             },
                             key: const ValueKey('library-drop-message'),
                             style: ui(18, w: 650, c: d.ink),

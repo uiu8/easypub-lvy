@@ -1,3 +1,4 @@
+import '../../application/plugin_auto_update.dart';
 import '../../application/output_formats.dart';
 import '../../application/workspace_leave_service.dart';
 import '../../application/folder_auto_import.dart';
@@ -219,6 +220,15 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
         readConfig: () => settings.snapshot.value.configuration,
         saveConfig: settings.savePatch,
         blockedByTasks: () => u.updateBlockedByTasks,
+        updatePlugins: switch (u.appUpdates) {
+          final PluginUpdateService plugins =>
+            (release) => updateInstalledPlugins(
+              plugins,
+              PluginRegistry.instance,
+              currentRelease: release,
+            ),
+          _ => null,
+        },
       );
       unawaited(updates!.start());
     }

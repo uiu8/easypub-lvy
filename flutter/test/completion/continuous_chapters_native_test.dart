@@ -148,7 +148,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('修改章节'), findsWidgets);
-        expect(find.byTooltip('选择记录书籍'), findsNothing);
+        expect(find.byTooltip('选择书稿'), findsNothing);
         expect(tester.takeException(), isNull);
         await tester.tap(find.descendant(of: tabs, matching: find.text('正文')));
         await tester.pumpAndSettle();

@@ -173,18 +173,18 @@ void main() {
     await t.pumpWidget(host(c, leaves: leaves));
     await t.runAsync(() => c.start(delay: Duration.zero));
     await t.pump();
-    expect(find.text('新版本 V68'), findsOneWidget);
+    expect(find.text('新版本：测试版 68'), findsOneWidget);
     await t.tap(find.byKey(const ValueKey('update-pill')));
     await t.pumpAndSettle();
-    expect(find.text('发现新版本 V68'), findsOneWidget);
-    expect(find.textContaining('当前 V67'), findsOneWidget);
+    expect(find.text('发现新版本：测试版 68'), findsOneWidget);
+    expect(find.textContaining('当前测试版 67'), findsOneWidget);
     expect(find.text('本版新增：自动更新'), findsOneWidget);
 
     await t.tap(find.byKey(const ValueKey('update-download')));
     await settle(t);
     expect(fake.calls, contains('download 68'));
     expect(c.phase, UpdatePhase.ready);
-    expect(find.text('V68 已下载并校验'), findsOneWidget);
+    expect(find.text('测试版 68 已下载并校验'), findsOneWidget);
     expect(find.text('重启以更新'), findsOneWidget);
 
     // 有任务进行时不能重启。

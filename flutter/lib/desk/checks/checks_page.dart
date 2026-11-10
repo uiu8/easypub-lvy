@@ -174,8 +174,8 @@ class _BookChecksPageState extends State<BookChecksPage> {
   }
 
   static const domains = [
-    CheckDomain('chapters', '章节结构', '未检查', '当前有效草稿的标题、编号与结构', []),
-    CheckDomain('cleanup', '文本清理', '未检测', '规则候选独立审阅，不混入章节问题', []),
+    CheckDomain('chapters', '章节结构', '未检查', '当前草稿的标题、编号与结构', []),
+    CheckDomain('cleanup', '文本清理', '未检测', '规则候选独立核对，不混入章节问题', []),
     CheckDomain('metadata', '书籍信息', '未检查', '书名、作者、语言与封面设置', []),
     CheckDomain('resources', '图片资源', '未检查', '资源可读性与正文插图位置', []),
     CheckDomain('output', '目标格式', '转换时检查', '选定格式与输出位置后检查批次', []),

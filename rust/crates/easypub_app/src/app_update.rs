@@ -4,8 +4,9 @@
 //!   backup\    上一版（回退用）；run\  更新程序副本；state.json / updater.log  更新程序写的结果。
 use easypub_core::{ApiError, ErrorCode};
 use easypub_updater::{
-    APP_EXE, MANIFEST_NAME, Manifest, PUBLIC_KEYS, SIGNATURE_NAME, UPDATER_EXE, WORK_DIR, hex,
-    read_release, verify_manifest,
+    APP_EXE, MANIFEST_NAME, Manifest, PLUGIN_MANIFEST_NAME, PLUGIN_SIGNATURE_NAME, PUBLIC_KEYS,
+    PluginManifest, SIGNATURE_NAME, UPDATER_EXE, WORK_DIR, hex, read_release, verify_manifest,
+    verify_plugin_manifest,
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -40,6 +41,8 @@ struct Job {
 struct State {
     /// 最近一次检查得到并已校验签名的清单，下载只认它。
     checked: Option<(Manifest, String)>,
+    /// 最近一次检查得到并已校验签名的插件清单。
+    plugins: Option<(PluginManifest, String)>,
     job: Option<Job>,
     sequence: u64,
 }
@@ -175,6 +178,219 @@ fn check(value: &Value) -> Result<Value, ApiError> {
     });
     state().lock().expect("update state").checked = Some((manifest, base));
     Ok(response)
+}
+
+/// 插件随版本更新：读最新 Release 的插件清单（已签名）。旧 Release 没有这个文件，按“没有可更新的”返回。
+fn plugin_check(value: &Value) -> Result<Value, ApiError> {
+    let base = base_url(value)?;
+    let c = client(Duration::from_secs(30))?;
+    let bytes = match fetch_small(&c, &format!("{base}/{PLUGIN_MANIFEST_NAME}")) {
+        Ok(bytes) => bytes,
+        Err(e) if e.next_action == "update_not_found" => {
+            state().lock().expect("update state").plugins = None;
+            return Ok(json!({"release":null,"plugins":[]}));
+        }
+        Err(e) => return Err(e),
+    };
+    let signature = fetch_small(&c, &format!("{base}/{PLUGIN_SIGNATURE_NAME}"))?;
+    let signature = String::from_utf8(signature)
+        .map_err(|_| error(ErrorCode::InvalidRule, "update_signature_invalid"))?;
+    let manifest = verify_plugin_manifest(&bytes, &signature, &keys(value))
+        .map_err(|e| error(ErrorCode::InvalidRule, e.0))?;
+    let response = json!({
+        "release": manifest.release,
+        "tag": manifest.tag,
+        "plugins": manifest.plugins.iter().map(|p| json!({
+            "id":p.id,"version":p.version,"exe_sha256":p.exe_sha256,
+            "permissions":p.permissions,"bytes":p.bytes,
+        })).collect::<Vec<_>>(),
+    });
+    state().lock().expect("update state").plugins = Some((manifest, base));
+    Ok(response)
+}
+
+/// 下载并校验一个插件，解压到 [target]（必须还不存在）。成功后由界面按“从文件夹安装”换掉旧插件。
+fn plugin_download(value: &Value) -> Result<Value, ApiError> {
+    let invalid = || error(ErrorCode::InvalidRule, "update_package_invalid");
+    let id = value["id"].as_str().ok_or_else(invalid)?;
+    let target = PathBuf::from(value["target"].as_str().ok_or_else(invalid)?);
+    if !target.is_absolute() || target.exists() {
+        return Err(invalid());
+    }
+    let (manifest, base) = state()
+        .lock()
+        .expect("update state")
+        .plugins
+        .clone()
+        .ok_or_else(|| error(ErrorCode::NotFound, "update_check_first"))?;
+    let plugin = manifest
+        .plugins
+        .iter()
+        .find(|p| p.id == id)
+        .ok_or_else(|| error(ErrorCode::NotFound, "update_check_first"))?;
+    let url = if base == DEFAULT_BASE {
+        format!("{RELEASES}/download/{}/{}", manifest.tag, plugin.name)
+    } else {
+        format!("{base}/{}", plugin.name)
+    };
+    let response = client(Duration::from_secs(10 * 60))?
+        .get(url)
+        .send()
+        .map_err(|_| error(ErrorCode::Io, "update_network"))?;
+    if !response.status().is_success() {
+        return Err(error(ErrorCode::Io, "update_download_failed"));
+    }
+    let mut data = Vec::new();
+    response
+        .take(plugin.bytes + 1)
+        .read_to_end(&mut data)
+        .map_err(|_| error(ErrorCode::Io, "update_download_failed"))?;
+    if data.len() as u64 != plugin.bytes || hex(&Sha256::digest(&data)) != plugin.sha256 {
+        return Err(error(ErrorCode::InvalidRule, "update_checksum_mismatch"));
+    }
+    let result = extract_plugin(&data, id, &target).and_then(|()| {
+        let info = read_json(&target.join("plugin.json"));
+        let exe = fs::read(target.join(&plugin.executable)).map_err(|_| invalid())?;
+        if info["id"].as_str() != Some(id)
+            || info["executable"].as_str() != Some(plugin.executable.as_str())
+            || info["sha256"].as_str() != Some(plugin.exe_sha256.as_str())
+            || hex(&Sha256::digest(&exe)) != plugin.exe_sha256
+        {
+            return Err(invalid());
+        }
+        Ok(())
+    });
+    if let Err(e) = result {
+        let _ = fs::remove_dir_all(&target);
+        return Err(e);
+    }
+    Ok(json!({"folder": target.to_string_lossy()}))
+}
+
+/// 解压插件压缩包里 `<id>/` 文件夹下的文件到 [out]；包里别的文件（安装说明）跳过，越界路径和链接拒绝。
+fn extract_plugin(data: &[u8], id: &str, out: &Path) -> Result<(), ApiError> {
+    let invalid = || error(ErrorCode::InvalidRule, "update_package_invalid");
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(data)).map_err(|_| invalid())?;
+    let mut total = 0u64;
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|_| invalid())?;
+        let name = entry.enclosed_name().ok_or_else(invalid)?;
+        let Ok(rel) = name.strip_prefix(id).map(Path::to_path_buf) else {
+            continue;
+        };
+        if rel.as_os_str().is_empty() || entry.is_dir() {
+            continue;
+        }
+        if rel
+            .components()
+            .any(|c| !matches!(c, std::path::Component::Normal(_)))
+            || entry.is_symlink()
+        {
+            return Err(invalid());
+        }
+        total += entry.size();
+        if total > 512 * 1024 * 1024 {
+            return Err(invalid());
+        }
+        let target = out.join(&rel);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|_| error(ErrorCode::Io, "update_disk_write_failed"))?;
+        }
+        let mut f = fs::File::create(&target)
+            .map_err(|_| error(ErrorCode::Io, "update_disk_write_failed"))?;
+        std::io::copy(&mut entry, &mut f).map_err(|_| invalid())?;
+    }
+    if !out.join("plugin.json").is_file() {
+        return Err(invalid());
+    }
+    Ok(())
+}
+
+/// 安装包在“应用和功能”里登记的项（tools/installer/easypub.iss 的 AppId）。
+#[cfg(windows)]
+const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{BEA8F550-7B3A-4CD8-9530-A9904978D26B}_is1";
+
+/// 自动更新只换程序文件，不经过安装程序，“应用和功能”里的版本会停在安装时那一版。
+/// 这里按 version.json 把它改成当前版本：只在登记的安装位置就是本程序目录时才改，
+/// 压缩包解压运行的副本不会去动安装版的登记。返回是否改写了。
+#[cfg(windows)]
+pub(crate) fn sync_installed_version(dir: &Path, subkey: &str) -> bool {
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_SZ, RRF_RT_REG_SZ,
+        RegCloseKey, RegGetValueW, RegOpenKeyExW, RegSetValueExW,
+    };
+    fn wide(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+    fn read(key: HKEY, name: &str) -> Option<String> {
+        let mut buf = vec![0u16; 2048];
+        let mut size = (buf.len() * 2) as u32;
+        // SAFETY: 缓冲区长度与传入的字节数一致，名称以 0 结尾。
+        let status = unsafe {
+            RegGetValueW(
+                key,
+                std::ptr::null(),
+                wide(name).as_ptr(),
+                RRF_RT_REG_SZ,
+                std::ptr::null_mut(),
+                buf.as_mut_ptr().cast(),
+                &mut size,
+            )
+        };
+        if status != 0 {
+            return None;
+        }
+        let len = (size as usize / 2).min(buf.len());
+        let text = String::from_utf16_lossy(&buf[..len]);
+        Some(text.trim_end_matches('\0').to_string())
+    }
+    fn write(key: HKEY, name: &str, value: &str) -> bool {
+        let data = wide(value);
+        // SAFETY: 数据指针与字节数来自同一个缓冲区。
+        unsafe {
+            RegSetValueExW(
+                key,
+                wide(name).as_ptr(),
+                0,
+                REG_SZ,
+                data.as_ptr().cast(),
+                (data.len() * 2) as u32,
+            ) == 0
+        }
+    }
+    fn folder(s: &str) -> String {
+        s.replace('/', "\\").trim_end_matches('\\').to_lowercase()
+    }
+    let Some(release) = read_release(dir) else {
+        return false;
+    };
+    let mut key: HKEY = std::ptr::null_mut();
+    // SAFETY: 子键名以 0 结尾，句柄在下面关闭。
+    let opened = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            wide(subkey).as_ptr(),
+            0,
+            KEY_QUERY_VALUE | KEY_SET_VALUE,
+            &mut key,
+        )
+    };
+    if opened != 0 {
+        return false;
+    }
+    let version = format!("测试版 {release}");
+    let here = folder(&dir.to_string_lossy());
+    let installed_here = read(key, "InstallLocation")
+        .or_else(|| read(key, "Inno Setup: App Path"))
+        .is_some_and(|location| folder(&location) == here);
+    let changed = installed_here
+        && read(key, "DisplayVersion").as_deref() != Some(version.as_str())
+        && write(key, "DisplayVersion", &version)
+        && write(key, "DisplayName", &format!("easypub-lvy {version}"));
+    // SAFETY: 句柄来自上面的 RegOpenKeyExW。
+    unsafe { RegCloseKey(key) };
+    changed
 }
 
 /// 测试可以额外信任一把公钥（十六进制）；只在本机回环地址的测试源上生效。
@@ -512,7 +728,20 @@ fn launch(value: &Value) -> Result<Value, ApiError> {
 
 pub(crate) fn run(value: Value) -> Result<String, ApiError> {
     let response = match value["action"].as_str() {
-        Some("status") => status(&app_dir(&value)?),
+        Some("status") => {
+            let dir = app_dir(&value)?;
+            // 真实运行（没有指定测试目录）时，每次启动核对一次“应用和功能”里的版本。
+            #[cfg(windows)]
+            if value["app_dir"].is_null() {
+                static SYNCED: std::sync::Once = std::sync::Once::new();
+                SYNCED.call_once(|| {
+                    sync_installed_version(&dir, UNINSTALL_KEY);
+                });
+            }
+            status(&dir)
+        }
+        Some("plugin_check") => plugin_check(&value)?,
+        Some("plugin_download") => plugin_download(&value)?,
         Some("check") => check(&value)?,
         Some("download") => start_download(&value)?,
         Some("poll") => job_action(&value, false)?,

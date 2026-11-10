@@ -316,7 +316,7 @@ void main() {
     expect(t.takeException(), isNull);
   });
 
-  testWidgets('漏识别标题批量标记“不是标题”：只写审阅结论，不改正文（CHK-052）', (t) async {
+  testWidgets('漏识别标题批量标记“不是标题”：只写核对结论，不改正文（CHK-052）', (t) async {
     size(t, const Size(1280, 860));
     final (state, library, _) = await open(t, 'v11-mark-', {
       '数字章节':
@@ -352,7 +352,7 @@ void main() {
     await idle(t);
     await t.runAsync(() async {
       final tree = await session.read(0);
-      expect(tree.total, before, reason: '只写审阅结论，不改章节');
+      expect(tree.total, before, reason: '只写核对结论，不改章节');
       final issues = await session.issues(tree, 0, effective: true);
       final decided = issues.items.where(
         (i) => i.category == 'unrecognized-heading' && i.decision != null,

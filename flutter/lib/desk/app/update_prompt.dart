@@ -30,8 +30,36 @@ class AppUpdateController extends ChangeNotifier {
     required this.saveConfig,
     required this.blockedByTasks,
     Future<void> Function()? exitApp,
+    this.updatePlugins,
     this.pollInterval = const Duration(milliseconds: 300),
   }) : exitApp = exitApp ?? windowManager.destroy;
+
+  /// 已装的插件随软件版本更新：传入当前批次号，返回给用户看的一句话。为 null 时没有这项功能。
+  final Future<String> Function(int? currentRelease)? updatePlugins;
+
+  /// 最近一次插件更新的结果（设置页“版本与更新”里显示）。
+  String pluginNote = '';
+
+  bool get pluginsFollowApp => readConfig()['plugin_update_with_app'] != false;
+
+  Future<void> setPluginsFollowApp(bool value) async {
+    await saveConfig({'plugin_update_with_app': value});
+    _set(() {});
+    if (value) await syncPlugins();
+  }
+
+  /// 软件已是清单对应的版本时，把已装的插件换成随这一版发布的；失败不打扰。
+  Future<void> syncPlugins() async {
+    final run = updatePlugins;
+    if (run == null || !pluginsFollowApp || status?.packaged != true) return;
+    try {
+      final note = await run(status?.currentRelease);
+      if (note.isNotEmpty) _set(() => pluginNote = note);
+    } catch (_) {
+      // 网络不通或校验不过：保留现有插件，下次启动再试。
+    }
+  }
+
   final AppUpdateService service;
   final Map<String, dynamic> Function() readConfig;
   final Future<bool> Function(Map<String, dynamic> patch) saveConfig;
@@ -74,6 +102,7 @@ class AppUpdateController extends ChangeNotifier {
     }
     await Future<void>.delayed(delay);
     if (!_disposed) await check(manual: false);
+    if (!_disposed) await syncPlugins();
   }
 
   Future<void> refresh() async {
@@ -245,7 +274,7 @@ class UpdatePill extends StatelessWidget {
             '正在下载 ${(p.received * 100 / p.total).floor()}%',
           UpdatePhase.downloading => '正在下载',
           UpdatePhase.ready => '重启以更新',
-          _ => '新版本 V${controller.latest?.release ?? ''}',
+          _ => '新版本：测试版 ${controller.latest?.release ?? ''}',
         };
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -355,8 +384,8 @@ class _UpdateDialogState extends State<UpdateDialog> {
             [close],
           ),
           UpdatePhase.available || UpdatePhase.skipped when r != null => (
-            '发现新版本 V${r.release}',
-            '当前 V${current ?? '?'} · ${r.date} · 下载约 ${_size(r.bytes)}',
+            '发现新版本：测试版 ${r.release}',
+            '当前测试版 ${current ?? '?'} · ${r.date} · 下载约 ${_size(r.bytes)}',
             notes(d, r),
             [
               DeskButton('以后再说', onPressed: () => Navigator.pop(context)),
@@ -380,7 +409,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
             ],
           ),
           UpdatePhase.downloading => (
-            '正在下载 V${r?.release ?? ''}',
+            '正在下载测试版 ${r?.release ?? ''}',
             '可以继续使用，下载在后台进行',
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -412,7 +441,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
             ],
           ),
           UpdatePhase.ready when r != null => (
-            'V${r.release} 已下载并校验',
+            '测试版 ${r.release} 已下载并校验',
             '大小、SHA-256 与发布签名都已核对',
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -446,7 +475,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
           ),
           UpdatePhase.upToDate => (
             '已是最新版本',
-            '当前 V${current ?? '?'}',
+            '当前测试版 ${current ?? '?'}',
             const SizedBox.shrink(),
             [close],
           ),
@@ -557,9 +586,9 @@ class _UpdateSettingsGroupState extends State<UpdateSettingsGroup> {
             UpdatePhase.checking => '正在检查…',
             UpdatePhase.upToDate => '已是最新版本',
             UpdatePhase.available || UpdatePhase.skipped =>
-              '发现 V${c.latest?.release}${c.phase == UpdatePhase.skipped ? '（已跳过）' : ''}',
-            UpdatePhase.downloading => '正在下载 V${c.latest?.release}',
-            UpdatePhase.ready => 'V${c.latest?.release} 已下载，重启即可更新',
+              '发现测试版 ${c.latest?.release}${c.phase == UpdatePhase.skipped ? '（已跳过）' : ''}',
+            UpdatePhase.downloading => '正在下载测试版 ${c.latest?.release}',
+            UpdatePhase.ready => '测试版 ${c.latest?.release} 已下载，重启即可更新',
             UpdatePhase.failed => c.error,
             UpdatePhase.idle => last == null ? '本次启动还没有检查' : '',
           },
@@ -586,6 +615,17 @@ class _UpdateSettingsGroupState extends State<UpdateSettingsGroup> {
                   },
           ),
         ),
+        if (c.updatePlugins != null)
+          row(
+            '已装的插件随软件更新',
+            '软件更新后，自动把已安装的插件换成随这一版发布的；启用状态和插件数据不变。'
+                '${c.pluginNote.isEmpty ? '' : '\n${c.pluginNote}'}',
+            Switch(
+              key: const ValueKey('update-plugins-follow'),
+              value: c.pluginsFollowApp,
+              onChanged: (v) => unawaited(c.setPluginsFollowApp(v)),
+            ),
+          ),
         if (!status.writable)
           row(
             '程序目录不能写入',
@@ -595,7 +635,7 @@ class _UpdateSettingsGroupState extends State<UpdateSettingsGroup> {
         if (status.backupRelease case final backup?)
           row(
             '回退到上一版',
-            '上一版 V$backup 保留在程序目录的 .update 里；回退时程序会重启。'
+            '上一版（测试版 $backup）保留在程序目录的 .update 里；回退时程序会重启。'
                 '${note.isEmpty ? '' : '\n$note'}',
             DeskButton(
               '回退到 V$backup…',
@@ -619,7 +659,7 @@ class _UpdateSettingsGroupState extends State<UpdateSettingsGroup> {
                       ),
                     ],
                     child: Text(
-                      '程序会退出，换回 V$backup 后重新打开。书库、设置与草稿不受影响。',
+                      '程序会退出，换回测试版 $backup 后重新打开。书库、设置与草稿不受影响。',
                       style: ui(13, c: d.ink2, h: 1.6),
                     ),
                   ),

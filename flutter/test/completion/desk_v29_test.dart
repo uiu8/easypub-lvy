@@ -72,7 +72,7 @@ void main() {
     expect(find.text('递归扫描子文件夹'), findsOneWidget);
     expect(text('导入创建工作引用'), findsNothing);
     expect(help('默认导入位置'), contains('不会移动或覆盖原文件'));
-    expect(help('章节识别'), contains('已有书籍在章节页预览重新识别'));
+    expect(help('章节识别'), contains('已有书稿在章节页预览重新识别'));
     // 点开关旁的“?”只显示说明，不切换开关。
     final row = find
         .ancestor(of: find.text('导入后检查章节识别结果'), matching: find.byType(InkWell))

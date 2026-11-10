@@ -523,7 +523,7 @@ class _CleanupRuleDialogState extends State<CleanupRuleDialog> {
               const SizedBox(height: 6),
               sampleDifference(sample!.actions.first),
             ] else
-              Text('当前范围内没有文字变更。提示候选仍须逐项审阅。', style: ui(12, c: d.ink2)),
+              Text('当前范围内没有文字变更。提示候选仍须逐项核对。', style: ui(12, c: d.ink2)),
             if (sample!.candidates.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -590,7 +590,7 @@ class _CleanupRuleDialogState extends State<CleanupRuleDialog> {
     );
     return DeskDialog(
       title: '编辑清理规则',
-      subtitle: '采用规则后可预览清理结果；只有确认采用清理方案才会修改编辑稿。',
+      subtitle: '采用规则后可预览清理结果；只有确认采用清理方案才会修改草稿。',
       closeTooltip: '取消',
       width: wide ? 1000 : 680,
       onClose: () {

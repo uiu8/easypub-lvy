@@ -185,7 +185,7 @@ class _QuickConversionDialogState extends State<QuickConversionDialog> {
                   children: [
                     LinearProgressIndicator(),
                     SizedBox(height: 18),
-                    Text('按本次输出设置准备所选书籍…'),
+                    Text('按本次输出设置准备所选书稿…'),
                   ],
                 )
               : ConstrainedBox(

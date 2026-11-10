@@ -298,7 +298,7 @@ void main() {
         ),
       );
       await t.pumpAndSettle();
-      await t.tap(find.byTooltip('书籍操作：${summary(id).title}'));
+      await t.tap(find.byTooltip('书稿操作：${summary(id).title}'));
       await t.pumpAndSettle();
       expect(find.text('更换编码重新读取…'), findsOneWidget);
       await t.sendKeyEvent(LogicalKeyboardKey.escape);

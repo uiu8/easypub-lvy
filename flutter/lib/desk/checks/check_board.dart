@@ -840,7 +840,7 @@ class CheckBoard extends ChangeNotifier {
     if (onChecks) return cell.track == 'chapters' ? null : '去处理';
     if (checkBoardPages[page] != cell.track) return null;
     return switch (cell.track) {
-      'chapters' => '核实无误',
+      'chapters' => '核对无误',
       'cleanup' => _keepLine == null ? null : '保留原文',
       _ => null,
     };

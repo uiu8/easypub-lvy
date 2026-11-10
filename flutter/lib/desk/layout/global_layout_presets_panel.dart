@@ -92,7 +92,7 @@ class _GlobalLayoutPresetsPanelState extends State<GlobalLayoutPresetsPanel> {
         state.configuration['layout_defaults'] as Map? ?? const {},
       );
       if (defaults.isEmpty) {
-        setState(() => message = '当前使用内置默认；选择书籍后可将本书排版保存为预设。');
+        setState(() => message = '当前使用内置默认；选择书稿后可将本书排版保存为预设。');
         return;
       }
       values.add({'name': name, 'values': defaults});
@@ -109,7 +109,7 @@ class _GlobalLayoutPresetsPanelState extends State<GlobalLayoutPresetsPanel> {
       context: context,
       builder: (context) => DeskAlert(
         title: Text('删除全局预设“$name”？'),
-        content: const Text('已有书籍和项目中的排版保留。'),
+        content: const Text('已有书稿和项目中的排版保留。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -192,7 +192,7 @@ class _GlobalLayoutPresetsPanelState extends State<GlobalLayoutPresetsPanel> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   DeskText(
-                    '选择上方书籍后可编辑本书排版。这里管理所有项目可用的预设，已有书籍保持原设置。',
+                    '选择上方书稿后可编辑本书排版。这里管理所有项目可用的预设，已有书籍保持原设置。',
                     size: 12,
                     color: context.desk.ink2,
                   ),
@@ -260,7 +260,7 @@ class _GlobalLayoutPresetsPanelState extends State<GlobalLayoutPresetsPanel> {
                           const SizedBox(height: 8),
                           if (values.isEmpty)
                             DeskText(
-                              '当前使用内置默认排版。导入书籍后，可在排版页保存并发布新的全局预设。',
+                              '当前使用内置默认排版。导入书稿后，可在排版页保存并发布新的全局预设。',
                               color: context.desk.ink2,
                             ),
                           for (final entry in values.entries)

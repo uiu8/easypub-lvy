@@ -131,7 +131,7 @@ Future<_Harness> _open(
 }
 
 void main() {
-  testWidgets('去处理到问题页签，核实后走下一条，走到头才换段，回到检查停在原处', (t) async {
+  testWidgets('去处理到问题页签，核对后走下一条，走到头才换段，回到检查停在原处', (t) async {
     final h = await _open(t);
     final board = h.board;
 
@@ -189,7 +189,7 @@ void main() {
     await h.until(() => h.listed.contains('第6章后直接到了第8章'));
 
     // 核实：做完加一，这一段走到头，按钮变成去下一段。
-    expect(find.text('核实无误'), findsOneWidget);
+    expect(find.text('核对无误'), findsOneWidget);
     final total = board.trackOf('chapters')!.total;
     await h.tap('check-bar-action');
     await h.until(() => board.trackOf('chapters')!.done == 1);

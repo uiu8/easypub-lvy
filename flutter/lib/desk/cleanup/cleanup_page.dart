@@ -1780,8 +1780,8 @@ class _CleanupPageState extends State<CleanupPage>
                 options: {
                   false: '查看变更',
                   true: plan == null
-                      ? '审阅提示候选'
-                      : '审阅提示候选 ${plan!.candidateTotal}',
+                      ? '核对提示候选'
+                      : '核对提示候选 ${plan!.candidateTotal}',
                 },
                 onChanged: plan == null || busy
                     ? null
@@ -2209,7 +2209,7 @@ class _CleanupPageState extends State<CleanupPage>
         ? '基础清理尚未复查。'
         : !session.isInspectionCurrent(inspection!)
         ? '复查已过期，请重新检查。'
-        : '有效稿基础复查：${inspection!.changes} 处空白变更 · ${inspection!.candidates} 条广告候选。';
+        : '草稿基础复查：${inspection!.changes} 处空白变更 · ${inspection!.candidates} 条广告候选。';
     return ListView(
       padding: const EdgeInsets.all(18),
       children: [
@@ -2240,7 +2240,7 @@ class _CleanupPageState extends State<CleanupPage>
                       '已采用 ${receipt!.changes} 处清理',
                       style: ui(15, w: 650, c: d.ink),
                     ),
-                    Text('当前编辑稿已更新并自动保存，原稿保留。', style: ui(12, c: d.ink2)),
+                    Text('当前草稿已更新并自动保存，原稿保留。', style: ui(12, c: d.ink2)),
                   ],
                 ),
               ),
@@ -2266,7 +2266,7 @@ class _CleanupPageState extends State<CleanupPage>
               '${receipt!.chapterIssues} 项',
               '有效章节结构待核对',
               key: const ValueKey('cleanup-result-chapter-issues'),
-              tooltip: '清理后有效稿的章节结构有 ${receipt!.chapterIssues} 项需要核对，点此到检查页查看',
+              tooltip: '清理后草稿的章节结构有 ${receipt!.chapterIssues} 项需要核对，点此到检查页查看',
               onTap: receipt!.chapterIssues > 0 && !busy
                   ? widget.onChecks
                   : null,
@@ -2288,10 +2288,10 @@ class _CleanupPageState extends State<CleanupPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('复查当前有效稿', style: ui(13, w: 650, c: d.ink)),
+              Text('复查当前草稿', style: ui(13, w: 650, c: d.ink)),
               const SizedBox(height: 2),
               Text(
-                '基础复查检查当前有效稿的行尾空白、连续空行与广告候选；不重放自定义替换规则。',
+                '基础复查检查当前草稿的行尾空白、连续空行与广告候选；不重放自定义替换规则。',
                 style: ui(12, c: d.ink2),
               ),
               const SizedBox(height: 8),
@@ -2301,7 +2301,7 @@ class _CleanupPageState extends State<CleanupPage>
                 spacing: 6,
                 children: [
                   DeskButton(
-                    '复查当前有效稿',
+                    '复查当前草稿',
                     icon: Icons.refresh_rounded,
                     onPressed: busy ? null : recheck,
                   ),

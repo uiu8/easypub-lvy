@@ -862,7 +862,7 @@ class _CatalogSourceDialogState extends State<CatalogSourceDialog> {
             fieldWithLabel(
               total,
               '声明的章节总数（可选）',
-              helper: '仅在已核实目录范围时填写；留空不会自动认定完整。',
+              helper: '仅在已核对目录范围时填写；留空不会自动认定完整。',
               type: TextInputType.number,
             ),
           ],

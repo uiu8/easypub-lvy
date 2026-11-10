@@ -232,7 +232,7 @@ class _QueueItem extends StatelessWidget {
     final d = context.desk;
     final (tone, _) = d.tone(issueTone(issue.severity));
     final decided = switch (issue.decision) {
-      'confirmed_normal' => '已核实',
+      'confirmed_normal' => '核对无误',
       'ignored' => '已忽略',
       _ => null,
     };

@@ -480,7 +480,7 @@ class LegacyChapterSession
       ),
     ) as Map;
     check(page);
-    if (stamp != _reviewGuard) throw const FormatException('审阅结论已变化，请重新检查。');
+    if (stamp != _reviewGuard) throw const FormatException('核对结论已变化，请重新检查。');
     if (id != null) {
       backend.change(
         () => backend.manuscript.findingReviews[bookId] =
@@ -605,7 +605,7 @@ class LegacyChapterSession
       reviewChange: changes.length == 1 ? changes.single : null,
       reviewChanges: changes.length == 1 ? null : changes,
     );
-    if (stamp != _reviewGuard) throw const FormatException('审阅结论已变化，请重新检查。');
+    if (stamp != _reviewGuard) throw const FormatException('核对结论已变化，请重新检查。');
     final records = Map<String, dynamic>.from(
       (backend.manuscript.findingReviews[bookId]?['records'] as Map?) ?? {},
     );

@@ -40,7 +40,7 @@ Future<ChapterCopyReceipt?> saveRepairCopy(
           ),
         ],
         child: SelectableText(
-          'TXT：${receipt.textPath}\n\n配套项目：${receipt.projectPath}\n\n复查还有 ${receipt.remainingIssues} 项提示。打开配套项目可保留章节层级、标题识别和排版设置；原始文件与当前编辑稿均未改动。',
+          'TXT：${receipt.textPath}\n\n配套项目：${receipt.projectPath}\n\n复查还有 ${receipt.remainingIssues} 项提示。打开配套项目可保留章节层级、标题识别和排版设置；原始文件与当前草稿均未改动。',
           style: ui(12.5, c: context.desk.ink2, h: 1.6),
         ),
       ),

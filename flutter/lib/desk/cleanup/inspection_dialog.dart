@@ -162,11 +162,11 @@ class _InspectionState extends State<CleanupInspectionDialog> {
               ad ? Tone.warn : Tone.neutral,
             ),
             const SizedBox(width: 8),
-            Text('有效稿第 ${s.line} 行', style: mono(11, c: d.ink3)),
+            Text('草稿第 ${s.line} 行', style: mono(11, c: d.ink3)),
           ],
         ),
         const SizedBox(height: 10),
-        const DeskLabel('有效稿证据'),
+        const DeskLabel('草稿证据'),
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
@@ -248,7 +248,7 @@ class _InspectionState extends State<CleanupInspectionDialog> {
     final d = context.desk;
     return DeskDialog(
       title: '清理问题与原稿上下文',
-      subtitle: '坐标分别标明有效稿与原稿。排除广告只生成待确认方案；不会直接修改草稿或原文件。',
+      subtitle: '坐标分别标明草稿与原稿。排除广告只生成待确认方案；不会直接修改草稿或原文件。',
       closeTooltip: '关闭',
       width: 1000,
       height: math.min(680, MediaQuery.sizeOf(context).height - 80),
@@ -340,7 +340,7 @@ class _InspectionState extends State<CleanupInspectionDialog> {
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                '${cleanupLabels[finding.kind]} · 有效稿第 ${finding.line} 行',
+                                                '${cleanupLabels[finding.kind]} · 草稿第 ${finding.line} 行',
                                                 style: ui(
                                                   12.5,
                                                   w: on ? 600 : 450,

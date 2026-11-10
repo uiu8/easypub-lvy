@@ -15,6 +15,9 @@ use std::{
 pub const PRODUCT: &str = "easypub-lvy";
 pub const MANIFEST_NAME: &str = "update-manifest.json";
 pub const SIGNATURE_NAME: &str = "update-manifest.json.sig";
+/// 插件随版本更新的清单（测试版 8 起）。主清单不能加字段：旧版本按固定字段解析，多一个就拒收。
+pub const PLUGIN_MANIFEST_NAME: &str = "plugin-manifest.json";
+pub const PLUGIN_SIGNATURE_NAME: &str = "plugin-manifest.json.sig";
 pub const UPDATER_EXE: &str = "easypub_updater.exe";
 pub const APP_EXE: &str = "easypub_desktop.exe";
 /// 程序目录下的更新工作区：下载、解压、备份、日志都在这里，替换时不会被移走。
@@ -118,12 +121,68 @@ pub fn unhex(s: &str) -> Option<Vec<u8>> {
         .collect()
 }
 
-/// 校验清单签名（任一公钥通过即可），再解析并检查字段。签名覆盖清单文件的原始字节。
-pub fn verify_manifest(
-    bytes: &[u8],
-    signature_hex: &str,
-    keys: &[[u8; 32]],
-) -> Result<Manifest, UpdateError> {
+/// 插件压缩包（Release 附件）。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PluginPackage {
+    /// 插件标识，也是压缩包内的顶层文件夹名和安装后的文件夹名。
+    pub id: String,
+    pub version: String,
+    pub executable: String,
+    /// 插件程序的 SHA-256：与已装插件比较，不同才更新。
+    pub exe_sha256: String,
+    pub permissions: Vec<String>,
+    pub name: String,
+    pub bytes: u64,
+    pub sha256: String,
+}
+
+/// 随某一版软件发布的插件清单。以后可以加字段：解析时不拒绝多出来的字段。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PluginManifest {
+    pub schema: u32,
+    pub product: String,
+    /// 这些插件对应的软件批次号：软件升到这一版之后才更新插件。
+    pub release: u32,
+    pub tag: String,
+    pub plugins: Vec<PluginPackage>,
+}
+
+fn plugin_id(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 40
+        && s.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
+}
+
+impl PluginManifest {
+    pub fn validate(&self) -> Result<(), UpdateError> {
+        let bad = self.schema != 1
+            || self.product != PRODUCT
+            || self.release == 0
+            || !safe_name(&self.tag, 64)
+            || self.plugins.len() > 16
+            || self.plugins.iter().any(|p| {
+                !plugin_id(&p.id)
+                    || p.version.len() > 64
+                    || !safe_name(&p.executable, 128)
+                    || !is_sha256(&p.exe_sha256)
+                    || p.permissions.len() > 32
+                    || p.permissions.iter().any(|x| !safe_name(x, 64))
+                    || !safe_name(&p.name, 128)
+                    || !p.name.ends_with(".zip")
+                    || !is_sha256(&p.sha256)
+                    || p.bytes == 0
+                    || p.bytes > 256 * 1024 * 1024
+            });
+        if bad {
+            return Err(UpdateError("update_manifest_invalid"));
+        }
+        Ok(())
+    }
+}
+
+/// 签名校验：任一公钥通过即可，签名覆盖文件的原始字节。
+fn verify_signed(bytes: &[u8], signature_hex: &str, keys: &[[u8; 32]]) -> Result<(), UpdateError> {
     if bytes.len() > 128 * 1024 {
         return Err(UpdateError("update_manifest_invalid"));
     }
@@ -137,6 +196,28 @@ pub fn verify_manifest(
     if !trusted {
         return Err(UpdateError("update_signature_invalid"));
     }
+    Ok(())
+}
+
+pub fn verify_plugin_manifest(
+    bytes: &[u8],
+    signature_hex: &str,
+    keys: &[[u8; 32]],
+) -> Result<PluginManifest, UpdateError> {
+    verify_signed(bytes, signature_hex, keys)?;
+    let manifest: PluginManifest =
+        serde_json::from_slice(bytes).map_err(|_| UpdateError("update_manifest_invalid"))?;
+    manifest.validate()?;
+    Ok(manifest)
+}
+
+/// 校验清单签名，再解析并检查字段。
+pub fn verify_manifest(
+    bytes: &[u8],
+    signature_hex: &str,
+    keys: &[[u8; 32]],
+) -> Result<Manifest, UpdateError> {
+    verify_signed(bytes, signature_hex, keys)?;
     let manifest: Manifest =
         serde_json::from_slice(bytes).map_err(|_| UpdateError("update_manifest_invalid"))?;
     manifest.validate()?;

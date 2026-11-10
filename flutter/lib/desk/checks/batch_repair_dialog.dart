@@ -185,7 +185,7 @@ class _BatchRepairDialogState extends State<BatchRepairDialog> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          error = deskErrorText(e, '未能写入审阅结论，请重新检查后再试。');
+          error = deskErrorText(e, '未能写入核对结论，请重新检查后再试。');
           busy = false;
         });
       }
@@ -207,7 +207,7 @@ class _BatchRepairDialogState extends State<BatchRepairDialog> {
     return DeskDialog(
       title: whole ? '一键修复' : '批量修复：${widget.label}',
       subtitle: reviewing
-          ? '已合并为一次修改。确认后应用到编辑稿（不改原稿），可在变更记录中撤销。'
+          ? '已合并为一次修改。确认后应用到草稿（不改原稿），可在变更记录中撤销。'
           : whole
           ? '列出全书可以直接应用的方案。安全的已勾选，需要你判断的默认不选。'
           : '列出这一类问题中可以直接应用的方案。默认全选，可取消个别项；先预览再应用。',
@@ -262,7 +262,7 @@ class _BatchRepairDialogState extends State<BatchRepairDialog> {
             '标记所选 ${selected.length} 项为不是标题',
             key: const ValueKey('batch-mark-normal'),
             icon: Icons.do_not_disturb_on_outlined,
-            tooltip: '只写审阅结论“本项已核实正常”，不改正文；可在“审阅此项”中逐项撤销',
+            tooltip: '只写核对结论“本项核对无误”，不改正文；可在“标记结论”中逐项撤销',
             disabledReason: '至少选择一项',
             onPressed: busy || loading || selected.isEmpty
                 ? null

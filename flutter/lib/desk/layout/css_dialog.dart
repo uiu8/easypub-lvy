@@ -307,7 +307,7 @@ class _CssDialogState extends State<CssDialog> {
                     child: DeskText(
                       initial['offline'] == true
                           ? '当前使用离线资源快照；修改样式或目录后需重新检查依赖。'
-                          : '检查后列出真实依赖；尚未修改书籍。',
+                          : '检查后列出真实依赖；尚未修改书稿。',
                       color: context.desk.ink2,
                     ),
                   )

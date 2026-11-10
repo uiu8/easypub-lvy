@@ -293,7 +293,7 @@ extension _LibraryShelf on _LibraryPageState {
                                     const SizedBox(width: 4),
                                     Text('$pending', style: mono(11, c: d.ink)),
                                     const SizedBox(width: 2),
-                                    Text('待核', style: ui(10.5, c: d.ink2)),
+                                    Text('待核对', style: ui(10.5, c: d.ink2)),
                                   ],
                                 ],
                               ),

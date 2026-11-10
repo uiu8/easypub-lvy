@@ -340,7 +340,7 @@ class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
                     icon: Icons.arrow_forward_rounded,
                     busy: busy,
                     disabledReason: count == 0
-                        ? '先选择要转换的书籍'
+                        ? '先选择要转换的书稿'
                         : busy
                         ? '等待当前操作完成'
                         : '请先检查并确认本次输出设置',

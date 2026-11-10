@@ -103,9 +103,9 @@ class LegacyCleanupSession extends ChangeNotifier
       report['candidate_count'] as int,
       List.unmodifiable([
         for (final row in (report['actions'] as List).cast<Map>())
-          '有效稿第 ${row['source_line']} 行 · 基础清理变更\n前：${jsonEncode(row['before'])}\n后：${row['after'] == null ? '排除此行' : jsonEncode(row['after'])}${row['truncated'] == true ? '\n长文本仅显示节选' : ''}',
+          '草稿第 ${row['source_line']} 行 · 基础清理变更\n前：${jsonEncode(row['before'])}\n后：${row['after'] == null ? '排除此行' : jsonEncode(row['after'])}${row['truncated'] == true ? '\n长文本仅显示节选' : ''}',
         for (final row in (report['candidates'] as List).cast<Map>())
-          '有效稿第 ${row['source_line']} 行 · 广告候选，需人工判断\n${row['text']}${row['truncated'] == true ? '\n长文本仅显示节选' : ''}',
+          '草稿第 ${row['source_line']} 行 · 广告候选，需人工判断\n${row['text']}${row['truncated'] == true ? '\n长文本仅显示节选' : ''}',
       ]),
       findings: List.unmodifiable([
         for (final row in (report['actions'] as List).cast<Map>())

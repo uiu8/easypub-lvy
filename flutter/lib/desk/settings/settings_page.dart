@@ -1312,7 +1312,7 @@ class _SettingsPageState extends State<SettingsPage> {
         navToggle(state, page, label, detail),
     ]),
     1 => section('导入与收藏', [
-      groupTitle('章节识别', '管理以后导入默认；已有书籍在章节页预览重新识别。'),
+      groupTitle('章节识别', '管理以后导入默认；已有书稿在章节页预览重新识别。'),
       if (widget.library is ChapterRulesService)
         Align(
           alignment: Alignment.centerLeft,
@@ -2318,7 +2318,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     }
                     if (await widget.settings.savePatch(patch) && mounted) {
                       setState(() {
-                        migrationResult = '已迁移 ${patch.length} 组字段；当前书籍和原稿未修改。';
+                        migrationResult = '已迁移 ${patch.length} 组字段；当前书稿和原稿未修改。';
                         migrationData = null;
                       });
                     }

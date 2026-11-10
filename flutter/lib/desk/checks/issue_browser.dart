@@ -382,7 +382,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
   }
 
   String decision(ChapterIssue issue) => switch (issue.decision) {
-    'confirmed_normal' => '已核实正常',
+    'confirmed_normal' => '核对无误',
     'ignored' => '暂时忽略',
     _ => issue.categoryReviewed ? '整类已有结论' : '待核对',
   };
@@ -449,7 +449,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
     } catch (e) {
       if (mounted && ticket == generation) {
         setState(() {
-          error = deskErrorText(e, '审阅未完成，请重新检查。');
+          error = deskErrorText(e, '核对未完成，请重新检查。');
         });
       }
     } finally {
@@ -582,7 +582,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
           deskSnackBar(
             content: Text(
               result.marked > 0
-                  ? '已把 ${result.marked} 项标记为“不是标题”，可在“审阅此项”中逐项撤销。'
+                  ? '已把 ${result.marked} 项标记为“不是标题”，可在“标记结论”中逐项撤销。'
                   : '已应用 ${result.applied} 项修改，并已重新检查。',
             ),
           ),
@@ -1197,13 +1197,13 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                         ),
                       DeskCommandMenu<String>(
                         key: ValueKey('review-${issue.id}'),
-                        tooltip: '审阅此项',
+                        tooltip: '标记结论',
                         enabled: !busy && !locating,
                         onSelected: review,
                         itemBuilder: (_) => [
                           const PopupMenuItem(
                             value: 'confirmed_normal',
-                            child: Text('本项已核实正常'),
+                            child: Text('本项核对无误'),
                           ),
                           const PopupMenuItem(
                             value: 'ignored',
@@ -1221,7 +1221,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                               child: Text('不是标题，加入非标题词库…'),
                             ),
                         ],
-                        child: const _Chip(text: '审阅此项', trailing: true),
+                        child: const _Chip(text: '标记结论', trailing: true),
                       ),
                     ],
                   ),
@@ -1369,13 +1369,13 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
         ],
         DeskCommandMenu<String>(
           key: ValueKey('review-${issue.id}'),
-          tooltip: '审阅此项',
+          tooltip: '标记结论',
           enabled: !disabled,
           onSelected: review,
           itemBuilder: (_) => [
             const PopupMenuItem(
               value: 'confirmed_normal',
-              child: Text('本项已核实正常'),
+              child: Text('本项核对无误'),
             ),
             const PopupMenuItem(value: 'ignored', child: Text('本项暂时忽略')),
             const PopupMenuItem(value: 'reset', child: Text('撤销本项结论')),
@@ -1387,7 +1387,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                 child: Text('不是标题，加入非标题词库…'),
               ),
           ],
-          child: const _Chip(text: '审阅此项', trailing: true),
+          child: const _Chip(text: '标记结论', trailing: true),
         ),
         const SizedBox(width: 4),
         DeskCommandMenu<String>(

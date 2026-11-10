@@ -152,7 +152,7 @@ pub fn catalog() -> Value {
             "chapter_check",
             None,
             label,
-            "列出当前有效稿中的问题，保留现有白名单与人工决定。",
+            "列出当前草稿中的问题，保留现有白名单与人工决定。",
             "report",
             Value::Null,
             true,

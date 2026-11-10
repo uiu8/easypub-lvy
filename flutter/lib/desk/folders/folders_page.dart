@@ -573,7 +573,7 @@ class _FoldersPageState extends State<FoldersPage> {
               primary: true,
               icon: Icons.file_download_outlined,
               busy: model.importing,
-              disabledReason: model.selected.isEmpty ? '先勾选要导入的书籍' : '等待当前操作完成',
+              disabledReason: model.selected.isEmpty ? '先勾选要导入的书' : '等待当前操作完成',
               onPressed: model.canImport ? importSelected : null,
             ),
           ],

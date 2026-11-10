@@ -88,7 +88,7 @@ void main() {
       );
       await t.pumpAndSettle();
       Future<void> open() async {
-        await t.tap(find.byTooltip('书籍操作：$title'));
+        await t.tap(find.byTooltip('书稿操作：$title'));
         await t.pumpAndSettle();
         await t.tap(find.text('刷新来源…'));
         await t.pump();
@@ -144,7 +144,7 @@ void main() {
         expect(chapters.nodes.map((n) => n.title), ['第一章 新正文', '第二章 后续']);
         expect(await File(originalPath).readAsString(), contains('更新后的正文'));
       });
-      await t.tap(find.byTooltip('书籍操作：$title'));
+      await t.tap(find.byTooltip('书稿操作：$title'));
       await t.pumpAndSettle();
       await t.tap(find.text('打开刷新前的书稿…'));
       await t.pumpAndSettle();

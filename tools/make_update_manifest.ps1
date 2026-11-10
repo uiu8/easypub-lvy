@@ -9,7 +9,10 @@ param(
   [string]$KeyPath = (Join-Path $env:USERPROFILE '.easypub-lvy\release-signing.key'),
   [int]$Release = 0,
   [string]$Tag = '',
-  [string]$Date = ''
+  [string]$Date = '',
+  # 插件随这一版自动更新：给出插件压缩包和解压出来的插件文件夹，另外生成 plugin-manifest.json 与签名。
+  [string]$PluginZip = '',
+  [string]$PluginDir = ''
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -28,4 +31,11 @@ if (-not (Test-Path -LiteralPath $KeyPath)) { throw "找不到发布私钥：$Ke
   --key $KeyPath --zip $zipPath --release $Release --tag $Tag --date $Date `
   --root $name --notes (Resolve-Path -LiteralPath $NotesPath).Path --out $OutDir
 if ($LASTEXITCODE -ne 0) { throw '生成更新清单失败。' }
+if ($PluginZip) {
+  if (-not $PluginDir) { throw '给了 -PluginZip 就要同时给 -PluginDir（解压出来的插件文件夹）。' }
+  & cargo run -q --release --locked -p easypub_updater --bin release_sign -- plugin-manifest `
+    --key $KeyPath --release $Release --tag $Tag `
+    --zip (Resolve-Path -LiteralPath $PluginZip).Path --dir (Resolve-Path -LiteralPath $PluginDir).Path --out $OutDir
+  if ($LASTEXITCODE -ne 0) { throw '生成插件清单失败。' }
+}
 Get-ChildItem -LiteralPath $OutDir | Select-Object Name, Length

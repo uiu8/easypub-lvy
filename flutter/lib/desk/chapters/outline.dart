@@ -396,7 +396,7 @@ class _ChapterOutlineState extends State<ChapterOutline> {
         children: [
           Dot(d.tone(Tone.ok).$1, size: 6),
           const SizedBox(width: 5),
-          Text(map.total == 0 ? '未发现结构问题' : '问题均已审阅', style: ui(11, c: d.ink3)),
+          Text(map.total == 0 ? '未发现结构问题' : '问题均已核对', style: ui(11, c: d.ink3)),
         ],
       );
     }

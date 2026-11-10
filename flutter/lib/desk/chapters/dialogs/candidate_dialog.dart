@@ -326,7 +326,7 @@ class _ChapterCandidateDialogState extends State<ChapterCandidateDialog> {
                 ),
               ],
               const Spacer(),
-              Text(before ? '当前有效稿' : '候选，确认前不生效', style: ui(11.5, c: d.ink3)),
+              Text(before ? '当前草稿' : '候选，确认前不生效', style: ui(11.5, c: d.ink3)),
             ],
           ),
           const SizedBox(height: 10),

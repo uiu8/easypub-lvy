@@ -212,7 +212,7 @@ class _IssueEvidenceViewState extends State<IssueEvidenceView> {
                 original: true,
                 header: choose ? picker(data.length, 0, a) : null,
               ),
-              right: pane(data, a, '当前编辑稿'),
+              right: pane(data, a, '当前草稿'),
             );
           }
           return ComparisonWorkspace(

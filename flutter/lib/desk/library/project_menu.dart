@@ -287,7 +287,7 @@ class _ProjectMenuState extends State<ProjectMenu> {
                     if (working) const LinearProgressIndicator(),
                     DeskText(
                       message.isEmpty
-                          ? '编辑进度自动保存。另存项目用于备份或迁移，包含书稿草稿与资源引用；原始书稿和已有项目文件保留。'
+                          ? '编辑进度自动保存。另存项目用于备份或迁移，包含草稿与资源引用；原始书稿和已有项目文件保留。'
                           : message,
                       size: 13,
                       color: context.desk.ink2,

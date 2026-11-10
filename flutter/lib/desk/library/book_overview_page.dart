@@ -367,7 +367,7 @@ class _BookOverviewState extends State<BookOverviewPage> {
                 BookAuthorText(book.author, size: 14),
                 const SizedBox(height: 10),
                 Tooltip(
-                  message: '正文字数是有效稿去除标题、空白后的字符数，包含标点',
+                  message: '正文字数是草稿去除标题、空白后的字符数，包含标点',
                   child: Wrap(
                     spacing: 10,
                     children: [
@@ -595,22 +595,26 @@ class _BookOverviewState extends State<BookOverviewPage> {
           final right = stack([source, recent]);
           return DeskScrollView(
             child: stack([
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '书稿概览',
-                      style: ui(16, w: 650, c: context.desk.ink),
+              // 内容区贴边后（V135）标题要自己留出左右空白，和其他页的页头对齐。
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 12, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '书稿概览',
+                        style: ui(16, w: 650, c: context.desk.ink),
+                      ),
                     ),
-                  ),
-                  // 转换统一用底部的“转换当前书”，这里不再重复（LIB-109）。
-                  DeskButton(
-                    '返回书库',
-                    quiet: true,
-                    icon: Icons.arrow_back_rounded,
-                    onPressed: () => context.go('/'),
-                  ),
-                ],
+                    // 转换统一用底部的“转换当前书”，这里不再重复（LIB-109）。
+                    DeskButton(
+                      '返回书库',
+                      quiet: true,
+                      icon: Icons.arrow_back_rounded,
+                      onPressed: () => context.go('/'),
+                    ),
+                  ],
+                ),
               ),
               if (error.isNotEmpty)
                 Text(error, style: TextStyle(color: context.desk.pen)),

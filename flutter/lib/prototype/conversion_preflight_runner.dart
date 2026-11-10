@@ -284,10 +284,10 @@ class ConversionPreflightRunner {
           ConversionPreflightIssue(
             category: 'chapters',
             level: ConversionPreflightLevel.blocking,
-            title: '章节问题待审阅（${findings.length} 类）',
+            title: '章节问题待核对（${findings.length} 类）',
             detail: ids.contains('number-gap')
                 ? '包含 number-gap：编号跳跃不能直接推断缺章，请逐项查看源行证据并选择修复或保留。'
-                : '可打开检查与修复进行审阅；也可保留当前内容直接转换。',
+                : '可打开检查与修复进行核对；也可保留当前内容直接转换。',
             canOpenRepair: true,
             action: ConversionPreflightAction.chapters,
           ),
@@ -297,8 +297,8 @@ class ConversionPreflightRunner {
           const ConversionPreflightIssue(
             category: 'chapters',
             level: ConversionPreflightLevel.pass,
-            title: '章节问题已审阅',
-            detail: '现有问题均已有明确的核实或忽略结论；转换不会自动补章或改号。',
+            title: '章节问题已核对',
+            detail: '现有问题均已有明确的核对或忽略结论；转换不会自动补章或改号。',
           ),
         );
       }
@@ -347,7 +347,7 @@ class ConversionPreflightRunner {
                 ? '文本清理发现 ${changes + candidates} 项候选'
                 : '文本清理仍有 ${changes + candidates} 项差异',
             detail: savedCleanup == null
-                ? '检测到尾随空白、空行或其他可审阅候选；请打开文本清理面板决定是否应用，不会自动改写原稿。'
+                ? '检测到尾随空白、空行或其他可核对候选；请打开文本清理面板决定是否应用，不会自动改写原稿。'
                 : '已保存的清理设置产生 $changes 项最终差异、$candidates 项候选和 $stages 项步骤记录；请在文本清理面板查看逐步预览，转换不会自动删除候选正文。',
             canOpenRepair: true,
             action: ConversionPreflightAction.cleanup,

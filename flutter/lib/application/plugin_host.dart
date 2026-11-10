@@ -262,6 +262,10 @@ class PluginRegistry {
     changes.value++;
   }
 
+  /// 插件进程正在运行（或正在启动）。
+  bool isRunning(String id) =>
+      _starting.containsKey(id) || (_clients[id]?.closed == false);
+
   String dataDirectory(String id) => '$dataRoot${Platform.pathSeparator}$id';
 
   /// 启动（或复用）插件进程。

@@ -270,14 +270,14 @@ void main() {
       library.checkBooks([other.id], true);
       library.selectBook(other.id);
       await t.pump();
-      await t.tap(find.byTooltip('书籍操作：${book.title}'));
+      await t.tap(find.byTooltip('书稿操作：${book.title}'));
       await t.pumpAndSettle();
       await t.tap(find.text('在资源管理器中显示原文件'));
       await until(() => revealed != null);
       expect(revealed, File(book.path).absolute.path);
       expect(library.selection.value.current, other.id);
       expect(library.selection.value.selected, {other.id});
-      await t.tap(find.byTooltip('书籍操作：${book.title}'));
+      await t.tap(find.byTooltip('书稿操作：${book.title}'));
       await t.pumpAndSettle();
       // R1 起书籍操作菜单是编辑台菜单，在打开的面板里找条目。
       await t.tap(

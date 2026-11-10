@@ -482,7 +482,7 @@ void main() {
             'cleanup-candidates',
             '文本清理 · 提示候选',
             () => t
-                .tap(find.textContaining('审阅提示候选').first)
+                .tap(find.textContaining('核对提示候选').first)
                 .then((_) => settle(t)),
           );
           await tapText('查看变更');

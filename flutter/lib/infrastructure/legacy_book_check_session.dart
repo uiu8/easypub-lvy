@@ -617,7 +617,7 @@ class LegacyBookCheckSession extends ChangeNotifier
           'chapters',
           '章节结构',
           options.report.total == 0 ? '未发现问题' : '${options.report.total} 项待核对',
-          '当前有效草稿 · $safe 项有安全修复候选',
+          '当前草稿 · $safe 项有安全修复候选',
           List.unmodifiable(options.report.items.map((i) => i.title)),
           count: options.report.total,
         );
@@ -711,7 +711,7 @@ class LegacyBookCheckSession extends ChangeNotifier
           'resources',
           '图片资源',
           '引用检查通过',
-          '当前有效稿资源与正文位置已核验',
+          '当前草稿资源与正文位置已核验',
           [
             '${(manifest['resources'] as List).length} 项图像资源',
             '${(manifest['placements'] as List).length} 处正文插图位置',

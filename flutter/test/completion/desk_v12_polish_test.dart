@@ -220,7 +220,7 @@ void main() {
     await idle(t);
     await t.tap(find.byKey(ValueKey('review-$firstId')));
     await t.pumpAndSettle();
-    await t.tap(find.text('本项已核实正常').last);
+    await t.tap(find.text('本项核对无误').last);
     await until(
       t,
       () => t.widget<Text>(progress).data == '已核对 1 / ${page.unfilteredTotal}',
@@ -229,7 +229,7 @@ void main() {
     expect(find.byKey(const ValueKey('issue-actions')), findsOneWidget);
     final chip = t.getSize(
       find
-          .ancestor(of: find.text('审阅此项'), matching: find.byType(Container))
+          .ancestor(of: find.text('标记结论'), matching: find.byType(Container))
           .first,
     );
     expect(chip.height, 36);
@@ -290,7 +290,7 @@ void main() {
     expect(report.domains.single.cleanup.last.candidate, true);
   });
 
-  testWidgets('非标题词库：从审阅加入后打开识别规则面板，识别器排除命中行（CH-253–255）', (t) async {
+  testWidgets('非标题词库：从核对加入后打开识别规则面板，识别器排除命中行（CH-253–255）', (t) async {
     size(t, const Size(1500, 1000));
     final (state, library) = await open(t, 'v12-phrases-', {
       '词库': '第一章 开始\n正文\n第二章 继续\n正文\n',

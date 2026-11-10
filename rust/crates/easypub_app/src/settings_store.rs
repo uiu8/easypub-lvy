@@ -122,6 +122,9 @@ pub struct Configuration {
     /// V68：启动时检查更新（缺省为开）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update_check_on_start: Option<bool>,
+    /// 已装的插件随软件版本自动更新（缺省为开）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin_update_with_app: Option<bool>,
     /// V68：用户选择“跳过这个版本”的批次号。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update_skipped_release: Option<u32>,

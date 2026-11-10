@@ -337,14 +337,14 @@ void main() {
     };
     expect(
       isLegacyCheckReport(
-        BookCheckReport.fromJson(saved(['有效稿第 3 行 · 基础清理变更'])),
+        BookCheckReport.fromJson(saved(['草稿第 3 行 · 基础清理变更'])),
       ),
       true,
     );
     expect(
       isLegacyCheckReport(
         BookCheckReport.fromJson(
-          saved(['有效稿第 3 行 · 基础清理变更'], checkedAt: '2026-10-12T00:00:00'),
+          saved(['草稿第 3 行 · 基础清理变更'], checkedAt: '2026-10-12T00:00:00'),
         ),
       ),
       true,

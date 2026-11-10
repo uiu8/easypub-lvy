@@ -572,7 +572,7 @@ class _TasksPageState extends State<TasksPage> {
                         !current.statusAvailable
                             ? '显示最后已知阶段；正在重连，不会自动重启任务。'
                             : current.waitingForCurrentFile
-                            ? '等待当前文件处理结束，后续书籍不再开始；已生成成品保留。'
+                            ? '等待当前文件处理结束，后续书稿不再开始；已生成成品保留。'
                             : current.cancelRequested
                             ? '已请求取消，等待后台确认退出；尚未标记为已取消。'
                             : '百分比按阶段和这台电脑上次同格式的用时估算，以实际完成为准。',

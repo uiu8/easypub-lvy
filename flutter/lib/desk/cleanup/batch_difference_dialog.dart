@@ -147,7 +147,7 @@ class _DifferenceState extends State<CleanupBatchDifferenceDialog> {
     final offset = page?.offset ?? 0;
     return DeskDialog(
       title: '${widget.title} · 批量清理差异',
-      subtitle: '只读审阅本批已冻结的规则与选择。候选不等于删除；如需调整，请返回本书清理后重新预览。',
+      subtitle: '只读查看本批已冻结的规则与选择。候选不等于删除；如需调整，请返回本书清理后重新预览。',
       closeTooltip: '返回批量预览',
       width: 960,
       height: math.min(660, MediaQuery.sizeOf(context).height - 80),

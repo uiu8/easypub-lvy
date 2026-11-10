@@ -116,7 +116,7 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
         presets = widget.session.presets;
         selected = name.text.trim();
         name.clear();
-        message = '预设已重命名；已有书籍的历史来源名称保留。';
+        message = '预设已重命名；已有书稿的历史来源名称保留。';
       });
     }
   });
@@ -137,7 +137,7 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
       setState(() {
         scope = 'project';
         presets = widget.session.presets;
-        message = '已复制到本项目；应用到书籍仍需预览确认。';
+        message = '已复制到本项目；应用到书稿仍需预览确认。';
       });
     }
   });
@@ -150,7 +150,7 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
         presets = loaded;
         selected = null;
         scope = 'file';
-        message = '文件校验通过；选择后复制到本项目，尚未改变书籍。';
+        message = '文件校验通过；选择后复制到本项目，尚未改变书稿。';
       });
     }
   });
@@ -194,7 +194,7 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
       context: context,
       builder: (context) => DeskAlert(
         title: Text('删除${global ? '全局' : '项目'}预设“$selected”？'),
-        content: const Text('已有书籍排版保持不变。'),
+        content: const Text('已有书稿排版保持不变。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -261,7 +261,7 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
             : !widget.allowApply
             ? '先补全排版数值'
             : !canApply
-            ? '先复制到本项目，再应用到书籍'
+            ? '先复制到本项目，再应用到书稿'
             : '正在处理',
         onPressed: busy || selected == null || !widget.allowApply || !canApply
             ? null

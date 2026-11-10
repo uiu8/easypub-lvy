@@ -173,7 +173,7 @@ void main() {
     );
     final badge = find.byKey(ValueKey('library-badge-$id'));
     expect(
-      find.descendant(of: badge, matching: find.text('待核')),
+      find.descendant(of: badge, matching: find.text('待核对')),
       findsOneWidget,
     );
     await t.pumpWidget(const SizedBox());

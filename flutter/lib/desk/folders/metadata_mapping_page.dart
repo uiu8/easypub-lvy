@@ -409,7 +409,7 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
                   () => run(() async {
                     project.setProjectEnabled(!project.projectEnabled);
                     preview = null;
-                    message = '已更新项目规则开关；已有书籍需要重新预览并确认，项目配置需保存项目。';
+                    message = '已更新项目规则开关；已有书稿需要重新预览并确认，项目配置需保存项目。';
                   }),
                   quiet: true,
                 ),
@@ -453,8 +453,8 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
                   message =
                       session is ProjectMappingSession &&
                           (session as ProjectMappingSession).editingProject
-                      ? '项目规则已启用；请保存项目。已有书籍需预览差异后确认。'
-                      : '规则已保存；之后导入自动匹配，已有书籍请先预览差异。';
+                      ? '项目规则已启用；请保存项目。已有书稿需预览差异后确认。'
+                      : '规则已保存；之后导入自动匹配，已有书稿请先预览差异。';
                 }),
                 icon: Icons.save_outlined,
               ),
@@ -884,7 +884,7 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
                             style: ui(13, w: 600, c: d.ink),
                           ),
                           Text(
-                            '仅应用到书籍草稿；不会覆盖原稿，也不自动保存规则配置。',
+                            '仅应用到草稿；不会覆盖原稿，也不自动保存规则配置。',
                             style: ui(11.5, c: d.ink3),
                           ),
                         ],
@@ -908,7 +908,7 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
                           ),
                           Text(
                             targets.isEmpty
-                                ? '当前没有选择书籍；可以先保存全局规则，导入后再预览。'
+                                ? '当前没有选择书稿；可以先保存全局规则，导入后再预览。'
                                 : '本次 ${targets.length} 本书。全局规则用于后续导入，已有书修改需确认。',
                             style: ui(11.5, c: d.ink3),
                           ),

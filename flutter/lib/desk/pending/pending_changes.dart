@@ -268,7 +268,7 @@ class PendingList extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '预览只是草稿；确认应用才会改动编辑稿',
+                          '预览不会改动草稿；确认应用后才写入',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: ui(11.5, c: d.ink3),
