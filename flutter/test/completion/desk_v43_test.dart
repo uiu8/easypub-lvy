@@ -10,7 +10,7 @@ import 'package:easypub_desktop/application/app_info.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/settings/settings_page.dart';
 
-/// V43：设置页开关统一靠右（SET-070）。
+/// 设置页开关统一靠右。
 void main() {
   testWidgets('外观与交互、导入与收藏：每个开关的右边缘都对齐到同一位置', (t) async {
     t.view.physicalSize = const Size(1100, 760);

@@ -1,4 +1,4 @@
-// 启动分段计时（V134）：只有设了环境变量 EASYPUB_STARTUP_PROFILE 时才把结果写进那个文件；
+// 启动分段计时：只有设了环境变量 EASYPUB_STARTUP_PROFILE 时才把结果写进那个文件；
 // 平时只记几个整数，不影响启动。
 import 'dart:convert';
 import 'dart:io';

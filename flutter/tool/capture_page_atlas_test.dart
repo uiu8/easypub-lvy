@@ -1,4 +1,4 @@
-// 页面巡检图集（V15）：真实应用 + 真实 Rust，三本样书，13 个页面 × 三种窗口宽度截图。
+// 页面巡检图集：真实应用 + 真实 Rust，三本样书，13 个页面 × 三种窗口宽度截图。
 // 运行：tools/test_flutter.ps1 -TestPaths @('tool/capture_page_atlas_test.dart')
 // 输出：artifacts/page-atlas-<日期>/<页面>-<宽度>.png 与 pages.json。
 import 'dart:convert';
@@ -207,9 +207,8 @@ void main() {
               format: ui.ImageByteFormat.png,
             );
             image.dispose();
-            await File(
-              '${out.path}/$file',
-            ).writeAsBytes(bytes!.buffer.asUint8List());
+            await File('${out.path}/$file')
+                .writeAsBytes(bytes!.buffer.asUint8List());
           });
           shots.add({
             'page': page,
@@ -222,17 +221,10 @@ void main() {
         }
 
         await shot(entry.key);
-        // ATLAS_SETTINGS=1：设置页其余 6 个分区逐个点开截图（V16 起共 7 个分区）。
+        // ATLAS_SETTINGS=1：设置页其余 6 个分区逐个点开截图（后来共 7 个分区）。
         if (entry.key == 'settings' &&
             Platform.environment['ATLAS_SETTINGS'] == '1') {
-          const tabs = [
-            '导入与收藏',
-            '成品与输出',
-            '自动检查',
-            '转换工具',
-            '数据与迁移',
-            '关于与许可',
-          ];
+          const tabs = ['导入与收藏', '成品与输出', '自动检查', '转换工具', '数据与迁移', '关于与许可'];
           for (var i = 0; i < tabs.length; i++) {
             await t.tap(find.text(tabs[i]).first);
             await settle();

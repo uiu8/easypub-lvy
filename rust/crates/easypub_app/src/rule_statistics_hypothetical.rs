@@ -130,7 +130,7 @@ pub(super) fn collect(
             _ => unreachable!(),
         }
     }
-    // 每批模拟彼此独立，分给多个线程（V83）；结果按原顺序写回。
+    // 每批模拟彼此独立，分给多个线程；结果按原顺序写回。
     #[allow(clippy::large_enum_variant)] // 只有几十个批次，装箱不划算。
     enum Batch {
         Layout(Settings),

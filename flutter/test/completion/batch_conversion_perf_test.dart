@@ -32,7 +32,7 @@ void main() {
       final sources = <String>[];
       final cover = await File('../samples/b7-covers/transparent.png')
           .copy('${root.path}/cover.png');
-      // R6：可指定每本章数与样书本数，测大书。
+      // 可指定每本章数与样书本数，测大书。
       final chapters = int.parse(
         Platform.environment['EASYPUB_B8_CHAPTERS'] ?? '30',
       );
@@ -59,7 +59,7 @@ void main() {
           await info.preview({
             'language': 'zh-CN',
             'author': '合成作者',
-            // AZW3/KFX 要求有封面（R6 起本测量也覆盖这两种格式）。
+            // AZW3/KFX 要求有封面（后来本测量也覆盖这两种格式）。
             'cover_path': cover.path,
           }),
         );
@@ -68,7 +68,7 @@ void main() {
         sources.add(file.path);
       }
       final reports = <Map<String, Object?>>[];
-      // R6：可用环境变量指定格式、本数与并发；默认仍是 EPUB、10/50 本、并发 1/4。
+      // 可用环境变量指定格式、本数与并发；默认仍是 EPUB、10/50 本、并发 1/4。
       List<String> list(String name, String fallback) =>
           (Platform.environment[name] ?? fallback).split(',');
       for (final format in list('EASYPUB_B8_FORMATS', 'EPUB')) {

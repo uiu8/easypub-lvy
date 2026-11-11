@@ -1,10 +1,10 @@
 part of '../booksource_page.dart';
 
-/// V97 书源交互（LIB-212、LIB-213）：书源脚本在登录、读取详情和目录时请求验证码、登录字段、提示或复制。
+/// 书源交互：书源脚本在登录、读取详情和目录时请求验证码、登录字段、提示或复制。
 /// 按书源显式启用，回复按 source_id + request_id 配对；图片、输入与提示文字都不写日志。
 /// 没有发现页，所以不声明 explore_refresh。
 extension _BookSourceInteractions on _BookSourcePageState {
-  /// book_search、login_open：书源脚本请求搜索或打开登录（LIB-240 协议，LIB-280 界面）。
+  /// book_search、login_open：书源脚本请求搜索或打开登录（协议，界面）。
   static const _capabilities = [
     'notice',
     'clipboard',

@@ -67,7 +67,7 @@ void main() {
         } finally {
           initial.dispose();
         }
-        // V17 起只改名的书能逐本换算，不再失败（CLEAN-104）。这里用仍不支持的情况：
+        // 后来只改名的书能逐本换算，不再失败。这里用仍不支持的情况：
         // 章节修改压缩了两次（检查点之上又压缩），批量预览如实标为失败。
         final chapters = library.openChapters(ids.last);
         final tree = await chapters.read(0);

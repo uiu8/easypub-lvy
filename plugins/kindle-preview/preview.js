@@ -1,4 +1,4 @@
-// 真机预览（EasyPub++ V30，LAY-108–110；V36 起每章一个文件，按 spine 跨文件翻页）。由排版页通过本机连接提供数据：
+// 真机预览（EasyPub++后来每章一个文件，按 spine 跨文件翻页）。由排版页通过本机连接提供数据：
 //   GET  api/state    书名、机型、阅读器设置、当前排版值、当前章节
 //   POST api/render   {values, entry} → 按这些排版值生成本书内容（不保存）
 //   POST api/metrics  {device, level, margin, spacing, values} → 阅读器字号、行高、页边距
@@ -8,13 +8,13 @@
 const CONTEXT_KEYS = ['layout_units_version','font_size_unit','line_height_unit','paragraph_indent_unit','paragraph_spacing_unit','paragraph_indent','margin_top','margin_right','margin_bottom','margin_left','margin_top_unit','margin_right_unit','margin_bottom_unit','margin_left_unit'];
 const BOOK_KEYS = ['writing_mode', 'vertical_digits', 'font_size', 'line_height',
   'fullwidth_indent', 'paragraph_spacing', 'text_alignment', 'heading_style', 'scene_break_style', 'first_paragraph_style', 'chapter_head_scope', 'chapter_head_width', 'system_block_style', 'verse_block_style', 'note_style',
-  // V76：生僻字注音；章节样式包的开关与卷页边框（只在本书用了样式包时出现）。
+  // 生僻字注音；章节样式包的开关与卷页边框（只在本书用了样式包时出现）。
   'rare_char_ruby', 'rare_char_scope', 'chapter_style_on', 'chapter_style_volume_frame',
-  // V77：系统提示分类样式的两个预设（参数改过时为 custom）。
+  // 系统提示分类样式的两个预设（参数改过时为 custom）。
   'system_note_preset', 'system_panel_preset',
-  // V81：场景样式（聊天记录自动识别与样式、书信样式、场景字体）。
+  // 场景样式（聊天记录自动识别与样式、书信样式、场景字体）。
   'chat_block_style', 'letter_block_style', 'inset_font',
-  // V82：场景识别（诏书、论坛楼层与自定义规则）。
+  // 场景识别（诏书、论坛楼层与自定义规则）。
   'inset_detect'];
 const NUMBER_KEYS = { font_size: 'float', line_height: 'float', fullwidth_indent: 'int', paragraph_spacing: 'float' };
 const FONTS = {
@@ -24,12 +24,12 @@ const FONTS = {
   kai: '"KaiTi", "STKaiti", serif',
   yuan: '"YouYuan", "Microsoft YaHei", sans-serif',
 };
-// 导入的预览字体（V123，LAY-178）：{id, name, file}，文件放在程序数据目录，只给预览用。
+// 导入的预览字体：{id, name, file}，文件放在程序数据目录，只给预览用。
 let USER_FONTS = [];
 function userFont() {
   return S.reader.font.startsWith('user:') ? USER_FONTS.find((f) => 'user:' + f.id === S.reader.font) : null;
 }
-// 导入的 Kindle 自带字体（V128，LAY-183）：程序按字体内部名认出宋体、黑体、楷体、圆体及简繁、粗细，
+// 导入的 Kindle 自带字体：程序按字体内部名认出宋体、黑体、楷体、圆体及简繁、粗细，
 // 对应到下拉里同名的选项。简体书用简体字体、繁体书用繁体字体（与 Kindle 按书的语言选字体一致）。
 const FACE_NAMES = { song: '宋体', hei: '黑体', kai: '楷体', yuan: '圆体' };
 function kindleFace(face, bold) {
@@ -64,9 +64,9 @@ const S = {
   devices: [], device: null, reader: { level: 8, margin: 'narrow', spacing: 'medium', font: 'publisher' },
   saved: {}, draft: {}, metrics: null, render: null, title: '',
   page: 0, pages: 1, vertical: false, headings: [], entry: null, seq: 0, timer: 0,
-  // 书的文字：sc 简体、tc 繁体（按内容的 lang 判断，V128）。
+  // 书的文字：sc 简体、tc 繁体（按内容的 lang 判断）。
   script: 'sc',
-  // 每章一个文件（V36，OUT-081）：spine 为阅读顺序中的文件，doc 为当前文件，chapters 为章节列表。
+  // 每章一个文件：spine 为阅读顺序中的文件，doc 为当前文件，chapters 为章节列表。
   spine: [], doc: '', chapters: [], tocChapters: false,
 };
 
@@ -121,7 +121,7 @@ function drawDevice() {
   body.style.width = d.bodyWidthMm * s + 'px';
   body.style.height = d.bodyHeightMm * s + 'px';
   body.style.borderRadius = (d.cornerMm || 6) * s + 'px';
-  // 侧边轮廓：Oasis、Scribe 为浅灰金属边，其他为略浅于正面的深灰（V31，按实拍照片）。
+  // 侧边轮廓：Oasis、Scribe 为浅灰金属边，其他为略浅于正面的深灰（按实拍照片）。
   body.style.setProperty('--rim', Math.max(1.2, 0.8 * s) + 'px');
   body.classList.toggle('metal', !!d.grip);
   // 上边框按实拍测量（握持机型为三条窄边）；Oasis 宽边在右、Scribe 在左；其他机型左右居中、下边框取余量。
@@ -137,7 +137,7 @@ function drawDevice() {
   const viewport = $('viewport');
   viewport.style.width = d.viewportWidth + 'px';
   viewport.style.height = d.viewportHeight + 'px';
-  // 视口等于屏幕分辨率时按屏幕像素排版（V118，KPW5）。
+  // 视口等于屏幕分辨率时按屏幕像素排版（KPW5）。
   viewport.classList.toggle('pixel', d.viewportWidth === d.width && d.viewportHeight === d.height);
   // 页脚的字号与位置按 KPW5 截图（300 ppi）量得，其他机型按 ppi 换算。
   viewport.style.setProperty('--ppx', String(d.ppi / 300));
@@ -184,24 +184,24 @@ function drawDevice() {
 
 // ---------------------------------------------------------------- 分页
 
-// Kindle 中文排版（V34，LAY-115，按用户 KPW5 与预览并排照片核对）：
+// Kindle 中文排版（按用户 KPW5 与预览并排照片核对）：
 // · 行末的句号、逗号等后置标点压成半个字宽：标点半宽，后面跟一个半宽空格；行中两者合起来仍是一个字宽，
 //   行末的空格由浏览器去掉，所以只在行末变成半宽（Edge 不支持 text-spacing-trim 的行末挤压与 hanging-punctuation）；
 // · 横排时弯引号“”‘’用西文字体，约 0.38 个字宽（真机如此）。
-// V124：按 KPW5 固件简体中文类别（docs/research 交接包“符号分类对照”），问号、叹号与句号同属类别 16，
+// 按 KPW5 固件简体中文类别（docs/research 交接包“符号分类对照”），问号、叹号与句号同属类别 16，
 // 行末同样压成半宽、相邻时同样挤压（真机“这儿的？”一行排下）。
 const CLOSING = '。，、；：？！」』）》】〉';
 const QUOTES = '“”‘’';
-// 相邻标点挤压（V118，KPW5 真机）：后置标点后面紧跟后置标点时前一个占半个字宽；
+// 相邻标点挤压（KPW5 真机）：后置标点后面紧跟后置标点时前一个占半个字宽；
 // 前置标点（引号、括号）前面是全角空格或另一个前置标点时占半个字宽。
 const CLOSING_ALL = CLOSING + '”’';
 const OPENING = '“‘「『（《【〈';
-// 中文与西文字母、数字相邻处多 0.075 个字宽（V124，固件间距描述 19；KPW5 真机“1890年”的“0”与“年”之间实测 9 像素，
+// 中文与西文字母、数字相邻处多 0.075 个字宽（固件间距描述 19；KPW5 真机“1890年”的“0”与“年”之间实测 9 像素，
 // 不加为 5.2、加上为 8.8）。只认汉字、假名与 ASCII 字母数字。
 const HAN = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
 const LATIN = /[A-Za-z0-9]/;
 const XHTML = 'http://www.w3.org/1999/xhtml';
-// V129：KPW5 上中文标点（含弯引号“”‘’）都按一个字宽排，与字体无关（宋体与苹方真机截图逐字同位；
+// KPW5 上中文标点（含弯引号“”‘’）都按一个字宽排，与字体无关（宋体与苹方真机截图逐字同位；
 // 苹方的引号本来约半个字宽，宋体、黑体的是一个字宽），再按规则挤压。横排时先把引号统一成一个字宽：
 // 前置引号补在左边、后置引号补在右边。挤压：段首全角空格或前置标点之后的前置引号半宽；后置引号在行末半宽、
 // 紧跟后置标点时半宽；后置标点（含后置引号）紧跟前置标点时前一个半宽（“表情：“检查”实测）。
@@ -260,7 +260,7 @@ function kindleTypography(doc) {
         // 后置引号后面跟一个半宽空格（同句号）：行中合起来一个字宽，行末空格去掉后只剩半宽。
         if (close && !adjacent) frag.appendChild(span('ep-qs', ' '));
       } else if (ch === '\u2026' && prev !== '' && prev !== '\u2026' && !OPENING.includes(prev)) {
-        // V129：省略号可以放在行首（KPW5 宋体实测一行以“……您是怎么”开头）；浏览器不在省略号前断行，
+        // 省略号可以放在行首（KPW5 宋体实测一行以“……您是怎么”开头）；浏览器不在省略号前断行，
         // 前面放一个零宽空格。两个省略号之间仍不断开。只在 KFX 规则下生效。
         flush();
         frag.appendChild(span('ep-br', '\u200b'));
@@ -281,7 +281,7 @@ function kindleTypography(doc) {
   });
 }
 
-// 书内 CSS 的 px 换算到屏幕像素（V118）：KPW5 上 1px 画成 300/160 个像素（标题内边距与下框实测）。
+// 书内 CSS 的 px 换算到屏幕像素：KPW5 上 1px 画成 300/160 个像素（标题内边距与下框实测）。
 // 第一次记下各条样式里写了 px 的原值，之后每次按当前倍数从原值重算，换机型时能还原。
 function scaleCssPixels(doc, factor) {
   if (!doc.__easypubPx) {
@@ -315,11 +315,11 @@ function scaleCssPixels(doc, factor) {
   }
 }
 
-// Kindle 自带的字体（V123）：书里写的字体不在这里、也没有嵌入时，真机用自带宋体代替。
+// Kindle 自带的字体：书里写的字体不在这里、也没有嵌入时，真机用自带宋体代替。
 const KINDLE_FONTS = /^(STSong|STSongti|Songti|SimSun|NSimSun|宋体|STKai|STKaiti|KaiTi|楷体|STHeiti|SimHei|黑体|STYuan|圆体|Bookerly|Caecilia|Georgia|Helvetica|Futura|Palatino|Baskerville|Amazon Ember|OpenDyslexic|serif|sans-serif|monospace)$/i;
 
-// 书里写了楷体的元素（V119）：第一次排版时阅读器字体还没覆盖，按样式表算出的字体标记出来。
-// 书里写的字体 Kindle 没有、书里也没嵌入的元素（V123）标成 data-ep-sub，按 Kindle 自带宋体显示：
+// 书里写了楷体的元素：第一次排版时阅读器字体还没覆盖，按样式表算出的字体标记出来。
+// 书里写的字体 Kindle 没有、书里也没嵌入的元素标成 data-ep-sub，按 Kindle 自带宋体显示：
 // 例如出厂排版写的“Microsoft YaHei”，电脑上有、Kindle 上没有，真机实际是宋体，字宽与断行都不同。
 function markKai(doc) {
   if (doc.__easypubKai || !doc.body) return;
@@ -335,7 +335,7 @@ function markKai(doc) {
     } else if (first && embedded.has(first.toLowerCase())) {
       el.setAttribute('data-ep-emb', '');
     } else if (first) {
-      // 书里写的是 Kindle 自带的中文字体（V128）：导入了对应的 Kindle 字体时用它显示。
+      // 书里写的是 Kindle 自带的中文字体：导入了对应的 Kindle 字体时用它显示。
       const face = /^(STHeiti|SimHei|黑体|sans-serif)$/i.test(first) ? 'hei'
         : /^(STYuan|圆体)$/i.test(first) ? 'yuan'
           : /^(STSong|STSongti|Songti|SimSun|NSimSun|宋体|serif)$/i.test(first) ? 'song' : '';
@@ -354,7 +354,7 @@ function setHalfSpace(doc, vertical) {
   const ratio = (vertical ? box.height : box.width) / parseFloat(getComputedStyle(probe).fontSize);
   probe.remove();
   doc.documentElement.style.setProperty('--ep-ws', (0.5 - ratio).toFixed(4) + 'em');
-  // 弯引号统一成一个字宽（V129）：按当前正文字体量出引号宽度。
+  // 弯引号统一成一个字宽：按当前正文字体量出引号宽度。
   const host = doc.querySelector('p') || doc.body;
   for (const q of QUOTES) {
     const probeQ = doc.createElementNS(XHTML, 'span');
@@ -369,11 +369,11 @@ function setHalfSpace(doc, vertical) {
   }
 }
 
-// 书内“另起一页”（V33，LAY-114）：浏览器按列分页时只认换栏，不认换页。
+// 书内“另起一页”：浏览器按列分页时只认换栏，不认换页。
 // 先从样式表找出写了换页的选择器（含行内样式），再按每个元素实际生效的样式判断（层叠后可能被取消，
 // 如 content-continuation），确实换页的元素改为换栏——章节、书名页、目录页才会像 Kindle 一样另起一页。
 const PAGE_BREAK = /^(page|left|right|recto|verso|always)$/;
-// 字号关键字（V36，LAY-117）：浏览器按自身默认字号解释 x-large 等关键字，不随预览设置的阅读器字号变化；
+// 字号关键字：浏览器按自身默认字号解释 x-large 等关键字，不随预览设置的阅读器字号变化；
 // Kindle 与 Bokai 按阅读器基准字号换算（x-large 为 1.5 倍）。改写成 rem 后与真机比例一致（EasyPub 经典标题用 x-large）。
 const KEYWORD_SIZES = {
   'xx-small': 0.5625, 'x-small': 0.625, small: 0.8125, medium: 1,
@@ -455,7 +455,7 @@ function area() {
   };
 }
 
-// 页底按文字下沿判断放不放得下（V124）：KPW5 一行能不能排进这一页，看的是文字（字体上下沿）的下沿，
+// 页底按文字下沿判断放不放得下：KPW5 一行能不能排进这一页，看的是文字（字体上下沿）的下沿，
 // 不算行框下面的半个行间留白。按 7 张真机截图（宋体字号 4、6、8 的章首页与第 2 页、苹方字号 5）反推，
 // 只有这种算法能让上下边距都是 63 像素；按整个行框算，苹方那页会少排一行。
 // 浏览器按行框分栏，所以把正文区往下延伸一个正文行的下留白（这段本来就是空白）。
@@ -472,7 +472,7 @@ function bodyLead(doc) {
   range.setEnd(node, i + 1);
   const rect = range.getClientRects()[0];
   const lh = parseFloat(getComputedStyle(node.parentElement).lineHeight);
-  // V130：文字高度按一个字号（字框）算，与字体无关。原来取浏览器里字体自身的上下高度，中易宋体正好一个字号，
+  // 文字高度按一个字号（字框）算，与字体无关。原来取浏览器里字体自身的上下高度，中易宋体正好一个字号，
   // 固件宋体约 1.15、苹方 1.4 个字号，换字体页底就会多排或少排一行；按字框算同样符合 7 张真机截图。
   const em = parseFloat(getComputedStyle(node.parentElement).fontSize);
   return rect && lh && em ? Math.max(0, (lh - em) / 2) : 0;
@@ -519,32 +519,32 @@ function layout(keepRatio) {
       + 'column-fill:auto!important;' + (vertical
         ? 'width:' + a.width + 'px!important;height:auto!important;column-width:' + a.height + 'px!important}'
         : 'height:' + h + 'px!important;width:auto!important;column-width:' + a.width + 'px!important}'),
-    // 真机规则（V118，KPW5）：阅读器行间距只乘到正文上，标题保留书里写的行高。
-    // 标题里面的小块（标点挤压包出的 span 等）也不乘（V124：标题带“：”“。”时整行被撑高约 24 像素）。
+    // 真机规则（KPW5）：阅读器行间距只乘到正文上，标题保留书里写的行高。
+    // 标题里面的小块（标点挤压包出的 span 等）也不乘（标题带“：”“。”时整行被撑高约 24 像素）。
     m.unitsVersion === 1 ? 'body{line-height:' + (S.draft.line_height_unit === 'number' || !S.draft.line_height_unit ? m.lineRatio : m.linePixels+'px') + '!important}' : (
     (kfx ? 'body *:not(rt):not(:is(h1,h2,h3,h4,h5,h6,.heading,h1 *,h2 *,h3 *,h4 *,h5 *,h6 *,.heading *))' : 'body *:not(rt)')
       + '{line-height:' + m.lineRatio + '!important}'),
-    // 真机规则（V118，KPW5）：正文两端对齐；按取整后的字宽断行，用字距补齐。
+    // 真机规则（KPW5）：正文两端对齐；按取整后的字宽断行，用字距补齐。
     m.justify ? 'p{text-align:justify;text-justify:inter-character}' : '',
     m.tracking ? 'p{letter-spacing:' + m.tracking + 'em}' : '',
     'img,svg{max-width:100%!important;max-height:' + a.height + 'px!important}',
-    // 书里写了楷体的段落（书信、系统提示“细线楷体”等）保留楷体：KFX 真机上 STKai/楷体能显示（V119）。
+    // 书里写了楷体的段落（书信、系统提示“细线楷体”等）保留楷体：KFX 真机上 STKai/楷体能显示。
     font ? 'body,body *:not(rt):not([data-ep-kai]){font-family:' + font + '!important}' : '',
     font ? '[data-ep-kai]{font-family:' + faceFont('kai') + '!important}' : '',
-    // 出版商字体时（V123）：Kindle 没有的字体按自带宋体显示，与真机一致。
+    // 出版商字体时：Kindle 没有的字体按自带宋体显示，与真机一致。
     font ? '' : '[data-ep-sub]{font-family:' + faceFont('song') + '!important}',
-    // 出版商字体时书里写的 Kindle 中文字体（V128）：导入了对应的 Kindle 字体就用它。
+    // 出版商字体时书里写的 Kindle 中文字体：导入了对应的 Kindle 字体就用它。
     font ? '' : Object.keys(FACE_NAMES).filter((face) => kindleFace(face))
       .map((face) => '[data-ep-' + (face === 'kai' ? 'kai' : 'face="' + face + '"') + ']{font-family:' + faceFont(face) + '!important}').join(''),
-    // 书里嵌入的字体与导入的字体只有一种字重（V123）：Kindle 不会伪加粗，标题仍是常规体（KPW5 实测）。
+    // 书里嵌入的字体与导入的字体只有一种字重：Kindle 不会伪加粗，标题仍是常规体（KPW5 实测）。
     font ? '' : '[data-ep-emb]{font-synthesis:none!important}',
     user ? 'body,body *{font-synthesis:none!important}' : '',
     // 用负字距而不是负外边距：负外边距加行末空格时，浏览器断行仍按整字宽计算。
     'html .ep-p{letter-spacing:-0.5em!important}',
     'html .ep-s{word-spacing:var(--ep-ws,0)!important}',
     vertical || kfx ? '' : 'html .ep-q{font-family:"Segoe UI",Arial,sans-serif!important}',
-    // 相邻标点挤压（V118，KPW5）：前一个后置标点只占半个字宽；缩进后的前置引号去掉左半边。
-    // 弯引号（V129，KFX 规则）：前置引号左边补到一个字宽，段首等处再去掉半个字宽；后置引号右边补到一个字宽，
+    // 相邻标点挤压（KPW5）：前一个后置标点只占半个字宽；缩进后的前置引号去掉左半边。
+    // 弯引号（KFX 规则）：前置引号左边补到一个字宽，段首等处再去掉半个字宽；后置引号右边补到一个字宽，
     // 行末与相邻时减半个字宽（行末靠后面的半宽空格被浏览器去掉）。AZW3 规则下这些都不生效。
     kfx ? ['201c', '2018'].map((k) => 'html .ep-q' + k + '{margin-left:var(--ep-q' + k + ',0)!important}'
       + 'html .ep-q' + k + '.ep-oa{margin-left:calc(var(--ep-q' + k + ',0) - 0.5em)!important}').join('')
@@ -587,7 +587,7 @@ function layout(keepRatio) {
   }
   if (keepRatio !== undefined) S.page = Math.round(keepRatio * (S.pages - 1));
   show(S.page);
-  // 字体全部载入后再完整排一次（V125）：书里嵌入的字体、导入的字体是异步载入的，
+  // 字体全部载入后再完整排一次：书里嵌入的字体、导入的字体是异步载入的，
   // 先用备用字体排出的半宽空格、行间留白和断行会留在页面上（实测导入苹方后一行少排一个字）。
   if (!doc.__epFontsHooked && doc.fonts) {
     doc.__epFontsHooked = true;
@@ -642,7 +642,7 @@ function show(page) {
     + (S.vertical ? '竖排：← 或点屏幕左侧翻到下一页' : '→ 或点屏幕右侧翻到下一页');
 }
 
-// 本文件翻完后接着翻到阅读顺序中的下一个文件（每章一个文件，V36）。
+// 本文件翻完后接着翻到阅读顺序中的下一个文件（每章一个文件）。
 function turn(forward) {
   closeNote();
   const next = S.page + (forward ? 1 : -1);
@@ -690,7 +690,7 @@ async function loadSpine(base) {
       const toc = navs.find((n) => /(^|\s)toc(\s|$)/.test(epubType(n))) || navs[0] || doc;
       for (const a of toc.getElementsByTagNameNS(XHTML, 'a')) {
         const href = a.getAttribute('href') || '';
-        // 前后附页（V55）在目录里链接整个文件，不带锚点，也列出来。
+        // 前后附页在目录里链接整个文件，不带锚点，也列出来。
         if (!spine.includes(href.split('#')[0])) continue;
         let level = 0;
         for (let n = a.parentNode; n; n = n.parentNode) if (n.localName === 'ol') level++;
@@ -706,7 +706,7 @@ async function loadSpine(base) {
   }
 }
 
-// ---------------------------------------------------------------- 书内链接与注释弹窗（V61）
+// ---------------------------------------------------------------- 书内链接与注释弹窗
 // Kindle 点注释标记弹出注释，点目录、上一章 / 下一章等链接在书内跳转。浏览器默认会让 iframe 直接
 // 跳到目标文件，打乱分页，所以书内链接一律由这里接管；外部链接不打开。
 const OPS = 'http://www.idpf.org/2007/ops';
@@ -789,7 +789,7 @@ function openDoc(file, where) {
   frame.onload = () => {
     if (seq !== S.seq) return;
     const doc = frame.contentDocument;
-    // 简繁按内容的语言标记判断（V128）：zh-Hant、zh-TW、zh-HK、zh-MO 为繁体。
+    // 简繁按内容的语言标记判断：zh-Hant、zh-TW、zh-HK、zh-MO 为繁体。
     const root = doc.documentElement;
     const XML_NS = 'http://www.w3.org/XML/1998/namespace';
     const lang = [doc.body, root].filter(Boolean)
@@ -824,7 +824,7 @@ async function refreshMetrics() {
   const d = S.device;
   S.metrics = await api('metrics', {
     device: d.id, level: S.reader.level, margin: S.reader.margin, spacing: S.reader.spacing,
-    // 出版商字体在真机上多半落到自带宋体（书里写的雅黑等 Kindle 没有），按衬线算（V123）。
+    // 出版商字体在真机上多半落到自带宋体（书里写的雅黑等 Kindle 没有），按衬线算。
     serif: !['hei', 'yuan'].includes(S.reader.font), values: S.draft,
   });
   $('level').textContent = S.reader.level;
@@ -890,14 +890,14 @@ function syncControls() {
   for (const el of document.querySelectorAll('.seg[data-reader]')) {
     for (const b of el.children) b.classList.toggle('on', b.dataset.value === S.reader[el.dataset.reader]);
   }
-  // 章节标题样式（V36，LAY-117）。
+  // 章节标题样式。
   for (const el of document.querySelectorAll('select[data-key]')) {
     const key = el.dataset.key;
     el.value = S.draft[key] || 'classic';
     el.classList.toggle('changed', dirty.has(key));
   }
   $('font').value = S.reader.font;
-  // 选中导入的字体，或已导入对应 Kindle 字体的宋体等时，可以移除（V128）。
+  // 选中导入的字体，或已导入对应 Kindle 字体的宋体等时，可以移除。
   const face = FACE_NAMES[S.reader.font] && kindleFace(S.reader.font);
   $('font-remove').hidden = !userFont() && !face;
   $('font-remove').textContent = face ? '移除导入的' + FACE_NAMES[S.reader.font] : '移除这个字体';
@@ -906,13 +906,13 @@ function syncControls() {
   $('revert').disabled = dirty.size === 0;
 }
 
-// 章节样式包（V76）：显示包名；没用样式包时整组隐藏。
+// 章节样式包：显示包名；没用样式包时整组隐藏。
 function showStyle(state) {
   $('chapter-style').hidden = !state.chapter_style_name;
   $('chapter-style-name').textContent = state.chapter_style_name || '';
 }
 
-// 分类样式时才显示两个预设（V77）。
+// 分类样式时才显示两个预设。
 function showSystem() {
   $('system-presets').hidden = S.draft.system_block_style !== 'styled';
 }
@@ -960,7 +960,7 @@ function setupControls() {
   $('level-up').addEventListener('click', () => level(1));
   $('font').addEventListener('change', () => chooseFont($('font').value));
   $('font-import').addEventListener('click', () => $('font-file').click());
-  // 一次可选多个字体文件（V128）：Kindle 自带的字体对应到宋体等选项，其他字体列在下拉末尾。
+  // 一次可选多个字体文件：Kindle 自带的字体对应到宋体等选项，其他字体列在下拉末尾。
   $('font-file').addEventListener('change', async () => {
     const files = [...$('font-file').files];
     $('font-file').value = '';
@@ -998,7 +998,7 @@ function setupControls() {
     else status(done);
     if (others.length === 1 && !kindle.length) await chooseFont('user:' + others[0].id);
     else if (kindle.length) {
-      // 导入了 Kindle 字体就改选对应的选项（V128）：优先宋体，其次按导入顺序；选着出版商字体时不改。
+      // 导入了 Kindle 字体就改选对应的选项：优先宋体，其次按导入顺序；选着出版商字体时不改。
       const faces = kindle.filter((k) => !k.bold && k.script === S.script).map((k) => k.face);
       const face = faces.includes('song') ? 'song' : faces[0];
       await chooseFont(face && S.reader.font !== 'publisher' ? face : S.reader.font);
@@ -1095,12 +1095,12 @@ function keys(event) {
   event.preventDefault();
 }
 
-// 阅读器字体下拉：内置几种近似字体，后面是导入的字体（V123）。
+// 阅读器字体下拉：内置几种近似字体，后面是导入的字体。
 function fillFonts(fonts) {
   USER_FONTS = fonts || [];
   const select = $('font');
   for (const option of [...select.querySelectorAll('option[data-user]')]) option.remove();
-  // 导入了对应 Kindle 字体的选项标成“Kindle 字体”，没导入的仍是电脑上的近似字体（V128）。
+  // 导入了对应 Kindle 字体的选项标成“Kindle 字体”，没导入的仍是电脑上的近似字体。
   for (const [face, label] of Object.entries(FACE_NAMES)) {
     const option = select.querySelector('option[value="' + face + '"]');
     if (option) option.textContent = label + (kindleFace(face) ? '（Kindle 字体）' : '');

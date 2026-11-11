@@ -9,7 +9,7 @@ import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/rules/rules_page.dart';
 
-/// V66：规则页开关接通（CH-282），真实 DLL；后端为 V65 的 settings / previewToggles / applyToggles。
+/// 规则页开关接通，真实 DLL；后端为 settings / previewToggles / applyToggles。
 void main() {
   setUpAll(
     () async => RustLib.init(

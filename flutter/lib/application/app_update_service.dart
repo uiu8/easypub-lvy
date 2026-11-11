@@ -1,4 +1,4 @@
-// 自动更新（V68，SET-071–073）：检查 GitHub 发布页、后台下载并校验、启动更新程序。
+// 自动更新：检查 GitHub 发布页、后台下载并校验、启动更新程序。
 // 实际的网络、校验与文件替换在 Rust（easypub_app::app_update 与 easypub_updater.exe）。
 
 class UpdateRelease {

@@ -27,7 +27,7 @@ class ConversionPreflightRunner {
     this.parallel = 1,
   });
 
-  /// 同时检查的本数（V38，OUT-083）；1 与原来的逐本检查相同。
+  /// 同时检查的本数；1 与原来的逐本检查相同。
   final int parallel;
 
   final PrototypeState state;
@@ -61,7 +61,7 @@ class ConversionPreflightRunner {
     bool Function()? isCancelled,
     void Function(List<ConversionPreflightReport> reports)? onProgress,
   }) async {
-    // 几本同时检查（V38）；进度与结果始终按所选书的顺序排列。
+    // 几本同时检查；进度与结果始终按所选书的顺序排列。
     final list = books.toList(growable: false);
     final done = List<ConversionPreflightReport?>.filled(list.length, null);
     await runLimited(list, parallel, (book, index) async {
@@ -409,7 +409,7 @@ class ConversionPreflightRunner {
           ),
         );
       }
-      // V24（OUT-078）：为 Kindle 转换的封面与插图，逐张列出转换前后的格式与尺寸。
+      // 为 Kindle 转换的封面与插图，逐张列出转换前后的格式与尺寸。
       final conversions = (manifest?['image_conversions'] as List? ?? const [])
           .whereType<Map>()
           .toList();
@@ -484,7 +484,7 @@ class ConversionPreflightRunner {
   }
 }
 
-/// 一张图片的转换说明（OUT-078），如“cover.webp：WebP 1200×1800 → JPEG 1200×1800（格式）”。
+/// 一张图片的转换说明，如“cover.webp：WebP 1200×1800 → JPEG 1200×1800（格式）”。
 String imageConversionLine(Map c) {
   String name(Object? f) => switch ('$f') {
     'jpg' || 'jpeg' => 'JPEG',

@@ -121,7 +121,7 @@ void main() {
         done = true;
       });
       await until(() => done);
-      // V16：检查摘要并入制作进度，标题行写检查时间（LIB-111）。
+      // 检查摘要并入制作进度，标题行写检查时间。
       expect(
         t.widget<Text>(find.byKey(const ValueKey('overview-checked-at'))).data,
         startsWith('检查于 '),
@@ -136,7 +136,7 @@ void main() {
       expect(notifications, greaterThan(before));
       observer.dispose();
       external.dispose();
-      // V15（LIB-110）：项目文件状态写在“项目与来源”里，与草稿自动保存分开说明。
+      // 项目文件状态写在“项目与来源”里，与草稿自动保存分开说明。
       expect(find.text('尚未另存为项目文件'), findsOneWidget);
       expect(find.textContaining('草稿已自动保存在本机'), findsOneWidget);
       await t.ensureVisible(find.text('另存为项目…'));
@@ -160,7 +160,7 @@ void main() {
             .onPressed,
         isNull,
       );
-      // 转换统一用底部的“转换当前书”，概览里不再有重复入口（LIB-109）。
+      // 转换统一用底部的“转换当前书”，概览里不再有重复入口。
       expect(find.text('生成成品'), findsOneWidget); // 只剩“制作进度”中的一行
       expect(find.text('转换本书'), findsNothing);
       await t.ensureVisible(find.text('打开原文件位置'));

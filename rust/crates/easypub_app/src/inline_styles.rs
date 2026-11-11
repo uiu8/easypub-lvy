@@ -1,4 +1,4 @@
-//! V105：有效稿上的非破坏性单行样式。
+//! 有效稿上的非破坏性单行样式。
 use crate::{
     block_annotations,
     manual_notes::{self, Anchor},

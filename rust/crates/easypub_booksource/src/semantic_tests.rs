@@ -1,4 +1,4 @@
-//! V102 C：根据公开规则说明自拟数据，经过真实 QuickJS/规则引擎，不访问真实站点。
+//! 根据公开规则说明自拟数据，经过真实 QuickJS/规则引擎，不访问真实站点。
 use crate::{
     engine::{Engine, SourceRt},
     node::Node,

@@ -7,7 +7,7 @@ import 'desk_v88_booksource_test.dart' as v88;
 import 'desk_v89_booksource_test.dart' as v89;
 import 'desk_v91_booksource_test.dart' as v91;
 
-/// V107：章节缓存位置。插件返回位置、书数与大小；选新位置后插件把已有缓存搬过去。
+/// 章节缓存位置。插件返回位置、书数与大小；选新位置后插件把已有缓存搬过去。
 class V107Api extends v91.V91Api {
   Map<String, dynamic> cache = {
     'path': r'C:\数据\plugin-data\booksource\chapter-cache',

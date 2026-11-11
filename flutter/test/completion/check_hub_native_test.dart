@@ -194,7 +194,7 @@ void main() {
         final tree = await chapter.read(0);
         await chapter.rename(tree, tree.nodes.first.id, '第一章 新标题');
       });
-      // V134：书稿改了自动重新检查，不再停在“需要重新检查”等用户点。
+      // 书稿改了自动重新检查，不再停在“需要重新检查”等用户点。
       await tester.pump();
       await settle();
       expect(
@@ -215,7 +215,7 @@ void main() {
         await chapter.history(await chapter.read(0), undo: true);
       });
       await tester.pump();
-      // 撤销后书稿又变了：自动重新检查（V134），仍保留用户的问题筛选与页码。
+      // 撤销后书稿又变了：自动重新检查，仍保留用户的问题筛选与页码。
       await settle();
       expect(
         tester

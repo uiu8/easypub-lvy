@@ -1,4 +1,4 @@
-// 排版预览的机型与分页（LAY-092/093）：机型表沿用原版 EasyPub-Modern 的 KindleDeviceProfiles
+// 排版预览的机型与分页：机型表沿用原版 EasyPub-Modern 的 KindleDeviceProfiles
 // （分辨率、PPI 与 CSS 视口）；书页按所选机型的视口宽高比排版并近似分页。只用于示意，以真机为准。
 import 'dart:convert';
 import 'dart:math' as math;
@@ -34,12 +34,12 @@ class KindleDevice {
   final String id, name;
   final int width, height, ppi;
 
-  /// 机身宽高（毫米，竖持），真机预览按此等比例绘制（LAY-109）。来源见
-  /// docs/evidence/v30-kindle-preview-20261014.md；Oasis、Scribe 一侧为宽边（[grip]）。
+  /// 机身宽高（毫米，竖持），真机预览按此等比例绘制，取自各机型的官方规格。
+  /// Oasis、Scribe 一侧为宽边（[grip]）。
   final double bodyWidthMm, bodyHeightMm;
   final bool grip;
 
-  /// 外观（V31，LAY-112，按实拍照片测量，见 docs/evidence/v31-kindle-body-20261014.md）：
+  /// 外观（按实拍照片测量）：
   /// [topBezelMm] 为上边框（握持机型为三条窄边的宽度），下边框取余量；[gripLeft] 宽边在左（Scribe）；
   /// [logo] 为下边框“kindle”字样：'light' 浅灰、'dark' 压印暗字、'' 没有；[pressMarks] 为 Voyage 两侧压感翻页标记。
   final bool gripLeft, pressMarks;
@@ -232,7 +232,7 @@ const kindleDevices = <KindleDevice>[
 const defaultKindleDeviceId = 'kpw6';
 
 /// 机型短名：“KPW6 / Paperwhite 第 12 代（7 英寸）”写作“KPW6”，
-/// 没有代号的去掉“Kindle”和括号部分，例如“Scribe”“基础款第 10 代”（LAY-102）。
+/// 没有代号的去掉“Kindle”和括号部分，例如“Scribe”“基础款第 10 代”。
 String kindleShortName(String name) =>
     name.split('（').first.split(' / ').first.replaceFirst('Kindle ', '').trim();
 
@@ -256,7 +256,7 @@ KindleDevice? customKindleDevice(int width, int height, int ppi) {
 }
 
 /// 预览机型与阅读器设置（界面偏好）：序列化后存于设置目录，不写入书稿。
-/// 阅读器设置对应 Kindle 的“字号档位 / 页边距 / 行距 / 字体”（LAY-096）；
+/// 阅读器设置对应 Kindle 的“字号档位 / 页边距 / 行距 / 字体”；
 /// [calibrations] 为“按真机校准”记录：键为 机型:档位:页边距:行距，值为（每行字数，每页行数）。
 class PreviewDeviceChoice {
   const PreviewDeviceChoice({
@@ -353,7 +353,7 @@ class PreviewDeviceChoice {
   }
 }
 
-/// Kindle 固件 5.8.11 中的 14 档默认字号（V32，LAY-113）。MobileRead 论坛从固件代码读出，
+/// Kindle 固件 5.8.11 中的 14 档默认字号。MobileRead 论坛从固件代码读出，
 /// 用于非中日韩文字，按屏幕 ppi 分三套；数值按磅计（与 KPW5 实测吻合，论坛另有“1/100 英寸”之说，与实测不符）。
 const kindleFontRamp = <int, List<double>>{
   300: [
@@ -408,7 +408,7 @@ const kindleFontRamp = <int, List<double>>{
 
 /// 固件中的页边距（磅）：左右“窄 / 中 / 宽”（font.wordsperline.margin.list），
 /// 上边距 reader.content.topMargin，下边距 reader.content.bottomMargin。
-/// 页脚（位置、进度）画在下边距里，不另占高度（V35，LAY-116：按用户 KPW5 并排照片，
+/// 页脚（位置、进度）画在下边距里，不另占高度（按用户 KPW5 并排照片，
 /// 真机第 4 章首页第十行的下沿在屏高 0.946 处、页脚文字在 0.972 处）。
 const readerMarginPt = {'narrow': 16.98, 'medium': 33.96, 'wide': 50.94};
 const readerTopPt = 13.58;
@@ -431,16 +431,16 @@ class ReaderMetrics {
   final bool measured;
   final String note;
 
-  /// 正文字距补偿（em）与两端对齐（V118，KPW5 真机规则）：真机按取整后的字宽断行，再两端对齐。
+  /// 正文字距补偿（em）与两端对齐（KPW5 真机规则）：真机按取整后的字宽断行，再两端对齐。
   final double tracking;
   final bool justify;
 
-  /// 书内 CSS 的 1px 在屏幕上画几个像素（V118：KPW5 为 300 / 160 = 1.875，按标题内边距与下框实测）。
+  /// 书内 CSS 的 1px 在屏幕上画几个像素（KPW5 为 300 / 160 = 1.875，按标题内边距与下框实测）。
   /// 为 1 时不换算。
   final double cssPx;
 }
 
-/// KFX 真机规则（V118，2026-10-29 用户 KPW5 真机截图实测，docs/research/2026-10-29_KPW5真机实测.md）。
+/// KFX 真机规则（2026-10-29 用户 KPW5 真机截图实测，docs/research/2026-10-29_KPW5真机实测.md）。
 /// 字号 = 固件中文字号表（磅）× ppi/72 × 书内字号；行距 = 字号 × 书内行高 × 阅读器行间距，取整；
 /// 版心 = 字号的整数倍（可用宽 ÷ 字号取整）并居中，两端对齐；上下边距用固件资源（KPW5 上 63 像素），
 /// 页脚画在下边距里。所有机型按原生分辨率排版；其他机型的资源参数见机型表，完整分页仍是近似。
@@ -453,7 +453,7 @@ const kpw5SpacingFactor = {'small': 1.14, 'medium': 1.35, 'large': 1.54};
 /// 取中间值 1064 / 861 / 734，每侧 86 / 187.5 / 251 像素，按 300 ppi 换成磅。仅保留给 KPW5 和自定义推算。
 const kfxSideMarginPt = {'narrow': 20.64, 'medium': 45.0, 'wide': 60.24};
 
-/// 固件屏幕系数（V131，KPW5 固件 5.17.1.0.3 KindleResourceBundle.pixVal）：阅读器资源里的磅数换像素时
+/// 固件屏幕系数（KPW5 固件 5.17.1.0.3 KindleResourceBundle.pixVal）：阅读器资源里的磅数换像素时
 /// 乘这个系数——6.8 英寸 1236×1648 为 1.13，7 英寸 1264×1680、1272×1696 为 1.16，其他屏幕为 1。
 double firmwareScreenFactor(KindleDevice d) {
   final profile = kindleFirmwareProfiles[d.id];
@@ -466,7 +466,7 @@ double firmwareScreenFactor(KindleDevice d) {
   return 1;
 }
 
-/// 固件的上下边距（像素，V131）：reader.content.topMargin / bottomMargin 为 13.58 磅（1860×2480 为
+/// 固件的上下边距（像素）：reader.content.topMargin / bottomMargin 为 13.58 磅（1860×2480 为
 /// 15.36 磅），按 pixVal 换算：磅 × 屏幕系数 × ppi ÷ 72，向下取整。KPW5 为 63 像素，与 7 张真机截图
 /// 反推的结果一致；页脚画在下边距里（阅读器把下边距交给排版引擎前减去页脚高度）。
 double firmwareVerticalMarginPx(KindleDevice d) {
@@ -571,7 +571,7 @@ ReaderMetrics kfxMetrics(
 }
 
 /// 实测“每行 N 字”对应的行宽（字）：真机行末的句号、逗号压成半宽，数到的 N 字通常是 N−1 个整字
-/// 加一个半宽标点，行宽在 N−0.5 与 N 之间，取 N−0.25（V34，LAY-115；按用户 KPW5 并排照片核对）。
+/// 加一个半宽标点，行宽在 N−0.5 与 N 之间，取 N−0.25（按用户 KPW5 并排照片核对）。
 double readerLineEms(int perLine) => perLine - .25;
 
 /// 机型使用的字号表：按 ppi 取最接近的一套。
@@ -585,7 +585,7 @@ List<double> kindleRamp(KindleDevice d) => d.ppi < 190
 double kindlePtToCss(KindleDevice d, double pt) =>
     pt * d.ppi / 72 * d.viewportWidth / d.width;
 
-/// 每侧左右页边距（CSS 像素）：固件磅数乘屏幕系数（V131）。
+/// 每侧左右页边距（CSS 像素）：固件磅数乘屏幕系数。
 double readerSideMargin(KindleDevice d, String margin) => kindlePtToCss(
   d,
   (kindleFirmwareProfiles[d.id]?.sideMarginPt[const {
@@ -599,9 +599,9 @@ double readerSideMargin(KindleDevice d, String margin) => kindlePtToCss(
       firmwareScreenFactor(d),
 );
 
-/// 按机型与阅读器设置计算正文字号与行高（LAY-096、LAY-113）。
+/// 按机型与阅读器设置计算正文字号与行高。
 /// [bookScale] 为书内字号相对 110% 的倍数；[bookLineHeight] 为书内行高。
-/// V118 起没有用户校准时一律按 KFX 真机规则（[kfxMetrics]，所有机型按原生分辨率排版）；
+/// 后来没有用户校准时一律按 KFX 真机规则（[kfxMetrics]，所有机型按原生分辨率排版）；
 /// 有“按真机校准”记录时按输入的每行字数、每页行数反推。
 ReaderMetrics readerMetrics(
   PreviewDeviceChoice choice, {
@@ -616,10 +616,10 @@ ReaderMetrics readerMetrics(
       bookLineHeight: bookLineHeight,
     );
   }
-  // 用户“按真机校准”：按输入的每行字数、每页行数反推字号与行高（LAY-096）。
+  // 用户“按真机校准”：按输入的每行字数、每页行数反推字号与行高。
   final device = choice.device;
   final side = readerSideMargin(device, choice.margin);
-  // 上下边距按固件（V131），换成视口像素。
+  // 上下边距按固件，换成视口像素。
   final top =
       firmwareVerticalMarginPx(device) * device.viewportWidth / device.width;
   final bottom = top;
@@ -640,7 +640,7 @@ ReaderMetrics readerMetrics(
 /// 标题下框的线型。
 enum HeadingRule { none, dotted, dashed, solid }
 
-/// 章节标题样式在预览中的画法（V36，LAY-117），与 Rust `heading_rules` 一一对应：
+/// 章节标题样式在预览中的画法，与 Rust `heading_rules` 一一对应：
 /// [scale] 为相对正文的字号；[top]、[bottom]、[padTop]、[padBottom] 为相对标题字号的倍数（CSS 的 em）；
 /// 下框宽度为 CSS 像素。所有样式都居中、加粗（h 标签默认粗体）。
 class HeadingLook {
@@ -752,10 +752,10 @@ class PreviewPiece {
   final String text;
   final bool title, indent;
 
-  /// 文字样式（V120，章节页排版视图）：按显示的文字分出加粗等片段；为空时整段同一样式。
+  /// 文字样式（章节页排版视图）：按显示的文字分出加粗等片段；为空时整段同一样式。
   final InlineSpan Function(String text)? spans;
 
-  /// 系统提示分类样式（V104，LAY-146）：单行 `note` 或面板 `panel`；不是分类样式时为空。
+  /// 系统提示分类样式：单行 `note` 或面板 `panel`；不是分类样式时为空。
   /// 一段连续的系统提示从 [runStart] 到 [runEnd]；跨页切开时前半段不收尾、后半段不起头。
   final String role;
   final bool runStart, runEnd;
@@ -763,19 +763,19 @@ class PreviewPiece {
   /// 面板的标题行。
   final bool heading;
 
-  /// 正文插图（R5-01）；不为空时这一块只画图和图注。
+  /// 正文插图；不为空时这一块只画图和图注。
   final PreviewImage? image;
 
-  /// 系统提示 `system`、诗句 `verse`、署名 `by`（V50，LAY-121/122）；普通段为空。
+  /// 系统提示 `system`、诗句 `verse`、署名 `by`；普通段为空。
   final String kind;
 
-  /// 章首段落的首字放大（V49，LAY-119）。
+  /// 章首段落的首字放大。
   final bool initial;
 }
 
 final _initialLetter = RegExp(r'^[\p{L}\p{N}]', unicode: true);
 
-/// 小预览里的正文插图（R5-01），与成品 CSS 一致：随正文的按原尺寸、超出版心才缩小
+/// 小预览里的正文插图，与成品 CSS 一致：随正文的按原尺寸、超出版心才缩小
 /// （`max-width: 100%`），上下各留 1em；整页的铺满宽度并单独占一页。保持原比例；
 /// 读不出的图画虚线框和文件名。只是近似，成品以真机预览为准。
 class PreviewImage {
@@ -876,13 +876,13 @@ class PreviewStyle {
     this.systemStyles,
   });
 
-  /// 系统提示与诗词样式（V50，LAY-121/122），见 `systemBlockStyles`、`verseBlockStyles`。
+  /// 系统提示与诗词样式，见 `systemBlockStyles`、`verseBlockStyles`。
   final String systemBlock, verseBlock;
 
-  /// “分类样式”下单行提示与面板的样式参数（V104，LAY-146）：`{note: {...}, panel: {...}}`。
+  /// “分类样式”下单行提示与面板的样式参数：`{note: {...}, panel: {...}}`。
   final Map? systemStyles;
 
-  /// 统一章首图（V54，LAY-124）：画在章标题上方，宽度为版心的 [headFraction]，保持原比例。
+  /// 统一章首图：画在章标题上方，宽度为版心的 [headFraction]，保持原比例。
   final ui.Image? headImage;
   final double headFraction;
 
@@ -896,16 +896,16 @@ class PreviewStyle {
 
   final TextStyle title, body;
 
-  /// 章首段落样式（V49，LAY-119），见 `firstParagraphStyles`。
+  /// 章首段落样式，见 `firstParagraphStyles`。
   final String firstParagraph;
 
-  /// 场景分隔样式（V46，LAY-118），见 `sceneBreakStyles`。
+  /// 场景分隔样式，见 `sceneBreakStyles`。
   final String sceneBreak;
   final TextAlign align;
   final double indent, paragraphSpacing, titleSpacing;
   final EdgeInsets padding;
 
-  /// 章节标题样式（V36）；为空时标题后只留 [titleSpacing]。
+  /// 章节标题样式；为空时标题后只留 [titleSpacing]。
   final HeadingLook? heading;
 
   /// CSS 像素换算为预览像素的倍数（下框宽度用）。
@@ -1047,11 +1047,11 @@ TextSpan _span(PreviewPiece piece, PreviewStyle style) {
   );
 }
 
-/// 一段之后到下一段的间距（V120，章节页排版视图逐段排时用）。
+/// 一段之后到下一段的间距（章节页排版视图逐段排时用）。
 double previewGapAfter(PreviewPiece piece, PreviewStyle style) =>
     _gapAfter(piece, style);
 
-/// 按书页规则画的一段（V120，章节页排版视图）：[style] 的页边距应为零，宽为版心宽；
+/// 按书页规则画的一段（章节页排版视图）：[style] 的页边距应为零，宽为版心宽；
 /// 高度与书页里这一段相同，不含段后间距。
 class PreviewPieceView extends StatelessWidget {
   const PreviewPieceView({
@@ -1075,7 +1075,7 @@ class PreviewPieceView extends StatelessWidget {
   );
 }
 
-/// 按 Kindle 规则断好的段落（V124）：每行原文的结束位置，分页时按它切开。
+/// 按 Kindle 规则断好的段落：每行原文的结束位置，分页时按它切开。
 final _kindleCuts = Expando<List<int>>('kindle-cuts');
 
 /// 单个字符的宽度（含正文字距），按字体、字号、字距与码点缓存。
@@ -1101,7 +1101,7 @@ double _advance(TextStyle body, int code) {
   return _advances[key] = width;
 }
 
-/// 普通正文段（V124）：按 Kindle 规则自己断行（行末标点半宽、相邻挤压、中西间距、中文禁则、两端对齐），
+/// 普通正文段：按 Kindle 规则自己断行（行末标点半宽、相邻挤压、中西间距、中文禁则、两端对齐），
 /// 每行一段文字，行间用换行分开。标题、系统提示、诗句、场景分隔、首字放大、带行内样式的段落仍交给 Flutter 排。
 (TextSpan, List<int>)? _kindleSpan(
   PreviewPiece piece,
@@ -1243,7 +1243,7 @@ TextPainter _painter(
     ]);
   }
   // 分类样式的系统提示：文字在边框与左右内边距以内排。
-  // 普通段按版心宽排（V120）：否则段宽缩到文字宽，居中的诗句、靠右的署名都会画在左边。
+  // 普通段按版心宽排：否则段宽缩到文字宽，居中的诗句、靠右的署名都会画在左边。
   painter.layout(
     minWidth: look == null ? width : 0,
     maxWidth: look == null
@@ -1263,7 +1263,7 @@ TextPainter _painter(
 
 /// 一行行框下面的半个行间留白：行高减去字体上下沿后的一半（Flutter 按行高等比放大上下沿，
 /// 字体本身的上下沿按未放大的上沿换算）。
-// V130：文字高度按一个字号（字框）算，与字体无关（同真机预览 bodyLead）。
+// 文字高度按一个字号（字框）算，与字体无关（同真机预览 bodyLead）。
 double _lineLead(ui.LineMetrics m, double em) {
   if (m.height <= 0) return 0;
   return math.max(0, (m.height - em) / 2);
@@ -1277,10 +1277,10 @@ List<List<PreviewPiece>> paginatePreview({
   required Size page,
   Locale? locale,
 
-  /// 正文插图（R5-01）：键是插在第几段之后（0 起），-1 表示紧接标题。
+  /// 正文插图：键是插在第几段之后（0 起），-1 表示紧接标题。
   Map<int, List<PreviewImage>> images = const {},
 
-  /// 系统提示识别范围（V121，LAY-169）：本书 rule_options.system_scope；按本章判断倾向。
+  /// 系统提示识别范围：本书 rule_options.system_scope；按本章判断倾向。
   String systemScope = 'auto',
 }) {
   final scope = SystemScope(paragraphs, systemScope);
@@ -1295,7 +1295,7 @@ List<List<PreviewPiece>> paginatePreview({
     remaining = height;
   }
 
-  // 章首段落（V49，LAY-119）：标题后与场景分隔后的第一段不缩进，可放大首字。
+  // 章首段落：标题后与场景分隔后的第一段不缩进，可放大首字。
   final blocks = [PreviewPiece(title, title: true)];
   void addImages(int after) {
     for (final image in images[after] ?? const <PreviewImage>[]) {
@@ -1309,7 +1309,7 @@ List<List<PreviewPiece>> paginatePreview({
   var previous = '';
   for (final (index, p) in paragraphs.indexed) {
     final scene = style.sceneBreak != 'off' && isSceneBreak(p);
-    // 系统提示与诗词（V50，LAY-121/122）：署名只接在诗句之后。
+    // 系统提示与诗词：署名只接在诗句之后。
     // 分类样式下单独一行的“叮！”并入紧跟的系统提示（与 Rust 相同）。
     final ding =
         styled &&
@@ -1375,7 +1375,7 @@ List<List<PreviewPiece>> paginatePreview({
               ? style.titleBefore + style.titleAfter + style.headHeight(width)
               : 0);
       final metrics = painter.computeLineMetrics();
-      // 页底按文字下沿判断放不放得下（V124，与真机预览相同，按 KPW5 真机截图反推）：
+      // 页底按文字下沿判断放不放得下（与真机预览相同，按 KPW5 真机截图反推）：
       // 最后一行行框下面的半个行间留白可以超出页底。
       final tail = piece.title || after > 0 || metrics.isEmpty
           ? 0.0
@@ -1417,7 +1417,7 @@ List<List<PreviewPiece>> paginatePreview({
       }
 
       // 文字都放得下、整块却放不下（块的下内边距与边框画成末尾一段，放不下）：最后一行连同块尾挪到下一页，
-      // 不切出一个没有剩余的块（那样这一页的块会少了收尾）。V130 页底按字框判断后才会碰到。
+      // 不切出一个没有剩余的块（那样这一页的块会少了收尾）。页底按字框判断后才会碰到。
       var cut = fit > 0 && !piece.title ? cutAt(fit) : 0;
       while (fit > 0 && !piece.title && cut >= piece.text.length) {
         fit--;
@@ -1463,7 +1463,7 @@ List<List<PreviewPiece>> paginatePreview({
   return pages.isEmpty ? [<PreviewPiece>[]] : pages;
 }
 
-/// 分类样式（V104，LAY-146）：连续的系统提示合成一段，一行为单行提示、多行为面板（与 Rust 按行数
+/// 分类样式：连续的系统提示合成一段，一行为单行提示、多行为面板（与 Rust 按行数
 /// 的规则相同）；面板首行是“叮！”或够短且不含冒号时作标题；按样式去掉【】。
 void _markSystemRuns(List<PreviewPiece> blocks, PreviewStyle style) {
   var i = 0;
@@ -1505,7 +1505,7 @@ void _markSystemRuns(List<PreviewPiece> blocks, PreviewStyle style) {
   }
 }
 
-/// 章节标题样式的缩略图（V36，LAY-117）：与小预览同一套画法，标题下画两条灰线代表正文。
+/// 章节标题样式的缩略图：与小预览同一套画法，标题下画两条灰线代表正文。
 class HeadingSample extends StatelessWidget {
   const HeadingSample({
     super.key,
@@ -1599,7 +1599,7 @@ class _HeadingSamplePainter extends CustomPainter {
 
 /// 一页书页：按视口尺寸排版，外部用 FittedBox 缩放。
 /// 书页按与分页完全相同的 TextPainter（同字体、同语言区域、不缩放）绘制，
-/// 分页与显示不会再因继承的默认文字样式不同而错开、截掉末尾几行（LAY-101）。
+/// 分页与显示不会再因继承的默认文字样式不同而错开、截掉末尾几行。
 class PreviewPage extends StatelessWidget {
   const PreviewPage({
     super.key,
@@ -1664,7 +1664,7 @@ class _PagePainter extends CustomPainter {
     this.single = false,
   });
 
-  /// 只画一段（V120，章节页排版视图逐行画）：加框的系统提示按 [PreviewPiece.runStart]、
+  /// 只画一段（章节页排版视图逐行画）：加框的系统提示按 [PreviewPiece.runStart]、
   /// [PreviewPiece.runEnd] 只画这一段的那部分框，连续几行在页面上连成一个框。
   final bool single;
   final List<PreviewPiece> pieces;
@@ -1701,13 +1701,13 @@ class _PagePainter extends CustomPainter {
       if (piece.title) y += style.titleBefore;
       final look = _look(piece, style);
       if (look != null) {
-        // 分类样式（V104，LAY-146）：照成品 CSS 画底色、边框、标题行，再画文字。
+        // 分类样式：照成品 CSS 画底色、边框、标题行，再画文字。
         y = _paintStyled(canvas, piece, look, painter, y, width);
         painter.dispose();
         if (i < pieces.length - 1) y += _gapAfter(piece, style);
         continue;
       }
-      // “加框”（V50）；分类样式缺参数时也按加框画。
+      // “加框”；分类样式缺参数时也按加框画。
       final boxed =
           piece.kind == 'system' &&
           (style.systemBlock == 'box' || style.systemBlock == 'styled');
@@ -1715,7 +1715,7 @@ class _PagePainter extends CustomPainter {
       painter.paint(canvas, Offset(style.padding.left, y));
       y += painter.height;
       painter.dispose();
-      // 系统提示加框（V50，LAY-121）：连续几段画一个框。
+      // 系统提示加框：连续几段画一个框。
       final next = i + 1 < pieces.length ? pieces[i + 1] : null;
       if (boxed && single) {
         _paintBoxPart(canvas, piece, boxTop!, y, width);
@@ -1805,7 +1805,7 @@ class _PagePainter extends CustomPainter {
     final shade = look.shade;
     if (shade != null) {
       final rect = Rect.fromLTRB(left, top, right, bottom);
-      // 圆角（V119）：一段跨页切开时只给起头、收尾的那一侧画圆角。
+      // 圆角：一段跨页切开时只给起头、收尾的那一侧画圆角。
       final r = Radius.circular(look.radius ? .5 * look.fontEm : 0);
       canvas.drawRRect(
         RRect.fromRectAndCorners(
@@ -1883,7 +1883,7 @@ class _PagePainter extends CustomPainter {
     return piece.runEnd ? bottom + margin : bottom;
   }
 
-  /// 画一张插图和图注，返回占用的高度（R5-01）。
+  /// 画一张插图和图注，返回占用的高度。
   double _paintImage(
     Canvas canvas,
     PreviewImage image,

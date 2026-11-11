@@ -497,7 +497,7 @@ fn hypothetical_catalog_counts_require_a_reference_and_keep_real_locations() {
     );
 }
 
-/// V104（LAY-148）：按当前设置逐行列出系统提示与诗词，行号是本节正文行号，手工标注单独标出；关闭识别时不列。
+/// 按当前设置逐行列出系统提示与诗词，行号是本节正文行号，手工标注单独标出；关闭识别时不列。
 #[test]
 fn layout_lines_follow_current_settings_and_mark_manual_blocks() {
     let source = SourceSnapshot::from_utf8(fixture().into_bytes(), RULE_ID, || false).unwrap();

@@ -1,5 +1,5 @@
-// 自适应导航栏（G-005–018）：默认是图标在上、短名在下的窄栏；宽窗（≥1440 逻辑像素）
-// 时栏底有“展开导航栏”，展开为图标+文字（G-084，用户反馈）。窗口不够高时只留图标
+// 自适应导航栏：默认是图标在上、短名在下的窄栏；宽窗（≥1440 逻辑像素）
+// 时栏底有“展开导航栏”，展开为图标+文字（用户反馈）。窗口不够高时只留图标
 // （悬停提示全名），再不够时可滚动。
 import 'package:flutter/material.dart';
 
@@ -285,7 +285,7 @@ class _RailItem extends StatelessWidget {
   }
 }
 
-/// 当前书卡（G-018）：展开时显示封面、书名、作者；点击打开选书。
+/// 当前书卡：展开时显示封面、书名、作者；点击打开选书。
 class DeskBookSwitch extends StatelessWidget {
   const DeskBookSwitch({
     super.key,

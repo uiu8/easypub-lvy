@@ -6,7 +6,7 @@ import '../dialogs.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 
-/// 系统提示块样式编辑器（V78，LAY-133）：逐项调参数，右侧按成品 CSS 的规则近似预览。
+/// 系统提示块样式编辑器：逐项调参数，右侧按成品 CSS 的规则近似预览。
 /// 结果：应用到本书（name 为 null），或另存为“我的样式”（带名称，同时应用）。
 class BlockStyleEdit {
   const BlockStyleEdit(this.style, {this.name});
@@ -33,7 +33,7 @@ const _choices = <String, (String, Map<Object, String>)>{
   'key_bold': ('键名加粗', {false: '关', true: '开'}),
   'brackets': ('成品括号', {'keep': '保留【】', 'remove': '去掉'}),
   'spacing': ('上下间距', {'tight': '紧', 'medium': '中', 'loose': '松'}),
-  // V119：参照中文精排加的四项。
+  // 参照中文精排加的四项。
   'tone': ('线色', {'black': '黑', 'gray': '灰'}),
   'font': ('字体', {'body': '随正文', 'kai': '楷体'}),
   'inset': (
@@ -67,7 +67,7 @@ class _Editor extends StatefulWidget {
 }
 
 class _EditorState extends State<_Editor> {
-  // 旧样式没有 V119 的四项参数：按默认值补齐，编辑器里每项都有选中的值。
+  // 旧样式没有早先的四项参数：按默认值补齐，编辑器里每项都有选中的值。
   late final style = <String, Object>{...blockStyleDefaults, ...widget.initial};
   final name = TextEditingController();
   bool get panel => widget.kind == 'panel';
@@ -333,7 +333,7 @@ Map<String, Map<String, Object>> savedStylesOf(
 /// 两组参数是否相同。
 bool sameStyle(Map? a, Map? b) {
   if (a == null || b == null) return false;
-  // V119 新增参数缺省时按默认值比较。
+  // 新增参数缺省时按默认值比较。
   final x = normalizedBlockStyle(a), y = normalizedBlockStyle(b);
   return x.length == y.length && x.entries.every((e) => y[e.key] == e.value);
 }
@@ -360,7 +360,7 @@ RegExp? systemPatternRegExp(String pattern) {
   }
 }
 
-/// 添加一条系统提示自定义识别规则（V78，LAY-134）：括号对或正则，带“试一试”。返回正则。
+/// 添加一条系统提示自定义识别规则：括号对或正则，带“试一试”。返回正则。
 Future<String?> showSystemPatternDialog(BuildContext context) =>
     showDialog<String>(
       context: context,

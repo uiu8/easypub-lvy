@@ -108,7 +108,7 @@ class PlainSession implements CatalogSession {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-/// V45：获取参考目录的“书源目录”页签（CH-270–276）。
+/// 获取参考目录的“书源目录”页签。
 void main() {
   CatalogSnapshot? returned;
   Future<void> open(

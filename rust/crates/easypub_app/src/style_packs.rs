@@ -1,4 +1,4 @@
-//! 章节样式包（V74，LAY-130）：章头图（按章轮换）、标题下装饰线、章末装饰、卷页边框、封面背景。
+//! 章节样式包：章头图（按章轮换）、标题下装饰线、章末装饰、卷页边框、封面背景。
 //!
 //! 书里只记图片的绝对路径（与章首图相同）；样式包文件放在调用方给的目录里：
 //! * 内置样式包由程序画的 SVG 栅格化为 PNG；
@@ -78,7 +78,7 @@ impl ChapterStyle {
     }
 }
 
-/// 成品里使用的样式资源 ID（V74）。
+/// 成品里使用的样式资源 ID。
 #[derive(Clone, Debug, Serialize)]
 pub struct StyleIds {
     pub head_ids: Vec<String>,
@@ -107,10 +107,10 @@ struct PackFile {
     volume_frame: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cover_background: Option<String>,
-    /// 系统提示块样式（V78，LAY-133）：应用样式包时一并套用。
+    /// 系统提示块样式：应用样式包时一并套用。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     blocks: Option<crate::block_styles::SystemStyles>,
-    /// 场景样式（V82，LAY-136）：应用样式包时一并套用。
+    /// 场景样式：应用样式包时一并套用。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     insets: Option<PackInsets>,
 }
@@ -348,7 +348,7 @@ fn import(zip_path: &Path, dir: &Path) -> Result<Imported, ApiError> {
     Ok((style, blocks, insets))
 }
 
-/// 从文件夹导入样式包（V114）。文件夹里有 `style.json` 时按样式包格式读取；否则按图片文件名识别：
+/// 从文件夹导入样式包。文件夹里有 `style.json` 时按样式包格式读取；否则按图片文件名识别：
 /// `header-数字.*` 为章头图（按名称排序，按章轮换），`header-line.*` 为标题下装饰线，
 /// `footer-line.*` 为章末装饰，`cover.*` 为文字封面背景。名称取文件夹名；上一级有
 /// `style-names.json`（文件夹名 → 显示名称）时用其中的名称。图片复制到 [dir] 下按内容命名的子目录。
@@ -643,7 +643,7 @@ mod tests {
         dir
     }
 
-    /// V114：按图片文件名识别的文件夹，以及带 style.json 的文件夹，都能导入。
+    /// 按图片文件名识别的文件夹，以及带 style.json 的文件夹，都能导入。
     #[test]
     fn folder_import_by_file_names_and_style_json() {
         let root = temp("folder");

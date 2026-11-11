@@ -9,7 +9,7 @@ import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/metadata/book_information_page.dart';
 
-/// V56：书籍信息页“前后附页”卡片与模板管理（META-048、META-049），真实 DLL。
+/// 书籍信息页“前后附页”卡片与模板管理，真实 DLL。
 void main() {
   setUpAll(
     () async => RustLib.init(

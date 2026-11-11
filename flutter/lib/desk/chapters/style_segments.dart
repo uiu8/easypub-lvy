@@ -12,7 +12,7 @@ import 'inline_style_marks.dart';
 import 'layout_view.dart';
 import 'note_marks.dart';
 
-/// 样式片段（V120）：排版视图里被识别或标注、套了样式的每一处文字。
+/// 样式片段：排版视图里被识别或标注、套了样式的每一处文字。
 class StyleSegment {
   const StyleSegment({
     required this.group,
@@ -49,7 +49,7 @@ const styleSegmentGroups = {
   'note': '注释',
 };
 
-/// 识别与样式（V121，LAY-173）：侧栏里可开关的识别项——分组、设置字段、名称、选项、开启时默认值、图标。
+/// 识别与样式：侧栏里可开关的识别项——分组、设置字段、名称、选项、开启时默认值、图标。
 final _recognitions =
     <(String, String, String, Map<String, String>, String, IconData)>[
       (
@@ -287,10 +287,10 @@ class StyleSegmentsPanel extends StatefulWidget {
   });
   final List<StyleSegment> segments;
 
-  /// 本书的排版设置（V121）：识别项的开关与方式。
+  /// 本书的排版设置：识别项的开关与方式。
   final Map<String, Object?> settings;
 
-  /// 整行【】的判断说明（V121，LAY-169）。
+  /// 整行【】的判断说明。
   final String? brackets;
 
   /// 改本书排版设置（进变更记录）；返回失败原因。为空时不显示开关。
@@ -615,7 +615,7 @@ class _StyleSegmentsPanelState extends State<StyleSegmentsPanel> {
     );
   }
 
-  // ---- 识别项（V121，LAY-173）：图标、名称、本章处数、当前方式、开关；点名称只看这一组，点箭头展开方式。
+  // ---- 识别项：图标、名称、本章处数、当前方式、开关；点名称只看这一组，点箭头展开方式。
   Widget recognitions(Desk d, Map<String, int> counts) => Padding(
     padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
     child: Column(

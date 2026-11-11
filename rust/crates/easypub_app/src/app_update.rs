@@ -1,4 +1,4 @@
-//! V68 自动更新（SET-071–073）：检查 GitHub 发布页、后台下载并校验、启动 easypub_updater.exe。
+//! 自动更新：检查 GitHub 发布页、后台下载并校验、启动 easypub_updater.exe。
 //! 文件都放在程序目录下的 `.update\`（与程序同盘，替换只需改名）：
 //!   download\  下载中的压缩包；staging\  校验通过、待替换的新版本；ready.json  待替换的版本；
 //!   backup\    上一版（回退用）；run\  更新程序副本；state.json / updater.log  更新程序写的结果。

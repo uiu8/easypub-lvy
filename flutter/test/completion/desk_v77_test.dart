@@ -78,7 +78,7 @@ Future<(PrototypeState, LegacyLibraryAdapter, String, String)> book(
   return (state, library, root, state.currentId);
 }
 
-/// V77：系统提示分类样式（LAY-132）。
+/// 系统提示分类样式。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -101,7 +101,7 @@ void main() {
     expect(presets.map((p) => p['id']).toSet(), blockStylePresets.keys.toSet());
     for (final p in presets) {
       expect(p['style'], blockStylePresets[p['id']], reason: '${p['id']}');
-      // V119 起有两类都可用的预设（kind 为 both），两张名称表都收了它们。
+      // 后来有两类都可用的预设（kind 为 both），两张名称表都收了它们。
       final names = p['kind'] == 'panel' ? panelPresetNames : notePresetNames;
       expect(names[p['id']], p['name']);
     }
@@ -158,7 +158,7 @@ void main() {
     await until(t, () => note.evaluate().isNotEmpty);
     await t.ensureVisible(note);
     await t.pump();
-    // V119 起选项变多，先把要点的那一项滚到可见处。
+    // 后来选项变多，先把要点的那一项滚到可见处。
     final center = find.descendant(of: note, matching: find.text('居中强调'));
     await t.ensureVisible(center);
     await t.pump();
@@ -398,7 +398,7 @@ void main() {
       expect(page, contains('data-key="system_note_preset"'));
       expect(page, contains('styled:分类样式'));
       expect(await css({}), contains('.blk-panel .blk-panel-title {'));
-      // V119 新增的细线楷体：灰色左细线、楷体。
+      // 新增的细线楷体：灰色左细线、楷体。
       expect(
         await css({'system_panel_preset': 'quiet'}),
         contains('border-color: #888888;'),

@@ -16,7 +16,7 @@ class SettingsSnapshot {
   final String theme;
 }
 
-/// 左栏可以收起的页面（V109，设置“外观与交互”）：键 → 名称与说明。主流程页面不能收起。
+/// 左栏可以收起的页面（设置“外观与交互”）：键 → 名称与说明。主流程页面不能收起。
 const navOptionalPages = {
   'overview': ('概览', '本书的统计与状态汇总'),
   'folders': ('文件夹', '常用文件夹与自动入库'),

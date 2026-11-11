@@ -1,4 +1,4 @@
-// 排版页“文字”分页：嵌入字体（V123，LAY-179）。
+// 排版页“文字”分页：嵌入字体。
 part of 'layout_page.dart';
 
 extension _LayoutFontSection on _LayoutPageState {
@@ -7,7 +7,7 @@ extension _LayoutFontSection on _LayoutPageState {
     _ => null,
   };
 
-  /// 一键移除或恢复原书行内样式（G-113）：表格不动，能在变更记录里退回。
+  /// 一键移除或恢复原书行内样式：表格不动，能在变更记录里退回。
   Future<void> setSourceMarks(bool off) async {
     final marks = sourceMarks;
     if (session == null || marks == null) return;
@@ -309,7 +309,7 @@ class _FontLicenseDialog extends StatelessWidget {
   final bool subset;
   final String? origin;
 
-  /// 书里用到、字体里没有的字（V123）：这些字按阅读器字体显示。
+  /// 书里用到、字体里没有的字：这些字按阅读器字体显示。
   final int missing;
   final List<String> missingSample;
 

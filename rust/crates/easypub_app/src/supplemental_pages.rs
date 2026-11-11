@@ -213,7 +213,7 @@ enum Action {
     Reorder {
         ids: Vec<String>,
     },
-    /// 拖到另一组：改位置并按 `ids` 重排，一步历史（V56）。
+    /// 拖到另一组：改位置并按 `ids` 重排，一步历史。
     Move {
         id: String,
         position: Position,

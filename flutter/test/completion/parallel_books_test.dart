@@ -11,7 +11,7 @@ import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/prototype/output_batch.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
 
-/// V38：多本并行（SET-069、LIB-115、OUT-083）——导入、书库检查、转换前检查与转换按设置同时进行，
+/// 多本并行——导入、书库检查、转换前检查与转换按设置同时进行，
 /// 结果与逐本处理相同，顺序不乱。
 Future<Map<String, String>> members(String path) async {
   final result = await Process.run(

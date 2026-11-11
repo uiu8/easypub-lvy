@@ -33,7 +33,7 @@ class ThemeSaveLibrary extends LegacyLibraryAdapter {
   }
 }
 
-/// V69：主题色（G-072）。书籍标签页（G-073）已在 V71 删除，这里确认它不再出现。
+/// 主题色。书籍标签页已删除，这里确认它不再出现。
 void main() {
   test('主题色：只换强调色三件套；未知值回落墨灰', () {
     final teal = deskTheme(accent: 'teal');

@@ -1,6 +1,6 @@
 part of 'library_page.dart';
 
-// R2-10：从 library_page.dart 拆出，行为不变。勾选工具条与批量检查进度。
+// 从 library_page.dart 拆出，行为不变。勾选工具条与批量检查进度。
 extension _LibrarySelection on _LibraryPageState {
   /// 勾选工具条：全选 / 清空 / 检查所选 / 应用到多本书 / 移除所选；有勾选时浅灰墨底。
   /// 有勾选，或有批量检查的进度与结果时显示批量操作条。

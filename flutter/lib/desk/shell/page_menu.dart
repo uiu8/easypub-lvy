@@ -32,7 +32,7 @@ const bookToolTitles = <String, String>{
   'rules': '识别与检查规则',
 };
 
-/// 最近访问的页面（R1，G-023–026）：每次路由变化时记录，最近的在前，按路径去重，最多 8 个。
+/// 最近访问的页面：每次路由变化时记录，最近的在前，按路径去重，最多 8 个。
 final recentPages = ValueNotifier<List<String>>(const []);
 
 void rememberPage(Uri uri) {
@@ -117,7 +117,7 @@ class WorkspacePageMenu extends StatelessWidget {
           ),
         );
 
-  /// R1：只列“最近访问”与“当前书”的页面；书库、转换等全局页面在左侧导航和命令面板里，
+  /// 只列“最近访问”与“当前书”的页面；书库、转换等全局页面在左侧导航和命令面板里，
   /// 菜单不再整份重复。
   Future<void> open(BuildContext context) async {
     final id = library.selection.value.current;

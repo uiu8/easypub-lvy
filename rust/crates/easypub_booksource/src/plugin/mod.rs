@@ -174,7 +174,7 @@ fn handle(method: &str, params: &Value) -> Result<Value, String> {
         }
         return Ok(json!({"ok":true}));
     }
-    // 重置书源运行状态（V108）：丢掉本次运行里书源脚本存的变量（如番茄书源的设备池）、临时 Cookie
+    // 重置书源运行状态：丢掉本次运行里书源脚本存的变量（如番茄书源的设备池）、临时 Cookie
     // 与缓存，下次使用时重新生成；登录信息保留。正在进行的任务继续用旧状态直到结束。
     if method == "source.reset" {
         let id: String = param(params, "id")?;

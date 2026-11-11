@@ -17,7 +17,7 @@ import 'package:easypub_desktop/desk/grain.dart';
 
 class NoPicker extends Fake implements BookFilePicker {}
 
-/// V69 截图：书籍标签页、主题色（青 / 默认墨灰）、设置页色块。输出 artifacts/v69-preview/。
+/// 截图：书籍标签页、主题色（青 / 默认墨灰）、设置页色块。输出 artifacts/v69-preview/。
 void main() {
   testWidgets('截图：主题色与书籍标签页', (t) async {
     t.binding.defaultBinaryMessenger.setMockMethodCallHandler(

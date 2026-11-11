@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// V134：文本清理默认列出全部内置规则，每条一个开关，显示在本书里会改几处。
+/// 文本清理默认列出全部内置规则，每条一个开关，显示在本书里会改几处。
 void main() {
   setUpAll(
     () async => RustLib.init(

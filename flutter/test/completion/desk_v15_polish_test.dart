@@ -17,7 +17,7 @@ import 'package:easypub_desktop/desk/errors.dart';
 
 class _NoPicker extends Fake implements BookFilePicker {}
 
-/// V15：错误原因对照表、统一弹窗、设置页构建期报错、显示缺陷。
+/// 错误原因对照表、统一弹窗、设置页构建期报错、显示缺陷。
 void main() {
   setUpAll(
     () async => RustLib.init(

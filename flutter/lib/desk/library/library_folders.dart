@@ -1,6 +1,6 @@
 part of 'library_page.dart';
 
-// 收藏夹模式（V104，LIB-283–285）：书库顶层是收藏夹文件夹，点进去看书；不在任何收藏夹里的书
+// 收藏夹模式：书库顶层是收藏夹文件夹，点进去看书；不在任何收藏夹里的书
 // 归入“未分类”，固定在最后。一本书在几个收藏夹里，就在几个文件夹里出现，书本身只有一份。
 extension _LibraryFolders on _LibraryPageState {
   bool get folderMode => folders && collectionService != null;

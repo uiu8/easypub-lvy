@@ -10,13 +10,13 @@ pub struct Options {
     pub scene_symbols: Option<String>,
     pub disabled: Vec<String>,
     pub restore_values: BTreeMap<String, Value>,
-    /// 系统提示自定义识别（V78，LAY-134）：整行匹配的正则；空时不写入，旧书不变。
+    /// 系统提示自定义识别：整行匹配的正则；空时不写入，旧书不变。
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub system_patterns: Vec<String>,
-    /// 场景自定义识别（V82，LAY-137）：开头、结尾（正则）与最多行数；空时不写入，旧书不变。
+    /// 场景自定义识别：开头、结尾（正则）与最多行数；空时不写入，旧书不变。
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub inset_rules: Vec<InsetRule>,
-    /// 系统提示识别范围（V121，LAY-169）：空或 auto 为自动判断，all 为所有整行【】，
+    /// 系统提示识别范围：空或 auto 为自动判断，all 为所有整行【】，
     /// keyword 为只认含系统用语的行；自动判断时不写入，旧书文件不变。
     #[serde(skip_serializing_if = "scope_is_auto")]
     pub system_scope: String,

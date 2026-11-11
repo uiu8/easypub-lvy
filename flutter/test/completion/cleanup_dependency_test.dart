@@ -51,14 +51,17 @@ void main() {
       return (await chapters.body(tree, tree.nodes.first.id, 0)).lines;
     }
 
-    // V17（CLEAN-103）起：撤销 / 重做清理把章节修改换算到新文本上，改名保留。
+    // 后来：撤销 / 重做清理把章节修改换算到新文本上，改名保留。
     await cleanup.undo();
     expect(state.cleanup.historyStatus[id], contains('1 处章节修改已换算'));
     expect((await chapters.read(0)).nodes.first.title, '第一章 已改名');
     expect(await firstBody(), ['这里是正文  ']);
     await cleanup.redo();
     // 撤销再重做清理是往返：退回原来的章节步骤，不留换算步骤。
-    expect((state.manuscript.effectiveHistories[id]!['history'] as List).length, 2);
+    expect(
+      (state.manuscript.effectiveHistories[id]!['history'] as List).length,
+      2,
+    );
     expect(state.manuscript.effectiveHistories[id]!['cursor'], 1);
     expect((await chapters.read(0)).nodes.first.title, '第一章 已改名');
     expect(await firstBody(), ['这里是正文']);
@@ -79,7 +82,8 @@ void main() {
     addTearDown(reopened.dispose);
     expect(await reopened.openProjectOutcome(project), true);
     expect(
-      ((await reopened.manuscript.effectiveTree(id, 0))['nodes'] as List).first['title'],
+      ((await reopened.manuscript.effectiveTree(id, 0))['nodes'] as List)
+          .first['title'],
       '第一章 已改名',
     );
 

@@ -786,7 +786,7 @@ fn prepare_context_cancellable(
             }
             continue;
         }
-        // V116：合并连续空行按全书习惯判断。先数非空行之间的空行数，最常见的（至少 1）算作这本书
+        // 合并连续空行按全书习惯判断。先数非空行之间的空行数，最常见的（至少 1）算作这本书
         // 的段间习惯；只合并超出习惯、又不挨着章节标题或分隔线、也不在全文开头结尾的连续空行。
         // 一段连续空行合成一处变更（保留习惯数量的空行）。行里含换行（前面步骤合并过）时用原来的逐行做法。
         if matches!(compiled.rule, Rule::CollapseBlankLines)
@@ -1187,7 +1187,7 @@ fn prepare_context_cancellable(
     })
 }
 
-// 参数各有独立含义，改成结构体会牵动所有调用者；V21 保留现状。
+// 参数各有独立含义，改成结构体会牵动所有调用者；保留现状。
 #[allow(clippy::too_many_arguments)]
 fn record_stage(
     stages: &mut Vec<Value>,
@@ -2573,7 +2573,7 @@ mod smart_blank_tests {
     use super::*;
     use crate::source::RULE_ID;
 
-    /// V116：段间空一行的书，章节标题与分隔线旁的多个空行是结构，不算；正文中间多出的
+    /// 段间空一行的书，章节标题与分隔线旁的多个空行是结构，不算；正文中间多出的
     /// 一段空行合成一处变更，保留一个空行。
     #[test]
     fn collapse_follows_the_books_own_gap_and_skips_chapter_boundaries() {

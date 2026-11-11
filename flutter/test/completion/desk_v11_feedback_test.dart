@@ -34,7 +34,7 @@ class _Desktop extends Fake
   Future<String> defaultOutputDirectory() async => directory;
 }
 
-/// V11：两章对照、识别规则说明与常用预设、转换页、排版机型预览、批量标记“不是标题”。
+/// 两章对照、识别规则说明与常用预设、转换页、排版机型预览、批量标记“不是标题”。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -334,7 +334,7 @@ void main() {
     await t.tap(batch);
     await until(t, () => find.byType(BatchRepairDialog).evaluate().isNotEmpty);
     await idle(t);
-    // V23：原“全部取消”按钮改为表头三态勾选框（默认全选，点一下全部取消）。
+    // 原“全部取消”按钮改为表头三态勾选框（默认全选，点一下全部取消）。
     await t.tap(find.byKey(const ValueKey('select-all')));
     await t.pump();
     final boxes = find.descendant(
@@ -410,7 +410,7 @@ void main() {
       ),
       findsNothing,
     );
-    // V16：全选改为勾选框，全部已选时再点清空（OUT-072）。
+    // 全选改为勾选框，全部已选时再点清空。
     await t.tap(find.byKey(const ValueKey('conversion-select-all')));
     await t.pump();
     expect(t.widget<Text>(count).data, '已选 0 / 共 3');
@@ -440,7 +440,7 @@ void main() {
       expect(customKindleDevice(300, 1000, 300), isNull);
       expect(customKindleDevice(1000, 1000, 700), isNull);
       final custom = customKindleDevice(1200, 1600, 300)!;
-      // V118：所有机型按原生分辨率排版，视口等于分辨率。
+      // 所有机型按原生分辨率排版，视口等于分辨率。
       expect((custom.viewportWidth, custom.viewportHeight), (1200, 1600));
       final choice = PreviewDeviceChoice.decode(
         const PreviewDeviceChoice(id: 'scribe').encode(),
@@ -540,7 +540,7 @@ void main() {
           )
           .onChanged!('scribe');
       await t.pumpAndSettle();
-      // V13：分辨率移到机型的悬停说明里。
+      // 分辨率移到机型的悬停说明里。
       expect(
         find.byWidgetPredicate(
           (w) =>

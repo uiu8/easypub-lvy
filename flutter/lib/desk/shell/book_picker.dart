@@ -9,7 +9,7 @@ import '../library/book_summary_panel.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 
-// 选书弹窗（G-018–021；R1 改用编辑台弹窗）：每行显示封面、书名、作者 · 格式 · 章数与检查状态，
+// 选书弹窗（改用编辑台弹窗）：每行显示封面、书名、作者 · 格式 · 章数与检查状态，
 // 当前书标“当前”；搜索框保持焦点，↑↓ 移动选中行，回车打开。
 
 Future<String?> chooseWorkspaceBook(

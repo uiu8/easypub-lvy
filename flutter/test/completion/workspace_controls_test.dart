@@ -170,7 +170,7 @@ void main() {
       );
       expect(Theme.of(shellContext).visualDensity, VisualDensity.compact);
       expect(MediaQuery.of(shellContext).disableAnimations, true);
-      // V109：概览默认收起，清理叫“文本”，图片与资源并进书籍信息。
+      // 概览默认收起，清理叫“文本”，图片与资源并进书籍信息。
       for (final label in ['检查与修复', '章节', '书籍信息', '排版', '文本']) {
         final nav = find.byTooltip(label).first;
         await t.ensureVisible(nav);
@@ -217,7 +217,7 @@ void main() {
       );
       await t.sendKeyEvent(LogicalKeyboardKey.tab);
       for (final shortcut in {
-        // V109：左栏检查在章节上面，Alt+3 检查、Alt+4 章节。
+        // 左栏检查在章节上面，Alt+3 检查、Alt+4 章节。
         LogicalKeyboardKey.digit3: '/tools/checks',
         LogicalKeyboardKey.digit4: '/tools/chapters',
         LogicalKeyboardKey.digit5: '/conversion',
@@ -319,7 +319,7 @@ void main() {
       await settle(t);
       await t.enterText(find.byType(TextField).last, books.last.title);
       await t.pump();
-      // R1 起选书弹窗的行是编辑台自己的行（不再是 ListTile），按行的 Key 点。
+      // 后来选书弹窗的行是编辑台自己的行（不再是 ListTile），按行的 Key 点。
       await t.tap(find.byKey(ValueKey('book-picker-row-${books.last.id}')));
       await until(t, () => library.selection.value.current == books.last.id);
       expect(
@@ -362,7 +362,7 @@ void main() {
       await until(t, () => find.byType(LibraryPage).evaluate().isNotEmpty);
       await settle(t);
       expect(find.byType(LibraryPage), findsOneWidget);
-      // V12（LIB-094）：书库页有勾选时，右下角按钮直接转换所选；
+      // 书库页有勾选时，右下角按钮直接转换所选；
       // 在范围菜单改回“当前书”后，“转换当前书”仍只转当前书。
       expect(find.text('转换所选 ${books.length} 本'), findsOneWidget);
       expect(find.text('转换当前书'), findsNothing);

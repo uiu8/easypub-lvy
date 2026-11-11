@@ -1,4 +1,4 @@
-//! V89 的跨层夹具：仅本机自拟内容，不启动第三方服务。
+//! 的跨层夹具：仅本机自拟内容，不启动第三方服务。
 use crate::{
     control::{Context, Profile},
     download::{self, Options},
@@ -568,7 +568,7 @@ fn v89_multi_source_alignment_speed_provenance_and_bad_length_return() {
     assert!(single.failures.is_empty());
     let multi = Options {
         folder: folder("multi"),
-        // V134 起默认关闭，这里测的就是分摊下载。
+        // 后来默认关闭，这里测的就是分摊下载。
         multi_source: true,
         ..opts.clone()
     };

@@ -9,8 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// V115：文本清理左侧规则栏——单击不再等双击判定；单击有变更的规则时切到“逐步骤差异”
-/// 并停在这条规则的第一处；0.3 秒内连点同一行打开编辑。V116：变更列表滚到这一处。
+/// 文本清理左侧规则栏——单击不再等双击判定；单击有变更的规则时切到“逐步骤差异”
+/// 并停在这条规则的第一处；0.3 秒内连点同一行打开编辑。变更列表滚到这一处。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -38,7 +38,7 @@ void main() {
       final text = StringBuffer('第一章 开始\n');
       for (var i = 0; i < 30; i++) {
         text.writeln('　　第$i段正文，行尾有空格。   ');
-        // 段间不空行，每三段多出三个空行（V116 起整段空行算一处）。
+        // 段间不空行，每三段多出三个空行（后来整段空行算一处）。
         if (i % 3 == 0) text.write('\n\n\n');
       }
       final file = File('$root/清理.txt')..writeAsStringSync('$text');
@@ -74,7 +74,7 @@ void main() {
     await settle();
     await t.tap(find.text('自动检测'));
     await settle(() => find.textContaining('处变更').evaluate().length >= 2);
-    // V134：有序规则在“执行顺序”页里（默认显示内置规则清单）。
+    // 有序规则在“执行顺序”页里（默认显示内置规则清单）。
     await t.tap(find.text('执行顺序'));
     await settle();
     final second = find.text('合并连续空行').first;

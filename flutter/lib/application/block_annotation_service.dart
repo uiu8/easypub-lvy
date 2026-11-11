@@ -54,7 +54,7 @@ class BlockAnnotationView {
       lastLine = (value['location'] as Map?)?['last_line'] as int?;
   final String id, excerpt;
 
-  /// 有效标注在章节页的位置（V53）：分节 ID（卷前正文为 `$prefix`）与本节正文行号，
+  /// 有效标注在章节页的位置：分节 ID（卷前正文为 `$prefix`）与本节正文行号，
   /// 与 [ChapterBodyRow.lineOffset] 同一编号，从 1 开始、两端包含；失效项为空。
   final String? entryId;
   final int? firstLine, lastLine;
@@ -63,11 +63,11 @@ class BlockAnnotationView {
   final int start, end;
   final BlockAnnotationKind kind;
 
-  /// 系统提示指定的样式（V78）：note 单行提示、panel 面板；null 按行数。
-  /// 场景（V81）：场景编号。
+  /// 系统提示指定的样式：note 单行提示、panel 面板；null 按行数。
+  /// 场景：场景编号。
   final String? variant;
 
-  /// 场景逐行指定的角色（V82，LAY-138）：标注内第几行（从 0 起）→ 角色。
+  /// 场景逐行指定的角色：标注内第几行（从 0 起）→ 角色。
   final Map<int, String> roles;
 
   /// 有效场景标注的各行文字与自动判断的角色；其他类为空。
@@ -104,7 +104,7 @@ class BlockAnnotationRange {
   final int start, end;
 }
 
-/// 能为一本书打开标注会话的书库（V53）；章节页据此决定是否显示手工标注。
+/// 能为一本书打开标注会话的书库；章节页据此决定是否显示手工标注。
 abstract interface class BlockAnnotationLibrary {
   BlockAnnotationSession openBlockAnnotations(String bookId);
 }
@@ -129,7 +129,7 @@ abstract interface class BlockAnnotationSession {
     String? variant,
   });
 
-  /// [roles] 只用于场景（V82）：不给时清空逐行角色。
+  /// [roles] 只用于场景：不给时清空逐行角色。
   Future<BlockAnnotationPreview> previewUpdate(
     BlockAnnotationSnapshot snapshot,
     String id, {

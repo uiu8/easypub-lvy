@@ -1,5 +1,5 @@
-// 书稿概览（LIB-041–060）：迁入 desk（V6a）。读取、检查、保存项目的逻辑沿用 V6 前的 BookOverviewPage；
-// 卡片、统计、进度行与页头按 design_review_v37/d4_library.dart（D4-C）换样式，布局沿用。
+// 书稿概览：迁入 desk。读取、检查、保存项目的逻辑沿用早先的 BookOverviewPage；
+// 卡片、统计、进度行与页头换了样式，布局沿用。
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as paths;
@@ -183,7 +183,7 @@ class _BookOverviewState extends State<BookOverviewPage> {
     );
   }
 
-  /// 卡片标题右侧的文字链接，例如“编辑书籍信息 →”（LIB-112）。
+  /// 卡片标题右侧的文字链接，例如“编辑书籍信息 →”。
   Widget link(String text, VoidCallback onTap, {Key? key}) => TextButton(
     key: key,
     style: TextButton.styleFrom(
@@ -269,7 +269,7 @@ class _BookOverviewState extends State<BookOverviewPage> {
     ],
   );
 
-  /// 卷、章、字数并成书籍信息里的一行（R2-06），不再各占一大格把制作进度挤到下面。
+  /// 卷、章、字数并成书籍信息里的一行，不再各占一大格把制作进度挤到下面。
   Widget statistic(String field, String label) {
     final d = context.desk;
     return Text.rich(
@@ -289,7 +289,7 @@ class _BookOverviewState extends State<BookOverviewPage> {
     );
   }
 
-  /// 书籍信息里的小标签（R2-05）：只有能点的才有下划线与指针，不再像按钮。
+  /// 书籍信息里的小标签：只有能点的才有下划线与指针，不再像按钮。
   Widget tag(String text, {VoidCallback? onTap, String? tooltip, Key? key}) {
     final d = context.desk;
     final body = Container(
@@ -487,7 +487,7 @@ class _BookOverviewState extends State<BookOverviewPage> {
           ],
         ),
       );
-      // 项目文件状态（LIB-110）：草稿一直自动保存在本机；项目文件是用户另存的文件，
+      // 项目文件状态：草稿一直自动保存在本机；项目文件是用户另存的文件，
       // 两者分开说明，避免把“已自动保存”和“项目有未保存更改”混在一起。
       final projectPath = metrics['project_path'] as String? ?? '';
       final projectKnown = metrics.containsKey('project_path');
@@ -503,7 +503,7 @@ class _BookOverviewState extends State<BookOverviewPage> {
           : dirty
           ? '草稿已自动保存在本机；项目文件还是上次保存时的内容。'
           : '';
-      // 原“检查摘要”与“制作进度”逐项重复，已并入制作进度（LIB-111）。
+      // 原“检查摘要”与“制作进度”逐项重复，已并入制作进度。
       final source = card(
         '项目与来源',
         Column(
@@ -595,7 +595,7 @@ class _BookOverviewState extends State<BookOverviewPage> {
           final right = stack([source, recent]);
           return DeskScrollView(
             child: stack([
-              // 内容区贴边后（V135）标题要自己留出左右空白，和其他页的页头对齐。
+              // 内容区贴边后标题要自己留出左右空白，和其他页的页头对齐。
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 12, 0),
                 child: Row(
@@ -606,7 +606,7 @@ class _BookOverviewState extends State<BookOverviewPage> {
                         style: ui(16, w: 650, c: context.desk.ink),
                       ),
                     ),
-                    // 转换统一用底部的“转换当前书”，这里不再重复（LIB-109）。
+                    // 转换统一用底部的“转换当前书”，这里不再重复。
                     DeskButton(
                       '返回书库',
                       quiet: true,

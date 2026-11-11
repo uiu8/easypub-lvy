@@ -95,7 +95,7 @@ pub(super) fn collect(
         .filter(|k| k.starts_with("cleanup."))
         .cloned()
         .collect();
-    // 每条清理规则各自在整本书上试一次，彼此独立，分给多个线程（V83）；结果按原顺序写回。
+    // 每条清理规则各自在整本书上试一次，彼此独立，分给多个线程；结果按原顺序写回。
     let rows: Vec<(String, Statistic)> = ids
         .into_iter()
         .map(|id| {

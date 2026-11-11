@@ -1,4 +1,4 @@
-// 转换（D4-F，V8 按设计重写视图）：草稿、默认继承、预检、确认与启动逻辑沿用原实现。
+// 转换（按设计重写视图）：草稿、默认继承、预检、确认与启动逻辑沿用原实现。
 import '../../application/output_formats.dart';
 
 import 'dart:async';
@@ -74,7 +74,7 @@ class _ConversionPageState extends State<ConversionPage> {
   ConversionPreview? preview;
   bool picking = false, openWhenDone = false;
 
-  /// 本次书稿列表只显示已勾选的书（OUT-064）。
+  /// 本次书稿列表只显示已勾选的书。
   bool onlySelected = false;
   bool applyingDefaults = false,
       readingSettings = false,
@@ -356,7 +356,7 @@ class _ConversionPageState extends State<ConversionPage> {
     saveDraft();
   }
 
-  /// 默认设置变更提示（OUT-066）：写明哪些继承项会更新、哪些手工设置保留。
+  /// 默认设置变更提示：写明哪些继承项会更新、哪些手工设置保留。
   String defaultsChangeText(Map<String, Object> next) {
     final draft = widget.draft, current = formDefaults;
     final labels = ConversionFormDraft.defaultLabels;
@@ -928,7 +928,7 @@ class _ConversionPageState extends State<ConversionPage> {
         children: [
           Row(
             children: [
-              // 全选勾选框（OUT-072）：部分勾选时为半选；全部已选时再点清空。
+              // 全选勾选框：部分勾选时为半选；全部已选时再点清空。
               Tooltip(
                 message: chosenCount == all.length && all.isNotEmpty
                     ? '全不选'
@@ -1089,7 +1089,7 @@ class _ConversionPageState extends State<ConversionPage> {
     );
   }
 
-  /// EPUB 的两条转换路径（V27，OUT-079）：只有图标，悬停说明，点击切换。
+  /// EPUB 的两条转换路径：只有图标，悬停说明，点击切换。
   Widget epubModeButton(BookSummary book, bool busy) {
     final d = context.desk;
     final original =
@@ -1262,7 +1262,7 @@ class _ConversionPageState extends State<ConversionPage> {
     );
   }
 
-  /// 书稿状态：与书库同一说法，有章节问题时加提醒圆点（OUT-071）。
+  /// 书稿状态：与书库同一说法，有章节问题时加提醒圆点。
   Widget statusText(BookSummary book) {
     final d = context.desk;
     final label = bookStatusLabel(book);
@@ -1287,7 +1287,7 @@ class _ConversionPageState extends State<ConversionPage> {
     );
   }
 
-  /// 本次输出汇总（OUT-065、OUT-073）：列出将生成的文件名，全部按当前选择计算，不估算。
+  /// 本次输出汇总：列出将生成的文件名，全部按当前选择计算，不估算。
   Widget summaryCard(List<BookSummary> all) {
     final d = context.desk;
     final chosen = all.where((b) => selected.contains(b.id)).toList();

@@ -31,7 +31,7 @@ class ImportedTxt {
   final int revision, lines, headings;
   final String? originPath;
 
-  /// 手动选的编码（G-114）：这时 [path] 是转好的 UTF-8 工作稿。
+  /// 手动选的编码：这时 [path] 是转好的 UTF-8 工作稿。
   final String? sourceEncoding;
 
   /// 自动判断成 GBK，但看着像乱码。
@@ -57,7 +57,7 @@ class ImportedTxt {
   final Map<String, dynamic>? initialStructure;
 }
 
-/// 文件解不开，要用户选编码（G-114）。
+/// 文件解不开，要用户选编码。
 class UndecodableText extends FormatException {
   const UndecodableText() : super('文件解不开，请选择编码。');
 }
@@ -68,7 +68,7 @@ typedef ImportTxt = Future<ImportedTxt> Function(
 );
 
 /// Input formats that the current read-only importer can actually decode.
-/// V131：AZW3 / MOBI（无 DRM）先转成 EPUB，再按 EPUB 导入。KFX 不支持。
+/// AZW3 / MOBI（无 DRM）先转成 EPUB，再按 EPUB 导入。KFX 不支持。
 const supportedBookImportExtensions = <String>{
   'txt',
   'epub',
@@ -167,7 +167,7 @@ Future<ImportedTxt> _readTxtMeasured(
               ? 'TXT 单文件上限为 128 MiB。'
               : code == 'InvalidEncoding'
               ? '无法完整解码文件，请检查编码。'
-              // R9：最常见的原因是文件正被其他程序独占（例如下载或编辑中）。
+              // 最常见的原因是文件正被其他程序独占（例如下载或编辑中）。
               : '文件读取失败：可能正被其他程序占用，或没有读取权限。请关闭占用它的程序后重试。',
         );
       default:
@@ -274,7 +274,7 @@ String _bookErrorText(String action) => switch (action) {
   _ => '这本书读不出来，文件可能已损坏。',
 };
 
-/// 按选定的编码转成 UTF-8 工作稿再读（G-114），原文件不动。工作稿按内容和编码
+/// 按选定的编码转成 UTF-8 工作稿再读，原文件不动。工作稿按内容和编码
 /// 存，同一个文件再选同一种编码不用再转。
 Future<ImportedTxt> _readEncoded(
   File source,
@@ -320,7 +320,7 @@ Future<ImportedTxt> _readEncoded(
   );
 }
 
-/// 已在书库的书补读原书标记（G-113）。[working] 是工作稿，文字要和原书读出来的
+/// 已在书库的书补读原书标记。[working] 是工作稿，文字要和原书读出来的
 /// 一字不差。返回导入报告里的那一段。
 Future<Map<String, dynamic>> rereadBookMarks(
   String origin,
@@ -347,7 +347,7 @@ Future<Map<String, dynamic>> rereadBookMarks(
   ) as Map).cast<String, dynamic>();
 }
 
-/// AZW3 / MOBI 先转成 EPUB（V131，LIB-295）：按文件内容的哈希存在程序数据目录，同一文件再次导入时直接沿用。
+/// AZW3 / MOBI 先转成 EPUB：按文件内容的哈希存在程序数据目录，同一文件再次导入时直接沿用。
 /// 原文件不改；带 DRM 的文件由后端拒绝。
 Future<File> _kindleAsEpub(
   File source,
@@ -361,7 +361,7 @@ Future<File> _kindleAsEpub(
   if (cancelled()) throw const FormatException('导入已取消。');
   final directory = Directory(p.join(root.path, 'kindle'));
   await directory.create(recursive: true);
-  // -m：带行内样式和表格的读法（G-113），旧的转换结果不再用。
+  // -m：带行内样式和表格的读法，旧的转换结果不再用。
   final epub = File(
     p.join(directory.path, '${digest.substring(0, 32)}-m.epub'),
   );

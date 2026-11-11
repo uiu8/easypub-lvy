@@ -23,7 +23,7 @@ const _template = {
   'author': {'op': 'fill_empty', 'value': '佚名'},
 };
 
-/// V84：文件夹导入的勾选按钮、拖动选书与排序（FOLD-083–087）；书库收藏夹与批量设类别（LIB-118–127）。
+/// 文件夹导入的勾选按钮、拖动选书与排序；书库收藏夹与批量设类别。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -143,7 +143,7 @@ void main() {
       MaterialApp(
         theme: deskTheme(),
         home: Scaffold(
-          // V110：收藏夹栏默认收起；这些测试从展开状态开始。
+          // 收藏夹栏默认收起；这些测试从展开状态开始。
           body: LibraryPage(
             library: library,
             picker: _NoPicker(),
@@ -258,7 +258,7 @@ void main() {
     await t.drag(handle, const Offset(60, 0));
     await t.pumpAndSettle();
     expect(railWidth(), closeTo(before + 60, 1));
-    // 拖到最窄以下：整栏收起（V94），显示范围改用筛选行的下拉。
+    // 拖到最窄以下：整栏收起，显示范围改用筛选行的下拉。
     await t.drag(handle, const Offset(-200, 0));
     await t.pumpAndSettle();
     expect(rail, findsNothing);

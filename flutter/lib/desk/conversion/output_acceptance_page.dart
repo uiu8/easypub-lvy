@@ -1,4 +1,4 @@
-// 成品验收（D4-H，V8 按设计重写视图）：核验、包检查与打开成品逻辑沿用原实现。
+// 成品验收（按设计重写视图）：核验、包检查与打开成品逻辑沿用原实现。
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as paths;
 
@@ -305,7 +305,7 @@ class _OutputAcceptancePageState extends State<OutputAcceptancePage> {
                         const SizedBox(height: 12),
                         field('格式', record.format),
                         field('文件名', filename),
-                        // 路径规范化，不再出现“flutter\\..\\”这类片段（TASK-028）。
+                        // 路径规范化，不再出现“flutter\\..\\”这类片段。
                         field('位置', paths.normalize(record.directory)),
                         field(
                           '导出大小',

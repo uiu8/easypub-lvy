@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:easypub_desktop/application/conversion_progress.dart';
 import 'package:easypub_desktop/application/conversion_service.dart';
 
-/// V134：转换进度百分比按阶段与上次耗时估算。
+/// 转换进度百分比按阶段与上次耗时估算。
 void main() {
   ConversionOutput task(String id, String phase, {String format = 'KFX'}) =>
       ConversionOutput(

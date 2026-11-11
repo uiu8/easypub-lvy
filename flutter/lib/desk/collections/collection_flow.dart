@@ -1,4 +1,4 @@
-// 加入收藏夹与套用预设信息（V84，LIB-120–124）：书库多选、拖入、导入后加入共用这一条链：
+// 加入收藏夹与套用预设信息：书库多选、拖入、导入后加入共用这一条链：
 // 加入分组 → 有预设信息时预览（或按收藏夹设置直接应用）→ 提示里可整批撤销。
 import 'package:flutter/material.dart';
 
@@ -89,7 +89,9 @@ Future<void> applyCollectionTemplate(
       );
       if (ok != true) {
         if (joined) {
-          messenger?.showSnackBar(deskSnackBar(content: Text('$prefix书籍信息未改。')));
+          messenger?.showSnackBar(
+            deskSnackBar(content: Text('$prefix书籍信息未改。')),
+          );
         }
         return;
       }
@@ -97,7 +99,9 @@ Future<void> applyCollectionTemplate(
     await _apply(service, preview, messenger, prefix: prefix);
   } catch (e) {
     messenger?.showSnackBar(
-      deskSnackBar(content: Text('$prefix${deskErrorText(e, '预设信息未能套用，书籍信息未改。')}')),
+      deskSnackBar(
+        content: Text('$prefix${deskErrorText(e, '预设信息未能套用，书籍信息未改。')}'),
+      ),
     );
   }
 }

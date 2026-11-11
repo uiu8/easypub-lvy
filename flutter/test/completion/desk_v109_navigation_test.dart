@@ -14,7 +14,7 @@ import 'package:go_router/go_router.dart';
 
 class _NoPicker extends Fake implements BookFilePicker {}
 
-/// V109：左栏开关与合并——概览默认收起、检查在章节上面、清理叫“文本”、
+/// 左栏开关与合并——概览默认收起、检查在章节上面、清理叫“文本”、
 /// 图片与资源并进书籍信息、记录并进任务（顶部窄条切换）；设置里可打开概览、收起文件夹。
 void main() {
   testWidgets('左栏开关与合并页的顶部切换条', (t) async {

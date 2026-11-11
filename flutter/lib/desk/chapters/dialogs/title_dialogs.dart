@@ -1,4 +1,4 @@
-// 改名（CH-045–049）与在本章前新增卷（CH-060–064）：输入标题 → 生成候选 → 修改前后预览确认。
+// 改名与在本章前新增卷：输入标题 → 生成候选 → 修改前后预览确认。
 // 输入草稿经 onTitleChanged 写入工作区；取消或完成后由调用方清除。
 import 'package:flutter/material.dart';
 
@@ -124,7 +124,7 @@ class _TitleEditDialogState extends State<_TitleEditDialog> {
     super.dispose();
   }
 
-  /// 不能为空、不能换行、最多 1000 字；改名还须与原标题不同（CH-046/061）。
+  /// 不能为空、不能换行、最多 1000 字；改名还须与原标题不同。
   String? get problem {
     final text = controller.text;
     if (text.trim().isEmpty) return '请填写标题';

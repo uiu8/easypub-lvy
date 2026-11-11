@@ -396,7 +396,7 @@ class LegacyResourceSession extends LegacyBookInformationSession
     }
   }
 
-  /// 预检图片并把后端的通用错误换成具体原因（RES-045）。
+  /// 预检图片并把后端的通用错误换成具体原因。
   Future<void> _checkImage(String path) async {
     if (path.trim().isEmpty) {
       throw const FormatException(

@@ -13,7 +13,7 @@ void main() {
     expect(restored.outputPath, r'D:\book.epub');
   });
 
-  // V21：原测试的旧原型“历史页”部分已随旧界面移除，状态部分保留。
+  // 原测试的旧原型“历史页”部分已随旧界面移除，状态部分保留。
   test(
     'output records retain source identity and confirmed terminal state',
     () async {

@@ -11,7 +11,7 @@ pub const DICTIONARY_VERSION: &str = "ferrous-opencc-0.4.0";
 pub enum Direction {
     S2t,
     T2s,
-    /// V113：台湾正体、香港繁体，及含台湾常用词（如“软件 ↔ 軟體”）的转换。
+    /// 台湾正体、香港繁体，及含台湾常用词（如“软件 ↔ 軟體”）的转换。
     S2tw,
     S2twp,
     S2hk,
@@ -40,7 +40,7 @@ fn gb2312_hanzi(c: char) -> bool {
         && (0xA1..=0xFE).contains(&bytes[1])
 }
 
-/// 繁→简时保护已是简体的字（V116）：这一行基本是简体（GB2312 以外的汉字不到一成）时，
+/// 繁→简时保护已是简体的字：这一行基本是简体（GB2312 以外的汉字不到一成）时，
 /// 原本就在 GB2312 简体字表里的字保持原样，只换真正的繁体字。例如简体书里的“覆上了”
 /// 不会被改成“复上了”，混进来的“機”仍换成“机”。整行是繁体时照常全部转换；
 /// 字数有变化的词组转换（极少）也照常。
@@ -118,7 +118,7 @@ mod tests {
             converter(&Direction::S2t, DICTIONARY_VERSION).unwrap()
         ));
         assert!(converter(&Direction::S2t, "future-dictionary").is_err());
-        // V116：简体行里的“覆”不被改成“复”，混进来的繁体“機”照常换成“机”；整行繁体照常转换。
+        // 简体行里的“覆”不被改成“复”，混进来的繁体“機”照常换成“机”；整行繁体照常转换。
         let raw = "他一边機械地迈动步子，直接低头覆上了她的唇。";
         assert_eq!(
             protect_simplified(raw, t2s.convert(raw)),
@@ -128,7 +128,7 @@ mod tests {
             protect_simplified(traditional, t2s.convert(traditional)),
             simple
         );
-        // V113：台湾用词转换会改词，不只改字形。
+        // 台湾用词转换会改词，不只改字形。
         let twp = converter(&Direction::S2twp, DICTIONARY_VERSION).unwrap();
         assert_eq!(twp.convert("软件"), "軟體");
         let back = converter(&Direction::Tw2sp, DICTIONARY_VERSION).unwrap();

@@ -48,10 +48,10 @@ class BookSummary {
     this.encodingSuspect = false,
   });
 
-  /// 自动判断的编码看着像乱码（G-114），书库里提示。
+  /// 自动判断的编码看着像乱码，书库里提示。
   final bool encodingSuspect;
 
-  /// 书籍信息里的类别与系列（V84，书库按类别筛选、排序用）。
+  /// 书籍信息里的类别与系列（书库按类别筛选、排序用）。
   final String category, series;
   final String id, title, author, path, format, status;
 
@@ -102,7 +102,7 @@ class ImportOutcome {
   final bool skipped;
 
   /// 书库里已有这本书，来源文件的内容却变了（如书源追更后重新拼出 TXT）：草稿保留，
-  /// 新内容没有采用，要用“刷新来源”对比确认（V111）。
+  /// 新内容没有采用，要用“刷新来源”对比确认。
   final bool sourceChanged;
 }
 
@@ -118,7 +118,7 @@ class FolderBook {
   final int bytes;
   final bool alreadyImported;
 
-  /// 文件修改时间；读不到时为 null（V84 排序用）。
+  /// 文件修改时间；读不到时为 null（排序用）。
   final DateTime? modified;
   String get name => path.replaceAll('\\', '/').split('/').last;
 
@@ -212,10 +212,10 @@ abstract class LibraryRemovalService {
   List<RemovedBookBatch> get removedBatches;
   void undoBookRemoval({int? batchId});
 
-  /// 彻底删除后丢掉这批的恢复记录（V134）：原文件已进回收站，不能再在程序里撤销。
+  /// 彻底删除后丢掉这批的恢复记录：原文件已进回收站，不能再在程序里撤销。
   void forgetRemovedBatch(int batchId);
 
-  /// 把这些文件移到回收站（V134），返回实际移走的路径。
+  /// 把这些文件移到回收站，返回实际移走的路径。
   Future<List<String>> recycleFiles(List<String> paths);
 }
 

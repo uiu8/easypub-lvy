@@ -1,4 +1,4 @@
-# 为发布包生成自动更新清单与签名（V68）。在 gh release create 时把输出的两个文件一起上传：
+# 为发布包生成自动更新清单与签名。在 gh release create 时把输出的两个文件一起上传：
 #   update-manifest.json、update-manifest.json.sig
 # 私钥默认在 %USERPROFILE%\.easypub-lvy\release-signing.key（不在仓库里）；
 # release_sign 会用程序内置公钥复核签名，私钥不对就失败。

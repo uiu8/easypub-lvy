@@ -6,7 +6,7 @@ import '../../application/conversion_service.dart';
 import '../../application/library_service.dart';
 import '../../application/settings_service.dart';
 
-/// 设置里 EPUB 的默认转换路径是否为“保持原格式”（V27，OUT-080）。
+/// 设置里 EPUB 的默认转换路径是否为“保持原格式”。
 bool epubOriginalDefault(LibraryService library) =>
     library is SettingsService &&
     (library as SettingsService)
@@ -50,7 +50,7 @@ class ConversionFormDraft extends ChangeNotifier {
   bool autoCheck = false;
   Set<String> selected = {};
 
-  /// 每本 EPUB 书单独选的转换路径：true 保持原格式，false 使用软件排版；没选过的按设置默认（V27，OUT-079）。
+  /// 每本 EPUB 书单独选的转换路径：true 保持原格式，false 使用软件排版；没选过的按设置默认。
   final Map<String, bool> epubOriginal = {};
   final Set<String> manualDefaults = {};
   Map<String, Object>? defaultValues;
@@ -75,7 +75,7 @@ class ConversionFormDraft extends ChangeNotifier {
 
   bool get hasActiveForm => activeForm != null;
 
-  /// 绑定当前挂载的转换页表单处理器（V105，P0-06）：收口页面与顶层壳层/底栏的生命周期契约。
+  /// 绑定当前挂载的转换页表单处理器：收口页面与顶层壳层/底栏的生命周期契约。
   void bindActiveForm(
     Object owner, {
     required Future<void> Function(String) onChangeFormat,

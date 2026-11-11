@@ -1,5 +1,5 @@
-// 手工标注块（V53，LAY-123）：章节页行号栏框选、浮动工具条、已有标注的括号与类型标签、失效提示。
-// 数据与输出由 V52 的 BlockAnnotationSession 提供；所有写入先预览、再确认，进入“制作”变更记录。
+// 手工标注块：章节页行号栏框选、浮动工具条、已有标注的括号与类型标签、失效提示。
+// 数据与输出由 BlockAnnotationSession 提供；所有写入先预览、再确认，进入“制作”变更记录。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -13,7 +13,7 @@ import '../tokens.dart';
 import '../widgets.dart';
 
 /// 工具条与菜单里可选的类别（`none` 显示为“取消识别”：此范围不参与自动识别）。
-/// 系统提示可指定样式（V78，LAY-134）：按行数（一行单行提示、多行面板）、单行提示、面板。
+/// 系统提示可指定样式：按行数（一行单行提示、多行面板）、单行提示、面板。
 const blockMarkChoices = <(BlockAnnotationKind, String?, String)>[
   (BlockAnnotationKind.letter, null, '书信'),
   (BlockAnnotationKind.quote, null, '引文'),
@@ -24,7 +24,7 @@ const blockMarkChoices = <(BlockAnnotationKind, String?, String)>[
   (BlockAnnotationKind.none, null, '不识别'),
 ];
 
-/// 场景（V81，LAY-135）：工具条与菜单里收在“场景”下面，九种场景各一项。
+/// 场景：工具条与菜单里收在“场景”下面，九种场景各一项。
 final insetMarkChoices = <(BlockAnnotationKind, String?, String)>[
   for (final e in insetTypes.entries)
     (BlockAnnotationKind.inset, e.key, '场景 · ${e.value}'),
@@ -39,7 +39,7 @@ String blockMarkLabel(BlockAnnotationKind kind, [String? variant]) => [
 String blockMarkKey(BlockAnnotationKind kind, String? variant) =>
     variant == null ? kind.name : '${kind.name}-$variant';
 
-/// 场景各角色的名称（V82，LAY-138）。
+/// 场景各角色的名称。
 const insetRoleLabels = {
   'head': '标题',
   'body': '正文',
@@ -142,7 +142,7 @@ class _RolesDialogState extends State<_RolesDialog> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        // R3-07：编辑台的选择框（原为 Material 下拉）。
+                        // 编辑台的选择框（原为 Material 下拉）。
                         SizedBox(
                           width: 168,
                           child: DeskChoice<String?>(
@@ -212,10 +212,10 @@ class BlockMarkController extends ChangeNotifier {
   BlockAnnotationKind? pendingKind;
   String? pendingVariant;
 
-  /// 确认步骤是删除选区上的手工标注（V121）。
+  /// 确认步骤是删除选区上的手工标注。
   bool pendingRemove = false;
 
-  /// 选区正好是一条有效手工标注时为它（V121）：这时选类型就是改为该类型，还可以删除。
+  /// 选区正好是一条有效手工标注时为它：这时选类型就是改为该类型，还可以删除。
   BlockAnnotationView? get existing {
     final (e, a, b) = (entryId, first, last);
     if (e == null || a == null || b == null) return null;
@@ -227,7 +227,7 @@ class BlockMarkController extends ChangeNotifier {
     return null;
   }
 
-  /// 某行所在的有效手工标注（V121）：点这一行时选中整条标注。
+  /// 某行所在的有效手工标注：点这一行时选中整条标注。
   BlockAnnotationView? _markAt(String entry, int line) {
     for (final v in snapshot?.annotations ?? const <BlockAnnotationView>[]) {
       final (a, b) = (v.firstLine, v.lastLine);
@@ -305,7 +305,7 @@ class BlockMarkController extends ChangeNotifier {
                 last == mark.lastLine))) {
       _clearSelection();
     } else if (mark != null) {
-      // 点手工标注里的一行：选中整条标注，面板里可以改类型或删除（V121）。
+      // 点手工标注里的一行：选中整条标注，面板里可以改类型或删除。
       entryId = entry;
       anchor = first = mark.firstLine;
       last = mark.lastLine;
@@ -316,7 +316,7 @@ class BlockMarkController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 排版视图里拖选（V104，LAY-150）：从 [from] 行拖到 [to] 行，选中两端之间的整行。
+  /// 排版视图里拖选：从 [from] 行拖到 [to] 行，选中两端之间的整行。
   void selectRange(String entry, int from, int to) {
     if (busy) return;
     pending = null;
@@ -364,7 +364,7 @@ class BlockMarkController extends ChangeNotifier {
   /// 工具条第一步：解析选区并预览新增，进入确认步骤。
   Future<void> choose(BlockAnnotationKind kind, [String? variant]) =>
       _run(() async {
-        // 选区正好是一条手工标注：改它的类型（V121），不再因“重叠”被拒绝。
+        // 选区正好是一条手工标注：改它的类型，不再因“重叠”被拒绝。
         final mark = existing;
         if (mark != null) {
           pending = await previewChange(mark, kind, variant);
@@ -391,7 +391,7 @@ class BlockMarkController extends ChangeNotifier {
         pendingVariant = variant;
       });
 
-  /// 删除选区上的手工标注（V121）：“不识别”删除后恢复自动识别，其他类型删除后按普通正文。
+  /// 删除选区上的手工标注：“不识别”删除后恢复自动识别，其他类型删除后按普通正文。
   Future<void> chooseRemove() => _run(() async {
     final mark = existing;
     if (mark == null) return;
@@ -552,7 +552,7 @@ class BlockTag extends StatelessWidget {
     }
   }
 
-  /// 场景逐行设置（V82，LAY-138）：对话框本身就是确认，应用后记入变更记录。
+  /// 场景逐行设置：对话框本身就是确认，应用后记入变更记录。
   Future<void> _roles(BuildContext context) async {
     final roles = await showInsetRolesDialog(context, view);
     if (roles == null || !context.mounted) return;
@@ -649,7 +649,7 @@ class BlockTag extends StatelessWidget {
   }
 }
 
-/// 标注面板（V120 重做）：所选行现在是什么、按类别分组的选项（图标 + 名称）、选中后在同一张卡片里应用。
+/// 标注面板（重做）：所选行现在是什么、按类别分组的选项（图标 + 名称）、选中后在同一张卡片里应用。
 class BlockMarkBar extends StatelessWidget {
   const BlockMarkBar({
     super.key,
@@ -662,13 +662,13 @@ class BlockMarkBar extends StatelessWidget {
   final BlockMarkController controller;
   final String lines;
 
-  /// 所选行现在的识别结果（V120），例如“系统提示 · 单行（自动识别）”；为空时不显示。
+  /// 所选行现在的识别结果，例如“系统提示 · 单行（自动识别）”；为空时不显示。
   final String? current;
 
-  /// “文字样式…”（V106，LAY-152）：单行或跨行都可用；书库不提供样式能力时为空。
+  /// “文字样式…”：单行或跨行都可用；书库不提供样式能力时为空。
   final VoidCallback? onStyle;
 
-  /// 选中单行时的“注释…”（V62，LAY-128）；书库不提供注释能力或选了多行时为空。
+  /// 选中单行时的“注释…”；书库不提供注释能力或选了多行时为空。
   final VoidCallback? onNote;
 
   static const _icons = {
@@ -768,7 +768,7 @@ class BlockMarkBar extends StatelessWidget {
                     if (k != BlockAnnotationKind.system &&
                         k != BlockAnnotationKind.none)
                       option(k, v, label, _icons[k.name]),
-                  // 场景（V81）：九种收在一个菜单里。
+                  // 场景：九种收在一个菜单里。
                   MenuAnchor(
                     menuChildren: [
                       for (final (k, v, label) in insetMarkChoices)
@@ -824,7 +824,7 @@ class BlockMarkBar extends StatelessWidget {
                     '不识别',
                     Icons.block_rounded,
                   ),
-                  // 已有手工标注时可以删除（V121）：“不识别”删除后恢复自动识别。
+                  // 已有手工标注时可以删除：“不识别”删除后恢复自动识别。
                   if (mark != null)
                     _MarkOption(
                       key: const ValueKey('block-mark-remove'),
@@ -924,7 +924,7 @@ class _MarkOption extends StatelessWidget {
   final String label;
   final IconData? icon;
 
-  /// [current]：所选行现在就是这个类型（V121），描边标出，点了不动。
+  /// [current]：所选行现在就是这个类型，描边标出，点了不动。
   final bool selected, current, menu;
   final VoidCallback? onTap;
 

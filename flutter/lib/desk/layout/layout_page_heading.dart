@@ -1,8 +1,8 @@
-// 排版页“标题”分页：章首图、章节样式包、标题样式、场景分隔、章首段落（R5-13 拆出，逻辑不变）。
+// 排版页“标题”分页：章首图、章节样式包、标题样式、场景分隔、章首段落（拆出，逻辑不变）。
 part of 'layout_page.dart';
 
 extension _LayoutHeadingSection on _LayoutPageState {
-  /// 统一章首图（V54，LAY-124）：选图后单独预览并应用（进变更记录），不经草稿；范围与宽度是排版字段。
+  /// 统一章首图：选图后单独预览并应用（进变更记录），不经草稿；范围与宽度是排版字段。
   Future<void> setChapterHeadImage(String? path) async {
     if (session == null) return;
     update(() => busy = true);
@@ -136,7 +136,7 @@ extension _LayoutHeadingSection on _LayoutPageState {
     );
   }
 
-  /// 章节样式包（V74，LAY-130）：单独预览并应用（进变更记录），不经草稿。
+  /// 章节样式包：单独预览并应用（进变更记录），不经草稿。
   Future<void> setChapterStyle(Map<String, dynamic>? style, String done) async {
     if (session == null) return;
     update(() => busy = true);
@@ -217,7 +217,7 @@ extension _LayoutHeadingSection on _LayoutPageState {
       'blocks': systemBlockStyle == 'styled'
           ? (systemStyles ?? defaultSystemStyles())
           : null,
-      // 场景样式（V82）：聊天、书信样式与改过的各场景参数。
+      // 场景样式：聊天、书信样式与改过的各场景参数。
       'insets': {
         'chat_block_style': chatBlockStyle,
         'letter_block_style': letterBlockStyle,
@@ -377,7 +377,7 @@ extension _LayoutHeadingSection on _LayoutPageState {
     );
   }
 
-  /// 章节标题样式（V36，LAY-117）：五个缩略图，点选即改；问号说明分页与适用格式。
+  /// 章节标题样式：五个缩略图，点选即改；问号说明分页与适用格式。
   Widget headingControls() {
     final d = context.desk;
     return Column(
@@ -412,7 +412,7 @@ extension _LayoutHeadingSection on _LayoutPageState {
     );
   }
 
-  /// 场景分隔（V46，LAY-118）：五个选项，问号说明识别规则。
+  /// 场景分隔：五个选项，问号说明识别规则。
   Widget sceneBreakControls() => foldRow(
     field: 'scene_break_style',
     label: '场景分隔',
@@ -432,7 +432,7 @@ extension _LayoutHeadingSection on _LayoutPageState {
     ),
   );
 
-  /// 章首段落（V49，LAY-119）：标题后与场景分隔后的第一段。
+  /// 章首段落：标题后与场景分隔后的第一段。
   Widget firstParagraphControls() => foldRow(
     field: 'first_paragraph_style',
     label: '章首段落',

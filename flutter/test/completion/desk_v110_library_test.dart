@@ -12,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 class _NoPicker extends Fake implements BookFilePicker {}
 
-/// V110：收藏夹栏默认收起；列表视图的“格式、大小”两列按整个列表的宽度统一决定。
+/// 收藏夹栏默认收起；列表视图的“格式、大小”两列按整个列表的宽度统一决定。
 /// 用户截图（窗口约 1260 逻辑像素宽、收藏夹栏展开、11 本书）里表头有这两列、各行没有：
 /// 表头和行以前各自按自己的宽度判断，真实程序里两者的内边距不同。
 void main() {
@@ -73,7 +73,7 @@ void main() {
       of: find.byKey(const ValueKey('library-column-header')),
       matching: find.text('格式'),
     );
-    // 只看书库各行里的格式（V131 起底部输出栏也有“TXT”格式按钮）。
+    // 只看书库各行里的格式（后来底部输出栏也有“TXT”格式按钮）。
     final rowFormat = find.descendant(
       of: find.byWidgetPredicate(
         (w) =>

@@ -48,7 +48,7 @@ bool _contains(List<int> haystack, String needle) {
   return false;
 }
 
-/// V24：封面与插图自动转换为 Kindle 可用格式（OUT-078）；GIF、BMP 可选（RES-049）。
+/// 封面与插图自动转换为 Kindle 可用格式；GIF、BMP 可选。
 void main() {
   setUpAll(
     () async => RustLib.init(

@@ -1,4 +1,4 @@
-// 同时处理的书（V38，SET-069、LIB-115、OUT-083）：导入、书库检查、转换前检查与转换按此本数同时进行。
+// 同时处理的书：导入、书库检查、转换前检查与转换按此本数同时进行。
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;

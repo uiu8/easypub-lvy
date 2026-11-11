@@ -1,4 +1,4 @@
-// 迁入 desk（V5a）：逻辑与布局沿用 V5 前的同名文件，只换面板与切换样式；见 docs/evidence/v5-meta-layout-resources-20261011.md。
+// 迁入 desk：逻辑与布局沿用早先的同名文件，只换面板与切换样式。
 import 'package:flutter/painting.dart';
 
 /// Move the image under the viewport, in visually oriented coordinates.

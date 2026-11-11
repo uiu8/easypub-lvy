@@ -29,7 +29,7 @@ const bookSourceErrorReasons = <String, String>{
   'book_source_conflicting_chapter': '同一章节地址对应了不同标题或卷名，本次目录未采用。',
 };
 
-/// 书源下拉里的短原因（V45，CH-272）；完整说明见 [bookSourceErrorReasons]。
+/// 书源下拉里的短原因；完整说明见 [bookSourceErrorReasons]。
 const bookSourceShortReasons = <String, String>{
   'book_source_javascript_required': '需要 JavaScript',
   'book_source_login_required': '需要登录',

@@ -27,7 +27,7 @@ double contrast(Color a, Color b) {
   return (x > y ? x + .05 : y + .05) / (x > y ? y + .05 : x + .05);
 }
 
-/// V79：多种主题（SET-074）。
+/// 多种主题。
 void main() {
   test('三种主题、六种主题色的令牌与对比度；设置值换算', () {
     for (final mode in ['paper', 'night', 'contrast']) {
@@ -68,7 +68,7 @@ void main() {
     expect(deskThemeMode('contrast', systemDark: true), 'contrast');
     expect(deskThemeMode(null, systemDark: true), 'paper');
     expect(deskThemeMode('nope', systemDark: false), 'paper');
-    // 银灰（V103，SET-101）排在宣纸之后。
+    // 银灰排在宣纸之后。
     expect(deskThemes.keys, ['paper', 'silver', 'night', 'contrast', 'system']);
     expect(deskThemeMode('silver', systemDark: true), 'silver');
   });

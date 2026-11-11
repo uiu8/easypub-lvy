@@ -20,7 +20,7 @@ fn invalid() -> ApiError {
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 enum Request {
     Defaults,
-    /// Read-only description of the built-in rules (CH-248).
+    /// Read-only description of the built-in rules.
     Builtin,
     Validate {
         rules: RuleSet,
@@ -93,7 +93,7 @@ pub fn request(service: &ImportService, raw: &str) -> Result<String, ApiError> {
                 .iter()
                 .map(|n| (n.source_line, n.clone()))
                 .collect::<std::collections::BTreeMap<_, _>>();
-            // 例外规则（V17）改变的是检查结果而不是目录，单独列出前后数量。
+            // 例外规则改变的是检查结果而不是目录，单独列出前后数量。
             let counts = |book: &easypub_core::publication::EffectiveBook| {
                 easypub_core::source::SourceSnapshot::for_effective_diagnostics(book)
                     .map(|view| view.exception_finding_counts())

@@ -34,7 +34,7 @@ void main() {
     expect(s.importStatus, '文件不存在');
   });
 
-  // V39：取消导入曾把一个只有旧文件夹导入才会重置的标志永久置位，之后每次导入都直接失败。
+  // 取消导入曾把一个只有旧文件夹导入才会重置的标志永久置位，之后每次导入都直接失败。
   test('cancelling one import does not block later imports', () async {
     final s = PrototypeState(
       importer: (path, _) async => ImportedTxt(

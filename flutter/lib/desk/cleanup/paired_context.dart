@@ -1,6 +1,6 @@
-// 原稿与清理后按同一原稿范围对齐（CLEAN-036–038）：每页 30 个对应范围；截断的范围可打开完整对照。
-// V15：改动范围只标出前后不同的那一段；改动的是空白时，只给这一段加空白标记（CLEAN-100）。
-// 逻辑沿用 V4 前的 CleanupPairedContext。
+// 原稿与清理后按同一原稿范围对齐：每页 30 个对应范围；截断的范围可打开完整对照。
+// 改动范围只标出前后不同的那一段；改动的是空白时，只给这一段加空白标记。
+// 逻辑沿用早先的 CleanupPairedContext。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -34,7 +34,7 @@ class _CleanupPairedContextState extends State<CleanupPairedContext> {
   bool busy = false;
   int generation = 0;
 
-  /// R4-02：所选那一处（第一条 selected 范围）；读完一段后滚到它，不停在上文开头。
+  /// 所选那一处（第一条 selected 范围）；读完一段后滚到它，不停在上文开头。
   final selectedRow = GlobalKey();
   @override
   void initState() {
@@ -82,7 +82,7 @@ class _CleanupPairedContextState extends State<CleanupPairedContext> {
         : text;
   }
 
-  /// 对照的一格。改动的范围只标出前后不同的那一段（CLEAN-100），整格不再着色，
+  /// 对照的一格。改动的范围只标出前后不同的那一段，整格不再着色，
   /// 左侧色条表示这一范围有改动；只改了空白时自动显示空白标记。
   Widget cell(
     String label,

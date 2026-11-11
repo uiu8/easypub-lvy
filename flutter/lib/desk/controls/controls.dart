@@ -8,8 +8,8 @@ import 'choice.dart';
 export 'choice.dart';
 export 'select_all.dart';
 
-// 编辑台表单控件（V8 由 Paper 兼容层迁入并改名）：按钮、文字、表单栅格、滚动区、可调分栏与 Material 主题。
-// 控件颜色一律取 context.desk 令牌；主题按“宣纸 / 夜墨 / 高对比”取对应令牌并换上所选主题色（V69、V79）。
+// 编辑台表单控件（由 Paper 兼容层迁入并改名）：按钮、文字、表单栅格、滚动区、可调分栏与 Material 主题。
+// 控件颜色一律取 context.desk 令牌；主题按“宣纸 / 夜墨 / 高对比”取对应令牌并换上所选主题色。
 
 /// 编辑台 Material 主题；[compact] 为紧凑密度，[accent] 为主题色编号（见 deskAccents）。
 ThemeData deskTheme({
@@ -22,14 +22,14 @@ ThemeData deskTheme({
   mode: mode,
 );
 
-/// 主题构造（V79 起按所选主题的令牌）。
+/// 主题构造（后来按所选主题的令牌）。
 abstract final class _Ink {
   static ThemeData themeFor({
     bool compact = false,
     required Desk d,
     required String mode,
   }) {
-    // 浮层悬停凹底：中性色，不随主题色变化（V79 起按主题取值）。
+    // 浮层悬停凹底：中性色，不随主题色变化（后来按主题取值）。
     final selected = switch (mode) {
       'night' => Color(0xFF2E2C29),
       'silver' => Color(0xFFE4E2E5),
@@ -64,7 +64,7 @@ abstract final class _Ink {
             onSurfaceVariant: d.ink2,
             outline: d.line,
             secondaryContainer: d.accentSoft,
-            // 开关关闭时的底色等：夜墨与高对比用令牌里的中性灰，避免种子色带出色偏（V79）。
+            // 开关关闭时的底色等：夜墨与高对比用令牌里的中性灰，避免种子色带出色偏。
             surfaceContainerHighest: mode == 'paper' ? null : d.sunken,
           ),
       textTheme: TextTheme(
@@ -108,7 +108,7 @@ abstract final class _Ink {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
-      // V7：下拉与菜单统一为编辑台浮层——表面色、10 圆角、细边与柔和阴影，悬停凹底。
+      // 下拉与菜单统一为编辑台浮层——表面色、10 圆角、细边与柔和阴影，悬停凹底。
       menuButtonTheme: MenuButtonThemeData(
         style: ButtonStyle(
           minimumSize: WidgetStatePropertyAll(Size(0, compact ? 32 : 38)),
@@ -137,7 +137,7 @@ abstract final class _Ink {
           ),
         ),
       ),
-      // V94：弹出菜单一律在按钮下方展开，不盖住按钮本身。
+      // 弹出菜单一律在按钮下方展开，不盖住按钮本身。
       popupMenuTheme: PopupMenuThemeData(
         position: PopupMenuPosition.under,
         color: d.surface,
@@ -183,7 +183,7 @@ abstract final class _Ink {
         thumbColor: WidgetStatePropertyAll(d.ink2.withValues(alpha: .42)),
         crossAxisMargin: 2,
       ),
-      // V8：系统 AlertDialog 与编辑台弹窗同一外观（14 圆角、深阴影、标题 15.5 半粗、正文次墨）。
+      // 系统 AlertDialog 与编辑台弹窗同一外观（14 圆角、深阴影、标题 15.5 半粗、正文次墨）。
       dialogTheme: DialogThemeData(
         barrierColor: Colors.black.withValues(alpha: .22),
         backgroundColor: d.surface,
@@ -361,7 +361,7 @@ class DeskButton extends StatelessWidget {
     final message = busy || onPressed == null
         ? disabledReason ?? tooltip ?? label
         : tooltip ?? label;
-    // 提示与按钮文字相同就不弹出：避免悬停时出现一个重复的文字块压住下方内容（V12）。
+    // 提示与按钮文字相同就不弹出：避免悬停时出现一个重复的文字块压住下方内容。
     return Tooltip(
       message: message,
       triggerMode: message == label ? TooltipTriggerMode.manual : null,
@@ -391,7 +391,7 @@ class DeskButton extends StatelessWidget {
             : dangerous
             ? context.desk.pen
             : context.desk.ink,
-        // 主按钮不可用时用凹陷浅底与灰字，而不是半透明，便于与可用态区分（G-060）。
+        // 主按钮不可用时用凹陷浅底与灰字，而不是半透明，便于与可用态区分。
         disabledForegroundColor: context.desk.ink2,
         disabledBackgroundColor: primary ? context.desk.sunken : null,
         backgroundColor: primary
@@ -440,7 +440,7 @@ class DeskButton extends StatelessWidget {
   );
 }
 
-/// 按钮按下时缩到 97%，松开后带轻微回弹复位（V41，G-070）：按下用 [DeskMotion.fast]，
+/// 按钮按下时缩到 97%，松开后带轻微回弹复位：按下用 [DeskMotion.fast]，
 /// 复位用 [DeskMotion.snap] + [DeskMotion.overshoot]。只改绘制比例，不影响布局与点击区域。
 class _PressBounce extends StatefulWidget {
   const _PressBounce({required this.enabled, required this.child});
@@ -556,7 +556,7 @@ class _DeskSplitViewState extends State<DeskSplitView> {
   bool dividerFocused = false;
 
   /// 拖动开始时的左栏宽度与指针横坐标：宽度 = 起始宽度 + 指针总位移，
-  /// 一帧内来多个移动事件也不会丢位移（V83）。
+  /// 一帧内来多个移动事件也不会丢位移。
   double? dragWidth, dragOrigin;
   @override
   Widget build(BuildContext context) => LayoutBuilder(

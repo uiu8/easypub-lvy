@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import '../dialogs.dart';
 import '../tokens.dart';
 
-// 粘贴目录文本（CH-187、CH-203–207）：完整目录保存在 controller，只排版一段可编辑切片；
-// 跨段撤销/重做只作用于目录文本。逻辑沿用 V3 前的 CatalogPasteField，仅换样式。
+// 粘贴目录文本：完整目录保存在 controller，只排版一段可编辑切片；
+// 跨段撤销/重做只作用于目录文本。逻辑沿用早先的 CatalogPasteField，仅换样式。
 
 /// Keeps the whole manuscript in [controller] while laying out one editable
 /// slice. Formatting occurs before EditableText lays out an incoming paste.

@@ -28,7 +28,7 @@ fn page(prepared: &Prepared, title: &str, body: &str) -> Result<String, ApiError
         escaped(&m.language)?
     ))
 }
-/// 封面页（OUT-074）。`svg` 为 true 时用 SVG 包住封面图：viewBox 取图片的实际像素尺寸，
+/// 封面页。`svg` 为 true 时用 SVG 包住封面图：viewBox 取图片的实际像素尺寸，
 /// 按“封面适配方式”保持原图比例（contain 完整显示、cover 铺满并裁去多余部分、fill 拉伸），
 /// 不依赖阅读器是否支持 `object-fit`。KFX（Bokai）仍用普通图片、高度随宽度。
 pub(crate) fn cover_page(prepared: &Prepared, svg: bool) -> Result<Option<String>, ApiError> {
@@ -66,7 +66,7 @@ pub(crate) fn cover_page(prepared: &Prepared, svg: bool) -> Result<Option<String
     };
     page(prepared, "封面", &body).map(Some)
 }
-/// 精排两行（V36，LAY-117）：标题开头的“第 N 章”（含后面的空白、冒号等分隔）在第几个字节结束。
+/// 精排两行：标题开头的“第 N 章”（含后面的空白、冒号等分隔）在第几个字节结束。
 /// 章名为空、或开头不是“第 N 章 / 回 / 节 / 卷 / 集 / 部 / 篇 / 话 / 幕”时返回 None，标题照常一行。
 /// 只改结构不改文字：分隔符留在小字里，行末空白不显示；两行之间用 `<br/>`，与网文精排成品书相同
 /// （Bokai 生成 KFX 时不保留行内元素的 display: block，换行元素三种格式都保留）。
@@ -142,7 +142,7 @@ pub(crate) fn classify_block(
     } else if has_node {
         None
     } else if system_style != "off"
-        // V121：整行【】按用途分，台词、聊天、书前标签不算系统提示（LAY-169）。
+        // 整行【】按用途分，台词、聊天、书前标签不算系统提示。
         && (scope.is_system(line)
             || (system_style == "styled"
                 && crate::block_styles::is_ding_line(line)
@@ -151,7 +151,7 @@ pub(crate) fn classify_block(
         Some(("system", "system-line"))
     } else if verse_style != "off"
         && is_verse_line(line)
-        // V92：只认成组的诗句——上一行已是诗句，或下一行仍是诗句 / 署名。
+        // 只认成组的诗句——上一行已是诗句，或下一行仍是诗句 / 署名。
         // 夹在正文里的单句（“我点开图片一看，整个人不由一怔！”）按正文。
         && (previous_line == Some("verse-line")
             || next_line.is_some_and(|n| is_verse_line(n) || is_verse_attribution(n)))
@@ -164,7 +164,7 @@ pub(crate) fn classify_block(
     }
 }
 
-/// 分类样式（V77，LAY-132）：每段连续系统提示的行数，按段首行的字节偏移记录。
+/// 分类样式：每段连续系统提示的行数，按段首行的字节偏移记录。
 /// 与正文生成用同一个 [classify_block]；手工标注与自动识别各自成段。
 fn system_runs(
     text: &str,
@@ -223,7 +223,7 @@ fn system_runs(
             system_style,
             custom,
         );
-        // 场景块（V81）里的行不算系统提示：自动识别的聊天记录优先于系统提示。
+        // 场景块里的行不算系统提示：自动识别的聊天记录优先于系统提示。
         let kind = if insets.contains_key(&offset) {
             None
         } else {
@@ -255,7 +255,7 @@ fn system_runs(
     runs
 }
 
-/// 系统提示自定义识别（V78，LAY-134）：自动识别没有归类、没有标题与手工标注的行，
+/// 系统提示自定义识别：自动识别没有归类、没有标题与手工标注的行，
 /// 整行匹配自定义规则时算系统提示。
 pub(crate) fn custom_system(
     kind: Option<(&'static str, &'static str)>,
@@ -272,10 +272,10 @@ pub(crate) fn custom_system(
     }
 }
 
-/// 可作场景分隔的符号（V46，LAY-118）。“……”“——”“-”不在其中：单独成行时通常是对白或停顿。
+/// 可作场景分隔的符号。“……”“——”“-”不在其中：单独成行时通常是对白或停顿。
 pub(crate) const SCENE_SYMBOLS: &str = "*＊﹡※◇◆○●◎☆★♢♦✱✲✳✿❀❖⁂#＃=＝~～§";
 
-/// 整行（可夹空白）都是分隔符号且至少 3 个时视为场景分隔（V46，LAY-118）。
+/// 整行（可夹空白）都是分隔符号且至少 3 个时视为场景分隔。
 pub(crate) fn is_scene_break(line: &str) -> bool {
     let mut count = 0;
     for c in line.chars() {
@@ -293,7 +293,7 @@ pub(crate) fn is_scene_break(line: &str) -> bool {
     count >= 3
 }
 
-/// 系统提示（V50，LAY-121）：整行由一个或多个【……】组成（之间可有空白），括号内不为空。
+/// 系统提示：整行由一个或多个【……】组成（之间可有空白），括号内不为空。
 pub(crate) fn is_system_line(line: &str) -> bool {
     let mut rest = line.trim();
     if rest.is_empty() || rest.chars().count() > 200 {
@@ -314,7 +314,7 @@ pub(crate) fn is_system_line(line: &str) -> bool {
     true
 }
 
-/// 生僻字注音（V73，LAY-129）：只处理标签外、已有 `<ruby>` 之外的文字。
+/// 生僻字注音：只处理标签外、已有 `<ruby>` 之外的文字。
 /// `seen` 为 None 时每次都标；否则只标集合里还没有的字，并记入集合。返回是否改动。
 pub(crate) fn rare_char_ruby(
     html: &str,
@@ -367,7 +367,7 @@ fn is_han(c: char) -> bool {
     matches!(c, '\u{4e00}'..='\u{9fff}' | '\u{3400}'..='\u{4dbf}' | '\u{f900}'..='\u{faff}')
 }
 
-/// 诗词（V50，LAY-122）：整行是五言或七言对句，前后两句等长，如“床前明月光，疑是地上霜。”。
+/// 诗词：整行是五言或七言对句，前后两句等长，如“床前明月光，疑是地上霜。”。
 pub(crate) fn is_verse_line(line: &str) -> bool {
     let t = line.trim();
     let t = t
@@ -380,7 +380,7 @@ pub(crate) fn is_verse_line(line: &str) -> bool {
     na == nb
         && (na == 5 || na == 7)
         && a.chars().chain(b.chars()).all(is_han)
-        // V92：网文里“这份潜在的商机，是我不能忽视的！”这类 7+7 的白话句子很常见，
+        // 网文里“这份潜在的商机，是我不能忽视的！”这类 7+7 的白话句子很常见，
         // 含现代白话虚词、代词的不算诗句（古诗里几乎不用这些字）。
         && !a.chars().chain(b.chars()).any(|c| MODERN_PROSE.contains(&c))
 }
@@ -390,14 +390,14 @@ const MODERN_PROSE: [char; 17] = [
     '咱',
 ];
 
-/// 诗词署名（V50，LAY-122）：紧跟诗句、以“——”开头的短行。
+/// 诗词署名：紧跟诗句、以“——”开头的短行。
 pub(crate) fn is_verse_attribution(line: &str) -> bool {
     let t = line.trim();
     t.strip_prefix("——")
         .is_some_and(|by| !by.trim().is_empty() && by.chars().count() <= 40)
 }
 
-/// 章首图（V54，RES-050 / LAY-124）：本章单独设的章首插图优先；没有时按统一章首图的适用范围插入。
+/// 章首图：本章单独设的章首插图优先；没有时按统一章首图的适用范围插入。
 fn chapter_head(
     prepared: &Prepared,
     role: &Role,
@@ -429,7 +429,7 @@ fn chapter_head(
         "both" => matches!(role, Role::Volume | Role::Chapter),
         _ => matches!(role, Role::Chapter),
     };
-    // 已设的章首图优先；否则用样式包的章头图，按章轮换（V74，LAY-130）。
+    // 已设的章首图优先；否则用样式包的章头图，按章轮换。
     let styled = m
         .chapter_style
         .as_ref()
@@ -569,7 +569,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
     let mut placement_index = 0;
     let mut prefix = book.tree.prefix_end > 0;
     let mut section_open = false;
-    // 章节样式包（V74，LAY-130）：章头图轮换计数；当前是否在章或前置部分里（用于章末装饰）。
+    // 章节样式包：章头图轮换计数；当前是否在章或前置部分里（用于章末装饰）。
     let mut head_rotation = 0usize;
     let mut in_chapter = false;
     let chapter_end = match m
@@ -594,33 +594,33 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
         )),
         None => None,
     };
-    // 章首插图（V54）：挂到所在章（插图之前最近的标题）；书首无标题时按随正文输出。
+    // 章首插图：挂到所在章（插图之前最近的标题）；书首无标题时按随正文输出。
     let mut heads: BTreeMap<usize, Vec<&crate::publication_resources::Placement>> = BTreeMap::new();
     for p in m.placements.iter().filter(|p| p.layout == "chapter_head") {
         if let Some(index) = book.tree.nodes.iter().rposition(|n| n.start < p.after_utf8) {
             heads.entry(index).or_default().push(p);
         }
     }
-    // 章首段落（V49，LAY-119）：标题或场景分隔之后、尚未遇到非空正文段。
+    // 章首段落：标题或场景分隔之后、尚未遇到非空正文段。
     let mut first_pending = false;
-    // 生僻字注音（V73，LAY-129）：已标过的字；每章首次时遇到章、卷、前置部分标题清空。
+    // 生僻字注音：已标过的字；每章首次时遇到章、卷、前置部分标题清空。
     let rare_scope = easypub_core::rare_chars::Scope::parse(&m.rare_char_scope)
         .unwrap_or(easypub_core::rare_chars::Scope::Outside);
     let mut rare_seen: HashSet<char> = HashSet::new();
-    // 系统提示与诗词（V50，LAY-121/122）：当前打开的块。
+    // 系统提示与诗词：当前打开的块。
     // 标注 ID 区分手工块与相邻自动块、相邻同类手工块。
     let mut block: Option<(&str, Option<&str>)> = None;
     let mut annotation_index = 0;
     let mut previous_line: Option<&str> = None;
-    // 系统提示分类样式（V77，LAY-132）：每段行数；当前段是否面板、段内第几行、有无标题。
+    // 系统提示分类样式：每段行数；当前段是否面板、段内第几行、有无标题。
     let styled = m
         .system_styles
         .as_ref()
         .filter(|_| m.system_block_style == "styled");
     let custom = m.rule_options.system_set();
-    // 整行【】的用途（V121，LAY-169）：按全文判断一次。
+    // 整行【】的用途：按全文判断一次。
     let scope = crate::system_scope::Scope::new(&book.text, &m.rule_options.system_scope);
-    // 场景样式（V81，LAY-135）：手工标注的场景与自动识别的聊天记录，逐行角色。
+    // 场景样式：手工标注的场景与自动识别的聊天记录，逐行角色。
     let inset_plan = crate::insets::plan(
         &book.text,
         &book.tree.nodes,
@@ -628,7 +628,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
         m.chat_block_style != "off",
         &crate::insets::Rules::from_settings(&m.inset_detect, &m.rule_options),
     );
-    // 各场景实际使用的样式参数（V82，LAY-136）：饰纹、首字放大、卷轴杆、聊天名字位置。
+    // 各场景实际使用的样式参数：饰纹、首字放大、卷轴杆、聊天名字位置。
     let inset_styles: BTreeMap<&str, crate::inset_styles::InsetStyle> = crate::insets::TYPES
         .iter()
         .map(|(scene, _)| {
@@ -739,7 +739,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             line_block
         };
         let inset = inset_plan.get(&offset).copied();
-        // 自动识别的块：聊天按 chat 统计，规则识别的按 inset（V82）；手工标注沿用 classify_block。
+        // 自动识别的块：聊天按 chat 统计，规则识别的按 inset；手工标注沿用 classify_block。
         let line_block = match inset {
             Some(l) if l.source == "chat" => Some(("chat", "inset-line")),
             Some(l) if l.automatic() => Some(("inset", "inset-line")),
@@ -787,7 +787,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             let section_class = match node.role {
                 Role::Volume => "volume-start",
                 Role::Chapter => "chapter-start",
-                // 序言、后记等前置部分与章同级，单独成页（V36，OUT-081）。
+                // 序言、后记等前置部分与章同级，单独成页。
                 Role::Front => "front-start",
                 _ => "content-section",
             };
@@ -909,13 +909,13 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
             && !blank
             && m.first_paragraph_style != "normal"
             && line_block.is_none();
-        // 场景分隔（V46，LAY-118）：原文留在 data-source 节点；换成装饰时原符号存于 data-original。
+        // 场景分隔：原文留在 data-source 节点；换成装饰时原符号存于 data-original。
         let line_styles = styles_by_line.remove(&offset).unwrap_or_default();
         let table = tables
             .get(&offset)
             .filter(|_| node.is_none() && annotation.is_none());
         let has_note = notes.as_ref().is_some_and(|notes| notes.has_line(offset));
-        // 章节分隔线（V116）：整行横线（如“----------”）紧挨下一个标题或在全文末尾时不输出，
+        // 章节分隔线：整行横线（如“----------”）紧挨下一个标题或在全文末尾时不输出，
         // 正文中间的按场景分隔处理。
         let rule_line = node.is_none()
             && annotation.is_none()
@@ -1019,7 +1019,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                 })
                 .collect();
             let styles: Vec<_> = adjusted.iter().collect();
-            // 注音、着重号与竖排的纵中横（V28）。
+            // 注音、着重号与竖排的纵中横。
             let digits = (m.writing_mode == "vertical").then_some(m.vertical_digits);
             let label = node
                 .filter(|n| {
@@ -1057,7 +1057,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                 }
                 _ => inner,
             };
-            // 场景样式（V81）：聊天行拆出名字；古籍、羊皮纸标题加饰纹；羊皮纸首段首字放大。原文存于 data-original。
+            // 场景样式：聊天行拆出名字；古籍、羊皮纸标题加饰纹；羊皮纸首段首字放大。原文存于 data-original。
             let mut who = None;
             let inner = match inset {
                 Some(l) if l.role == "say" && !has_note => {
@@ -1114,7 +1114,7 @@ pub fn prepare(prepared: &Prepared) -> Result<Documents, ApiError> {
                     escaped(original)?.replace('\t', "&#9;")
                 ));
             }
-            // 系统提示分类样式（V77）：按单行提示 / 面板的参数去括号、标标题、键名加粗；原文存于 data-original。
+            // 系统提示分类样式：按单行提示 / 面板的参数去括号、标标题、键名加粗；原文存于 data-original。
             let inner = match (styled, styled_block.as_mut(), line_block) {
                 (Some(styles), Some((panel, index, title)), Some(("system", _))) => {
                     let params = if *panel { &styles.panel } else { &styles.note };
@@ -1368,7 +1368,7 @@ mod tests {
         assert!(page.contains("class=\"scene-break\" data-source=\"true\" data-original=\"＊＊＊\" data-eol=\"lf\">―――</p>"));
     }
 
-    /// V116：章末紧挨下一个标题的横线分隔线不输出；正文中间的横线按场景分隔。
+    /// 章末紧挨下一个标题的横线分隔线不输出；正文中间的横线按场景分隔。
     #[test]
     fn rule_lines_vanish_at_chapter_boundaries_and_split_scenes_inside() {
         let dash = "-".repeat(40);
@@ -1633,7 +1633,7 @@ mod tests {
                 }
             }
         }
-        // V82a：本书改过的样式——古籍换〖〗饰纹并首字放大，羊皮纸去掉卷轴杆与纸纹、改浅灰底。
+        // 本书改过的样式——古籍换〖〗饰纹并首字放大，羊皮纸去掉卷轴杆与纸纹、改浅灰底。
         let mut req = request(&source);
         req.settings.chat_block_style = "window".into();
         req.settings.block_annotations = serde_json::from_value(annotations.clone()).unwrap();
@@ -1679,7 +1679,7 @@ mod tests {
         let prepared = publication_resources::prepare(&source, req).unwrap();
         let page = prepared.documents().unwrap().pages["body.xhtml"].clone();
         assert!(!page.contains("inset"));
-        // V121（LAY-169）：【名字：内容】是聊天消息，不识别聊天时按正文排，不再当系统提示。
+        // 【名字：内容】是聊天消息，不识别聊天时按正文排，不再当系统提示。
         assert!(
             !page.contains("blk-panel"),
             "不识别聊天时【】聊天消息按正文排"
@@ -2046,7 +2046,7 @@ mod tests {
         ] {
             assert!(verse(yes), "{yes}");
         }
-        // V92：Kindle 上被误当诗句居中的网文句子（7+7 白话）。
+        // Kindle 上被误当诗句居中的网文句子（7+7 白话）。
         for no in [
             "这份潜在的商机，是我不能忽视的！",
             "察觉到我的迟疑，倪妮并没有勉强。",
@@ -2151,7 +2151,7 @@ mod tests {
 
     #[test]
     fn notes_first_paragraph_and_blocks_combine_without_losing_text() {
-        // V48 注释、V49 首字放大、V50 系统提示与诗词同时开启。
+        // 注释、首字放大、系统提示与诗词同时开启。
         let text = "第一章 开始\n港口起雾①了。\n【叮！任务开启】\n床前明月光，疑是地上霜。\n——李白\n①雾：水汽。\n";
         let source =
             SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
@@ -2400,7 +2400,7 @@ mod tests {
                 );
             }
         }
-        // 封面页（OUT-074）：SVG 的 viewBox 是封面图的实际尺寸，按“封面适配方式”保持比例。
+        // 封面页：SVG 的 viewBox 是封面图的实际尺寸，按“封面适配方式”保持比例。
         let m = prepared.manifest();
         let cover_id = m.cover.as_ref().unwrap();
         let resource = m.resources.iter().find(|r| &r.id == cover_id).unwrap();

@@ -31,11 +31,11 @@ class _Autosave implements WorkspaceAutosaveService {
   Future<bool> flushWorkspace() async => true;
 }
 
-/// V40：删除转换选项“使用本次已确认的参考目录”（OUT-038）。
+/// 删除转换选项“使用本次已确认的参考目录”。
 void main() {
   testWidgets('转换高级设置不再有参考目录选项；旧草稿里残留的开关被忽略', (t) async {
     final autosave = _Autosave();
-    // V39 之前保存的弹窗草稿带 useCatalog。
+    // 以前保存的弹窗草稿带 useCatalog。
     autosave.drafts['workspace/conversion-options/AZW3'] = {
       'engine': r'D:\old\kindling.exe',
       'engineEdited': true,

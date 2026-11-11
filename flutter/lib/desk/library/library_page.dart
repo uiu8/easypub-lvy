@@ -1,6 +1,6 @@
-// 书库（LIB-001–040）：页头（导入、更多导入方式、撤销移除）、搜索与筛选、勾选工具条、书稿列表、
-// 右侧当前书摘要与底部转换入口。导入、勾选、移除/撤销、批量检查、来源刷新的逻辑逐行沿用 V6 前的
-// LibraryPage；视图按 design_review_v37/d4_library.dart（D4-A）重写。
+// 书库：页头（导入、更多导入方式、撤销移除）、搜索与筛选、勾选工具条、书稿列表、
+// 右侧当前书摘要与底部转换入口。导入、勾选、移除/撤销、批量检查、来源刷新的逻辑逐行沿用早先的
+// LibraryPage；视图重写。
 import 'dart:async';
 import 'dart:io';
 
@@ -47,7 +47,7 @@ part 'library_folders.dart';
 part 'library_selection.dart';
 part 'library_shelf.dart';
 
-/// 列宽与表头共用（LIB-098）。
+/// 列宽与表头共用。
 const _checkWidth = 40.0, _formatWidth = 56.0, _sizeWidth = 76.0;
 const _statusWidth = 128.0, _menuWidth = 40.0;
 bool _wide(double width) => width >= 620;
@@ -86,13 +86,13 @@ class LibraryPage extends StatefulWidget {
   final void Function(String)? onConvertBook;
   final Future<void> Function(String)? onRevealSource;
 
-  /// 转换历史；为 null 时详情栏不显示“最近输出”（LIB-113）。
+  /// 转换历史；为 null 时详情栏不显示“最近输出”。
   final OutputHistoryService? outputs;
 
-  /// 打开某次输出所在的文件夹（LIB-113）。
+  /// 打开某次输出所在的文件夹。
   final Future<void> Function(OutputRecord)? onRevealOutput;
 
-  /// 进入转换历史（LIB-113）。
+  /// 进入转换历史。
   final VoidCallback? onOutputHistory;
   @override
   State<LibraryPage> createState() => _LibraryPageState();
@@ -165,12 +165,12 @@ class _LibraryPageState extends State<LibraryPage> {
 
   String query = '', filter = '全部书稿', format = '全部格式';
 
-  /// 显示范围与排序（V84，LIB-118/125/127）。
+  /// 显示范围与排序。
   String scope = '', sort = 'default';
   bool descending = false;
   final collectionKeys = <String, GlobalKey>{};
 
-  /// 收藏夹模式（V104）：书库顶层是收藏夹文件夹，点进去看书；不在收藏夹里的书归入“未分类”。
+  /// 收藏夹模式：书库顶层是收藏夹文件夹，点进去看书；不在收藏夹里的书归入“未分类”。
   bool folders = false;
   String folderOrder = 'custom';
   final folderKeys = <String, GlobalKey>{};
@@ -193,7 +193,7 @@ class _LibraryPageState extends State<LibraryPage> {
   double _extent = 132;
 
   /// 列表视图是否显示“格式、大小”两列：按整个列表的宽度统一决定，表头与各行用同一个结果
-  /// （V110：以前表头和行各自按自己的宽度算，列表区域的内边距不同，宽度临界时表头有、行里没有）。
+  /// （以前表头和行各自按自己的宽度算，列表区域的内边距不同，宽度临界时表头有、行里没有）。
   bool _wideColumns = false;
 
   /// 书架视图每行几本（列表视图为 1）；滚动位置按“行”保存和恢复。
@@ -269,7 +269,7 @@ class _LibraryPageState extends State<LibraryPage> {
     rememberView();
   }
 
-  /// 列表视图的行高（LIB-101：列表封面放大到 48×64）。
+  /// 列表视图的行高（列表封面放大到 48×64）。
   double rowExtent(BuildContext context) =>
       76 * MediaQuery.textScalerOf(context).scale(1);
 
@@ -373,7 +373,7 @@ class _LibraryPageState extends State<LibraryPage> {
 
   bool picking = false, fileImporting = false, importCancelled = false;
 
-  /// 本次导入的文件数与开始时的书库本数（R2-01）：标题行按新加入的本数显示进度。
+  /// 本次导入的文件数与开始时的书库本数：标题行按新加入的本数显示进度。
   int importTotal = 0, importBase = 0;
   int? _undoBatchId;
   String? _undoMessage;
@@ -426,7 +426,7 @@ class _LibraryPageState extends State<LibraryPage> {
   String? get currentCollection =>
       scope.startsWith('c:') ? scope.substring(2) : null;
 
-  /// 导入完成后把成功的书加入收藏夹（V84，LIB-122）。
+  /// 导入完成后把成功的书加入收藏夹。
   Future<void> joinImported(
     String collection,
     Iterable<ImportOutcome> results,
@@ -480,7 +480,7 @@ class _LibraryPageState extends State<LibraryPage> {
     }
   }
 
-  /// 彻底删除（V134）：确认后移出书库，并把原文件移到 Windows 回收站（可从回收站还原）；
+  /// 彻底删除：确认后移出书库，并把原文件移到 Windows 回收站（可从回收站还原）；
   /// 程序里不能撤销。文件被占用等原因没删掉的，提示用户。
   Future<void> deletePermanently(Set<String> ids) async {
     final service = removals;
@@ -680,7 +680,7 @@ class _LibraryPageState extends State<LibraryPage> {
     }
   }
 
-  /// 换编码（G-114）：选编码、有修改时先提示、再换。旧书稿能从“打开刷新前的书稿”找回。
+  /// 换编码：选编码、有修改时先提示、再换。旧书稿能从“打开刷新前的书稿”找回。
   Future<void> changeEncoding(BookSummary book) async {
     final service = widget.library as TextEncodingService;
     void say(String text) {
@@ -887,7 +887,7 @@ class _LibraryPageState extends State<LibraryPage> {
     icon: const Icon(Icons.more_horiz),
   );
 
-  /// 把这些书加入用户选的收藏夹（V84，LIB-120）。
+  /// 把这些书加入用户选的收藏夹。
   Future<void> collect(List<String> ids) async {
     final service = collectionService;
     if (service == null || ids.isEmpty) return;
@@ -922,7 +922,7 @@ class _LibraryPageState extends State<LibraryPage> {
       final failed = results.where((r) => !r.succeeded).toList();
       final count = results.length - failed.length;
       final retained = results.where((r) => r.skipped).toList();
-      // 有失败时只在提示里写数量，逐个原因放进清单（R2-02）。
+      // 有失败时只在提示里写数量，逐个原因放进清单。
       ScaffoldMessenger.of(context).showSnackBar(
         deskSnackBar(
           content: Text(
@@ -1013,7 +1013,7 @@ class _LibraryPageState extends State<LibraryPage> {
       fileHoverCollection = null;
     });
     if (picking || fileImporting || widget.library.importing.value) return;
-    // 拖入图片（R1 后，用户反馈）：拖到哪本书上就给哪本书设封面，没拖到书上时给当前书；
+    // 拖入图片（后，用户反馈）：拖到哪本书上就给哪本书设封面，没拖到书上时给当前书；
     // 先在“选择封面图片”里预览，确认后才写入。
     final images = details.files
         .map((f) => f.path)
@@ -1061,7 +1061,7 @@ class _LibraryPageState extends State<LibraryPage> {
     }
   }
 
-  // ---------------------------------------------------------------- 视图（V6 起，设计 D4-A）
+  // ---------------------------------------------------------------- 视图（设计）
 
   @override
   Widget build(BuildContext context) => DeskSearchScope(
@@ -1185,10 +1185,10 @@ class _LibraryPageState extends State<LibraryPage> {
     );
   }
 
-  /// 左栏（收藏夹与类别，V84b）：书库区域宽 ≥520 就有；可拖右边缘伸缩（150–320）。
-  /// V94：点标题行的开关或拖到最窄时整栏滑出收起；书库区域不足 700 时只显示 48 宽的图标条。
+  /// 左栏（收藏夹与类别）：书库区域宽 ≥520 就有；可拖右边缘伸缩（150–320）。
+  /// 点标题行的开关或拖到最窄时整栏滑出收起；书库区域不足 700 时只显示 48 宽的图标条。
   bool railShown = false, railAvailable = false;
-  // V110：收藏夹栏默认收起，点标题行左侧的开关展开。
+  // 收藏夹栏默认收起，点标题行左侧的开关展开。
   bool railCollapsed = true, railCanExpand = true;
   double railWidthValue = 184;
   bool get railCollapsedNow => railCollapsed || !railCanExpand;
@@ -1233,12 +1233,12 @@ class _LibraryPageState extends State<LibraryPage> {
         clipBehavior: Clip.antiAlias,
         child: LayoutBuilder(
           builder: (context, frame) {
-            // 够宽时右侧有当前书详情栏（LIB-105）：标题行横跨整页，标题分隔线以下
+            // 够宽时右侧有当前书详情栏：标题行横跨整页，标题分隔线以下
             // 分成书架与详情两栏，详情从分隔线贯通到底。
-            // 左栏优先于详情栏（V84b）：书库区域宽 ≥700 就有左栏（可收起）；
+            // 左栏优先于详情栏：书库区域宽 ≥700 就有左栏（可收起）；
             // 扣掉左栏后仍 ≥820 才放详情栏，书架至少留约 530，筛选放不下一行时收成菜单。
             // 书库为空时只有导入引导，不出左栏和开关。
-            // 收藏夹模式不出左栏：收藏夹就在书架上（V104）。
+            // 收藏夹模式不出左栏：收藏夹就在书架上。
             railAvailable =
                 collectionService != null &&
                 !folderMode &&
@@ -1270,7 +1270,7 @@ class _LibraryPageState extends State<LibraryPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 filters(visible),
-                // 移除提示浮在列表底部居中，不挤开列表（V134）。
+                // 移除提示浮在列表底部居中，不挤开列表。
                 Expanded(
                   child: Stack(
                     children: [
@@ -1414,7 +1414,7 @@ class _LibraryPageState extends State<LibraryPage> {
                                               ),
                                             ),
                                     ),
-                                    // 批量操作条浮在书架底部（LIB-105）：出现时不推动书架，
+                                    // 批量操作条浮在书架底部：出现时不推动书架，
                                     // 拖动连选途中不会错行，书架与详情栏的封面也保持对齐。
                                     Positioned(
                                       left: 20,
@@ -1437,7 +1437,7 @@ class _LibraryPageState extends State<LibraryPage> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           if (railShown)
-                            // V94：收起时整栏向左滑出（只动画宽度比例，拖边缘调宽仍即时跟手）。
+                            // 收起时整栏向左滑出（只动画宽度比例，拖边缘调宽仍即时跟手）。
                             ClipRect(
                               child: AnimatedAlign(
                                 alignment: Alignment.centerRight,
@@ -1541,7 +1541,7 @@ class _LibraryPageState extends State<LibraryPage> {
                     ),
                     child: Row(
                       children: [
-                        // 已有右侧详情栏时不再重复这个入口（LIB-108）。
+                        // 已有右侧详情栏时不再重复这个入口。
                         if (!wide)
                           DeskButton(
                             '当前书详情',

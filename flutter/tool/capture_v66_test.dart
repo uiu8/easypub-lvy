@@ -13,7 +13,7 @@ import 'package:easypub_desktop/desk/controls/controls.dart' show deskTheme;
 import 'package:easypub_desktop/desk/fonts.dart';
 import 'package:easypub_desktop/desk/rules/rules_page.dart';
 
-/// V64 界面截图：检查页“规则”入口、规则页各页签。输出 artifacts/v66-preview/。
+/// 界面截图：检查页“规则”入口、规则页各页签。输出 artifacts/v66-preview/。
 void main() {
   testWidgets('截图：规则开关接通', (t) async {
     final capture = GlobalKey();

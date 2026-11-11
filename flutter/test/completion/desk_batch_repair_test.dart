@@ -81,7 +81,7 @@ void main() {
     expect(find.byType(BatchRepairDialog), findsOneWidget);
     expect(find.text('批量修复：漏识别的标题'), findsOneWidget);
     expect(find.text('预览 30 项修改'), findsOneWidget);
-    // 取消第一项：只应用仍勾选的 29 项（V23 起第一个勾选框是表头全选，第一项是第二个）。
+    // 取消第一项：只应用仍勾选的 29 项（后来第一个勾选框是表头全选，第一项是第二个）。
     await t.tap(
       find
           .descendant(

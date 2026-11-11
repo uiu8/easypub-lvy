@@ -70,7 +70,7 @@ impl Structure {
     /// unchanged so existing history hashes and node identities keep replaying.
     pub fn recognized(source: &SourceSnapshot) -> Self {
         let mut result = Self::new(source);
-        // V113：导入时不再自动打开纯数字识别（V91 曾在纯数字标题占多数时悄悄打开）。
+        // 导入时不再自动打开纯数字识别（曾在纯数字标题占多数时悄悄打开）。
         // 纯数字标题改由检查页“漏识别的标题”汇总提示，用户一键识别并统一为“第X章 标题”。
         result.recognition_rules = Some(crate::chapter_rules::RuleSet::default());
         let dominant =
@@ -368,7 +368,7 @@ mod tests {
             .unwrap();
         assert_eq!(settings.tree(&s).unwrap().nodes[0].entry_id, id);
     }
-    /// V91：作者说明和卷末标记导入后算正文；卷名和章名同行的按该卷下的章。
+    /// 作者说明和卷末标记导入后算正文；卷名和章名同行的按该卷下的章。
     #[test]
     fn recognized_demotes_notes_and_keeps_volume_chapter_lines_as_chapters() {
         let text = "第一卷 风起\n第一章 甲\n甲文\n（第二章大概十一点左右。）\n仍是甲文\n第二章 乙\n乙文\n（第一卷终）\n第二卷垂幕之年 第三章 丙，我来了\n丙文\n第二卷垂幕之年 第四章 丁\n丁文\n";
@@ -391,7 +391,7 @@ mod tests {
             ]
         );
     }
-    /// V113：导入不再自动打开纯数字识别，纯数字标题留给检查页提示后一键识别。
+    /// 导入不再自动打开纯数字识别，纯数字标题留给检查页提示后一键识别。
     #[test]
     fn recognized_leaves_numeric_titles_to_the_check_hint() {
         let body = "正文一行。\n".repeat(6);

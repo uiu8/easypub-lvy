@@ -8,7 +8,7 @@ const _sourceCauses = {
   'verification': '登录或验证',
 };
 
-/// 连接失败的细分原因（V102 D）：插件固定词表；未知值或空值不显示，仍用原来的 error。
+/// 连接失败的细分原因：插件固定词表；未知值或空值不显示，仍用原来的 error。
 const _networkFailures = {
   'dns': 'DNS 解析失败',
   'connection_refused': '连接被拒绝',
@@ -22,7 +22,7 @@ const _networkFailures = {
   'response': '连接中断或响应读取失败',
 };
 
-/// 书源脚本出错的分类（V101）：JSON 数据错误多半是网站变了，不等于书源写错。
+/// 书源脚本出错的分类：JSON 数据错误多半是网站变了，不等于书源写错。
 const _scriptDiagnostics = {
   'script_json_error': '网站返回的不是有效 JSON（多半是网站变了）',
   'script_syntax_error': '书源脚本有语法错误',
@@ -33,14 +33,14 @@ const _scriptDiagnostics = {
   'script_error': '书源脚本出错',
 };
 
-/// 校验词从哪来（V101）。
+/// 校验词从哪来。
 const _keywordOrigins = {
   'user': '你输入的词',
   'source': '书源自带的校验词',
   'default': '默认校验词',
 };
 
-/// 未通过校验的原因（V102）：原来的概括，加上网络细分、运行时遇到的未支持接口、脚本错误分类。
+/// 未通过校验的原因：原来的概括，加上网络细分、运行时遇到的未支持接口、脚本错误分类。
 /// 有细分时不再重复大类名。
 String _checkReason(Map? check) {
   final parts = <String>['${check?['error'] ?? ''}'];

@@ -149,7 +149,7 @@ abstract interface class InlineStyleLibrary {
   InlineStyleSession openInlineStyles(String bookId);
 }
 
-/// 已在书库的书从原文件补读行内样式（G-113）。
+/// 已在书库的书从原文件补读行内样式。
 abstract interface class SourceMarkLibrary {
   /// 读到的概要，含 path、sha256 和各类数量；没读到时没有 path。
   Future<Map<String, dynamic>> rereadSourceMarks(String bookId);

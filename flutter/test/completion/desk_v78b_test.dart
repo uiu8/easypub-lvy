@@ -66,7 +66,7 @@ Future<(PrototypeState, LegacyLibraryAdapter, String, String)> book(
   return (state, library, root, state.currentId);
 }
 
-/// V78b：系统提示自定义识别与手工指定样式（LAY-134）；每个样式参数取值的 KFX 校验。
+/// 系统提示自定义识别与手工指定样式；每个样式参数取值的 KFX 校验。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -259,7 +259,7 @@ void main() {
       expect(xhtml, contains('>【甲：一】</p>'));
       await convert('KFX', 'out');
 
-      // 每个参数取值至少出现一次（V77 已验四个预设），各转一次 KFX 由 Bokai 校验。
+      // 每个参数取值至少出现一次（已验四个预设），各转一次 KFX 由 Bokai 校验。
       final combos = <Map<String, Map<String, Object>>>[
         {
           'note': {

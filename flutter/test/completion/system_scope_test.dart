@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:easypub_desktop/application/system_scope.dart';
 
-/// V121（LAY-169）：整行【】的用途，与 Rust `system_scope.rs` 的测试用同样的例子。
+/// 整行【】的用途，与 Rust `system_scope.rs` 的测试用同样的例子。
 void main() {
   test('台词多的书只认明确带系统用语的行', () {
     const text =

@@ -7,7 +7,7 @@ abstract class ChapterRulesSession {
   Future<Map<String, dynamic>> load();
   Future<Map<String, dynamic>> builtin();
 
-  /// 内置规则的只读说明（CH-248）：识别形式、排除项、参考正则与数字标题正则。
+  /// 内置规则的只读说明：识别形式、排除项、参考正则与数字标题正则。
   Future<Map<String, dynamic>> builtinDescription();
   Future<Map<String, dynamic>> sample(Map<String, dynamic> rules, String text);
   Future<ChapterRulesPreview> preview(

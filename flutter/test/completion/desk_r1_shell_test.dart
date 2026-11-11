@@ -1,4 +1,4 @@
-// R1 全局外壳（正式版打磨）：选书弹窗、快速排版先比较后应用、命令菜单统一、窄窗底栏、
+// 全局外壳（正式版打磨）：选书弹窗、快速排版先比较后应用、命令菜单统一、窄窗底栏、
 // 命令面板的章节与设置项、设置项定位、页面导航最近访问、保存状态浮层。
 import 'dart:io';
 
@@ -244,7 +244,7 @@ void main() {
     await t.pumpAndSettle();
     final option = t.getRect(find.text(long).last);
     // 面板至少 360 宽，选项文字按面板宽度省略（面板 360 − 内边距与勾 64 = 296）；
-    // V94 时面板只有约 280 宽，文字却按 420 排，超出的部分被面板裁掉（用户截图）。
+    // 时面板只有约 280 宽，文字却按 420 排，超出的部分被面板裁掉（用户截图）。
     expect(option.width, lessThanOrEqualTo(296));
     expect(t.takeException(), isNull);
   });

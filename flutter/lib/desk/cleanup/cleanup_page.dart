@@ -1,6 +1,6 @@
-// 文本清理（CLEAN-001–041、CLEAN-068–072）：左栏有序规则，右栏检测结果（本页变更列表 + 选中项对照、
-// 提示候选、逐步骤差异）与采用结果。检测、保留、候选、采用、撤销与复查的逻辑逐行沿用 V4 前的 CleanupPage；
-// 采用前必须进入“清理差异”并确认。设计：design_review_v37/d3_cleanup.dart（D3-H~L）。
+// 文本清理：左栏有序规则，右栏检测结果（本页变更列表 + 选中项对照、
+// 提示候选、逐步骤差异）与采用结果。检测、保留、候选、采用、撤销与复查的逻辑逐行沿用早先的 CleanupPage；
+// 采用前必须进入“清理差异”并确认。
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -79,7 +79,7 @@ class _CleanupPageState extends State<CleanupPage>
   CleanupReceipt? receipt;
   CleanupInspection? inspection;
 
-  /// 后台核对：清理对章节修改与检查的影响（CLEAN-097/098）。
+  /// 后台核对：清理对章节修改与检查的影响。
   CleanupImpact? impact;
   String impactError = '';
   bool impactBusy = false;
@@ -88,11 +88,11 @@ class _CleanupPageState extends State<CleanupPage>
   bool busy = false, diff = false, showCandidates = false;
   bool showWhitespace = false, showStages = false;
 
-  /// 差异列表占结果区的比例（CLEAN-101）：默认约 60%，拖动分隔线调整；
+  /// 差异列表占结果区的比例：默认约 60%，拖动分隔线调整；
   /// 本次运行期间在各书之间保持，重启后恢复默认。
   static double split = .6;
 
-  /// 拖动分隔线时按按下时的高度加鼠标总位移计算（V112，同 V83 的分隔条）：
+  /// 拖动分隔线时按按下时的高度加鼠标总位移计算（同早先的分隔条）：
   /// 以前每个移动事件都从上一帧的高度加增量，一帧内多个事件只算最后一个，分隔线跟不上鼠标。
   double? dragTop, dragOrigin;
   String contextKey = '';
@@ -123,7 +123,7 @@ class _CleanupPageState extends State<CleanupPage>
     super.initState();
     saved = jsonEncode(draft);
     draftIdentity = saved;
-    // 内置规则各会改几处：页面出来后在后台试算（V134）。
+    // 内置规则各会改几处：页面出来后在后台试算。
     WidgetsBinding.instance.addPostFrameCallback((_) => countBuiltins());
     final restored = workspace?.readDraft('cleanup:${widget.bookId}');
     if (restored != null) {
@@ -473,7 +473,7 @@ class _CleanupPageState extends State<CleanupPage>
       undoDraft.clear();
       redoDraft.clear();
     });
-    // 正文变了，重新试算内置规则的改动数（V134）。
+    // 正文变了，重新试算内置规则的改动数。
     countBuiltins();
   });
   Future<void> recheck() => run(() async {
@@ -554,7 +554,7 @@ class _CleanupPageState extends State<CleanupPage>
       try {
         redo ? await session.redo() : await session.undo();
       } on CleanupEditsNeedConfirmation catch (request) {
-        // 有章节修改无法换算到撤销 / 重做后的文本：列出并请用户确认（CLEAN-103）。
+        // 有章节修改无法换算到撤销 / 重做后的文本：列出并请用户确认。
         if (!mounted ||
             !await resolveCleanupEditConfirmation(context, request)) {
           return;
@@ -718,7 +718,7 @@ class _CleanupPageState extends State<CleanupPage>
     }, preserveResults: true);
   }
 
-  // ---------------------------------------------------------------- 视图（V4 起，设计 D3-H~L）
+  // ---------------------------------------------------------------- 视图（设计~L）
 
   /// 窄窗时左右两栏改为分段切换：0 规则，1 预览。
   int pane = 1;
@@ -944,12 +944,12 @@ class _CleanupPageState extends State<CleanupPage>
 
   void toggleRule(int i, bool? enabled) => toggleRules([i], enabled);
 
-  /// 左栏页签（V134）：false 内置规则清单，true 有序规则（执行顺序、预设与自定义）。
+  /// 左栏页签：false 内置规则清单，true 有序规则（执行顺序、预设与自定义）。
   bool showOrder = false;
   final builtinCounts = <String, int?>{};
   bool countingBuiltins = false;
 
-  /// 内置规则开关（V134）：已有就启用或停用；没有就按默认设置插到同类内置规则的相对位置。
+  /// 内置规则开关：已有就启用或停用；没有就按默认设置插到同类内置规则的相对位置。
   /// 简体转繁体与繁体转简体只开一个。
   void toggleBuiltin(BuiltinCleanupRule item, bool on) {
     final order = [for (final (_, items) in builtinCleanupGroups) ...items];
@@ -1002,7 +1002,7 @@ class _CleanupPageState extends State<CleanupPage>
     });
   }
 
-  /// 每条内置规则单独执行时会改几处（V134）：在后台逐条试算，只读不改书稿。
+  /// 每条内置规则单独执行时会改几处：在后台逐条试算，只读不改书稿。
   Future<void> countBuiltins() async {
     if (countingBuiltins || !mounted) return;
     final probe = widget.library.openCleanup(widget.bookId);
@@ -1037,7 +1037,7 @@ class _CleanupPageState extends State<CleanupPage>
     }
   }
 
-  /// 一次启用或停用多条规则（表头全选、Shift 选一段；G-067）。
+  /// 一次启用或停用多条规则（表头全选、Shift 选一段）。
   void toggleRules(Iterable<int> indexes, bool? enabled) => edit(() {
     final next = rules;
     for (final i in indexes) {
@@ -1055,7 +1055,7 @@ class _CleanupPageState extends State<CleanupPage>
   });
   final ruleRange = RangeSelection(), candidateRange = RangeSelection();
 
-  /// 本页提示候选一次勾选或取消（勾选即排除该行；G-067）。
+  /// 本页提示候选一次勾选或取消（勾选即排除该行）。
   void selectCandidates(Iterable<CleanupCandidate> values, bool selected) =>
       edit(() {
         final lines = ((draft['remove_lines'] as List?) ?? [])
@@ -1067,7 +1067,7 @@ class _CleanupPageState extends State<CleanupPage>
         draft['remove_lines'] = lines.toList();
       }, preserveResults: true);
 
-  /// 规则行的单击与双击（V115）：单击立即选中并跳到这条规则的变更，0.3 秒内再点同一行打开编辑。
+  /// 规则行的单击与双击：单击立即选中并跳到这条规则的变更，0.3 秒内再点同一行打开编辑。
   DateTime? lastRuleTap;
   int? lastRuleTapIndex;
   void tapRule(int i) {
@@ -1086,7 +1086,7 @@ class _CleanupPageState extends State<CleanupPage>
     jumpToRule(i);
   }
 
-  /// 变更列表的滚动与当前项（V115）：点规则跳到它的第一处时，把这一项滚到列表上方可见处。
+  /// 变更列表的滚动与当前项：点规则跳到它的第一处时，把这一项滚到列表上方可见处。
   final changeList = ScrollController();
   final currentChangeKey = GlobalKey();
   void revealChange() {
@@ -1168,7 +1168,7 @@ class _CleanupPageState extends State<CleanupPage>
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        // 不用 onDoubleTap：同时设了双击时，单击要等双击判定超时（约 0.3 秒）才生效（V115）。
+        // 不用 onDoubleTap：同时设了双击时，单击要等双击判定超时（约 0.3 秒）才生效。
         onTap: busy ? null : () => tapRule(i),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
@@ -1189,7 +1189,7 @@ class _CleanupPageState extends State<CleanupPage>
                     ? null
                     : (v) => toggleRules(ruleRange.span(i), v),
               ),
-              // 执行顺序号胶囊（V105 视觉语言）；停用的步骤一起变淡。
+              // 执行顺序号胶囊（视觉语言）；停用的步骤一起变淡。
               DeskPill(
                 Text(
                   '${i + 1}',
@@ -1361,7 +1361,7 @@ class _CleanupPageState extends State<CleanupPage>
 
   double get textScale => MediaQuery.textScalerOf(context).scale(10) / 10;
 
-  /// R4-05：差异行右侧固定留出操作区，选中行多出按钮时其他行的右栏不再错位。
+  /// 差异行右侧固定留出操作区，选中行多出按钮时其他行的右栏不再错位。
   List<Widget> actionSlot(bool show, List<Widget> buttons) => diff
       ? const []
       : [
@@ -1379,7 +1379,7 @@ class _CleanupPageState extends State<CleanupPage>
           ),
         ];
 
-  /// R4-04：最终差异里相邻的整行空行删除合并成一组；逐步骤差异照旧逐条列出。
+  /// 最终差异里相邻的整行空行删除合并成一组；逐步骤差异照旧逐条列出。
   List<List<int>> changeGroups(List<CleanupChange> changes) {
     bool blank(CleanupChange c) => c.after == null && c.before.trim().isEmpty;
     final groups = <List<int>>[];
@@ -1401,7 +1401,7 @@ class _CleanupPageState extends State<CleanupPage>
     return groups;
   }
 
-  /// V116：后端把一段连续空行记成一处变更（跨多行的整行空行删除），最终差异里同样按一组显示。
+  /// 后端把一段连续空行记成一处变更（跨多行的整行空行删除），最终差异里同样按一组显示。
   bool blankRun(CleanupChange c) =>
       !showStages &&
       c.after == null &&
@@ -1550,7 +1550,7 @@ class _CleanupPageState extends State<CleanupPage>
     );
   }
 
-  /// 本页提示候选：表头三态勾选（勾选即排除该行，默认不勾选；G-067/068）。
+  /// 本页提示候选：表头三态勾选（勾选即排除该行，默认不勾选）。
   Widget candidateList(bool current) {
     final d = context.desk;
     final page = plan!.candidates;
@@ -1797,7 +1797,7 @@ class _CleanupPageState extends State<CleanupPage>
               ),
             ),
           ],
-          // R4-03：空白标记开关并入“⋯”，窄窗时工具栏不再把它单独挤到第二行。
+          // 空白标记开关并入“⋯”，窄窗时工具栏不再把它单独挤到第二行。
           DeskCommandMenu<String>(
             key: const ValueKey('cleanup-view-menu'),
             enabled: !busy,
@@ -2261,7 +2261,7 @@ class _CleanupPageState extends State<CleanupPage>
           children: [
             stat('${receipt!.changes} 处', '规则变更已纳入草稿'),
             stat('${receipt!.candidates} 条', '提示候选；未选择的原文保留'),
-            // R4-06：有待核对项时这一格可点，直接到检查页。
+            // 有待核对项时这一格可点，直接到检查页。
             stat(
               '${receipt!.chapterIssues} 项',
               '有效章节结构待核对',
@@ -2342,7 +2342,7 @@ class _CleanupPageState extends State<CleanupPage>
     );
   }
 
-  /// 书稿变了，检测结果或复查过期时自动重做（V134）：同一份旧结果只重做一次，
+  /// 书稿变了，检测结果或复查过期时自动重做：同一份旧结果只重做一次，
   /// 连续最多三次，失败照常显示错误。
   Object? autoRedoneFrom;
   int autoRedos = 0;
@@ -2371,7 +2371,7 @@ class _CleanupPageState extends State<CleanupPage>
     builder: (_, _) {
       final d = context.desk;
       autoRefreshStale();
-      // G-061：进入“清理差异”后、确认采用前，登记为待应用。
+      // 进入“清理差异”后、确认采用前，登记为待应用。
       reportPending(
         plan != null && diff
             ? PendingChange(
@@ -2414,7 +2414,7 @@ class _CleanupPageState extends State<CleanupPage>
               child: LayoutBuilder(
                 builder: (context, c) {
                   final right = receipt != null ? result() : previewColumn();
-                  // R4-03：字号放大时两栏需要的宽度和规则栏的宽度一起放大，放不下就改成切换。
+                  // 字号放大时两栏需要的宽度和规则栏的宽度一起放大，放不下就改成切换。
                   final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
                   if (c.maxWidth >= 900 * scale) {
                     return Row(

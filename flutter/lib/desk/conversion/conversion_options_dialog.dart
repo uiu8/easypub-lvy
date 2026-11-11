@@ -1,4 +1,4 @@
-// 迁入 desk（conversion，V5/V6）：逻辑与布局沿用 V5 前的同名文件；公共弹窗框架样式在 V7 统一。
+// 迁入 desk（conversion）：逻辑与布局沿用早先的同名文件；公共弹窗框架样式后来统一。
 import 'package:flutter/material.dart';
 
 import '../dialogs.dart' show DeskAlert, deskInput;

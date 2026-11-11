@@ -16,7 +16,7 @@ pub struct Quality {
     pub merged_toc_items: usize,
     pub dropped_latest_block: usize,
     pub removed_duplicate_headings: usize,
-    /// 目录里按章号挪回原位或去掉的错位章节（V132）。
+    /// 目录里按章号挪回原位或去掉的错位章节。
     pub reordered_toc_items: usize,
 }
 
@@ -130,7 +130,7 @@ pub fn clean_cached(body: &str, title: &str, remove_prompts: bool) -> (String, u
     (out, removed)
 }
 
-/// 目录按章号整理（V132）。网站目录页常把“最新章节”栏（多为倒序）放在完整目录前面，
+/// 目录按章号整理。网站目录页常把“最新章节”栏（多为倒序）放在完整目录前面，
 /// 或把最新一章夹在目录中间；按网页顺序下载就会出现“第19章后接第470章”“编号回退”。
 ///
 /// 做法：取有章号的各章，求最长的不减子序列，当作目录的主体顺序；不在主体里的章只在

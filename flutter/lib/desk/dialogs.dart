@@ -1,4 +1,4 @@
-// 编辑台弹窗部件（设计来源 design_review_v37/kit.dart DialogFrame 与 d2_chapters 弹窗共用件）：
+// 编辑台弹窗部件：
 // 弹窗框架、带标签输入、影响说明、行号正文行、翻页条。
 // 忙碌时框架禁止返回键/遮罩关闭，关闭按钮置灰；尺寸随窗口收缩，内容区可滚动。
 import 'package:flutter/material.dart';
@@ -37,7 +37,7 @@ class DeskDialog extends StatelessWidget {
   final VoidCallback? onClose;
 
   /// 以 `barrierDismissible: false` 打开时 Flutter 不让 Esc 关闭；为 true 时由弹窗自己处理
-  /// Esc（忙碌时除外），与关闭按钮相同（R5-03）。
+  /// Esc（忙碌时除外），与关闭按钮相同。
   final bool escapeCloses;
 
   @override
@@ -151,7 +151,7 @@ class DeskDialog extends StatelessWidget {
   }
 }
 
-/// 与 AlertDialog 参数相同的统一弹窗（V15）：标题、内容、按钮，外框与 [DeskDialog] 一致。
+/// 与 AlertDialog 参数相同的统一弹窗：标题、内容、按钮，外框与 [DeskDialog] 一致。
 /// 宽度和 AlertDialog 一样随内容（IntrinsicWidth）；不加关闭按钮，
 /// 需要明确选择的确认框（如离开工作区前保存）行为不变。
 class DeskAlert extends StatelessWidget {
@@ -237,10 +237,10 @@ class DeskAlert extends StatelessWidget {
   }
 }
 
-/// 编辑台统一悬浮轻提示（V105，收口散落 SnackBar）：
+/// 编辑台统一悬浮轻提示（收口散落 SnackBar）：
 /// 外观由 [deskTheme] 的 `snackBarTheme` 统一提供（10 圆角、表面底色、细边、避开底栏托盘），
 /// 同时保留原生 [SnackBar] 与 [SnackBarAction] 类型以兼容全部组件测试。
-/// 弹窗控制器托管件（V105，P0-03）：
+/// 弹窗控制器托管件：
 /// 在弹窗路由完全卸载时的 `State.dispose()` 中释放全部控制器，
 /// 避免未释放泄漏或 `Future.delayed(300ms)` 悬挂定时器。
 class DeskControllerScope extends StatefulWidget {
@@ -281,7 +281,7 @@ SnackBar deskSnackBar({
   behavior: SnackBarBehavior.floating,
 );
 
-/// 操作完成后的浮动小卡片（V134）：图标、标题一行、说明一行、一个动作按钮和关闭按钮。
+/// 操作完成后的浮动小卡片：图标、标题一行、说明一行、一个动作按钮和关闭按钮。
 /// 放在页面底部居中，不挤开下面的内容。
 class DeskNoticeCard extends StatelessWidget {
   const DeskNoticeCard({

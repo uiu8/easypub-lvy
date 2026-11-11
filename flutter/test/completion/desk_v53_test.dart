@@ -15,7 +15,7 @@ import 'package:easypub_desktop/desk/chapters/block_marks.dart';
 import 'package:easypub_desktop/desk/chapters/chapter_workspace.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 
-/// 行号栏上某一行的点击区域（V53）。
+/// 行号栏上某一行的点击区域。
 Finder lineNumber(int line) => find.byWidgetPredicate((w) {
   final key = w.key;
   if (key is! ValueKey) return false;
@@ -72,7 +72,7 @@ class _InvalidOnlySession implements BlockAnnotationSession {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-/// V53：章节页手工标注界面（LAY-123）。
+/// 章节页手工标注界面。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -182,7 +182,7 @@ void main() {
     await until(() => annotations().single['kind'] == 'quote', '改为引文');
     await until(() => find.text('引文 · 手工').evaluate().isNotEmpty, '标签刷新');
 
-    // 已标注的行再选（V121）：选中整条标注，面板写明现在是引文，选诗词是“改为”，不再因重叠被拒绝。
+    // 已标注的行再选：选中整条标注，面板写明现在是引文，选诗词是“改为”，不再因重叠被拒绝。
     await t.tap(lineNumber(3));
     await t.pump();
     expect(

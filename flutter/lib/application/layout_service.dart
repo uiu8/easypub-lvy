@@ -19,7 +19,7 @@ const layoutFlags = <String, String>{
   'chapter_navigation': '章节顶部导航',
 };
 
-/// 章节标题样式（V36，LAY-117）：值与 Rust `HEADING_STYLES` 一一对应。
+/// 章节标题样式：值与 Rust `HEADING_STYLES` 一一对应。
 const headingStyles = {
   'classic': 'EasyPub 经典',
   'amazon': '亚马逊官方',
@@ -28,7 +28,7 @@ const headingStyles = {
   'light_novel': '日系轻小说',
 };
 
-/// 场景分隔样式（V46，LAY-118）：值与 Rust `SCENE_BREAK_STYLES` 一一对应。
+/// 场景分隔样式：值与 Rust `SCENE_BREAK_STYLES` 一一对应。
 const sceneBreakStyles = {
   'off': '不识别',
   'keep': '居中保留原符号',
@@ -60,17 +60,17 @@ String sceneBreakText(String style, String original) => switch (style) {
   _ => original.trim(),
 };
 
-/// 章首段落样式（V49，LAY-119）：值与 Rust `FIRST_PARAGRAPH_STYLES` 一一对应。
+/// 章首段落样式：值与 Rust `FIRST_PARAGRAPH_STYLES` 一一对应。
 const firstParagraphStyles = {
   'normal': '同正文',
   'no_indent': '首段不缩进',
   'large_initial': '首字放大',
 };
 
-/// 章节样式包（V74，LAY-130）：卷页边框，值与 Rust `VOLUME_FRAMES` 一一对应。
+/// 章节样式包：卷页边框，值与 Rust `VOLUME_FRAMES` 一一对应。
 const volumeFrames = {'none': '无', 'single': '单线', 'double': '双线'};
 
-/// 章节样式包的生成、导入与导出（V74，LAY-130）。请求见 Rust `style_packs::run`；
+/// 章节样式包的生成、导入与导出。请求见 Rust `style_packs::run`；
 /// 样式包文件放在本机设置目录下，书里只记图片路径。
 abstract interface class ChapterStyleStore {
   Future<Map<String, dynamic>> chapterStyleRequest(
@@ -78,7 +78,7 @@ abstract interface class ChapterStyleStore {
   );
 }
 
-/// 生僻字注音（V73，LAY-129）：值与 Rust `RARE_CHAR_RUBY_MODES` 一一对应。
+/// 生僻字注音：值与 Rust `RARE_CHAR_RUBY_MODES` 一一对应。
 const rareCharRubyModes = {
   'off': '不标',
   'chapter': '每章首次',
@@ -86,10 +86,10 @@ const rareCharRubyModes = {
   'every': '每次',
 };
 
-/// 生僻字范围（V73，LAY-129）：值与 Rust `RARE_CHAR_SCOPES` 一一对应。
+/// 生僻字范围：值与 Rust `RARE_CHAR_SCOPES` 一一对应。
 const rareCharScopes = {'outside': '表外字', 'level3': '表外字和三级字'};
 
-/// 场景样式（V81，LAY-135）：值与 Rust `insets` 模块的常量一一对应。
+/// 场景样式：值与 Rust `insets` 模块的常量一一对应。
 const chatBlockStyles = {
   'off': '不识别',
   'window': '群聊窗口',
@@ -99,7 +99,7 @@ const chatBlockStyles = {
 const letterBlockStyles = {'plain': '普通', 'ruled': '信笺格线'};
 const insetFonts = {'kai': '楷体', 'body': '正文字体'};
 
-/// 场景识别（V82，LAY-137）：值与 Rust `insets::INSET_DETECT` 一一对应。
+/// 场景识别：值与 Rust `insets::INSET_DETECT` 一一对应。
 const insetDetectModes = {'off': '不识别', 'on': '识别'};
 
 const _insetBase = <String, Object>{
@@ -119,7 +119,7 @@ const _insetBase = <String, Object>{
   'names': 'block',
 };
 
-/// 场景样式的内置预设（V82，LAY-136）：与 Rust `inset_styles::presets` 一一对应（测试核对）。
+/// 场景样式的内置预设：与 Rust `inset_styles::presets` 一一对应（测试核对）。
 /// 每种场景第一个是默认；聊天的三种对应“聊天记录”设置的三种样式。
 final insetStylePresets =
     <String, (String scene, String name, Map<String, Object>)>{
@@ -250,7 +250,7 @@ Map<String, Map<String, Object>> savedInsetsOf(
 
 bool sameInsetStyle(Map a, Map? b) => _sameMap(a, b);
 
-/// 手工标注的场景（V81）：与 Rust `insets::TYPES` 顺序相同。
+/// 手工标注的场景：与 Rust `insets::TYPES` 顺序相同。
 const insetTypes = {
   'chat': '聊天记录',
   'post': '动态',
@@ -263,7 +263,7 @@ const insetTypes = {
   'news': '剪报',
 };
 
-/// 系统提示样式（V50，LAY-121）：值与 Rust `SYSTEM_BLOCK_STYLES` 一一对应。
+/// 系统提示样式：值与 Rust `SYSTEM_BLOCK_STYLES` 一一对应。
 const systemBlockStyles = {
   'off': '不识别',
   'box': '加框',
@@ -271,7 +271,7 @@ const systemBlockStyles = {
   'styled': '分类样式',
 };
 
-/// 系统提示块样式预设（V77，LAY-132）：参数与 Rust `block_styles::presets` 一一对应，
+/// 系统提示块样式预设：参数与 Rust `block_styles::presets` 一一对应，
 /// desk_v77_test 逐项核对。
 const blockStylePresets = <String, Map<String, Object>>{
   'bar': {
@@ -295,7 +295,7 @@ const blockStylePresets = <String, Map<String, Object>>{
     'title': 'none', 'key_bold': false, 'brackets': 'keep',
     'spacing': 'medium',
   },
-  // V119：参照中文精排的五种（单行提示与面板都可用），与 Rust 预设逐项相同。
+  // 参照中文精排的五种（单行提示与面板都可用），与 Rust 预设逐项相同。
   'quiet': {
     'border': 'left', 'line': 'single', 'weight': 'thin', 'shade': 'none', //
     'align': 'start', 'size': 100, 'bold': false, 'title': 'none',
@@ -328,7 +328,7 @@ const blockStylePresets = <String, Map<String, Object>>{
   },
 };
 
-/// V119 新增四项参数的默认值：旧样式没有这几项时按默认处理，成品不变。
+/// 新增四项参数的默认值：旧样式没有这几项时按默认处理，成品不变。
 const blockStyleDefaults = <String, Object>{
   'tone': 'black',
   'font': 'body',
@@ -336,7 +336,7 @@ const blockStyleDefaults = <String, Object>{
   'radius': false,
 };
 
-/// 两类都能用的新预设（V119）。
+/// 两类都能用的新预设。
 const _sharedPresetNames = {
   'quiet': '细线楷体',
   'side': '左侧竖线',
@@ -351,19 +351,19 @@ const panelPresetNames = {
   'rules': '上下双线',
 };
 
-/// 新书默认（与 Rust `default_styles` 相同）：单行提示条，面板标题面板；V119 新增的五种只作可选。
+/// 新书默认（与 Rust `default_styles` 相同）：单行提示条，面板标题面板；新增的五种只作可选。
 Map<String, Object> defaultSystemStyles() => {
   'note': blockStylePresets['bar']!,
   'panel': blockStylePresets['titled']!,
 };
 
-/// 补齐 V119 新增参数的默认值，便于比较新旧样式。
+/// 补齐新增参数的默认值，便于比较新旧样式。
 Map<String, Object?> normalizedBlockStyle(Map style) => {
   ...blockStyleDefaults,
   for (final e in style.entries) '${e.key}': e.value,
 };
 
-/// 某一类当前用的是哪个预设；参数被改过（V78 编辑器）时为 custom。
+/// 某一类当前用的是哪个预设；参数被改过（编辑器）时为 custom。
 String presetOf(Map? style, Map<String, String> names) {
   if (style == null) return 'custom';
   final current = normalizedBlockStyle(style);
@@ -384,16 +384,16 @@ String describeSystemStyles(Object? value) {
   return '单行${notePresetNames[note] ?? '自定义'} · 面板${panelPresetNames[panel] ?? '自定义'}';
 }
 
-/// 诗词样式（V50，LAY-122）：值与 Rust `VERSE_BLOCK_STYLES` 一一对应。
+/// 诗词样式：值与 Rust `VERSE_BLOCK_STYLES` 一一对应。
 const verseBlockStyles = {'off': '不识别', 'center': '居中', 'indent': '缩进'};
 
-/// 统一章首图用于哪些标题（V54，LAY-124）：值与 Rust `CHAPTER_HEAD_SCOPES` 一一对应。
+/// 统一章首图用于哪些标题：值与 Rust `CHAPTER_HEAD_SCOPES` 一一对应。
 const chapterHeadScopes = {'chapter': '每章', 'volume': '每卷', 'both': '卷和章'};
 
-/// 章首图宽度（V54，LAY-124）：值与 Rust `CHAPTER_HEAD_WIDTHS` 一一对应。
+/// 章首图宽度：值与 Rust `CHAPTER_HEAD_WIDTHS` 一一对应。
 const chapterHeadWidths = {'third': '三分之一', 'half': '一半', 'full': '满宽'};
 
-/// 弹出注释（V48 能力，V51 界面，LAY-120）：值与 Rust `NOTE_STYLES` 一一对应。
+/// 弹出注释（能力，界面）：值与 Rust `NOTE_STYLES` 一一对应。
 const noteStyles = {'off': '关闭', 'popup': '弹出注释'};
 
 /// 整行由一个或多个【……】组成（之间可有空白）时视为系统提示（与 Rust 规则一致）。
@@ -426,7 +426,7 @@ bool isVerseLine(String line) {
       (a.length == 5 || a.length == 7) &&
       _han.hasMatch(a) &&
       _han.hasMatch(b) &&
-      // V92：含现代白话虚词、代词的不算诗句。
+      // 含现代白话虚词、代词的不算诗句。
       !_modernProse.hasMatch(a + b);
 }
 
@@ -475,7 +475,7 @@ final layoutFields = Set<String>.unmodifiable({
   'margin_right_unit',
 });
 
-/// 嵌入字体（V123，LAY-179）：检查字体、复制到程序数据目录、列出原书自带的字体。
+/// 嵌入字体：检查字体、复制到程序数据目录、列出原书自带的字体。
 abstract interface class BookFontSource {
   /// 字体检查报告（字体名、授权标记、哈希）；读不了时抛出。
   Future<FontReport> inspectFont(String path);
@@ -497,10 +497,10 @@ abstract class LayoutSession {
   Future<void> importPreset(LayoutPreset preset);
   Future<LayoutPreset> builtinPreset();
 
-  /// 出厂默认加上 [builtinLayoutPresets]（V114）。
+  /// 出厂默认加上 [builtinLayoutPresets]。
   Future<List<LayoutPreset>> builtinPresets();
 
-  /// 按内置预设预览本书排版，与套用项目预设同一条路径（V114）。
+  /// 按内置预设预览本书排版，与套用项目预设同一条路径。
   Future<BookInformationPreview> previewBuiltin(LayoutPreset preset);
   List<LayoutPreset> get presets;
   Future<void> renamePreset(String name, String replacement);
@@ -541,15 +541,15 @@ class LayoutPreset {
   final String name;
   final Map<String, Object?> values;
 
-  /// 内置预设的一句说明（V114）；其他预设为空。
+  /// 内置预设的一句说明；其他预设为空。
   final String description;
 
-  /// 应用内置预设时一并套用的内置章节样式包编号（V114，如 'plain'）。
+  /// 应用内置预设时一并套用的内置章节样式包编号（如 'plain'）。
   final String? stylePack;
 }
 
-/// 内置排版预设（V114）：在出厂排版上改这些值。出厂默认不变，这几套是可选的。
-/// 依据真机预览实排（`docs/evidence/v114-layout-presets-20261026.md`）。
+/// 内置排版预设：在出厂排版上改这些值。出厂默认不变，这几套是可选的。
+/// 依据真机预览实排。
 const builtinLayoutPresets = <(String, String, Map<String, Object?>, String?)>[
   (
     '出版社纸书',
@@ -616,7 +616,7 @@ const builtinLayoutPresets = <(String, String, Map<String, Object?>, String?)>[
 ];
 
 /// Optional because lightweight page previews and tests need no desktop shell.
-/// 排版预览机型偏好（LAY-092）：界面偏好，存于设置目录，不写入书稿。
+/// 排版预览机型偏好：界面偏好，存于设置目录，不写入书稿。
 abstract interface class LayoutPreviewDeviceStore {
   Future<String?> readPreviewDevice();
   Future<void> savePreviewDevice(String value);
@@ -627,7 +627,7 @@ abstract interface class LayoutPublicationPreviewSession {
   Future<void> openPreview(LayoutPublicationPreview preview);
 }
 
-/// 真机预览（LAY-108/110）：按还没写回的排版值生成本书内容，不保存。
+/// 真机预览：按还没写回的排版值生成本书内容，不保存。
 abstract interface class LayoutDraftPreviewSession {
   Future<LayoutDraftPreview> renderDraftPreview(
     Map<String, Object?> values, {

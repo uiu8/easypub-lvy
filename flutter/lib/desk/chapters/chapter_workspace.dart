@@ -1,6 +1,5 @@
-// 章节工作区（CH-001–044）：目录 + 纸面正文 + 检查器。
+// 章节工作区：目录 + 纸面正文 + 检查器。
 // 所有结构修改都经现有弹窗生成预览、确认后写入并可撤销；本页只组织入口与视图。
-// 设计：design/review-20261010-v37-flutter/d2（D2-A、D2-B）；docs/37 第 6 节 V2 行的证据。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -76,7 +75,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     widget.bookId,
   );
 
-  /// 手工标注（V53，LAY-123）：书库提供标注能力时才有。
+  /// 手工标注：书库提供标注能力时才有。
   late final BlockMarkController? marks = switch (widget.library) {
     final BlockAnnotationLibrary library => BlockMarkController(
       library.openBlockAnnotations(widget.bookId),
@@ -84,7 +83,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     _ => null,
   };
 
-  /// 手工注释（V62，LAY-128）：书库提供注释能力时才有。
+  /// 手工注释：书库提供注释能力时才有。
   late final NoteMarkController? noteMarks = switch (widget.library) {
     final ManualNoteLibrary library => NoteMarkController(
       library.openManualNotes(widget.bookId),
@@ -92,7 +91,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     _ => null,
   };
 
-  /// 文字样式（V106，LAY-152）：书库提供样式能力时才有。
+  /// 文字样式：书库提供样式能力时才有。
   late final InlineStyleController? inlineStyles = switch (widget.library) {
     final InlineStyleLibrary library => InlineStyleController(
       library.openInlineStyles(widget.bookId),
@@ -100,7 +99,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     _ => null,
   };
 
-  /// 排版视图（V104，LAY-149）：打开时才创建，统计整本书的识别结果；关掉时释放。
+  /// 排版视图：打开时才创建，统计整本书的识别结果；关掉时释放。
   ChapterLayoutView? layoutView;
 
   void setLayoutMode(bool on) {
@@ -150,8 +149,8 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     visitedIssues = showIssues;
     visitedHistory = showHistory;
     continuousScroll = explicitTarget ? 0 : view.bodyScrollOffset;
-    // 上次停在排版视图时照旧打开（V104）。从问题跳过来（带定位行或打开问题列表）一律用原文视图，
-    // 才看得到行号和原文；记住的视图不改，自己进章节页时照旧（V134）。
+    // 上次停在排版视图时照旧打开。从问题跳过来（带定位行或打开问题列表）一律用原文视图，
+    // 才看得到行号和原文；记住的视图不改，自己进章节页时照旧。
     final fromIssue = widget.initialFocusLine != null || widget.initialIssues;
     if (view.layoutView && !fromIssue && widget.library is RuleCatalogLibrary) {
       layoutView = ChapterLayoutView(
@@ -160,7 +159,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
         bookId: widget.bookId,
       )..addListener(checkStale);
     }
-    // 标注、注释、文字样式与排版设置改了书稿版本时，自动重读本页（V121）。
+    // 标注、注释、文字样式与排版设置改了书稿版本时，自动重读本页。
     marks?.addListener(checkStale);
     noteMarks?.addListener(checkStale);
     inlineStyles?.addListener(checkStale);
@@ -213,9 +212,9 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
   }
 
   // ---------------------------------------------------------------- 读取与编辑流程
-  // 与 V1 前的章节页逐行对应；只改视图，不改会话调用顺序与刷新规则。
+  // 与早先的章节页逐行对应；只改视图，不改会话调用顺序与刷新规则。
 
-  // ---------------------------------------------------------------- 书稿版本变化（V121）
+  // ---------------------------------------------------------------- 书稿版本变化
   // 页面带着读取时的书稿版本；标注、样式、排版设置一改，版本就变。发现变了就按原位置重读本页，
   // 阅读位置与选中章节不变，不再要用户手动刷新。
 
@@ -366,7 +365,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
         }
       });
 
-  // ---------------------------------------------------------------- 问题位置（CH-234–240）
+  // ---------------------------------------------------------------- 问题位置
   // 后台读取，不置忙碌；书稿版本变化或有更新的请求时丢弃旧结果。读取失败只提示，不显示猜测数据。
 
   ChapterIssueMap? issueMap, chapterIssues;
@@ -427,7 +426,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     }
   }
 
-  /// 一键修复（CH-244）：就地打开弹窗，核对后应用，然后重读本页。
+  /// 一键修复：就地打开弹窗，核对后应用，然后重读本页。
   Future<void> repairAll({String? category, String label = ''}) async {
     final result = await showDialog<({int applied, int marked})>(
       context: context,
@@ -444,7 +443,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     reviewInIssues(issue);
   }
 
-  /// 批注“在问题中核对”（CH-238）：清除筛选，翻到该问题所在页并选中它。
+  /// 批注“在问题中核对”：清除筛选，翻到该问题所在页并选中它。
   void reviewInIssues(ChapterIssue issue) {
     final index = chapterIssues?.reviewIndex[issue.id];
     view.issues
@@ -469,7 +468,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
       final content = await session.body(next, node.id, issue.bodyOffset);
       if (!mounted || ticket != generation) return;
       setState(() {
-        // 定位问题一律切回原文视图（V134）；记住的视图不改。
+        // 定位问题一律切回原文视图；记住的视图不改。
         if (layoutView != null) {
           layoutView!.dispose();
           layoutView = null;
@@ -489,7 +488,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     });
   }
 
-  /// 样式片段（V120，LAY-166）：跳到本节第 [line] 行（本节正文行号），上面留三行。
+  /// 样式片段：跳到本节第 [line] 行（本节正文行号），上面留三行。
   Future<void> locateLine(int line) async {
     final node = selected, current = page;
     if (busy || node == null || current == null) return;
@@ -544,7 +543,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     final layout = layoutView;
     final result = <StyleSegmentChapter>[];
     for (final (i, (node, _)) in nodes.indexed) {
-      // 章节多时分批算，中间把控制权还给界面，切到“全书”不卡住（V121）。
+      // 章节多时分批算，中间把控制权还给界面，切到“全书”不卡住。
       if (i % 40 == 39) await Future<void>.delayed(Duration.zero);
       final lines = layout?.linesFor(node.id) ?? const <int, LayoutLine>{};
       final manual = marks?.linesFor(node.id) ?? const {};
@@ -775,7 +774,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     }
   }
 
-  /// 规则面板关闭后递增，目录标题行的规则摘要据此重新读取（CH-261）。
+  /// 规则面板关闭后递增，目录标题行的规则摘要据此重新读取。
   int rulesRevision = 0;
 
   Future<void> openRules({String? appendNonHeading}) async {
@@ -790,7 +789,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     await read(page?.offset ?? 0);
   }
 
-  /// 数字章节（V25，CH-263）：有识别规则服务时打开合并后的对话框，否则沿用原来的修复流程入口。
+  /// 数字章节：有识别规则服务时打开合并后的对话框，否则沿用原来的修复流程入口。
   VoidCallback? get numericAction {
     if (widget.library is! ChapterRulesService) {
       return () => repairAll(category: 'unrecognized-heading', label: '数字章节');
@@ -827,8 +826,8 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     });
   }
 
-  /// [tools]：工具栏最窄档时，“识别规则”“数字章节”收进本菜单首组（CH-002/003 入口不丢）。
-  /// 已在书库的书补读（G-113）。原文件要在，文字要和工作稿一字不差。
+  /// [tools]：工具栏最窄档时，“识别规则”“数字章节”收进本菜单首组（入口不丢）。
+  /// 已在书库的书补读。原文件要在，文字要和工作稿一字不差。
   Future<void> rereadSourceMarks() async {
     final library = widget.library;
     if (library is! SourceMarkLibrary) return;
@@ -1184,7 +1183,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
                 '移动',
                 onPressed: busy ? null : () => targetEdit(merge: false),
               ),
-              // V134：原来只在目录行右键菜单里。
+              // 原来只在目录行右键菜单里。
               DeskButton(
                 '改为正文',
                 key: const ValueKey('chapter-inspector-demote'),
@@ -1298,7 +1297,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
                     ? 1
                     : 0,
                 options: {0: '正文', 1: '问题', 2: tight ? '记录' : '变更记录'},
-                // R3-03（CH-001）：问题页签带全书未处理的问题数；读取失败写“!”，
+                // 问题页签带全书未处理的问题数；读取失败写“!”，
                 // 不把失败当成没有问题。
                 badges: {
                   if (issueStatus == 'error')
@@ -1323,7 +1322,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
               icon: const Icon(Icons.redo_rounded, size: 18),
             ),
             const SizedBox(width: 6),
-            // 一键修复（CH-244）：全书自动方案，核对差异、确认后才应用并复查。
+            // 一键修复：全书自动方案，核对差异、确认后才应用并复查。
             ...[
               repairNarrow
                   ? IconButton(
@@ -1401,7 +1400,7 @@ class _ChapterWorkspaceState extends State<ChapterWorkspace> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 排版视图（V120）不显示编辑工具条（修复、识别规则、数字章节等），页眉在正文组件里。
+        // 排版视图不显示编辑工具条（修复、识别规则、数字章节等），页眉在正文组件里。
         if (layoutView == null || showIssues || showHistory) toolbar(),
         SizedBox(
           height: 2,

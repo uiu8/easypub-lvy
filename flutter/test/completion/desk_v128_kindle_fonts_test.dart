@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:easypub_desktop/application/kindle_preview_server.dart';
 
-/// 只含 name 与 OS/2 表的假字体（V128，LAY-183）：名字照 Kindle 固件字体的内部名写，
+/// 只含 name 与 OS/2 表的假字体：名字照 Kindle 固件字体的内部名写，
 /// 不用真的 Kindle 字体文件。
 Uint8List fakeFont(
   Map<int, String> names, {
@@ -216,7 +216,7 @@ void main() {
           for (final id in files.keys)
             {'id': id, 'name': id, 'file': '$id.ttf'},
         ],
-        // 选的是较早的那份（用户 V127 时导入的宋体）。
+        // 选的是较早的那份（用户时导入的宋体）。
         'selected': 'user:aaaaaaaaaaaaaaaa',
       }),
     );

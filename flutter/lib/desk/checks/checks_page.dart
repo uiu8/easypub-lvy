@@ -1,4 +1,4 @@
-// 检查页（CHK-001–011）：全书问题的总览，按章节结构、文本清理、书籍信息、图片资源、目标格式分页签。
+// 检查页：全书问题的总览，按章节结构、文本清理、书籍信息、图片资源、目标格式分页签。
 // 只看不改：处理都到对应的页面去，章节问题到章节编辑的“问题”页签。
 // 问题数量和进度来自检查进度（CheckBoard），和各页面读同一份。检查本身不改书稿。
 import 'package:flutter/material.dart';
@@ -39,7 +39,7 @@ class BookChecksPage extends StatefulWidget {
   final String bookId;
   final VoidCallback onCatalog;
 
-  /// 在清理页打开检测详情并定位到某一行（CHK-055）。
+  /// 在清理页打开检测详情并定位到某一行。
   final void Function(int line)? onCleanupLine;
   final VoidCallback onCleanup;
   final void Function(String)? onOpenDomain;
@@ -47,13 +47,13 @@ class BookChecksPage extends StatefulWidget {
   /// 去处理这一条章节问题；[offset] 是它在列表里的位置。
   final void Function(ChapterIssue? issue, int? offset) onChapter;
 
-  /// 打开识别与检查规则页（V64，CH-279）；ruleId 不为空时定位到这条规则。
+  /// 打开识别与检查规则页；ruleId 不为空时定位到这条规则。
   final void Function(String? ruleId)? onRules;
   @override
   State<BookChecksPage> createState() => _BookChecksPageState();
 }
 
-/// 格式版本低于当前要求的检查结果：需要重新检查才能用新的显示方式（CHK-058/060）。
+/// 格式版本低于当前要求的检查结果：需要重新检查才能用新的显示方式。
 bool isLegacyCheckReport(BookCheckReport report) => report.outdated;
 
 class _BookChecksPageState extends State<BookChecksPage> {
@@ -71,7 +71,7 @@ class _BookChecksPageState extends State<BookChecksPage> {
   /// 正在把旧格式的检查结果更新为新的显示方式。
   bool upgrading = false;
 
-  /// 已经因为它过期而自动更新过的那份结果（V134）。
+  /// 已经因为它过期而自动更新过的那份结果。
   BookCheckReport? autoRecheckedFrom;
 
   /// 连续自动更新的次数：结果一直对不上稿件时最多三次，避免反复检查。
@@ -200,7 +200,7 @@ class _BookChecksPageState extends State<BookChecksPage> {
           if (mounted) check();
         });
       } else if (isLegacyCheckReport(report!)) {
-        // V12 前保存的结果没有结构化清理数据、数量和时间：后台重新检查一次（CHK-058）。
+        // 前保存的结果没有结构化清理数据、数量和时间：后台重新检查一次。
         upgrading = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) check();
@@ -209,7 +209,7 @@ class _BookChecksPageState extends State<BookChecksPage> {
     }
   }
 
-  /// 一键修复（CH-243）：就地打开弹窗；书稿变了检查结果会自动重查。
+  /// 一键修复：就地打开弹窗；书稿变了检查结果会自动重查。
   Future<void> repairAll() => showDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -312,7 +312,7 @@ class _BookChecksPageState extends State<BookChecksPage> {
         : '${when.month} 月 ${when.day} 日 $time';
   }
 
-  /// 分类页签（CHK-057）：标题后带数量，有待处理项时前面一个小圆点，替代单独的状态标签。
+  /// 分类页签：标题后带数量，有待处理项时前面一个小圆点，替代单独的状态标签。
   Widget tab(Desk d, CheckDomain domain) {
     final on = domain.id == selected;
     final (fg, _) = d.tone(statusTone(domain));
@@ -364,7 +364,7 @@ class _BookChecksPageState extends State<BookChecksPage> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // 一键修复（CH-243）：进入全书自动方案，仍需核对差异、确认后才应用并复查。
+        // 一键修复：进入全书自动方案，仍需核对差异、确认后才应用并复查。
         DeskButton(
           '一键修复…',
           key: const ValueKey('checks-auto-repair'),
@@ -398,7 +398,7 @@ class _BookChecksPageState extends State<BookChecksPage> {
     final checkedAt = when == null ? null : '检查于 ${_time(when)}';
     return LayoutBuilder(
       builder: (context, box) {
-        // R3-01：窄时（字号放大或窗口窄）检查时间放进“检查本书”的悬停提示，
+        // 窄时（字号放大或窗口窄）检查时间放进“检查本书”的悬停提示，
         // “规则”只留图标，领域页签右端渐隐，表示可以横向滑动看到其余页签。
         final narrow =
             box.maxWidth < 860 * MediaQuery.textScalerOf(context).scale(1);

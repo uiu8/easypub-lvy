@@ -10,7 +10,7 @@ import 'package:easypub_desktop/prototype/txt_import.dart';
 import 'package:easypub_desktop/infrastructure/legacy_conversion_session.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 
-/// V131：输出 TXT（OUT-089）；导入 AZW3 / MOBI（LIB-295）。
+/// 输出 TXT；导入 AZW3 / MOBI。
 void main() {
   setUpAll(
     () async => RustLib.init(

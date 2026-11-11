@@ -1,4 +1,4 @@
-// 生成封面（LIB-102 样式；V16 起书库显示与转出的书共用同一画法，OUT-070）：
+// 生成封面（样式；后来书库显示与转出的书共用同一画法）：
 // 纸色底、按书名固定的墨色书脊、细线内框、衬线书名居中、作者在下；很小时只留书脊与书名首字。
 import 'dart:io';
 import 'dart:math' as math;
@@ -73,7 +73,7 @@ class GeneratedCoverPainter extends CustomPainter {
     canvas.drawRect(Offset.zero & size, Paint()..color = paper);
     final spine = math.max(3.0, w * .07);
     canvas.drawRect(Rect.fromLTWH(0, 0, spine, h), Paint()..color = ink);
-    // V105 (V2-1)：精装书脊立体明暗与压槽折痕、右侧书口多层纸页纹理。
+    // 精装书脊立体明暗与压槽折痕、右侧书口多层纸页纹理。
     canvas.drawRect(
       Rect.fromLTWH(0, 0, math.max(1.0, spine * .24), h),
       Paint()..color = const Color(0x2E000000),
@@ -225,7 +225,7 @@ class GeneratedCoverPainter extends CustomPainter {
       old.framed != framed;
 }
 
-/// 图片封面的精装书脊压痕与右侧书口纸页叠层（V105 V2-1）。
+/// 图片封面的精装书脊压痕与右侧书口纸页叠层。
 class HardcoverFinishPainter extends CustomPainter {
   const HardcoverFinishPainter({required this.edge});
   final Color edge;
@@ -270,7 +270,7 @@ class HardcoverFinishPainter extends CustomPainter {
   bool shouldRepaint(HardcoverFinishPainter old) => old.edge != edge;
 }
 
-/// 把生成封面画成 1200 × 1600 的 PNG，供转换在书没有封面时写入成品（OUT-070）。
+/// 把生成封面画成 1200 × 1600 的 PNG，供转换在书没有封面时写入成品。
 /// 返回新文件的路径；不改动任何已有的用户封面。
 Future<String> renderGeneratedCover(
   String title,

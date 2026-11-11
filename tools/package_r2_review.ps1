@@ -8,10 +8,10 @@
   [string]$CompletionEvidence = '',
   [string]$ReleaseDescription = '',
   [string]$InstructionsPath = '',
-  # 批次号（V68 自动更新按它比较新旧）；不填时从包名里的 -vNN- 取。
+  # 批次号（自动更新按它比较新旧）；不填时从包名里的 -vNN- 取。
   [int]$Release = 0,
   [switch]$FrontendRewriteReview,
-  # V102：书源下载插件单独发布（tools/package_booksource_plugin.ps1），主程序包里不带。
+  # 书源下载插件单独发布（tools/package_booksource_plugin.ps1），主程序包里不带。
   [switch]$WithoutBookSourcePlugin
 )
 $ErrorActionPreference = 'Stop'
@@ -76,18 +76,18 @@ if ($KindlingPath) {
 
 Copy-Item -LiteralPath $bokai -Destination (Join-Path $staging 'converters/bokai.exe')
 Copy-Item -LiteralPath $bokaiProofPath -Destination (Join-Path $staging 'converters/bokai-verification.json')
-# 真机预览组件（V30，LAY-108）：独立的网页组件，由排版页用系统 Edge 打开。
+# 真机预览组件：独立的网页组件，由排版页用系统 Edge 打开。
 $pluginSource = Join-Path $root 'plugins/kindle-preview'
 if (-not (Test-Path -LiteralPath (Join-Path $pluginSource 'plugin.json'))) { throw '缺少真机预览组件 plugins/kindle-preview' }
 New-Item -ItemType Directory -Force -Path (Join-Path $staging 'plugins') | Out-Null
 Copy-Item -LiteralPath $pluginSource -Destination (Join-Path $staging 'plugins') -Recurse
-# V87：书源下载插件（独立进程，随包附带、默认停用；由 tools/build_booksource_plugin.ps1 生成）。
+# 书源下载插件（独立进程，随包附带、默认停用；由 tools/build_booksource_plugin.ps1 生成）。
 if (-not $WithoutBookSourcePlugin) {
   $bookSourcePlugin = Join-Path $root 'artifacts/plugins/booksource'
   if (-not (Test-Path -LiteralPath (Join-Path $bookSourcePlugin 'plugin.json'))) { throw '缺少书源下载插件：先运行 tools/build_booksource_plugin.ps1' }
   Copy-Item -LiteralPath $bookSourcePlugin -Destination (Join-Path $staging 'plugins') -Recurse
 }
-# 自动更新程序（V68，SET-073）：随包分发，主程序退出后由它替换文件。
+# 自动更新程序：随包分发，主程序退出后由它替换文件。
 & cargo build --release --locked -p easypub_updater --bin easypub_updater
 if ($LASTEXITCODE -ne 0) { throw '更新程序构建失败。' }
 $updaterSource = Join-Path $root 'target/release/easypub_updater.exe'
@@ -98,7 +98,7 @@ $instructionsSource = if ($InstructionsPath) { $InstructionsPath } elseif ($Fron
 $instructions = Get-Content -LiteralPath (Join-Path $root $instructionsSource) -Raw -Encoding UTF8
 $instructionsName = if ($InstructionsPath) { '先读我.txt' } elseif ($FrontendRewriteReview) { '先读我-前端评审版.txt' } else { 'R4-查看说明.txt' }
 [IO.File]::WriteAllText((Join-Path $staging $instructionsName), $instructions, [Text.UTF8Encoding]::new($false))
-# 应用内显示的版本信息（V22，SET-066）：版本与日期取自包名，记录构建提交；
+# 应用内显示的版本信息：版本与日期取自包名，记录构建提交；
 # 打包时工作区有未提交的改动则在提交号后加“+”，界面如实注明。
 $versionMatch = [regex]::Match($PackageName, 'desk-(v\d+[a-z]?)-(\d{8})')
 if ($Release -le 0) {

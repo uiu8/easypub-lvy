@@ -1,4 +1,4 @@
-// V86 插件系统与书源下载页面。
+// 插件系统与书源下载页面。
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -156,7 +156,7 @@ class FakeApi implements BookSourceApi {
   }
 }
 
-/// V93：书源页的检查、维护操作收进菜单，先打开菜单再点菜单项。
+/// 书源页的检查、维护操作收进菜单，先打开菜单再点菜单项。
 Future<void> _menu(WidgetTester tester, String key) async {
   await tester.ensureVisible(find.byKey(ValueKey(key)));
   await tester.tap(find.byKey(ValueKey(key)));

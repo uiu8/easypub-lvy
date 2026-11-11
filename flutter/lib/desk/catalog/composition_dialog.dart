@@ -1,6 +1,6 @@
-// 目录修复 · 组合预览（CH-215–227）：勾选目录方案（含依赖）、在“当前有效草稿”与“按勾选方案修复后”
+// 目录修复 · 组合预览：勾选目录方案（含依赖）、在“当前有效草稿”与“按勾选方案修复后”
 // 之间切换浏览结构与正文；核对后整批确认应用，或另存修订 TXT。冲突阻止预览，不自动丢弃旧编辑。
-// 逻辑沿用 V3 前的 CatalogCompositionDialog；设计：design_review_v37/d2_catalog.dart（D2-L）。
+// 逻辑沿用早先的 CatalogCompositionDialog。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -58,7 +58,7 @@ class _CatalogCompositionDialogState extends State<CatalogCompositionDialog> {
     load(0);
   }
 
-  /// 全选 / 清空（表头三态与 Ctrl+A、Esc；G-067）。全选时依赖自然满足。
+  /// 全选 / 清空（表头三态与 Ctrl+A、Esc）。全选时依赖自然满足。
   void selectAll(bool value) {
     setState(() {
       selected = value

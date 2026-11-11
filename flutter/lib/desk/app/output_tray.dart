@@ -15,8 +15,8 @@ class _WorkspaceBottomBar extends StatefulWidget {
   State<_WorkspaceBottomBar> createState() => _WorkspaceBottomBarState();
 }
 
-/// 底部输出托盘（G-031–047、G-061）：左侧是待应用预览与本次输出范围，右侧是格式、排版、位置与主操作。
-/// 保存状态已移到标题栏（G-030）。
+/// 底部输出托盘：左侧是待应用预览与本次输出范围，右侧是格式、排版、位置与主操作。
+/// 保存状态已移到标题栏。
 class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
   _RewriteAppState? owner;
   @override
@@ -163,13 +163,13 @@ class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
                     ),
                   ),
                 const Spacer(),
-                // 转换页内已有格式、排版与输出位置（OUT-067），托盘不重复。
+                // 转换页内已有格式、排版与输出位置，托盘不重复。
                 if (!conversionPage) ...[
                   if (!tiny) ...[
                     Text('输出', style: ui(12, c: d.ink3)),
                     const SizedBox(width: 8),
                   ],
-                  // R1：只有极窄时才收成下拉；其余宽度都用分段按钮（四个格式名本来就短）。
+                  // 只有极窄时才收成下拉；其余宽度都用分段按钮（四个格式名本来就短）。
                   if (!tiny)
                     KeyedSubtree(
                       key: ValueKey('quick-format-${draft.format}'),
@@ -214,7 +214,7 @@ class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
                   const SizedBox(width: 8),
                   if (!tiny)
                     Tooltip(
-                      // R1：窄时按钮只写“排版”，完整名称放在悬停提示里。
+                      // 窄时按钮只写“排版”，完整名称放在悬停提示里。
                       message: [
                         multipleBooks ? '本次书稿批量排版' : '本次书稿排版预设',
                         if (compact)
@@ -319,7 +319,7 @@ class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
                   if (!compact)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      // V134：整批进度百分比 + 已完成本数。
+                      // 整批进度百分比 + 已完成本数。
                       child: ConversionPercent(
                         outputs: app.conversion.outputs,
                         compact: true,

@@ -10,7 +10,7 @@ import 'package:easypub_desktop/infrastructure/legacy_book_check_session.dart';
 import 'package:easypub_desktop/application/cleanup_rule_resolution.dart';
 import 'package:easypub_desktop/application/conversion_snapshot.dart';
 
-/// V19 基线：300 本书的书库刷新一次要多久（docs/evidence/v19-check-cache-20261013.md）。
+/// 基线：300 本书的书库刷新一次要多久。
 /// 只测量并输出耗时，不设门槛；结果写进证据。默认跳过，运行方法：
 /// `$env:EASYPUB_BENCHMARK=1; tools/test_flutter.ps1 -TestPaths test/completion/library_refresh_benchmark_test.dart`
 void main() {
@@ -108,7 +108,7 @@ void main() {
           });
         }
       });
-      // V117：稿件版本改为直接嵌入设置组成部分；这里同一轮测一下改前的写法（嵌入已编码的
+      // 稿件版本改为直接嵌入设置组成部分；这里同一轮测一下改前的写法（嵌入已编码的
       // guardFor 字符串）作对照。
       final nested = repeat(15, () {
         for (final id in ids) {
@@ -159,7 +159,7 @@ void main() {
           .writeAsString(const JsonEncoder.withIndent('  ').convert(result));
     },
     timeout: const Timeout(Duration(minutes: 10)),
-    // 测量工具，不是回归用例：默认跳过，设 EASYPUB_BENCHMARK=1 时运行（V21）。
+    // 测量工具，不是回归用例：默认跳过，设 EASYPUB_BENCHMARK=1 时运行。
     skip: Platform.environment['EASYPUB_BENCHMARK'] == '1'
         ? false
         : '只在 EASYPUB_BENCHMARK=1 时测量',

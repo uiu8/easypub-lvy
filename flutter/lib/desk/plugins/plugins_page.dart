@@ -1,4 +1,4 @@
-// 插件管理（PLG-001–004）：列出、启用 / 停用、从文件夹安装、卸载。
+// 插件管理：列出、启用 / 停用、从文件夹安装、卸载。
 import 'package:flutter/material.dart';
 
 import '../../application/plugin_host.dart';

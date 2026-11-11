@@ -40,7 +40,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
   return const LineSplitter().convert(result.stdout as String);
 }
 
-/// V123：真机预览导入字体（LAY-178）与嵌入字体（LAY-179）。
+/// 真机预览导入字体与嵌入字体。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -216,7 +216,7 @@ void main() {
       });
       expect(await state.production.confirm(change), true);
       expect(report.missingCount, greaterThan(0));
-      // 真机预览带嵌入字体也能生成（V123：原来书里有一个字体没有的字就生成失败）。
+      // 真机预览带嵌入字体也能生成（原来书里有一个字体没有的字就生成失败）。
       final preview = await (library.openLayout(
         id,
       ) as LayoutDraftPreviewSession).renderDraftPreview({});

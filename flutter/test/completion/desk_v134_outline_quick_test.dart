@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// V134：目录里选中的章节行直接显示“改为正文 / 合并 / 重命名”，不用打开菜单。
+/// 目录里选中的章节行直接显示“改为正文 / 合并 / 重命名”，不用打开菜单。
 void main() {
   setUpAll(
     () async => RustLib.init(

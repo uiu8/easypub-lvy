@@ -87,7 +87,7 @@ class RuleStatistic {
   final List<RuleLineRange> changedRanges, candidateRanges;
 }
 
-/// 整行【】的判断（V121，LAY-169）：识别范围、全书倾向与各类行数。
+/// 整行【】的判断：识别范围、全书倾向与各类行数。
 class BracketSummary {
   BracketSummary.fromJson(Map v)
     : mode = v['mode'] as String? ?? 'auto',
@@ -163,15 +163,15 @@ class RuleStatisticsSnapshot {
   final int byteLength, lineCount, chapterCount;
   final Map<String, RuleStatistic> rules;
 
-  /// 按当前设置逐行识别出的块（V104，LAY-148）：章节编号 → 各行。
+  /// 按当前设置逐行识别出的块：章节编号 → 各行。
   final Map<String, List<LayoutLine>> layoutLines;
 
-  /// 整行【】的用途与全书倾向（V121，LAY-169）；旧版本统计没有时为空。
+  /// 整行【】的用途与全书倾向；旧版本统计没有时为空。
   final BracketSummary? brackets;
   final InlineStyleSnapshot? inlineStyles;
 }
 
-/// 一行的识别结果（V104，LAY-148）：本节正文行号（从 1 开始）、类别（system、verse、chat、inset、
+/// 一行的识别结果：本节正文行号（从 1 开始）、类别（system、verse、chat、inset、
 /// 手工标注的 letter、quote 等）、成品里的 CSS 类（如 verse-by），以及是否来自手工标注。
 class LayoutLine {
   const LayoutLine(this.line, this.kind, this.css, this.manual);
@@ -197,7 +197,7 @@ class RuleStatisticsState {
   final String? reason;
 }
 
-/// 章节问题对应的规则编号（V64，CH-279）：类别 number-gap 对应 check.number_gap；
+/// 章节问题对应的规则编号：类别 number-gap 对应 check.number_gap；
 /// 编号重复 / 编号回退两个细分对应“编号回退或重复”下的细分规则。
 String chapterIssueRule(String category, String? subtype) {
   final base = 'check.${category.replaceAll('-', '_')}';

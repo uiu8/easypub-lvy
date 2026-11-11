@@ -186,7 +186,7 @@ void main() {
               '-X',
               'utf8',
               '-c',
-              // 每章一个文件（V36，OUT-081）：按 spine 顺序读全部正文文件。
+              // 每章一个文件：按 spine 顺序读全部正文文件。
               r'''
 import re,sys,zipfile,xml.etree.ElementTree as E
 z=zipfile.ZipFile(sys.argv[1]); n={'h':'http://www.w3.org/1999/xhtml'}; o='{http://www.idpf.org/2007/opf}'

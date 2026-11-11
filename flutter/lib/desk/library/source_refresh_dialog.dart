@@ -1,4 +1,4 @@
-// 迁入 desk（library，V5/V6）：逻辑与布局沿用 V5 前的同名文件；公共弹窗框架样式在 V7 统一。
+// 迁入 desk（library）：逻辑与布局沿用早先的同名文件；公共弹窗框架样式后来统一。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -202,7 +202,7 @@ class _SourceRefreshDialogState extends State<SourceRefreshDialog> {
                                 ? null
                                 : (v) => setState(() => replaceImages = v!),
                           ),
-                        // 表头三态勾选（G-067）；默认不勾选，避免覆盖手工内容（G-068）。
+                        // 表头三态勾选；默认不勾选，避免覆盖手工内容。
                         SelectAllHeader(
                           selected: preview!.incoming.keys
                               .where(fields.contains)
@@ -224,9 +224,7 @@ class _SourceRefreshDialogState extends State<SourceRefreshDialog> {
                           Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
-                              border: Border.all(
-                                color: context.desk.line,
-                              ),
+                              border: Border.all(color: context.desk.line),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: CheckboxListTile(

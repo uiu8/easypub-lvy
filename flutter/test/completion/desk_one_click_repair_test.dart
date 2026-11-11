@@ -16,7 +16,7 @@ import 'package:easypub_desktop/desk/checks/chapter_issues_panel.dart';
 import 'package:easypub_desktop/desk/checks/checks_page.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 
-/// 一键修复入口（CH-243–246）：检查页、章节页按钮就地打开全书修复弹窗；
+/// 一键修复入口：检查页、章节页按钮就地打开全书修复弹窗；
 /// 一键目录修复必须经身份核对与组合预览确认后才改书稿。
 void main() {
   setUpAll(
@@ -189,7 +189,7 @@ void main() {
     await until(t, () => find.byType(CatalogSourceDialog).evaluate().isEmpty);
     await t.pumpAndSettle();
     expect(find.byType(CatalogQuickIdentityDialog), findsNothing);
-    // R3-05：停在参考目录的空状态（说明与来源列表）。
+    // 停在参考目录的空状态（说明与来源列表）。
     expect(find.byKey(const ValueKey('catalog-empty')), findsOneWidget);
     expect(t.takeException(), isNull);
   });
@@ -280,7 +280,7 @@ void main() {
     Future<void> menu(String label) async {
       await t.tap(find.text('更多'));
       await t.pumpAndSettle();
-      // R1 起菜单条目是编辑台自己的行（不再是 PopupMenuItem），在打开的菜单面板里找。
+      // 后来菜单条目是编辑台自己的行（不再是 PopupMenuItem），在打开的菜单面板里找。
       await t.tap(
         find.descendant(
           of: find.byKey(deskMenuPanelKey),

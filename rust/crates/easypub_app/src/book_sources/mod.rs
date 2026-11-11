@@ -22,7 +22,7 @@ use std::{
 use tokio_util::sync::CancellationToken;
 
 const MAX_IMPORT: usize = 16 * 1024 * 1024;
-// V45：长篇每页目录只有二三十章时需要几十页；300 页只作防失控上限（“阅读”App 不设页数上限）。
+// 长篇每页目录只有二三十章时需要几十页；300 页只作防失控上限（“阅读”App 不设页数上限）。
 const MAX_PAGES: usize = 300;
 static STORAGE: Mutex<()> = Mutex::new(());
 type Fields = BTreeMap<String, String>;
@@ -667,7 +667,7 @@ async fn toc(
     })
 }
 
-/// 作者名去掉开头的“作者：”与结尾的“ 著”，与“阅读”App 的 formatBookAuthor 相同（V45）。
+/// 作者名去掉开头的“作者：”与结尾的“ 著”，与“阅读”App 的 formatBookAuthor 相同。
 fn author_name(raw: &str) -> String {
     static PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let name = PATTERN

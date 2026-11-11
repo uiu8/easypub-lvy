@@ -1,5 +1,5 @@
-// 批量清理差异（CLEAN-091–096）：只读浏览本批已冻结的规则与选择，按 40 条分页；关闭不改变批量的确认步骤。
-// 排版“应用到多本书”的清理部分也用它（.reader 构造）。逻辑沿用 V4 前的 CleanupBatchDifferenceDialog。
+// 批量清理差异：只读浏览本批已冻结的规则与选择，按 40 条分页；关闭不改变批量的确认步骤。
+// 排版“应用到多本书”的清理部分也用它（.reader 构造）。逻辑沿用早先的 CleanupBatchDifferenceDialog。
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';

@@ -165,7 +165,7 @@ extension SourceRefreshOperations on PrototypeState {
         .toString();
   }
 
-  /// 换编码（G-114）：按选定的编码重读原文件，后面和刷新来源一样，旧书稿进恢复
+  /// 换编码：按选定的编码重读原文件，后面和刷新来源一样，旧书稿进恢复
   /// 项目。选的就是现在的编码时不用读，用户确认过了，去掉提示。
   Future<SourceRefreshPreview?> previewEncodingChange(
     String id,
@@ -232,7 +232,7 @@ extension SourceRefreshOperations on PrototypeState {
             key: metadata[key] as String? ?? '',
           'cover_path': source.resourceReport?['cover_path'],
         },
-        // 来源里没有作者时用文件名里的作者（V72）；刷新只是候选，由用户勾选是否采用。
+        // 来源里没有作者时用文件名里的作者；刷新只是候选，由用户勾选是否采用。
         if ((metadata?['author'] as String?)?.trim().isNotEmpty != true &&
             named.author.isNotEmpty)
           'author': named.author,

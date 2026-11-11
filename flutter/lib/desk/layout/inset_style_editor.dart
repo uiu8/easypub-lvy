@@ -6,7 +6,7 @@ import '../dialogs.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 
-/// 场景样式编辑器（V82，LAY-136）：逐项调参数，右侧按成品 CSS 的规则近似预览。
+/// 场景样式编辑器：逐项调参数，右侧按成品 CSS 的规则近似预览。
 /// 结果：应用到本书（name 为 null），或另存为“我的场景样式”（带名称，同时应用）。
 class InsetStyleEdit {
   const InsetStyleEdit(this.style, {this.name});

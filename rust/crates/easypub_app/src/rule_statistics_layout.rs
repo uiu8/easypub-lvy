@@ -16,7 +16,7 @@ fn render_insets(
     crate::insets::plan(&book.text, &book.tree.nodes, &owned, chat, rules)
 }
 
-/// 按当前设置逐行识别出的块（V104，LAY-148）：章节编号 → [本节正文行号, 类别, CSS 类, 是否手工标注]。
+/// 按当前设置逐行识别出的块：章节编号 → [本节正文行号, 类别, CSS 类, 是否手工标注]。
 /// 只列系统提示、诗词、聊天记录与场景；章节页的排版视图据此标出各行，与正文生成用同一套判断。
 pub(super) type LayoutLines = BTreeMap<String, Vec<(u32, &'static str, &'static str, bool)>>;
 
@@ -142,12 +142,12 @@ pub(super) fn collect(
     let mut block = None;
     let mut verse_kinds = BTreeSet::new();
     let mut first_pending = false;
-    // 系统提示自定义识别（V78）：统计与正文生成用同一组规则。
+    // 系统提示自定义识别：统计与正文生成用同一组规则。
     let custom = settings.rule_options.system_set();
-    // 整行【】的用途（V121）：与正文生成同一判断。
+    // 整行【】的用途：与正文生成同一判断。
     let scope = crate::system_scope::Scope::new(&book.text, &settings.rule_options.system_scope);
-    // 场景样式（V81）：自动识别的聊天记录按开启时统计（与系统提示用 box 统计相同），并优先于系统提示。
-    // 规则识别（V82）按开启时统计：内置项与自定义规则都计入，便于在规则页看到“开启会命中”。
+    // 场景样式：自动识别的聊天记录按开启时统计（与系统提示用 box 统计相同），并优先于系统提示。
+    // 规则识别按开启时统计：内置项与自定义规则都计入，便于在规则页看到“开启会命中”。
     let mut all_on = settings.rule_options.clone();
     all_on
         .disabled
@@ -335,7 +335,7 @@ pub(super) fn collect(
                 .expect("rule")
                 .hit(loc.byte(start));
         }
-        // 生僻字注音（V73，LAY-129）：含生僻字的正文行；关闭时仍统计，供“开启会命中”显示。
+        // 生僻字注音：含生僻字的正文行；关闭时仍统计，供“开启会命中”显示。
         if !heading
             && !scene
             && line

@@ -79,7 +79,7 @@ void main() {
         backend = PrototypeState(settingsDirectory: '${tmp.path}/settings');
         library = ObservedLibrary(backend);
         await library.load();
-        // V109：概览默认从左栏收起；这个测试要点左栏的“概览”。
+        // 概览默认从左栏收起；这个测试要点左栏的“概览”。
         await library.savePatch({'nav_hidden_pages': <String>[]});
         for (final entry in {
           '甲书': '第一章 甲章\n甲正文\n第一章 甲章\n\n第二章 甲尾\n甲末\n',
@@ -187,7 +187,7 @@ void main() {
           expect(find.textContaining('书库  /'), findsNothing);
           final header = find.byKey(const ValueKey('workspace-page-header'));
           expect(header, findsOneWidget, reason: route);
-          // V1：页名移入 40 逻辑像素高的标题栏面包屑，不再占用独立页头。
+          // 页名移入 40 逻辑像素高的标题栏面包屑，不再占用独立页头。
           expect(
             tester.getRect(header).bottom,
             lessThanOrEqualTo(40 * scale.clamp(1.0, 1.5)),

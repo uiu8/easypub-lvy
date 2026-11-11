@@ -107,7 +107,7 @@ void main() {
           ),
         );
         await t.pumpAndSettle();
-        // V15（LIB-108）：右侧已有详情栏时不再显示“当前书详情”按钮。
+        // 右侧已有详情栏时不再显示“当前书详情”按钮。
         if (find
             .byKey(const ValueKey('library-detail-column'))
             .evaluate()

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/tokens.dart';
 
-/// V41：动效令牌（G-070）与界面数字等宽（G-069）。
+/// 动效令牌与界面数字等宽。
 void main() {
   test('动效令牌：五档时长与三条曲线', () {
     expect(

@@ -20,7 +20,7 @@ import '../application/output_defaults.dart';
 import '../prototype/prototype_state.dart';
 import '../prototype/output_batch.dart';
 import '../prototype/output_task.dart';
-// 生成封面与书库共用同一画法（OUT-070）。
+// 生成封面与书库共用同一画法。
 import '../desk/library/generated_cover.dart' show renderGeneratedCover;
 import '../prototype/conversion_preflight_runner.dart';
 import '../prototype/conversion_preflight.dart';
@@ -319,7 +319,7 @@ class LegacyConversionSession extends ChangeNotifier
   }
 
   /// 成品文件名（不含扩展名与同名序号）：按全局设置的命名方式，
-  /// 转换与转换页的“本次将生成”共用（OUT-073）。
+  /// 转换与转换页的“本次将生成”共用。
   String outputStem(SampleBook book, String title) {
     final author = backend.authorOf(book);
     final naming = backend.globalConfiguration['output_naming'] ?? 'title';
@@ -853,7 +853,7 @@ class LegacyConversionSession extends ChangeNotifier
   }
 }
 
-/// 保持原格式时对原 EPUB 做了哪些修补（OUT-079）。
+/// 保持原格式时对原 EPUB 做了哪些修补。
 String passthroughSummary(Map report) {
   final images = (report['images'] as List? ?? const []).length;
   final unreadable = (report['unreadable_images'] as List? ?? const []).length;

@@ -5,7 +5,7 @@ class CatalogSearchResult {
   final String id, title, url;
 }
 
-/// V44：本机书源配置。supported 仅表示规则可执行，不代表站点已联网验收。
+/// 本机书源配置。supported 仅表示规则可执行，不代表站点已联网验收。
 class BookSourceInfo {
   const BookSourceInfo({
     required this.id,

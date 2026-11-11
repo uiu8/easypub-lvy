@@ -50,8 +50,8 @@ pub struct Chapter {
     pub extra_urls: Vec<String>,
     /// 目录头部移除的最新章节项数，只记在第一项，供下载质量报告使用。
     pub dropped_latest_block: usize,
-    /// 按章号挪回原位或去掉的错位章节数（V132），只记在第一项，供下载质量报告使用。
-    /// 为 0 时不序列化：交给书源脚本的章节对象保持 V132 之前的字段，
+    /// 按章号挪回原位或去掉的错位章节数，只记在第一项，供下载质量报告使用。
+    /// 为 0 时不序列化：交给书源脚本的章节对象保持早先的字段，
     /// 免得脚本把章节数组原样提交时请求体随内部记账变化。
     #[serde(skip_serializing_if = "is_zero")]
     pub reordered_toc_items: usize,

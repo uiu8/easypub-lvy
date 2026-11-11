@@ -13,9 +13,10 @@ import 'package:easypub_desktop/desk/cleanup/batch_dialog.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 
 import 'legacy_checkpoint.dart';
+
 import 'package:easypub_desktop/desk/rules/rules_sheet.dart';
 
-/// V17：撤销 / 重做清理时换算章节修改（CLEAN-103）；检查点之上的修改也能换算（CLEAN-105）。
+/// 撤销 / 重做清理时换算章节修改；检查点之上的修改也能换算。
 /// 真实 Rust。
 void main() {
   setUpAll(

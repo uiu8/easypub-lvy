@@ -1,4 +1,4 @@
-// 检查结果缓存文件（设置目录 check-reports/）的命名、统计与清理（V19，CHK-061）。
+// 检查结果缓存文件（设置目录 check-reports/）的命名、统计与清理。
 // 只处理名为 64 位十六进制 + .json 的缓存文件；不读不写书稿。
 import 'dart:convert';
 import 'dart:io';
@@ -12,7 +12,7 @@ import 'package:path/path.dart' as paths;
 import '../application/book_check_service.dart' show CheckSpots;
 import '../application/check_cache_service.dart';
 
-/// 某一稿的检查报告缓存文件名（指纹前加 v3 前缀，沿用 V12 起的命名）。
+/// 某一稿的检查报告缓存文件名（指纹前加 v3 前缀，沿用后来的命名）。
 String checkReportFileName(String guard) =>
     '${sha256.convert(utf8.encode('v3:$guard'))}.json';
 

@@ -6,7 +6,7 @@ class ChapterViewState {
   double bodyScrollOffset = 0;
   bool showIssueNotes = true;
 
-  /// 正文用排版视图显示（V104，LAY-149）。
+  /// 正文用排版视图显示。
   bool layoutView = false;
   final issues = IssueViewState();
   final tree = ChapterTreeViewState();

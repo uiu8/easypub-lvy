@@ -1,4 +1,4 @@
-# 打包书源下载插件（V86）：release 构建插件进程，生成 plugin.json（含 SHA-256）与说明。
+# 打包书源下载插件：release 构建插件进程，生成 plugin.json（含 SHA-256）与说明。
 # 用法：. ./tools/project_env.ps1; ./tools/build_booksource_plugin.ps1 [-Out artifacts/plugins/booksource]
 param([string]$Out = 'artifacts/plugins/booksource')
 $ErrorActionPreference = 'Stop'

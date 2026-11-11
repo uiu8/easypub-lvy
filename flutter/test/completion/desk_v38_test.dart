@@ -12,7 +12,7 @@ import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/settings/settings_page.dart';
 import 'package:easypub_desktop/desk/widgets.dart';
 
-/// V38：设置页“同时处理的书”（SET-069）。
+/// 设置页“同时处理的书”。
 void main() {
   testWidgets('成品与输出：同时处理的书默认自动，点选后保存，说明写明内存占用', (t) async {
     t.view.physicalSize = const Size(1100, 760);

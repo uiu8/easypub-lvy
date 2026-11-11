@@ -17,7 +17,7 @@ import 'package:go_router/go_router.dart';
 
 class NoPicker extends Fake implements BookFilePicker {}
 
-/// V1 编辑台外壳：四种窗口尺寸下标题栏、导航栏、托盘不溢出；导航栏按宽度展开；
+/// 编辑台外壳：四种窗口尺寸下标题栏、导航栏、托盘不溢出；导航栏按宽度展开；
 /// Ctrl+K 打开命令面板，拼音首字母可检索，选择后只跳转页面。
 /// 设置 DESK_SHELL_CAPTURE=<目录> 时同时输出截图。
 void main() {
@@ -106,7 +106,7 @@ void main() {
         await settle();
         expect(t.takeException(), isNull, reason: '$size $route');
         final rail = t.getSize(find.byKey(const ValueKey('desk-rail')));
-        // G-084：默认窄栏；宽窗时栏底有“展开导航栏”。
+        // 默认窄栏；宽窗时栏底有“展开导航栏”。
         expect(rail.width, 64, reason: '$size');
         expect(
           find.byKey(const ValueKey('desk-rail-toggle')),

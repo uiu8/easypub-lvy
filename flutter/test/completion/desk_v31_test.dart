@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:easypub_desktop/desk/layout/device_preview.dart';
 
-/// V31：真机预览机身外观按实拍照片校正（LAY-112）。
+/// 真机预览机身外观按实拍照片校正。
 void main() {
   KindleDevice device(String id) => kindleDevices.firstWhere((k) => k.id == id);
 

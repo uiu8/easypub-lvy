@@ -67,7 +67,7 @@ extension _BookSourceQueue on _BookSourcePageState {
     });
   }
 
-  /// 书库里还是旧版本时“刷新来源”（V111）；采用后，下载格式为 EPUB 的接着生成。
+  /// 书库里还是旧版本时“刷新来源”；采用后，下载格式为 EPUB 的接着生成。
   Future<void> _refreshLibrary(DownloadTask t) async {
     if (t.path == null || widget.refreshInLibrary == null) return;
     final fresh = await widget.refreshInLibrary!(t.path!);
@@ -80,7 +80,7 @@ extension _BookSourceQueue on _BookSourcePageState {
     }
   }
 
-  /// 单独清除一条下载记录（LIB-223）：文件与章节缓存保留；进行中的任务由插件拒绝并说明。
+  /// 单独清除一条下载记录：文件与章节缓存保留；进行中的任务由插件拒绝并说明。
   Future<void> _removeTask(DownloadTask t) async {
     try {
       await api!.call('queue.remove', {'taskId': t.id});

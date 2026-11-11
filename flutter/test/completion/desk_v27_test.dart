@@ -107,7 +107,7 @@ Future<ConversionOutput> _convert(
   }
 }
 
-/// V27：EPUB 两条转换路径——保持原格式 / 使用软件排版（OUT-079/080）。
+/// EPUB 两条转换路径——保持原格式 / 使用软件排版。
 void main() {
   setUpAll(
     () async => RustLib.init(

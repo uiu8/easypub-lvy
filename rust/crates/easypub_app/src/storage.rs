@@ -713,7 +713,7 @@ fn clean(store: &Store, kinds: &[Value]) -> Result<Value> {
             rows.push(json!({"kind":kind,"path":root,"deleted_bytes":0,"skipped":"persistent_reference_or_external_preview"}));
             continue;
         }
-        // 真机预览是独立的浏览器资料目录（V107）：浏览器开着时一直占着 lockfile，删不掉就说明预览窗口还开着，整类跳过。
+        // 真机预览是独立的浏览器资料目录：浏览器开着时一直占着 lockfile，删不掉就说明预览窗口还开着，整类跳过。
         if kind == "kindle_preview" {
             let lockfile = root.join("lockfile");
             if lockfile.exists() && fs::remove_file(&lockfile).is_err() {

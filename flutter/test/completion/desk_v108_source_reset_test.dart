@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'desk_v88_booksource_test.dart' as v88;
 import 'desk_v89_booksource_test.dart' as v89;
 
-/// V108：重置书源运行状态（设备、临时 Cookie 与缓存），登录信息保留。
+/// 重置书源运行状态（设备、临时 Cookie 与缓存），登录信息保留。
 class V108Api extends v89.V89Api {
   @override
   Future<dynamic> call(

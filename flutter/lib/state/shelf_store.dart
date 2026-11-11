@@ -1,4 +1,4 @@
-// 书库中的书、勾选与收藏文件夹（V20 从 PrototypeState 拆出）。移出与恢复要协调所有领域，仍在 PrototypeState。
+// 书库中的书、勾选与收藏文件夹（从 PrototypeState 拆出）。移出与恢复要协调所有领域，仍在 PrototypeState。
 // 只通过 PrototypeState 的公开接口读写全局设置；行为与拆分前相同。
 import 'dart:convert';
 import 'dart:io';

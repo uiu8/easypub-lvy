@@ -1,4 +1,4 @@
-// 崩溃日志的只读接口（V22，SET-067），设置页用它显示份数与最近一份。
+// 崩溃日志的只读接口，设置页用它显示份数与最近一份。
 
 class CrashLogEntry {
   const CrashLogEntry(this.path, this.time, this.bytes);

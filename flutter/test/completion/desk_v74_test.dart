@@ -49,7 +49,7 @@ Future<void> until(WidgetTester t, bool Function() ready) async {
   fail('界面未就绪');
 }
 
-/// V74：章节样式包（LAY-130）。
+/// 章节样式包。
 void main() {
   setUpAll(
     () async => RustLib.init(

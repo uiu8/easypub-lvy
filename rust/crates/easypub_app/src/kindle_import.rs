@@ -1,4 +1,4 @@
-//! AZW3 / MOBI 导入（V131，LIB-295）：读取没有 DRM 的 Kindle 文件，转成一个结构简单的 EPUB，
+//! AZW3 / MOBI 导入：读取没有 DRM 的 Kindle 文件，转成一个结构简单的 EPUB，
 //! 之后与导入 EPUB 完全相同（正文成为 TXT 工作稿，封面、图片、样式、字体另存为资源）。
 //!
 //! 支持：KF8（AZW3，以及新版 MOBI 里的 KF8 部分）与旧式 MOBI；PalmDOC 与 HUFF/CDIC 两种压缩。
@@ -635,7 +635,7 @@ fn clean_xhtml(html: &str, image_src: &dyn Fn(&str) -> Option<String>) -> String
     let doc = Html::parse_document(html);
     let mut out = String::new();
     let mut text = Line::default();
-    /// 当前一行：行内样式和网址链接留着，后面导入时读（G-113）。
+    /// 当前一行：行内样式和网址链接留着，后面导入时读。
     #[derive(Default)]
     struct Line {
         html: String,

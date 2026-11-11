@@ -1,4 +1,4 @@
-//! 性能样本（V83）：同一本确定性合成长稿，测规则统计、场景识别、成品文档与 EPUB 写出。
+//! 性能样本：同一本确定性合成长稿，测规则统计、场景识别、成品文档与 EPUB 写出。
 //! 默认不运行；手动执行：`cargo test --release -p easypub_app perf_samples -- --ignored --nocapture`。
 use crate::publication_resources::{self, Request};
 use easypub_core::source::{RULE_ID, SourceSnapshot};

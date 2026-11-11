@@ -61,7 +61,7 @@ fn side(book: &EffectiveBook, focus: Option<u32>, offset: usize, char_offset: us
         "next_offset":next_offset,"next_char_offset":next_char_offset})
 }
 
-// 参数各有独立含义，改成结构体会牵动所有调用者；V21 保留现状。
+// 参数各有独立含义，改成结构体会牵动所有调用者；保留现状。
 #[allow(clippy::too_many_arguments)]
 pub fn compare(before: &EffectiveBook, after: &EffectiveBook, entry_id: &str,
     line: u32, kept_line: Option<u32>, before_offset: usize, after_offset: usize,

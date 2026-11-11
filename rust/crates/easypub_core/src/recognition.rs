@@ -1,4 +1,4 @@
-//! Explicit R1 rule compatibility seam.
+//! Explicit rule compatibility seam.
 //!
 //! The old desktop application accepts .NET regular expressions, including
 //! constructs that Rust's linear-time `regex` engine intentionally rejects.
@@ -203,7 +203,7 @@ fn split_numbered(title: &str) -> Option<(bool, char, &str)> {
 
 const SENTENCE_MARKS: [char; 10] = ['，', ',', '。', '！', '!', '？', '?', '…', '～', '~'];
 
-/// V91：正文里作者写的更新说明和卷末标记，不是标题。
+/// 正文里作者写的更新说明和卷末标记，不是标题。
 /// 例：“（第二章大概十一点左右。）”“第一章完毕，继续努力”“两章合一已更，求月票”
 /// “526章更新延迟些”“（第三卷摸鱼儿终）”“【第二卷·终】”“九章玉璧除却……，……”。
 /// 带标题的括号行（“（第二章 月光）”）、标题与正文粘在一行的真标题
@@ -271,7 +271,7 @@ fn is_update_or_end_note(title: &str) -> bool {
     !had_di && marker == '章' && sentence && body.chars().count() > 12
 }
 
-/// V91：卷名和章名写在同一行（“第四卷垂幕之年 第十章 佛至人间”），按其中的章处理，
+/// 卷名和章名写在同一行（“第四卷垂幕之年 第十章 佛至人间”），按其中的章处理，
 /// 返回章的（编号, 单位）。括号开头的作者说明不算。
 pub fn inner_chapter(title: &str) -> Option<(u32, char)> {
     let text = title.trim();
@@ -549,7 +549,7 @@ mod tests {
         assert!(!is_prose_heading("第三回人生如梦。", Some('回')));
     }
 
-    /// V91：用 51 本网文实测得到的作者说明、卷末标记和正文句子（标题文字为自拟或截短）。
+    /// 用 51 本网文实测得到的作者说明、卷末标记和正文句子（标题文字为自拟或截短）。
     #[test]
     fn update_notes_end_markers_and_prose_are_not_headings() {
         for note in [

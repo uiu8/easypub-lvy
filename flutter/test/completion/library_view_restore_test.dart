@@ -83,7 +83,7 @@ void main() {
         of: find.byType(LibraryPage),
         matching: find.byType(TextField),
       );
-      // V14：书架视图是 GridView，列表视图是 ListView。
+      // 书架视图是 GridView，列表视图是 ListView。
       ScrollController scroll() => t
           .widget<BoxScrollView>(
             find
@@ -127,7 +127,7 @@ void main() {
             book.status != '检查通过' &&
             {ids.first, ids.last}.contains(book.id),
       );
-      // V15：数量写在标题“书库”后面，筛选后为“可见 / 全部”。
+      // 数量写在标题“书库”后面，筛选后为“可见 / 全部”。
       expect(
         find.text('${combined.length} / ${library.books.value.length} 本'),
         findsOneWidget,
@@ -140,7 +140,7 @@ void main() {
       await t.pumpAndSettle();
       router.go('/');
       await t.pumpAndSettle();
-      // V8：书目行也显示格式列，这里只核对筛选器恢复的值。
+      // 书目行也显示格式列，这里只核对筛选器恢复的值。
       expect(
         find.descendant(
           of: find.byType(DeskFilter<String>).first,
@@ -168,7 +168,7 @@ void main() {
       router.go('/');
       await t.pumpAndSettle();
       expect(t.widget<TextField>(search()).controller!.text, 'BoOk');
-      // V8：书目行也显示格式列，这里只核对筛选器恢复的值。
+      // 书目行也显示格式列，这里只核对筛选器恢复的值。
       expect(
         find.descendant(
           of: find.byType(DeskFilter<String>).first,
@@ -209,7 +209,7 @@ void main() {
       router.go('/');
       await t.pumpAndSettle();
       expect(t.widget<TextField>(search()).controller!.text, 'BoOk');
-      // 1.3 倍字号下筛选可能收进“筛选”菜单（V84b），也可能整行放得下（V94 左栏开关移出筛选行）；
+      // 1.3 倍字号下筛选可能收进“筛选”菜单，也可能整行放得下（左栏开关移出筛选行）；
       // 两种情况都核对记着的格式。
       final menuKeepsTxt = find.byWidgetPredicate(
         (w) =>

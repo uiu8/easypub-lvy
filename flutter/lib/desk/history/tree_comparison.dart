@@ -1,5 +1,5 @@
-// 章节变化对照（HIS-012–019）：修改前 / 修改后两棵章节树分页并排；点节点在两个版本中定位同一节点。
-// 粗体只表示本页对照中的差异。逻辑沿用 V4 前的 HistoryTreeComparison。
+// 章节变化对照：修改前 / 修改后两棵章节树分页并排；点节点在两个版本中定位同一节点。
+// 粗体只表示本页对照中的差异。逻辑沿用早先的 HistoryTreeComparison。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';

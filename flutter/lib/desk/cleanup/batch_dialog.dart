@@ -1,6 +1,6 @@
-// 清理规则应用到多本书（CLEAN-081–090）：勾选目标书 → 逐书预览 → 核对后整批采用；部分失败只能
-// “仅重新预览可处理书”，不会静默跳过失败书提交。逻辑沿用 V4 前的 CleanupBatchDialog。
-// V17：有章节修改的书逐本换算；无法换算的书由用户逐本决定放弃修改或不清理（CLEAN-104）。
+// 清理规则应用到多本书：勾选目标书 → 逐书预览 → 核对后整批采用；部分失败只能
+// “仅重新预览可处理书”，不会静默跳过失败书提交。逻辑沿用早先的 CleanupBatchDialog。
+// 有章节修改的书逐本换算；无法换算的书由用户逐本决定放弃修改或不清理。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -30,7 +30,7 @@ class CleanupBatchDialog extends StatefulWidget {
 class _CleanupBatchDialogState extends State<CleanupBatchDialog> {
   late final session = widget.library.openCleanupBatch(widget.bookId);
   late final books = List<BookSummary>.of(widget.library.books.value);
-  // 默认目标（G-068）：书库里已勾选的书；书库没有勾选时全选。
+  // 默认目标：书库里已勾选的书；书库没有勾选时全选。
   late final selected = () {
     final chosen = widget.library.selection.value.selected.toSet();
     return chosen.isNotEmpty ? chosen : books.map((b) => b.id).toSet();
@@ -44,7 +44,7 @@ class _CleanupBatchDialogState extends State<CleanupBatchDialog> {
   bool append = true, busy = false, confirmed = false;
   final expanded = <String>{};
 
-  /// 用户确认放弃无法换算的章节修改的书（CLEAN-104）。
+  /// 用户确认放弃无法换算的章节修改的书。
   final dropEdits = <String>{};
   String error = '';
   @override

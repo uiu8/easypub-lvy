@@ -1,4 +1,4 @@
-// 检查结果缓存的统计与手动清理（V19，CHK-061 / SET-065）。
+// 检查结果缓存的统计与手动清理。
 // 只删缓存文件，不碰书稿；先预览将删除的份数，确认后才删除。
 
 /// 一次统计的结果；[CheckCacheService.cleanCheckCache] 只删除其中列出的文件。
@@ -18,7 +18,7 @@ class CheckCachePreview {
   /// 缓存文件总数与大小。
   final int total, totalBytes;
 
-  /// 无法归属到书的旧报告（V19 前写入、或无法读取），且不是书库中某本书当前稿的结果。
+  /// 无法归属到书的旧报告（前写入、或无法读取），且不是书库中某本书当前稿的结果。
   final int unattributed, unattributedBytes;
 
   /// 各书当前稿与上一稿以外更早的报告。

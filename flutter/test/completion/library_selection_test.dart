@@ -119,7 +119,7 @@ void main() {
       await t.tap(find.byTooltip('全选筛选结果'));
       await t.pump();
       expect(library.selection.value.selected, ids.toSet());
-      // V14：书架 ↔ 列表切换后，原来最上面那本书仍在视野内。
+      // 书架 ↔ 列表切换后，原来最上面那本书仍在视野内。
       await t.tap(find.byTooltip('切换列表视图'));
       await t.pumpAndSettle();
       final list = find.byType(ListView).first;

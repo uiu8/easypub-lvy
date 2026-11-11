@@ -78,7 +78,7 @@ class LegacyLayoutSession extends LegacyBookInformationSession
     sample: await _bookCharacters(),
   );
 
-  /// 书里用到的字（去重）：检查报告据此列出字体里没有的字（V123）。读不了原文时为空。
+  /// 书里用到的字（去重）：检查报告据此列出字体里没有的字。读不了原文时为空。
   Future<String> _bookCharacters() async {
     try {
       final source = backend.shelf.books
@@ -156,7 +156,7 @@ class LegacyLayoutSession extends LegacyBookInformationSession
     Map<String, Object?> values, {
     String? entryId,
   }) async {
-    // 章节样式包（V76）：真机预览可临时停用或改卷页边框，只用于这一次生成。
+    // 章节样式包：真机预览可临时停用或改卷页边框，只用于这一次生成。
     if (values.keys.any(
       (key) => !layoutFields.contains(key) && key != 'chapter_style',
     )) {
@@ -244,21 +244,21 @@ class LegacyLayoutSession extends LegacyBookInformationSession
     }
   }
 
-  /// 统一章首图的图片路径与封面一样属于本书（V54，LAY-124）：可读写，但不进草稿、预设与批量。
+  /// 统一章首图的图片路径与封面一样属于本书：可读写，但不进草稿、预设与批量。
   @override
   Set<String> get allowedFields => {
     ...layoutFields,
     'chapter_head_image',
-    // 嵌入字体（V123，LAY-179）：与章首图一样属于本书，不进草稿与预设。
+    // 嵌入字体：与章首图一样属于本书，不进草稿与预设。
     'font_resource',
     'original_style',
     'image_options',
     'navigation_options',
     'output_options',
-    // 原书标记（G-113）：路径和校验值属于本书，不进草稿与预设。
+    // 原书标记：路径和校验值属于本书，不进草稿与预设。
     'source_marks',
     'chapter_style',
-    // 系统提示自定义识别规则在 rule_options.system_patterns（V78），单独应用。
+    // 系统提示自定义识别规则在 rule_options.system_patterns，单独应用。
     'rule_options',
   };
 

@@ -362,7 +362,7 @@ fn local_http_search_gbk_post_redirect_pages_cache_and_failures() {
     let reversed = run(&root, request.clone()).unwrap();
     assert_eq!(reversed["from_cache"], false);
     assert_eq!(reversed["catalog"]["entries"][0]["title"], "第二章 乙");
-    // V45：翻页下拉列出全部页（含当前页、已抓过的页）时逐页抓取一次，不当作循环。
+    // 翻页下拉列出全部页（含当前页、已抓过的页）时逐页抓取一次，不当作循环。
     for (path, titles) in [
         ("cycle", vec!["第一章 甲"]),
         ("sel1", vec!["第一章 甲", "第二章 乙"]),

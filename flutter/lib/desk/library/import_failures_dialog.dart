@@ -6,7 +6,7 @@ import '../dialogs.dart';
 import '../tokens.dart';
 import '../controls/controls.dart';
 
-/// 批量导入的失败清单（R2-02）：每个没导入的文件写明原因，可整份复制。
+/// 批量导入的失败清单：每个没导入的文件写明原因，可整份复制。
 class ImportFailuresDialog extends StatelessWidget {
   const ImportFailuresDialog(this.failures, {super.key});
   final List<ImportOutcome> failures;

@@ -5,7 +5,7 @@ import '../controls/controls.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 
-/// 设置 · 导入：从文件名提取作者（V72，LIB-116）。
+/// 设置 · 导入：从文件名提取作者。
 /// 方式、自定义格式、书名里是否去掉作者名，以及即时的“试一试”。
 class FileNameAuthorSettings extends StatefulWidget {
   const FileNameAuthorSettings({
@@ -143,7 +143,7 @@ class _FileNameAuthorSettingsState extends State<FileNameAuthorSettings> {
                   controller: pattern,
                   enabled: custom && !widget.saving,
                   style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
-                  // 至少显示两行，一眼能看出可以写多行（V113）。
+                  // 至少显示两行，一眼能看出可以写多行。
                   minLines: 2,
                   maxLines: 6,
                   keyboardType: TextInputType.multiline,

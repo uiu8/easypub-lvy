@@ -19,7 +19,7 @@ abstract interface class ResourcePlacementSession {
   Future<ResourceParagraphPage> placementParagraphs(String nodeId, int offset);
 }
 
-/// 插图版式（V54，RES-050）：值与 Rust `ILLUSTRATION_LAYOUTS` 一一对应。
+/// 插图版式：值与 Rust `ILLUSTRATION_LAYOUTS` 一一对应。
 const illustrationLayouts = {
   'inline': '随正文',
   'full_page': '整页',
@@ -43,7 +43,7 @@ class BookResource {
     this.layout = 'inline',
   });
 
-  /// 插图版式（V54，RES-050），见 [illustrationLayouts]。
+  /// 插图版式，见 [illustrationLayouts]。
   final String layout;
 
   /// -1 denotes the cover; nonnegative values address illustrations.
@@ -96,11 +96,11 @@ class ResourceLocation {
   final int? nodeOffset;
   final String heading, message;
 
-  /// 插在成品文本第几行之后；未定位或需要重新定位时为空（R5-01）。
+  /// 插在成品文本第几行之后；未定位或需要重新定位时为空。
   final int? outputLine;
 }
 
-/// 一次读出全部插图的位置（R5-01、R5-05）：排版预览按它放图，资源页按它写章节与段落。
+/// 一次读出全部插图的位置：排版预览按它放图，资源页按它写章节与段落。
 abstract interface class ResourceLocator {
   Future<List<ResourceLocation>> locateAll();
 }

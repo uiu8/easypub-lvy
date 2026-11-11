@@ -1,6 +1,5 @@
 // 编辑台设计令牌：单色“纸与墨”。灰墨是唯一的强调色；语义色只有三种且低饱和：
 // 朱（错误/删除）、赭（提醒/过期）、苔（差异中的新增/成功）。
-// 设计来源 design_review_v37/tokens.dart（预览），见 docs/37 第 2 节。
 import 'package:flutter/material.dart';
 
 @immutable
@@ -131,7 +130,7 @@ class Desk extends ThemeExtension<Desk> {
     grain: .012,
   );
 
-  /// 高对比（V79，SET-074）：白底纯黑字、深灰线、黑色强调，给看不清浅灰的人用；不随主题色。
+  /// 高对比：白底纯黑字、深灰线、黑色强调，给看不清浅灰的人用；不随主题色。
   static const contrast = Desk(
     dark: false,
     canvas: Color(0xFFFFFFFF),
@@ -197,7 +196,7 @@ class Desk extends ThemeExtension<Desk> {
     ),
   ];
 
-  /// 换成另一种主题色（V69，G-072）：只换强调色三件套，语义色与底色不变。
+  /// 换成另一种主题色：只换强调色三件套，语义色与底色不变。
   Desk withAccent(DeskAccent a) =>
       copyWith(accent: a.accent, accentInk: a.onAccent, accentSoft: a.soft);
 
@@ -239,14 +238,14 @@ class Desk extends ThemeExtension<Desk> {
   Desk lerp(Desk? other, double t) => t < .5 ? this : (other ?? this);
 }
 
-/// 主题色（V69，G-072）：强调色、其上文字色、浅底色。都与宣纸底色保持足够对比；默认墨灰。
+/// 主题色：强调色、其上文字色、浅底色。都与宣纸底色保持足够对比；默认墨灰。
 @immutable
 class DeskAccent {
   const DeskAccent(this.id, this.label, this.accent, this.onAccent, this.soft);
   final String id, label;
   final Color accent, onAccent, soft;
 
-  /// 夜墨主题下的同一种主题色（V79）：调亮强调色，文字改深色，浅底换成深底。
+  /// 夜墨主题下的同一种主题色：调亮强调色，文字改深色，浅底换成深底。
   DeskAccent forDark() => DeskAccent(
     id,
     label,
@@ -256,7 +255,7 @@ class DeskAccent {
   );
 }
 
-/// 界面主题（V79，SET-074）：设置值 `ui_theme`。
+/// 界面主题：设置值 `ui_theme`。
 const deskThemes = {
   'paper': '宣纸',
   'silver': '银灰',
@@ -346,7 +345,7 @@ extension DeskContext on BuildContext {
   Desk get desk => Theme.of(this).extension<Desk>() ?? Desk.light;
 }
 
-/// 动效令牌（V41，G-070）：时长五档、曲线三条，参考 Claude 前端的时间阶梯。
+/// 动效令牌：时长五档、曲线三条，参考 Claude 前端的时间阶梯。
 /// 悬停用 [fast]，切换用 [snap]，展开折叠用 [base] + [snapCurve]，侧栏用 [sheet]，主题与背景用 [slow]；
 /// 回弹 [overshoot] 只给按钮按下，面板不弹。“减少动效”打开时经 [of] 得到零时长。
 abstract final class DeskMotion {
@@ -373,7 +372,7 @@ abstract final class DeskMotion {
 }
 
 /// 字体：界面黑体，正文/标题宋体，数字与正则等宽。
-/// 界面黑体与宋体也用等宽数字（V41，G-069）：进度、计数、耗时变化时文字不左右晃。
+/// 界面黑体与宋体也用等宽数字：进度、计数、耗时变化时文字不左右晃。
 const sansFamily = 'Desk Sans';
 const serifFamily = 'Desk Serif';
 const monoFamily = 'Desk Mono';

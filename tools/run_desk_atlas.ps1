@@ -1,4 +1,4 @@
-# 全页面图集（R0，正式版打磨）：真实字体与测试假数据，按窗口宽度 × 主题 × 字号给每个页面出图，
+# 全页面图集（正式版打磨）：真实字体与测试假数据，按窗口宽度 × 主题 × 字号给每个页面出图，
 # 输出到 artifacts/atlas-<时间>/，打开其中的 index.html 逐页翻看。
 # 用法：tools/run_desk_atlas.ps1 [-Sizes 1100,1500,1900] [-Themes paper,night] [-Scales 1.0,1.3]
 param(

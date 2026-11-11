@@ -1,5 +1,5 @@
-// 清理问题与原稿上下文（CLEAN-073–080）：复查结果分页列表 + 证据；广告候选只生成待确认的排除方案，
-// 其他问题定位到对应清理规则。不直接修改草稿或原文件。逻辑沿用 V4 前的 CleanupInspectionDialog。
+// 清理问题与原稿上下文：复查结果分页列表 + 证据；广告候选只生成待确认的排除方案，
+// 其他问题定位到对应清理规则。不直接修改草稿或原文件。逻辑沿用早先的 CleanupInspectionDialog。
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';

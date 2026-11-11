@@ -11,7 +11,7 @@ import 'package:easypub_desktop/desk/settings/storage_settings.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
 
-/// V104：设置 · 存储位置（SET-108–112），用真实后端与隔离的临时目录。
+/// 设置 · 存储位置，用真实后端与隔离的临时目录。
 void main() {
   testWidgets('存储位置：显示位置与占用、清理缓存、切换图片方式与缓存位置、搬家后提示重启', (t) async {
     t.view.physicalSize = const Size(1100, 1400);
@@ -110,10 +110,7 @@ void main() {
     await t.tap(key('storage-confirm'));
     await until(() => key('storage-notice').evaluate().isNotEmpty, '清理结果');
     expect(find.textContaining('已清理 4 KB'), findsOneWidget);
-    await until(
-      () => find.text('没有可清理的').evaluate().isNotEmpty,
-      '清理后重新统计',
-    );
+    await until(() => find.text('没有可清理的').evaluate().isNotEmpty, '清理后重新统计');
 
     // 图片方式改为只记原路径。
     await t.tap(

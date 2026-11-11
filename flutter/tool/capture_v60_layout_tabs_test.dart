@@ -13,7 +13,7 @@ import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/fonts.dart';
 import 'package:easypub_desktop/desk/layout/layout_page.dart';
 
-/// V60 界面截图：排版页四个分页。输出 artifacts/v60-preview/。
+/// 界面截图：排版页四个分页。输出 artifacts/v60-preview/。
 void main() {
   testWidgets('截图：排版页分页', (t) async {
     final capture = GlobalKey();

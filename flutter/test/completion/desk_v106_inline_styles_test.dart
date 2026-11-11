@@ -13,7 +13,7 @@ import 'package:easypub_desktop/prototype/prototype_state.dart';
 
 const _sample = '第一章 开始\n甲乙丙丁戊。\n己庚辛壬癸。\n子丑寅卯辰。\n第二章 结束\n保留。\n';
 
-/// V106：章节页文字样式界面（LAY-152）：跨行选择一次写入、一次撤销；格式提示；改与删。
+/// 章节页文字样式界面：跨行选择一次写入、一次撤销；格式提示；改与删。
 void main() {
   test('样式分段：显示文字去掉首尾空白时区间平移，几种样式叠加', () {
     final span = inlineStyledSpan('　甲乙丙', '甲乙丙', [

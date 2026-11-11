@@ -1,4 +1,4 @@
-// 选择编码（G-114）：左边编码列表，右边显示前 30 行，看着对就用。
+// 选择编码：左边编码列表，右边显示前 30 行，看着对就用。
 import 'package:flutter/material.dart';
 
 import '../../application/text_encoding_service.dart';

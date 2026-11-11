@@ -1,6 +1,6 @@
 import '../application/storage_locations.dart';
 
-// 真机预览组件的查找与启动（V30，LAY-108）：组件在发布包 plugins/kindle-preview/，
+// 真机预览组件的查找与启动：组件在发布包 plugins/kindle-preview/，
 // 用系统 Edge 以应用窗口（无地址栏）打开，使用单独的配置目录，不碰用户自己的 Edge 资料。
 import 'dart:io';
 
@@ -64,7 +64,7 @@ class SystemKindlePreviewHost implements KindlePreviewHost {
       '--user-data-dir=${profile.path}',
       '--no-first-run',
       '--no-default-browser-check',
-      // V107：这是只显示预览的独立窗口，不同步账号、不装扩展、不下载浏览器组件，
+      // 这是只显示预览的独立窗口，不同步账号、不装扩展、不下载浏览器组件，
       // 免得资料目录涨到几百 MB（实测 40 秒内 87 MB → 21 MB）。
       '--disable-sync',
       '--disable-extensions',

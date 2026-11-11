@@ -34,7 +34,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
   return result.stdout as String;
 }
 
-/// V51：排版页“弹出注释”开关（LAY-120 界面）。
+/// 排版页“弹出注释”开关（界面）。
 void main() {
   setUpAll(
     () async => RustLib.init(

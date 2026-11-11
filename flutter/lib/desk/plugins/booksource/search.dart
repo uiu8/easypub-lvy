@@ -42,7 +42,7 @@ extension _BookSourceSearch on _BookSourcePageState {
   }
 
   Map<String, dynamic> _searchParams(String key) {
-    // 收藏或手动选择的书源（LIB-220/221）：明确指定，不再叠加“快速”“只搜优先”。
+    // 收藏或手动选择的书源：明确指定，不再叠加“快速”“只搜优先”。
     final ids = _scopeIds();
     return {
       'key': key,
@@ -356,7 +356,7 @@ extension _BookSourceSearch on _BookSourcePageState {
       toc = null;
     });
     try {
-      // 读取详情和目录时书源脚本可能请求验证码等交互（LIB-212）。
+      // 读取详情和目录时书源脚本可能请求验证码等交互。
       await _enableInteractions('${s['sourceId']}');
       final info = await api!.call('book.info', {
         'sourceId': s['sourceId'],
@@ -697,7 +697,7 @@ extension _BookSourceSearch on _BookSourcePageState {
                             child: Text('重试 ${p['sourceName']}'),
                           ),
                       ],
-                      // R1：用图标代替“▾”文字（缺字时会显示成方框）。
+                      // 用图标代替“▾”文字（缺字时会显示成方框）。
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [

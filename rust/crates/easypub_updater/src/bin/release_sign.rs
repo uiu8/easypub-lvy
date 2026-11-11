@@ -1,4 +1,4 @@
-//! 发布签名工具（V68，只在发布者本机使用，不进发布包）。
+//! 发布签名工具（只在发布者本机使用，不进发布包）。
 //!   release_sign keygen --out <私钥文件>
 //!       生成 Ed25519 密钥：私钥以十六进制写入文件（文件已存在则拒绝），公钥打印出来，填进 lib.rs 的 RELEASE_KEY。
 //!   release_sign manifest --key <私钥文件> --zip <发布包> --release <批次号> --tag <tag> --date <日期>

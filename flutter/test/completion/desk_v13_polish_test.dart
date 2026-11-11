@@ -19,7 +19,7 @@ import 'package:easypub_desktop/desk/library/library_page.dart';
 
 class _NoPicker extends Fake implements BookFilePicker {}
 
-/// V13：清理后重放章节修改、降级预览定位、排版预览放大、书库列表与详情。
+/// 清理后重放章节修改、降级预览定位、排版预览放大、书库列表与详情。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -134,14 +134,16 @@ void main() {
         expect(impact.skipped, isEmpty);
         expect(impact.checkpoint, false);
         final before =
-            (state.manuscript.effectiveHistories[ids[0]]!['history'] as List).length;
+            (state.manuscript.effectiveHistories[ids[0]]!['history'] as List)
+                .length;
         final receipt = await cleanup.apply(plan);
         expect(receipt.editsKept, 1);
         expect(receipt.editsDropped, 0);
         expect(state.cleanup.drafts[ids[0]], isNotNull);
         // 换算结果是章节历史中的新一步，可撤销。
         expect(
-          (state.manuscript.effectiveHistories[ids[0]]!['history'] as List).length,
+          (state.manuscript.effectiveHistories[ids[0]]!['history'] as List)
+              .length,
           before + 1,
         );
       } finally {
@@ -320,7 +322,7 @@ void main() {
     );
     expect(find.byKey(const ValueKey('layout-reader-panel')), findsNothing);
     // 预览页按剩余空间放大（屏幕上的实际尺寸，含缩放）：上沿紧跟设置行，
-    // 下沿紧贴翻页条；V12 在同样窗口里只有 534 像素高，且上下各空出一大段。
+    // 下沿紧贴翻页条；改前在同样窗口里只有 534 像素高，且上下各空出一大段。
     final page = t.getRect(find.byKey(const ValueKey('layout-preview-page')));
     final pager = t.getRect(find.byKey(const ValueKey('layout-preview-pages')));
     expect(page.height, greaterThan(760));
@@ -389,9 +391,9 @@ void main() {
       );
     }
     final row = t.getSize(find.byKey(ValueKey('library-row-$first')));
-    // V14：列表封面放大到 48×64，行高 76。
+    // 列表封面放大到 48×64，行高 76。
     expect(row.height, lessThanOrEqualTo(76));
-    // 甲书跳号：状态列显示待核对数量；数量来自检查报告，只算章节问题（V15 LIB-106）。
+    // 甲书跳号：状态列显示待核对数量；数量来自检查报告，只算章节问题。
     final book = library.books.value.firstWhere((b) => b.id == first);
     final pending = book.pending!;
     expect(pending.chapters, greaterThan(0));
@@ -406,8 +408,8 @@ void main() {
     // 当前书：“当前”标记；不再在每行重复“检查完成 · 有待核对项”。
     expect(find.text('当前'), findsOneWidget);
     expect(find.text('检查完成 · 有待核对项'), findsNothing);
-    // 详情面板（V14 精简）：一行写数量与检查时间，入口齐全，原文件位置只留文件夹图标。
-    // V15：详情写章节问题数量，清理建议、书籍信息与最近检查时间分行列出。
+    // 详情面板（精简）：一行写数量与检查时间，入口齐全，原文件位置只留文件夹图标。
+    // 详情写章节问题数量，清理建议、书籍信息与最近检查时间分行列出。
     expect(find.text('章节问题 ${pending.chapters} 项'), findsOneWidget);
     expect(find.text('最近检查'), findsOneWidget);
     for (final page in ['chapters', 'information', 'layout', 'cleanup']) {

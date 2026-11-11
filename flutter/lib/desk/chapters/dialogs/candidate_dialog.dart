@@ -1,4 +1,4 @@
-// 修改前后预览（CH-079–089）：分页浏览真实候选的结构与所选节点正文。
+// 修改前后预览：分页浏览真实候选的结构与所选节点正文。
 // “修改前”读取当前有效稿，书稿版本变化时报错，不展示伪造的旧版本；
 // “修改后”读取尚未采用的候选。只读模式（修复差异核对）没有确认按钮。
 import 'package:flutter/material.dart';
@@ -32,7 +32,7 @@ class ChapterCandidateDialog extends StatefulWidget {
   final int initialOffset;
   final String? initialNodeId;
 
-  /// 被处理的标题（CH-257）：“修改前”选中它；“修改后”选中 [focusLine]
+  /// 被处理的标题：“修改前”选中它；“修改后”选中 [focusLine]
   /// 所在的章节并把正文翻到这一行。
   final String? focusNodeId;
   final int? focusLine;

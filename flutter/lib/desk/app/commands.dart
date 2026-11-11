@@ -1,9 +1,9 @@
 part of 'rewrite_app.dart';
 
-/// 命令面板（G-062），自 rewrite_app.dart 拆出。
+/// 命令面板，自 rewrite_app.dart 拆出。
 extension _CommandPalette on _RewriteAppState {
-  /// 命令面板（G-062）：页面跳转与既有入口；不包含任何直接修改书稿的应用动作。
-  /// V70：最上方“最近使用”与“当前书”组，输入书名可以切换到那本书（G-074–076）。
+  /// 命令面板：页面跳转与既有入口；不包含任何直接修改书稿的应用动作。
+  /// 最上方“最近使用”与“当前书”组，输入书名可以切换到那本书。
   Future<void> openCommandPalette([BuildContext? from]) async {
     final context = from ?? router.routerDelegate.navigatorKey.currentContext;
     if (context == null || !context.mounted) return;
@@ -32,7 +32,7 @@ extension _CommandPalette on _RewriteAppState {
       shortcut: shortcut,
       run: run,
     );
-    // 最近使用（V70，G-075）：随工作区保存，最近的在前，最多 5 条。
+    // 最近使用：随工作区保存，最近的在前，最多 5 条。
     List<String> recent() =>
         ((autosave?.readDraft('workspace/palette'))?['recent'] as List? ?? [])
             .whereType<String>()
@@ -40,7 +40,7 @@ extension _CommandPalette on _RewriteAppState {
     void remember(DeskCommand c) => autosave?.writeDraft('workspace/palette', {
       'recent': [c.key, ...recent().where((k) => k != c.key)].take(5).toList(),
     });
-    // 当前书（V70，G-074）：组名带书名；没有当前书或正在转换时说明原因。
+    // 当前书：组名带书名；没有当前书或正在转换时说明原因。
     final title = widget.library.books.value
         .where((b) => b.id == current)
         .firstOrNull
@@ -77,7 +77,7 @@ extension _CommandPalette on _RewriteAppState {
         run: () => book('rules'),
       ),
     ];
-    // 按书名切换（V70，G-076）：只在输入后出现，打开书稿概览。
+    // 按书名切换：只在输入后出现，打开书稿概览。
     final books = [
       for (final b in widget.library.books.value)
         DeskCommand(
@@ -91,7 +91,7 @@ extension _CommandPalette on _RewriteAppState {
           run: () => go(bookPageLocation(b.id, 'overview')),
         ),
     ];
-    // 设置项（R1，G-062）：只在输入后出现，打开设置页对应分组并定位到该项。
+    // 设置项：只在输入后出现，打开设置页对应分组并定位到该项。
     final settingItems = [
       for (final (label, tab, keywords) in settingsIndex)
         DeskCommand(
@@ -110,7 +110,7 @@ extension _CommandPalette on _RewriteAppState {
           ),
         ),
     ];
-    // 章节（R1，G-062）：面板打开后再读取当前书的章节标题（最多 5000 个），只在输入后出现，
+    // 章节：面板打开后再读取当前书的章节标题（最多 5000 个），只在输入后出现，
     // 选中跳到章节页的该章。
     Future<List<DeskCommand>> chapterItems() async {
       final id = current;

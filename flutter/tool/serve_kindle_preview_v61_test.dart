@@ -29,7 +29,7 @@ const ornamentPng =
 const pagePng =
     'iVBORw0KGgoAAAANSUhEUgAAAFoAAACgCAIAAAADw+wqAAAA6ElEQVR4nO3QMQ0AIADAMJSgBNkI5EMC42gyAUvHXFu3kR98FQ4cOHDgwIEDBw4cfThw4MCBAwcOHDhw9OHAgQMHDhw4cODA0YcDBw4cOHDgwIEDRx8OHDhw4MCBAwcOHH04cODAgQMHDhw4cPThwIEDBw4cOHDgwNGHAwcOHDhw4MCBA0cfDhw4cODAgQMHDhx9OHDgwIEDBw4cOHD04cCBAwcOHDhw4MDRhwMHDhw4cODAgQNHHw4cOHDgwIEDBw4cfThw4MCBAwcOHDhw9OHAgQMHDhw4cODA0YcDBw4cOHDgwLEecRyN+1b2vJkg2QAAAABJRU5ErkJggg==';
 
-/// V61：生成含全部新功能的样书，启动真实的真机预览服务，把地址写到 artifacts/v61-preview/url.txt，
+/// 生成含全部新功能的样书，启动真实的真机预览服务，把地址写到 artifacts/v61-preview/url.txt，
 /// 供浏览器手动检查；同目录出现 stop 文件或 15 分钟后结束。
 void main() {
   testWidgets('真机预览服务（手动检查用）', (t) async {

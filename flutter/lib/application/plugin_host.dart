@@ -1,6 +1,6 @@
 import 'storage_locations.dart';
 
-// 插件系统（V86）：插件是独立进程，放在插件目录里，每个插件一个子文件夹：
+// 插件系统：插件是独立进程，放在插件目录里，每个插件一个子文件夹：
 //   plugin.json  {"id","name","version","description","executable","sha256","permissions":[…],"protocol":1}
 //   可执行文件
 // 启动前核对可执行文件的 SHA-256 与清单一致；与插件之间每行一个 JSON（见 Rust 插件说明）。
@@ -156,7 +156,7 @@ class PluginRegistry {
     }
   }
 
-  /// 校验值缓存（V94）：按文件大小与修改时间记住上次算出的 SHA-256。
+  /// 校验值缓存：按文件大小与修改时间记住上次算出的 SHA-256。
   /// 左栏每次重建都要问书源插件是否可用；原先每次同步读整个插件程序（约 12MB）再算校验值，
   /// 每次切页多花约 180ms。真正启动插件前仍重新计算（[fresh]）。
   final Map<String, (int, DateTime, String)> _digests = {};

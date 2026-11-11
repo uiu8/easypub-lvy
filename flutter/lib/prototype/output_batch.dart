@@ -68,7 +68,7 @@ class OutputBatch {
   final List<BatchOutputItem> items;
   bool busy = false, preflightBusy = false, stopped = false, consumed = false;
 
-  /// 正在生成的任务（V38 起可以同时有几本）；停止批次时全部取消。
+  /// 正在生成的任务（后来可以同时有几本）；停止批次时全部取消。
   final Set<OutputTask> _active = {};
   OutputTask? get active => _active.isEmpty ? null : _active.first;
 
@@ -76,7 +76,7 @@ class OutputBatch {
   final SerialQueue _records = SerialQueue();
   String? _savedRecord;
 
-  /// 同时处理的本数（V38，SET-069）；测试可以直接指定。
+  /// 同时处理的本数；测试可以直接指定。
   int? parallelOverride;
   int get parallel =>
       parallelOverride ?? parallelBooks(state.globalConfiguration);
@@ -85,7 +85,7 @@ class OutputBatch {
   String? retryOfBatchId;
   Map<String, Map<String, dynamic>> publicationOverrides = const {};
 
-  /// 保持原格式的 EPUB 书（V27，OUT-079）。
+  /// 保持原格式的 EPUB 书。
   Set<String> keepOriginalEpub = const {};
   bool requiresPreflight = false;
   bool? checksEnabled;
@@ -487,7 +487,7 @@ class OutputBatch {
     ],
   };
 
-  /// 每本完成后的“进行中”记录合并保存（R6）：一次保存约 200ms（读全局设置、整表改写、
+  /// 每本完成后的“进行中”记录合并保存：一次保存约 200ms（读全局设置、整表改写、
   /// 落一个设置版本和一份约 6KB×本数的记录），原来每本都排队等它，批量时成了瓶颈，
   /// 设置目录也每本多一份记录（设置版本上限 1024，用完后设置无法保存）。现在不等，并且最多每 10 秒存一次
   /// 最新快照；重启后各书状态按任务历史重新核对（loadTaskFeed），单本回执仍由
@@ -552,7 +552,7 @@ class OutputBatch {
   bool get hasFailedItems => items.any((item) => item.failed);
 }
 
-/// 书的原 EPUB 路径；不是从 EPUB 导入的书为 null（V27）。
+/// 书的原 EPUB 路径；不是从 EPUB 导入的书为 null。
 String? originalEpubPath(SampleBook book) {
   final origin = book.source?.originPath;
   return origin != null && origin.toLowerCase().endsWith('.epub')

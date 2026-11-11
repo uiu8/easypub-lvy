@@ -1,5 +1,5 @@
-// 文件夹与收藏（D4-D，V8 按设计重写视图）：扫描、勾选、导入与收藏逻辑沿用原实现。
-// V84（FOLD-083–087）：全选 / 取消全选 / 反选按钮、拖动连选与框选、点列名排序与类型筛选、
+// 文件夹与收藏（按设计重写视图）：扫描、勾选、导入与收藏逻辑沿用原实现。
+// 全选 / 取消全选 / 反选按钮、拖动连选与框选、点列名排序与类型筛选、
 // 修改时间列；可选“导入后加入收藏夹”。
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -46,7 +46,7 @@ class _FoldersPageState extends State<FoldersPage> {
       ? widget.library as BookCollectionService
       : null;
 
-  /// 导入所选，成功后按需加入收藏夹（V84，FOLD-087）。
+  /// 导入所选，成功后按需加入收藏夹。
   Future<void> importSelected() async {
     await model.importSelected();
     final target = collection, service = collections;
@@ -195,7 +195,7 @@ class _FoldersPageState extends State<FoldersPage> {
                   ),
           ),
         ),
-        // 自动入库的最近一次结果（V26）：只在有内容时占一行。
+        // 自动入库的最近一次结果：只在有内容时占一行。
         if (widget.library case final FolderAutoImportService auto)
           ValueListenableBuilder<AutoImportState>(
             valueListenable: auto.autoImportState,
@@ -274,7 +274,7 @@ class _FoldersPageState extends State<FoldersPage> {
                     ],
                   ),
                 ),
-                // 自动入库开关（V26，FOLD-080）：只有图标，悬停说明。
+                // 自动入库开关：只有图标，悬停说明。
                 if (widget.library case final FolderAutoImportService auto)
                   ValueListenableBuilder<List<String>>(
                     valueListenable: auto.autoImportFolders,
@@ -585,7 +585,7 @@ class _FoldersPageState extends State<FoldersPage> {
   Widget bookRow(BuildContext context, List<FolderBook> books, int index) {
     final d = context.desk;
     final book = books[index];
-    // Shift+点击：把上次点击到本行之间的书统一设成同一状态（G-067）。
+    // Shift+点击：把上次点击到本行之间的书统一设成同一状态。
     void toggle(bool value) => model.setMany([
       for (final i in range.span(index)) books[i].path,
     ], value);

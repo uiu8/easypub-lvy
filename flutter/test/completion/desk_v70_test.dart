@@ -15,7 +15,7 @@ import 'package:easypub_desktop/desk/shell/command_palette.dart';
 
 class NoPicker extends Fake implements BookFilePicker {}
 
-/// V70：命令面板加强（G-074 当前书、G-075 最近使用、G-076 按书名切换）。
+/// 命令面板加强（当前书、最近使用、按书名切换）。
 void main() {
   testWidgets('面板：未输入时最近使用在最上方且不重复，只在搜索时出现的命令要输入后才有', (t) async {
     final ran = <String>[], recorded = <String>[];

@@ -94,7 +94,7 @@ pub fn factory() -> BTreeMap<String, Value> {
     .map(|mut values: BTreeMap<String, Value>| {
         values.insert("navigation_options".into(), json!(crate::edition_options::NavigationOptions::default()));
         values.insert("image_options".into(), json!(crate::kindle_images::Options::default()));
-        // 新书的系统提示用分类样式（V77，LAY-132）。
+        // 新书的系统提示用分类样式。
         values.insert(
             "system_styles".into(),
             serde_json::to_value(crate::block_styles::default_styles()).expect("styles"),

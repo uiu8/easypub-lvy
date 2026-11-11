@@ -33,12 +33,12 @@ pub fn default_writing_mode() -> String {
 pub fn default_vertical_digits() -> u8 {
     2
 }
-/// 章节标题样式（V36，LAY-117）的可选值，与 publication_style::heading_rules 一一对应。
+/// 章节标题样式的可选值，与 publication_style::heading_rules 一一对应。
 pub const HEADING_STYLES: [&str; 5] = ["classic", "amazon", "publisher", "two_line", "light_novel"];
 pub fn default_heading_style() -> String {
     "classic".into()
 }
-/// 场景分隔样式（V46，LAY-118）：off 不识别；keep 居中保留原符号；stars ＊　＊　＊；diamonds ◇　◇　◇；line 细线。
+/// 场景分隔样式：off 不识别；keep 居中保留原符号；stars ＊　＊　＊；diamonds ◇　◇　◇；line 细线。
 pub const SCENE_BREAK_STYLES: [&str; 5] = ["off", "keep", "stars", "diamonds", "line"];
 pub fn default_scene_break_style() -> String {
     "keep".into()
@@ -50,12 +50,12 @@ pub fn default_note_style() -> String {
 pub fn note_style_is_off(style: &str) -> bool {
     style == "off"
 }
-/// 章首段落样式（V49，LAY-119）：normal 同正文；no_indent 首段不缩进；large_initial 首段不缩进且首字放大。
+/// 章首段落样式：normal 同正文；no_indent 首段不缩进；large_initial 首段不缩进且首字放大。
 pub const FIRST_PARAGRAPH_STYLES: [&str; 3] = ["normal", "no_indent", "large_initial"];
 pub fn default_first_paragraph_style() -> String {
     "normal".into()
 }
-/// 生僻字注音（V73，LAY-129）：off 不标；chapter 每章首次；book 全书首次；every 每次。
+/// 生僻字注音：off 不标；chapter 每章首次；book 全书首次；every 每次。
 /// 旧项目缺少字段和新书出厂默认均为 off；显式开启的已有设置保留。
 pub const RARE_CHAR_RUBY_MODES: [&str; 4] = ["off", "chapter", "book", "every"];
 pub fn default_rare_char_ruby() -> String {
@@ -72,13 +72,13 @@ pub fn default_rare_char_scope() -> String {
 pub fn rare_char_scope_is_default(scope: &str) -> bool {
     scope == "outside"
 }
-/// 系统提示（V50，LAY-121）：off 不识别；box 加框；indent 缩进；
-/// styled 按单行提示 / 多行面板分别套样式（V77，LAY-132，见 [crate::block_styles]）。
+/// 系统提示：off 不识别；box 加框；indent 缩进；
+/// styled 按单行提示 / 多行面板分别套样式（见 [crate::block_styles]）。
 pub const SYSTEM_BLOCK_STYLES: [&str; 4] = ["off", "box", "indent", "styled"];
 pub fn default_system_block_style() -> String {
     "box".into()
 }
-/// 场景样式（V81，LAY-135）：旧项目缺少字段时聊天记录不识别、书信原样（输出不变）；
+/// 场景样式：旧项目缺少字段时聊天记录不识别、书信原样（输出不变）；
 /// 新书出厂默认 window / ruled，见 layout_settings::factory。
 pub fn default_chat_block_style() -> String {
     "off".into()
@@ -104,9 +104,9 @@ pub fn default_inset_font() -> String {
 pub fn inset_font_is_kai(v: &str) -> bool {
     v == "kai"
 }
-/// 诗词（V50，LAY-122）：off 不识别；center 居中；indent 缩进。
+/// 诗词：off 不识别；center 居中；indent 缩进。
 pub const VERSE_BLOCK_STYLES: [&str; 3] = ["off", "center", "indent"];
-/// 插图版式（V54，RES-050）。
+/// 插图版式。
 pub const ILLUSTRATION_LAYOUTS: [&str; 3] = ["inline", "full_page", "chapter_head"];
 pub fn default_illustration_layout() -> String {
     "inline".into()
@@ -114,12 +114,12 @@ pub fn default_illustration_layout() -> String {
 pub fn illustration_layout_is_inline(value: &str) -> bool {
     value == "inline"
 }
-/// 统一章首图用于哪些标题（V54，LAY-124）：chapter 每章；volume 每卷；both 卷和章。
+/// 统一章首图用于哪些标题：chapter 每章；volume 每卷；both 卷和章。
 pub const CHAPTER_HEAD_SCOPES: [&str; 3] = ["chapter", "volume", "both"];
 pub fn default_chapter_head_scope() -> String {
     "chapter".into()
 }
-/// 章首图宽度（V54，LAY-124）：third 三分之一；half 一半；full 满宽。
+/// 章首图宽度：third 三分之一；half 一半；full 满宽。
 pub const CHAPTER_HEAD_WIDTHS: [&str; 3] = ["third", "half", "full"];
 pub fn default_chapter_head_width() -> String {
     "half".into()
@@ -199,14 +199,14 @@ pub struct Settings {
     pub language: String,
 
     pub cover_path: Option<String>,
-    /// 统一章首图（V54，LAY-124）。与 cover_path 一样总是序列化：patch 按键修改，缺键会被拒绝。
+    /// 统一章首图。与 cover_path 一样总是序列化：patch 按键修改，缺键会被拒绝。
     #[serde(default)]
     pub chapter_head_image: Option<String>,
     #[serde(default = "crate::production::default_chapter_head_scope")]
     pub chapter_head_scope: String,
     #[serde(default = "crate::production::default_chapter_head_width")]
     pub chapter_head_width: String,
-    /// 章节样式包（V74，LAY-130）。与章首图一样总是序列化。
+    /// 章节样式包。与章首图一样总是序列化。
     #[serde(default)]
     pub chapter_style: Option<crate::style_packs::ChapterStyle>,
     pub cover_fit: String,
@@ -221,7 +221,7 @@ pub struct Settings {
     pub font_size_unit: String,
     #[serde(default)]
     pub layout_units_version: u8,
-    /// 保持原格式时对原书样式的改动（G-112）；没改时不写，旧版本还能打开。
+    /// 保持原格式时对原书样式的改动；没改时不写，旧版本还能打开。
     #[serde(
         default,
         skip_serializing_if = "crate::epub_restyle::OriginalStyle::is_default"
@@ -252,49 +252,49 @@ pub struct Settings {
     pub line_height_unit: String,
     #[serde(default = "crate::production::default_text_alignment")]
     pub text_alignment: String,
-    /// 书写方向（V28，LAY-104）：horizontal 横排、vertical 竖排（从右往左翻页）。
+    /// 书写方向：horizontal 横排、vertical 竖排（从右往左翻页）。
     #[serde(default = "crate::production::default_writing_mode")]
     pub writing_mode: String,
     /// 竖排时连续不超过这么多位的半角数字横着排（纵中横）；0 关闭。
     #[serde(default = "crate::production::default_vertical_digits")]
     pub vertical_digits: u8,
-    /// 章节标题样式（V36，LAY-117）：classic、amazon、publisher、two_line、light_novel。
+    /// 章节标题样式：classic、amazon、publisher、two_line、light_novel。
     #[serde(default = "crate::production::default_heading_style")]
     pub heading_style: String,
-    /// 场景分隔样式（V46，LAY-118），见 [SCENE_BREAK_STYLES]。
+    /// 场景分隔样式，见 [SCENE_BREAK_STYLES]。
     #[serde(default = "crate::production::default_scene_break_style")]
     pub scene_break_style: String,
     #[serde(default = "crate::production::default_note_style")]
     pub note_style: String,
-    /// 章首段落样式（V49，LAY-119），见 [FIRST_PARAGRAPH_STYLES]。
+    /// 章首段落样式，见 [FIRST_PARAGRAPH_STYLES]。
     #[serde(default = "crate::production::default_first_paragraph_style")]
     pub first_paragraph_style: String,
-    /// 生僻字注音（V73，LAY-129），见 [RARE_CHAR_RUBY_MODES]。
+    /// 生僻字注音，见 [RARE_CHAR_RUBY_MODES]。
     #[serde(default = "crate::production::default_rare_char_ruby")]
     pub rare_char_ruby: String,
-    /// 生僻字范围（V73，LAY-129），见 [RARE_CHAR_SCOPES]。
+    /// 生僻字范围，见 [RARE_CHAR_SCOPES]。
     #[serde(default = "crate::production::default_rare_char_scope")]
     pub rare_char_scope: String,
-    /// 系统提示样式（V50，LAY-121），见 [SYSTEM_BLOCK_STYLES]。
+    /// 系统提示样式，见 [SYSTEM_BLOCK_STYLES]。
     #[serde(default = "crate::production::default_system_block_style")]
     pub system_block_style: String,
-    /// 分类样式的参数（V77，LAY-132）；为空时用内置默认。总是序列化。
+    /// 分类样式的参数；为空时用内置默认。总是序列化。
     #[serde(default)]
     pub system_styles: Option<crate::block_styles::SystemStyles>,
-    /// 诗词样式（V50，LAY-122），见 [VERSE_BLOCK_STYLES]。
+    /// 诗词样式，见 [VERSE_BLOCK_STYLES]。
     #[serde(default = "crate::production::default_verse_block_style")]
     pub verse_block_style: String,
-    /// 场景样式（V81，LAY-135）：聊天记录自动识别与样式、书信样式、场景字体，见 [crate::insets]。
+    /// 场景样式：聊天记录自动识别与样式、书信样式、场景字体，见 [crate::insets]。
     #[serde(default = "crate::production::default_chat_block_style")]
     pub chat_block_style: String,
     #[serde(default = "crate::production::default_letter_block_style")]
     pub letter_block_style: String,
     #[serde(default = "crate::production::default_inset_font")]
     pub inset_font: String,
-    /// 场景识别（V82，LAY-137），见 [crate::insets::INSET_DETECT]。
+    /// 场景识别，见 [crate::insets::INSET_DETECT]。
     #[serde(default = "crate::production::default_inset_detect")]
     pub inset_detect: String,
-    /// 本书改过的场景样式（V82，LAY-136）：按场景编号；没改的用内置预设。总是序列化（补丁只能改已有字段）。
+    /// 本书改过的场景样式：按场景编号；没改的用内置预设。总是序列化（补丁只能改已有字段）。
     #[serde(default)]
     pub inset_styles: Option<std::collections::BTreeMap<String, crate::inset_styles::InsetStyle>>,
     #[serde(default)]
@@ -305,7 +305,7 @@ pub struct Settings {
     pub manual_notes: Vec<crate::manual_notes::Note>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inline_styles: Vec<crate::inline_styles::Annotation>,
-    /// 导入时从原书读到的行内样式和表格（G-113）。
+    /// 导入时从原书读到的行内样式和表格。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_marks: Option<crate::source_marks::Selection>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1515,7 +1515,7 @@ pub fn run(
     if value["op"] == "supplemental_templates" && !apply {
         return crate::supplemental_pages::templates(value);
     }
-    // V77 系统提示块样式：只读列出内置预设（界面与 Rust 预设的一致性由测试核对）。
+    // 系统提示块样式：只读列出内置预设（界面与 Rust 预设的一致性由测试核对）。
     if value["op"] == "block_styles" {
         if apply || confirmed || !plan_id.is_empty() {
             return Err(invalid());
@@ -1526,7 +1526,7 @@ pub fn run(
             .collect();
         return serde_json::to_string(&json!({"presets": presets})).map_err(|_| invalid());
     }
-    // V82 场景样式：只读列出内置预设（界面与 Rust 预设的一致性由测试核对）。
+    // 场景样式：只读列出内置预设（界面与 Rust 预设的一致性由测试核对）。
     if value["op"] == "inset_styles" {
         if apply || confirmed || !plan_id.is_empty() {
             return Err(invalid());
@@ -1542,14 +1542,14 @@ pub fn run(
         return serde_json::to_string(&json!({"presets": presets, "scenes": scenes}))
             .map_err(|_| invalid());
     }
-    // V74 章节样式包：生成内置包、导入与导出样式包文件，不涉及书稿。
+    // 章节样式包：生成内置包、导入与导出样式包文件，不涉及书稿。
     if value["op"] == "chapter_style" {
         if apply || confirmed || !plan_id.is_empty() {
             return Err(invalid());
         }
         return crate::style_packs::run(value);
     }
-    // V68 自动更新：只读检查与下载，不涉及书稿，也不走制作事务。
+    // 自动更新：只读检查与下载，不涉及书稿，也不走制作事务。
     if value["op"] == "app_update" {
         if apply || confirmed || !plan_id.is_empty() {
             return Err(invalid());

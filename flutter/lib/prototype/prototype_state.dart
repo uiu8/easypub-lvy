@@ -99,12 +99,12 @@ class BookDraft {
   int fullwidthIndent = 2;
   bool removeBlankLines = true;
   String textAlignment = 'start';
-  // 竖排与纵中横位数（V28，LAY-104）。
+  // 竖排与纵中横位数。
   String writingMode = 'horizontal';
   int verticalDigits = 2;
-  // 章节标题样式（V36，LAY-117）。
+  // 章节标题样式。
   String headingStyle = 'classic';
-  // 场景分隔样式（V46，LAY-118）。
+  // 场景分隔样式。
   static const _ruleOptionDefaults = <String, dynamic>{
     'cleanup_pipeline': null,
     'scene_symbols': null,
@@ -120,28 +120,28 @@ class BookDraft {
   Map<String, dynamic>? ruleToggleHistory;
   String sceneBreakStyle = 'keep';
   String noteStyle = 'off';
-  // 章首段落样式（V49，LAY-119）。
+  // 章首段落样式。
   String firstParagraphStyle = 'normal';
-  // 生僻字注音（V73，LAY-129）：旧书缺少字段时不标。
+  // 生僻字注音：旧书缺少字段时不标。
   String rareCharRuby = 'off';
   String rareCharScope = 'outside';
-  // 场景样式（V81，LAY-135）：旧书缺少字段时聊天记录不识别、书信原样。
+  // 场景样式：旧书缺少字段时聊天记录不识别、书信原样。
   String chatBlockStyle = 'off';
   String letterBlockStyle = 'plain';
   String insetFont = 'kai';
-  // 场景识别（V82，LAY-137）：旧书缺少字段时不识别。
+  // 场景识别：旧书缺少字段时不识别。
   String insetDetect = 'off';
-  // 本书改过的场景样式参数（V82，LAY-136）：场景编号 → 参数。
+  // 本书改过的场景样式参数：场景编号 → 参数。
   Map<String, dynamic>? insetStyles;
-  // 统一章首图（V54，LAY-124）。
+  // 统一章首图。
   String? chapterHeadImage;
-  // 章节样式包（V74，LAY-130）：与章首图一样属于本书，不进草稿。
+  // 章节样式包：与章首图一样属于本书，不进草稿。
   Map<String, dynamic>? chapterStyle;
   String chapterHeadScope = 'chapter';
   String chapterHeadWidth = 'half';
-  // 系统提示与诗词（V50，LAY-121/122）。
+  // 系统提示与诗词。
   String systemBlockStyle = 'box';
-  // 系统提示分类样式参数（V77）：旧书为空。
+  // 系统提示分类样式参数：旧书为空。
   Map<String, dynamic>? systemStyles;
   String verseBlockStyle = 'center';
   List<Map<String, dynamic>> blockAnnotations = [];
@@ -167,14 +167,14 @@ class BookDraft {
   bool chapterNavigation = false;
   String? coverPath;
 
-  /// 新书默认“完整显示”：EPUB 封面页放下整张封面，不裁切（V16 后用户决定，OUT-075）。
+  /// 新书默认“完整显示”：EPUB 封面页放下整张封面，不裁切（后用户决定）。
   String coverFit = 'contain';
   Map<String, dynamic>? coverCrop;
   Map<String, dynamic>? coverDesign;
   String fontFamily = 'Microsoft YaHei';
   Map<String, dynamic>? fontResource;
 
-  /// 保持原格式时对原书样式的改动（G-112）；没改时为空。
+  /// 保持原格式时对原书样式的改动；没改时为空。
   Map<String, dynamic>? originalStyle;
   Map<String, dynamic>? imageOptions;
   Map<String, dynamic>? outputOptions;
@@ -297,10 +297,10 @@ class PrototypeState extends ChangeNotifier {
   /// Task progress is persisted by output history, independently of book edits.
   bool taskNotification = false;
 
-  /// 书籍信息、封面、插图、排版等制作设置与其历史（V20 拆到 state/production_store.dart）。
+  /// 书籍信息、封面、插图、排版等制作设置与其历史（拆到 state/production_store.dart）。
   late final ProductionStore production = ProductionStore(this);
 
-  /// 转换任务与输出记录（V20 拆到 state/output_store.dart）。
+  /// 转换任务与输出记录（拆到 state/output_store.dart）。
   late final OutputStore outputs = createOutputs();
 
   /// 测试可以覆盖它来替换保存行为。
@@ -323,7 +323,7 @@ class PrototypeState extends ChangeNotifier {
     'favorite_folders': <dynamic>[],
   };
 
-  /// 书库中的书、勾选与收藏文件夹（V20 拆到 state/shelf_store.dart）。
+  /// 书库中的书、勾选与收藏文件夹（拆到 state/shelf_store.dart）。
   late final ShelfStore shelf = ShelfStore(this);
   String? globalSettingsToken;
   String globalSettingsStatus = '';
@@ -549,7 +549,7 @@ class PrototypeState extends ChangeNotifier {
         encoding: chosenEncodings[path],
       );
 
-  /// 这些文件按选定的编码读（G-114）。
+  /// 这些文件按选定的编码读。
   final chosenEncodings = <String, String>{};
 
   /// 解不开、等用户选编码的文件。
@@ -611,7 +611,7 @@ class PrototypeState extends ChangeNotifier {
     }, bookIds: {id});
   }
 
-  /// 从原书补读行内样式（G-113）：只读不写，保存走排版的预览与应用。
+  /// 从原书补读行内样式：只读不写，保存走排版的预览与应用。
   Future<Map<String, dynamic>> rereadSourceMarks(String id) async {
     final source = shelf.books.firstWhere((b) => b.id == id).source;
     final origin = source?.originPath;
@@ -623,7 +623,7 @@ class PrototypeState extends ChangeNotifier {
 
   bool _disposed = false, _cancelImport = false;
 
-  /// 预先解析的书稿（V38，LIB-115）：导入多本时几本同时读取与识别，写入书库仍按顺序逐本进行。
+  /// 预先解析的书稿：导入多本时几本同时读取与识别，写入书库仍按顺序逐本进行。
   final Map<String, Future<ImportedTxt>> _prefetched = {};
 
   /// 开始预先解析 [path]；只读取与识别书稿，不改书库。导入取消时随之取消。
@@ -647,7 +647,7 @@ class PrototypeState extends ChangeNotifier {
   String importStatus = '';
   bool importing = false;
 
-  /// 最近一次导入遇到书库里已有的书、来源内容已变化（草稿保留，V111）。
+  /// 最近一次导入遇到书库里已有的书、来源内容已变化（草稿保留）。
   bool importSourceChanged = false;
   bool reducedMotion = false;
 
@@ -704,10 +704,10 @@ class PrototypeState extends ChangeNotifier {
 
   final metadata = <String, (String, String)>{};
 
-  /// 文本清理（V20 拆到 state/cleanup_store.dart）。
+  /// 文本清理（拆到 state/cleanup_store.dart）。
   late final CleanupStore cleanup = CleanupStore(this);
 
-  /// 章节结构、人工编辑与有效书稿的章节修改历史（V20 拆到 state/manuscript_store.dart）。
+  /// 章节结构、人工编辑与有效书稿的章节修改历史（拆到 state/manuscript_store.dart）。
   late final ManuscriptStore manuscript = ManuscriptStore(this);
   BookDraft get draft =>
       production.drafts.putIfAbsent(currentId, () => BookDraft(current));
@@ -736,7 +736,7 @@ class PrototypeState extends ChangeNotifier {
 
   String displayTitle(SampleBook book) => metadata[book.id]?.$1 ?? book.title;
 
-  /// 实际填写的作者；没有填写时为空字符串（成品、文件名和书库都用它，V15）。
+  /// 实际填写的作者；没有填写时为空字符串（成品、文件名和书库都用它）。
   String authorOf(SampleBook book) =>
       (metadata[book.id]?.$2 ?? book.author).trim();
 
@@ -751,7 +751,7 @@ class PrototypeState extends ChangeNotifier {
   ]);
 
   // 内容版本不包含当前导航的书；导入/换书不会改变其他书的内容。
-  // 直接嵌入制作设置的组成部分，不嵌入已编码的 guardFor 字符串（V117，免去二次转义）。
+  // 直接嵌入制作设置的组成部分，不嵌入已编码的 guardFor 字符串（免去二次转义）。
   String publicationContext(String bookId) => jsonEncode([
     production.guardInputs(bookId),
     manuscript.structures[bookId],
@@ -784,7 +784,7 @@ class PrototypeState extends ChangeNotifier {
         'manual': {'kind': 'manual_batch', 'actions': actions},
       if (cleanup.drafts[bookId] != null) 'cleanup': cleanup.drafts[bookId],
       'post_edits': manuscript.effectiveSelection(bookId),
-      // V109：设置里关掉“自动转换 Kindle 不支持的图片”时，封面与插图保留原图。
+      // 设置里关掉“自动转换 Kindle 不支持的图片”时，封面与插图保留原图。
       if (globalConfiguration['convert_kindle_images'] == false)
         'keep_original_images': true,
     };
@@ -792,7 +792,7 @@ class PrototypeState extends ChangeNotifier {
 
   List<Map<String, dynamic>> folderRules = [];
 
-  /// 书库收藏夹（V84，LIB-118）：随项目保存；成员为书 id。
+  /// 书库收藏夹：随项目保存；成员为书 id。
   List<Map<String, dynamic>> collections = [];
   bool projectFolderRulesEnabled = false;
   List<Map<String, dynamic>> get effectiveFolderRules => [
@@ -933,8 +933,8 @@ class PrototypeState extends ChangeNotifier {
       final importedMetadata = (importedResources?['metadata'] as Map?)
           ?.cast<String, dynamic>();
       final id = originalPath.toLowerCase();
-      // 来源里没有书名、作者时，先看 TXT 开头有没有“书名 / 作者：某某”（V107，书源下载的格式），
-      // 再从文件名里取（V72，LIB-116）。
+      // 来源里没有书名、作者时，先看 TXT 开头有没有“书名 / 作者：某某”（书源下载的格式），
+      // 再从文件名里取。
       final options = FileNameOptions.fromConfiguration(globalConfiguration);
       final named =
           (options.mode == 'off' ? null : _txtHeader(originalPath)) ??

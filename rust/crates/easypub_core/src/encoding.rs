@@ -1,4 +1,4 @@
-//! Explicit source decoding for the R1 compatibility gate.
+//! Explicit source decoding for the compatibility gate.
 //!
 //! This module deliberately separates detection from decoding.  Detection is
 //! only a policy choice; every decoder is strict and never replaces malformed

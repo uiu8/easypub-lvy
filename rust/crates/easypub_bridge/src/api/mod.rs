@@ -1,4 +1,4 @@
-//! The only Rust-to-Dart application boundary for the R1 experiment.
+//! The only Rust-to-Dart application boundary for the experiment.
 use easypub_app::sessions::ImportService;
 pub use easypub_core::ApiError;
 use easypub_core::source::SourceCursor;
@@ -370,7 +370,7 @@ pub fn import_epub_resources(
     easypub_app::epub_import::extract_resources(&source_path, &resource_dir, keep_marks)
 }
 
-/// 选编码窗口的数据：每种编码解不解得开、前 30 行（G-114）。
+/// 选编码窗口的数据：每种编码解不解得开、前 30 行。
 pub fn probe_text_encoding(path: String) -> Result<String, ApiError> {
     easypub_app::text_encoding::probe(&path)
 }
@@ -590,7 +590,7 @@ pub fn inspect_legacy_settings_text(path: String) -> Result<String, ApiError> {
     })
 }
 
-/// V104 存储位置与受控迁移接口。
+/// 存储位置与受控迁移接口。
 pub fn storage_text(request_json: String) -> String {
     easypub_app::storage::request(request_json)
 }
@@ -723,12 +723,12 @@ pub fn inspect_font(path: String, face_index: u32, sample: String) -> Result<Fon
     })
 }
 
-/// 把文件移到 Windows 回收站（V134）：返回实际移走的路径，不存在的跳过。
+/// 把文件移到 Windows 回收站：返回实际移走的路径，不存在的跳过。
 pub fn recycle_files(paths: Vec<String>) -> Result<Vec<String>, ApiError> {
     easypub_app::recycle::to_recycle_bin(&paths)
 }
 
-/// 把无 DRM 的 AZW3 / MOBI 转成新的 EPUB（V131），之后按 EPUB 导入。
+/// 把无 DRM 的 AZW3 / MOBI 转成新的 EPUB，之后按 EPUB 导入。
 pub fn import_kindle_epub(source_path: String, output_path: String) -> Result<(), ApiError> {
     easypub_app::kindle_import::to_epub(&source_path, &output_path).map(|_| ())
 }

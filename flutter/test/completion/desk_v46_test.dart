@@ -35,7 +35,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
   return Map<String, String>.from(jsonDecode(result.stdout as String) as Map);
 }
 
-/// V46：场景分隔（LAY-118）与导航地标（OUT-084）。
+/// 场景分隔与导航地标。
 void main() {
   setUpAll(
     () async => RustLib.init(

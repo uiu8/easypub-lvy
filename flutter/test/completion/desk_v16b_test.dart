@@ -15,8 +15,8 @@ import 'package:easypub_desktop/desk/app/rewrite_app.dart';
 
 class _NoPicker extends Fake implements BookFilePicker {}
 
-/// V16b：EPUB 封面页按原图比例显示（OUT-074）；设置分区（SET-062–064）；
-/// 书稿概览（LIB-111、LIB-112）。真实应用、真实 Rust、真实转换。
+/// EPUB 封面页按原图比例显示；设置分区；
+/// 书稿概览。真实应用、真实 Rust、真实转换。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -72,7 +72,7 @@ void main() {
           .readAsStringSync();
       // 生成封面是 1200 × 1600。
       expect(cover, contains('viewBox="0 0 1200 1600"'));
-      // 新书默认“完整显示”（OUT-075）。
+      // 新书默认“完整显示”。
       expect(cover, contains('preserveAspectRatio="xMidYMid meet"'));
       expect(cover, isNot(contains('<img')));
       final opf = files
@@ -151,7 +151,7 @@ void main() {
     await settle();
     final router = GoRouter.of(t.element(find.byType(Navigator).first));
 
-    // 设置：7 个分区，名称与页面标题一致（SET-062）。
+    // 设置：7 个分区，名称与页面标题一致。
     router.go('/settings');
     await settle();
     for (final name in [
@@ -178,17 +178,17 @@ void main() {
     await settle();
     expect(find.text('迁移旧版配置'), findsOneWidget);
     expect(find.widgetWithText(TextField, '旧设置文件路径'), findsOneWidget);
-    // 成品与输出：KFX 提示只在 KFX 选项下（SET-063）。
+    // 成品与输出：KFX 提示只在 KFX 选项下。
     await t.tap(find.text('成品与输出').first);
     await settle();
     expect(find.text('选择 Bokai'), findsNothing);
     expect(find.textContaining('需要 Bokai'), findsOneWidget);
-    // 保存状态只在左下角一处（SET-064）。
+    // 保存状态只在左下角一处。
     expect(find.byKey(const ValueKey('settings-save-status')), findsOneWidget);
     expect(find.text('设置更改后自动保存'), findsNothing);
     expect(find.text('修改立即保存'), findsNothing);
 
-    // 概览：检查摘要并入制作进度；状态靠右；入口改为链接（LIB-111、LIB-112）。
+    // 概览：检查摘要并入制作进度；状态靠右；入口改为链接。
     router.go('/books/${Uri.encodeComponent(id)}/overview');
     await settle();
     expect(find.text('检查摘要'), findsNothing);
@@ -207,10 +207,7 @@ void main() {
     final detail = t.getRect(find.text('引用检查通过'));
     // 状态占行的右侧并靠右排，紧挨着箭头。
     expect(detail.right, greaterThan(label.right + 300));
-    expect(
-      t.widget<Text>(find.text('引用检查通过')).textAlign,
-      TextAlign.right,
-    );
+    expect(t.widget<Text>(find.text('引用检查通过')).textAlign, TextAlign.right);
     expect(t.takeException(), isNull);
     await t.pumpWidget(const SizedBox());
     await settle();

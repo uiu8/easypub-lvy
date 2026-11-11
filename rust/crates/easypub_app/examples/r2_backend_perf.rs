@@ -1,4 +1,4 @@
-//! R2 开发探针：真实导入、取消，以及有效稿编辑/撤销/重做；只读取传入样本。
+//! 开发探针：真实导入、取消，以及有效稿编辑/撤销/重做；只读取传入样本。
 use easypub_app::{effective_draft, sessions::ImportService};
 use easypub_core::source::RULE_ID;
 use serde_json::{Value, json};

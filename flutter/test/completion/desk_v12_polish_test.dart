@@ -22,7 +22,7 @@ import 'package:easypub_desktop/desk/rules/rules_sheet.dart';
 
 class _NoPicker extends Fake implements BookFilePicker {}
 
-/// V12：多选、检查页分组与进度、清理结果显示、非标题词库、Kindle 校准。
+/// 多选、检查页分组与进度、清理结果显示、非标题词库、Kindle 校准。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -335,7 +335,7 @@ void main() {
     test('KPW5 真机规则、推算档位与真机校准', () {
       const kpw5 = PreviewDeviceChoice(id: 'kpw5');
       final device = kindleDevices.firstWhere((d) => d.id == 'kpw5');
-      // V118：KPW5 按屏幕像素排版，视口等于分辨率。
+      // KPW5 按屏幕像素排版，视口等于分辨率。
       expect((device.viewportWidth, device.viewportHeight), (1236, 1648));
       // 每行字数 = 版心宽 ÷ 取整后的字宽（真机截图实测，docs/research/2026-10-29_KPW5真机实测.md）。
       int perLine(ReaderMetrics m) =>
@@ -412,7 +412,7 @@ void main() {
       await t.pumpAndSettle();
       // 数据来源保留在模型中，不再作为界面状态标签。
       expect(find.text('按 KPW6 固件 5.20.1 · 未经真机核对'), findsNothing);
-      // V13：阅读器设置收进弹出面板，先打开面板再校准。
+      // 阅读器设置收进弹出面板，先打开面板再校准。
       await t.tap(settings);
       await t.pumpAndSettle();
       await t.tap(find.byKey(const ValueKey('layout-reader-calibrate')));

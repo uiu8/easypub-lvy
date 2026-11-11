@@ -152,7 +152,7 @@ void main() {
         }))!;
       }
 
-      // 留白取画布色 Desk.light.canvas（V1 纸与墨：#F6F4EF）。
+      // 留白取画布色 Desk.light.canvas（纸与墨：#F6F4EF）。
       expect(await topPixel(), [246, 244, 239]);
       Future<void> fit(String text) async {
         await t.tap(find.byType(DeskChoice<String>));

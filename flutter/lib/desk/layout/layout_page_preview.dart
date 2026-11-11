@@ -1,4 +1,4 @@
-// 排版页的阅读预览、阅读器设置、真机预览与按真机校准（R5-13 拆出，逻辑不变）。
+// 排版页的阅读预览、阅读器设置、真机预览与按真机校准（拆出，逻辑不变）。
 part of 'layout_page.dart';
 
 extension _LayoutPreviewSection on _LayoutPageState {
@@ -28,7 +28,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
     }
   }
 
-  /// 按真机校准（LAY-096）：输入在真机当前设置下数到的每行字数与每页正文行数。
+  /// 按真机校准：输入在真机当前设置下数到的每行字数与每页正文行数。
   Future<void> calibrate() async {
     final saved = device.calibrations[device.calibrationKey];
     final result = await showDialog<(int, int)?>(
@@ -121,7 +121,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
     }
   }
 
-  /// 读本章的正文插图（R5-01）：按插图在成品里的行号对到正文行，读不出位置或图片时
+  /// 读本章的正文插图：按插图在成品里的行号对到正文行，读不出位置或图片时
   /// 照样返回（图片画成虚线框），读不出插图列表时返回空表，不影响正文预览。
   Future<(Map<int, List<PreviewImage>>, PreviewImage?)> loadBodyImages(
     ChapterNode node,
@@ -265,12 +265,12 @@ extension _LayoutPreviewSection on _LayoutPageState {
     'pressMarks': k.pressMarks,
   };
 
-  /// 真机预览送来的样式包设置（V76）：返回去掉这两个键后的排版值，以及对应的样式包（null 为停用）。
+  /// 真机预览送来的样式包设置：返回去掉这两个键后的排版值，以及对应的样式包（null 为停用）。
   (Map<String, Object?>, Map<String, dynamic>?) _kindleStyle(
     Map<String, Object?> draft,
   ) {
     final rest = Map<String, Object?>.from(draft);
-    // 系统提示预设（V77）：换成对应参数；custom 表示不改。
+    // 系统提示预设：换成对应参数；custom 表示不改。
     final note = rest.remove('system_note_preset');
     final panel = rest.remove('system_panel_preset');
     if (blockStylePresets.containsKey(note) ||
@@ -329,7 +329,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
     if (draft.keys.any((key) => !layoutFields.contains(key))) {
       return '只能写回排版字段。';
     }
-    // 样式包（V76）：与排版页“章节样式包”同一条应用路径，进变更记录。
+    // 样式包：与排版页“章节样式包”同一条应用路径，进变更记录。
     if (styled && chapterStyle != null) {
       final before = chapterStyle;
       await setChapterStyle(style, style == null ? '已停用样式包' : '已更新样式包');
@@ -432,10 +432,10 @@ extension _LayoutPreviewSection on _LayoutPageState {
 
   Widget reading() {
     final d = context.desk;
-    // 书页模拟 Kindle 白纸，不随软件主题变（V79）：纸色与字色固定取宣纸令牌。
+    // 书页模拟 Kindle 白纸，不随软件主题变：纸色与字色固定取宣纸令牌。
     const page = Desk.light;
     if (loading) return const Center(child: CircularProgressIndicator());
-    // 字号与行高按机型和阅读器设置换算（LAY-096）：书内字号以 110% 为基准缩放。
+    // 字号与行高按机型和阅读器设置换算：书内字号以 110% 为基准缩放。
     final lengths = LayoutUnits(values, device);
     final metrics = lengths.metrics;
     final size = lengths.modern
@@ -450,7 +450,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 预览设置收成一行（LAY-098）：章节、机型、阅读器设置（弹出面板）、实际生成预览。
+          // 预览设置收成一行：章节、机型、阅读器设置（弹出面板）、实际生成预览。
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -494,7 +494,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
                     key: const ValueKey('layout-preview-device'),
                     value: device.id,
                     isExpanded: true,
-                    // 选择框只写短名，菜单与悬停提示写全名（LAY-102）。
+                    // 选择框只写短名，菜单与悬停提示写全名。
                     selectedLabel: (id) => Text(
                       kindleShortName(
                         kindleDevices
@@ -551,7 +551,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
                       ),
               if (session is LayoutPublicationPreviewSession)
                 iconOnlyPreview
-                    // 预览区较窄时只留图标，避免设置行折成两行（LAY-100、LAY-102）。
+                    // 预览区较窄时只留图标，避免设置行折成两行。
                     ? IconButton(
                         key: const ValueKey('layout-real-preview-icon'),
                         tooltip: '实际生成预览：用浏览器查看实际生成的 XHTML / CSS',
@@ -637,7 +637,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
                         k.viewportWidth.toDouble(),
                         k.viewportHeight.toDouble(),
                       );
-                      // 章节标题按所选样式画（V36，LAY-117）。
+                      // 章节标题按所选样式画。
                       final look =
                           headingLooks[headingStyle] ??
                           headingLooks['classic']!;
@@ -654,7 +654,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
                         heading: look,
                         sceneBreak: sceneBreakStyle,
                         firstParagraph: firstParagraphStyle,
-                        // 资源页把某张插图设为“章首图”时，这一章用它代替统一章首图（R5-01）。
+                        // 资源页把某张插图设为“章首图”时，这一章用它代替统一章首图。
                         headImage:
                             chapterHeadOverride?.pixels ??
                             (chapterHeadScope == 'volume'
@@ -711,7 +711,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
                       ].join('|');
                       if (key != _pagesKey) {
                         _pagesKey = key;
-                        // 去掉空行时段落序号会变：插图按原来的正文行换算到段落序号（R5-01）。
+                        // 去掉空行时段落序号会变：插图按原来的正文行换算到段落序号。
                         final paragraphs = <String>[];
                         final images = <int, List<PreviewImage>>{
                           if (bodyImages[-1] != null) -1: bodyImages[-1]!,
@@ -744,10 +744,10 @@ extension _LayoutPreviewSection on _LayoutPageState {
                       final index = previewPage.clamp(0, _pages.length - 1);
                       return Column(
                         children: [
-                          // 按剩余空间等比放大（LAY-099）：SizedBox.expand 给出紧约束，
+                          // 按剩余空间等比放大：SizedBox.expand 给出紧约束，
                           // FittedBox 才会放大；原来的 Center 只给松约束，只会缩小。
                           Expanded(
-                            // 滚轮在预览上翻页（LAY-101）：向下下一页，向上上一页。
+                            // 滚轮在预览上翻页：向下下一页，向上上一页。
                             child: Listener(
                               key: const ValueKey('layout-preview-wheel'),
                               onPointerSignal: (event) {
@@ -843,7 +843,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
     );
   }
 
-  /// 阅读器设置弹出面板（LAY-096/098）：字号档位、页边距、行距、字体与按真机校准，
+  /// 阅读器设置弹出面板：字号档位、页边距、行距、字体与按真机校准，
   /// 收起时按钮上显示当前设置，不再占用预览上方的空间。
   Widget readerMenu(ReaderMetrics metrics) {
     final d = context.desk;
@@ -966,7 +966,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
         ),
       ],
       child: DeskButton(
-        // 预览区较窄时只写字号，完整设置在悬停提示里，预览设置保持一行（LAY-102）。
+        // 预览区较窄时只写字号，完整设置在悬停提示里，预览设置保持一行。
         narrowPreview ? '字号 ${device.level} …' : summary,
         key: const ValueKey('layout-reader-settings'),
         icon: Icons.tune_rounded,

@@ -418,7 +418,7 @@ extension _SourcePanes on _BookSourcePageState {
     ];
     final last = (check?['ms'] ?? ping?['ms']) as num?;
     final failed = check?['ok'] == false;
-    // 静态告警在“最近一次校验”里写成兼容提示，这里不再当成问题列出（V102 A）。
+    // 静态告警在“最近一次校验”里写成兼容提示，这里不再当成问题列出。
     final warnings = List<String>.from(s['staticWarnings'] as List? ?? []);
     final reasons = List<String>.from(s['reasons'] as List? ?? [])
         .where((r) => s['supported'] != true || !warnings.contains(r))

@@ -1,6 +1,6 @@
-// 识别与检查规则（V63 起，CH-278；V64 改版，CH-279/280；V66 接通开关，CH-282）：从检查页进入。
+// 识别与检查规则（改版，接通开关）：从检查页进入。
 // 按执行顺序分页签，每组作用只说明一次；筛选与跨页签搜索。每行为开关、名称与一行说明、本书命中数，
-// 展开看位置（点击跳到章节页）、细分项与“去设置”。开关改动先暂存，底部“预览影响…”调用 V65 的
+// 展开看位置（点击跳到章节页）、细分项与“去设置”。开关改动先暂存，底部“预览影响…”调用
 // previewToggles，确认后 applyToggles 一次写入（本书可在变更记录撤销；新书默认只影响以后导入的书）。
 import 'dart:async';
 
@@ -93,10 +93,10 @@ class RulesPage extends StatefulWidget {
   /// 打开原有设置页：cleanup、chapters、checks、layout。
   final void Function(String page) onOpenSettings;
 
-  /// 打开时定位的规则（可以是细分项）：切到所在页签、展开并滚动到它（CH-279）。
+  /// 打开时定位的规则（可以是细分项）：切到所在页签、展开并滚动到它。
   final String? focusRule;
 
-  /// 回到检查页（CH-279）。
+  /// 回到检查页。
   final VoidCallback? onBack;
   @override
   State<RulesPage> createState() => _RulesPageState();
@@ -303,12 +303,12 @@ class _RulesPageState extends State<RulesPage> {
       RuleStatisticsPhase.cancelling => ('正在取消…', Tone.neutral),
       RuleStatisticsPhase.cancelled => ('统计已取消', Tone.warn),
       RuleStatisticsPhase.stale => ('书稿或设置已变化，正在重新统计…', Tone.neutral),
-      // 后端给的是下一步代码，换成对照表里的说明（V66 修正：原来直接显示代码）。
+      // 后端给的是下一步代码，换成对照表里的说明（修正：原来直接显示代码）。
       RuleStatisticsPhase.failed => (
         '统计失败：${deskErrorReason(state.reason ?? '') ?? '请稍后重试'}',
         Tone.pen,
       ),
-      // R3-06：只写本书多少行、多少节；耗时与是否用了缓存放进悬停提示。
+      // 只写本书多少行、多少节；耗时与是否用了缓存放进悬停提示。
       RuleStatisticsPhase.completed when r != null => (
         '已统计本书 ${r.lineCount} 行、${r.chapterCount} 节',
         Tone.ok,
@@ -385,7 +385,7 @@ class _RulesPageState extends State<RulesPage> {
         s.enabled
             ? s.count == 0
                   ? Text(ruleCount(s), style: ui(12, c: d.ink3))
-                  // 有命中：计数胶囊（V105 视觉语言）。
+                  // 有命中：计数胶囊（视觉语言）。
                   : DeskPill(
                       Text(ruleCount(s), style: ui(12, w: 600, c: d.ink)),
                       color: d.surface,
@@ -1061,7 +1061,7 @@ class _RulesPageState extends State<RulesPage> {
   }
 }
 
-/// 规则开关外观（V64 只显示状态；V65 接统一后端后可拨动）。locked 表示始终启用。
+/// 规则开关外观（只显示状态；接统一后端后可拨动）。locked 表示始终启用。
 class RuleSwitch extends StatelessWidget {
   const RuleSwitch({
     super.key,

@@ -1,4 +1,4 @@
-// 章节结构、人工编辑、识别规则草稿、问题审阅与有效书稿的章节修改历史（V20 从 PrototypeState 拆出）。
+// 章节结构、人工编辑、识别规则草稿、问题审阅与有效书稿的章节修改历史（从 PrototypeState 拆出）。
 // 只通过 PrototypeState 的公开接口读写书库、清理与制作设置；行为与拆分前相同。
 import 'dart:convert';
 
@@ -49,7 +49,7 @@ class ManuscriptStore {
         : request;
   }
 
-  /// 当前章节修改基于检查点时，创建该检查点那一步保存的原始操作（CLEAN-105）；
+  /// 当前章节修改基于检查点时，创建该检查点那一步保存的原始操作；
   /// 清理预览带上它才能换算。没有检查点或找不到时为 null。
   Map<String, dynamic>? effectiveCheckpointRoot(String bookId) {
     final history = effectiveHistories[bookId];

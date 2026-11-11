@@ -1,6 +1,6 @@
-// 目录与当前书稿对应（CH-208–214）：对应表（本地章节 / 参考目录 / 对应情况）、搜索、
+// 目录与当前书稿对应：对应表（本地章节 / 参考目录 / 对应情况）、搜索、
 // 选中行的书稿片段与人工对应，进入组合预览。只读：人工对应只重算预览，不改书稿。
-// 逻辑沿用 V3 前的 CatalogAlignmentPanel；设计：design_review_v37/d2_catalog.dart（D2-K）。
+// 逻辑沿用早先的 CatalogAlignmentPanel。
 import 'package:flutter/material.dart';
 
 import '../../application/catalog_service.dart';
@@ -270,7 +270,7 @@ class _CatalogAlignmentPanelState extends State<CatalogAlignmentPanel> {
               if (row?.candidates.isNotEmpty == true) ...[
                 const SizedBox(height: 14),
                 const DeskLabel('选择参考章节'),
-                // R3-07：编辑台的选择框（原为 Material 下拉）。
+                // 编辑台的选择框（原为 Material 下拉）。
                 DeskChoice<String>(
                   key: ValueKey('${row!.line}:${row.chosenId}'),
                   initialValue: row.chosenId,

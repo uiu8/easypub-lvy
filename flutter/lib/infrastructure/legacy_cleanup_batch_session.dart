@@ -35,7 +35,7 @@ class LegacyCleanupBatchSession extends ChangeNotifier
   String _request = '', _planId = '';
   final _targets = <String, _TargetPreview>{};
 
-  /// 预览时检测到的章节修改换算结果（CLEAN-104），采用时核对一致。
+  /// 预览时检测到的章节修改换算结果，采用时核对一致。
   final _impacts = <String, CleanupImpact>{};
 
   String _context(String id) => jsonEncode([
@@ -44,7 +44,9 @@ class LegacyCleanupBatchSession extends ChangeNotifier
     backend.cleanup.histories[id],
   ]);
   bool get _idle =>
-      !backend.projectBusy && !backend.importing && !backend.cleanup.historyBusy;
+      !backend.projectBusy &&
+      !backend.importing &&
+      !backend.cleanup.historyBusy;
   bool _valid(int generation) =>
       !_disposed &&
       generation == _generation &&
@@ -92,7 +94,7 @@ class LegacyCleanupBatchSession extends ChangeNotifier
         final probe = LegacyCleanupSession(backend, id);
         try {
           final plan = await probe.preview(jsonEncode(row['next_request']));
-          // 逐本换算章节修改（CLEAN-104）：能换算的保留；无法换算的列出，由用户决定。
+          // 逐本换算章节修改：能换算的保留；无法换算的列出，由用户决定。
           impact = await probe.impact(plan);
           if (impact.checkpoint) {
             error = cleanupCheckpointMessage;
@@ -288,7 +290,8 @@ class LegacyCleanupBatchSession extends ChangeNotifier
         backend.cleanup.drafts.addAll(settings);
         for (final id in histories.keys) {
           final moved = rebased[id];
-          if (moved != null) backend.manuscript.effectiveHistories[id] = moved.history;
+          if (moved != null)
+            backend.manuscript.effectiveHistories[id] = moved.history;
           backend.cleanup.historyStatus[id] =
               '已采用批量清理规则，可逐书撤销；另存项目保留。'
               '${moved == null ? '' : '${moved.kept} 处章节修改已换算到清理后的文本${moved.skipped > 0 ? '，放弃 ${moved.skipped} 处' : ''}。'}';

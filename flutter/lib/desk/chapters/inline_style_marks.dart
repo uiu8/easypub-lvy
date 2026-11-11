@@ -1,5 +1,5 @@
-// 章节页文字样式（V106，LAY-152）：工具条“文字样式…”、样式对话框（可跨行选择）、
-// 排版视图里的样式显示与停用提示。数据与输出由 V105 的 InlineStyleSession 提供；
+// 章节页文字样式：工具条“文字样式…”、样式对话框（可跨行选择）、
+// 排版视图里的样式显示与停用提示。数据与输出由 InlineStyleSession 提供；
 // 所有写入先预览、再确认，与本书其他制作修改共用一条变更记录。跨行选择拆成逐行条目，一次写入、一次撤销。
 import 'dart:async';
 import 'dart:math';
@@ -954,7 +954,7 @@ class InlineStyleInvalidBanner extends StatelessWidget {
   }
 }
 
-/// 章节页只读显示的原书表格（G-113）。单元格不能在软件里改，只能整张删。
+/// 章节页只读显示的原书表格。单元格不能在软件里改，只能整张删。
 class SourceTableCard extends StatelessWidget {
   const SourceTableCard({
     super.key,

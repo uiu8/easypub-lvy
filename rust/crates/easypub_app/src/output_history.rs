@@ -127,7 +127,7 @@ pub fn inspect_package(directory: &Path, task_id: &str) -> Result<Value, ApiErro
             "byte_length":size, "sha256":expected}),
         );
     }
-    // TXT 输出（V131）：纯文字没有容器结构，核对回执哈希并确认是 UTF-8。
+    // TXT 输出：纯文字没有容器结构，核对回执哈希并确认是 UTF-8。
     if extension == "txt" {
         let unchanged = verify(directory, task_id)?;
         if unchanged["status"] != "matches" {

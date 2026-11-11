@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-/// 成品文件的大小与修改时间（TASK-025）：每个文件只读一次磁盘并缓存，读不到就不显示。
+/// 成品文件的大小与修改时间：每个文件只读一次磁盘并缓存，读不到就不显示。
 FileStat? probeOutputStat(String path, Map<String, FileStat?> cache) =>
     cache.putIfAbsent(path, () {
       try {
@@ -12,7 +12,7 @@ FileStat? probeOutputStat(String path, Map<String, FileStat?> cache) =>
       }
     });
 
-/// 统一读取本机图片/资源字节（P0-02），避免页面层直接操作 dart:io File。
+/// 统一读取本机图片/资源字节，避免页面层直接操作 dart:io File。
 Future<Uint8List> readLocalFileBytes(String path) => File(path).readAsBytes();
 
 abstract class BookSourceDesktop {

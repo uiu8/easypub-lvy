@@ -1,7 +1,7 @@
-// 参考目录（CH-173–179）：目录身份核对（书名、作者、来源、完整性、条目）→ 与当前书稿对应 → 组合预览。
+// 参考目录：目录身份核对（书名、作者、来源、完整性、条目）→ 与当前书稿对应 → 组合预览。
 // 获取与保存都不改正文；目录修复只在组合预览中核对后整批应用，可撤销。
-// 一键流程（CH-246，quick）：取得目录 → 身份核对弹窗 → 对齐 → 有推荐修改时打开组合预览；每步可取消。
-// 逻辑沿用 V3 前的 CatalogPage；设计：design_review_v37/d2_catalog.dart（D2-I）。
+// 一键流程（quick）：取得目录 → 身份核对弹窗 → 对齐 → 有推荐修改时打开组合预览；每步可取消。
+// 逻辑沿用早先的 CatalogPage。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -36,7 +36,7 @@ class CatalogPage extends StatefulWidget {
   final String returnLabel;
   final Future<String?> Function() pickFile;
 
-  /// 选择“阅读”书源 JSON（V45）；不提供时书源页签不能导入。
+  /// 选择“阅读”书源 JSON；不提供时书源页签不能导入。
   final Future<String?> Function()? pickBookSourceFile;
 
   /// 从“参考目录修复…”进入：打开页面后自动走一键流程，任一步取消都停在本页，
@@ -236,7 +236,7 @@ class _CatalogPageState extends State<CatalogPage> {
         children: [
           Text('参考目录', style: ui(16, w: 650, c: d.ink)),
           const Spacer(),
-          // R3-05：还没有目录时只在页面中间放“获取参考目录”，标题行不再重复。
+          // 还没有目录时只在页面中间放“获取参考目录”，标题行不再重复。
           if (snapshot != null) ...[
             DeskButton(
               '更换来源',
@@ -481,7 +481,7 @@ class _CatalogPageState extends State<CatalogPage> {
   Widget identityView(BoxConstraints c) {
     final d = context.desk;
     if (snapshot == null) {
-      // R3-05：说明参考目录是什么、可以从哪里来，以及它不会改原稿。
+      // 说明参考目录是什么、可以从哪里来，以及它不会改原稿。
       Widget source(IconData icon, String title, String detail) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Row(

@@ -16,7 +16,7 @@ class CleanupBatchItem {
   final int changes, candidates;
   final List<String> samples;
 
-  /// 这本书能换算到清理后文本并保留的章节修改数（CLEAN-104）。
+  /// 这本书能换算到清理后文本并保留的章节修改数。
   final int editsKept;
 
   /// 无法换算的章节修改；不为空时须由用户决定放弃这些修改，或不清理这本书。

@@ -37,7 +37,7 @@ String _sample() {
   return b.toString();
 }
 
-/// V120：章节页排版视图的“样式片段”侧栏（LAY-166）：逐处列出、筛选、点一处或上下一处跳过去、全书按章汇总。
+/// 章节页排版视图的“样式片段”侧栏：逐处列出、筛选、点一处或上下一处跳过去、全书按章汇总。
 void main() {
   final shots = Platform.environment['EASYPUB_SHOT_DIR'];
   setUpAll(() async {
@@ -251,7 +251,7 @@ void main() {
     await settle();
     await shot('jump');
 
-    // 筛选（V121）：点“诗词”只看诗词，再点一次恢复全部。
+    // 筛选：点“诗词”只看诗词，再点一次恢复全部。
     await t.tap(find.byKey(const ValueKey(('style-segments-group', 'verse'))));
     await t.pump();
     expect(segment('system', 3), findsNothing);
@@ -260,7 +260,7 @@ void main() {
     await t.pump();
     expect(segment('system', 3), findsOneWidget);
 
-    // 识别开关（V121）：关掉诗词，写进本书设置并重新识别，诗词片段与居中消失；再打开恢复。
+    // 识别开关：关掉诗词，写进本书设置并重新识别，诗词片段与居中消失；再打开恢复。
     await t.tap(find.byKey(const ValueKey(('recognition-switch', 'verse'))));
     await until(() => segment('verse', 15).evaluate().isEmpty, '诗词关掉');
     expect(state.production.settings(id)['verse_block_style'], 'off');
@@ -274,7 +274,7 @@ void main() {
     }
     await until(() => segment('verse', 15).evaluate().isNotEmpty, '诗词打开');
     expect(state.production.settings(id)['verse_block_style'], 'center');
-    // 改设置会改书稿版本（V121）：章节页自动重读本页，往下滚续读正文不报“书稿已变化”。
+    // 改设置会改书稿版本：章节页自动重读本页，往下滚续读正文不报“书稿已变化”。
     await t.fling(
       find.byType(CustomScrollView).first,
       const Offset(0, -4000),
@@ -349,13 +349,13 @@ void main() {
       await library.savePatch({'check_after_import': false});
       final source = File('$root/加框.txt')
         ..writeAsStringSync(
-          // 要像系统提示：V121 起【】里的台词不算系统提示（LAY-169）。
+          // 要像系统提示：后来【】里的台词不算系统提示。
           '第一章 茶馆\n“不急着添料，来，先跟叔唠一会儿。”\n【叮！检测到宿主】\n'
           '【任务：在三日内拜入青云门】\n【奖励：灵石一百、悟性丹一枚】\n'
           '“……”\n好家伙，这是拎着粪叉进马厩。\n',
         );
       expect((await library.importFiles([source.path])).single.succeeded, true);
-      // 老书的“加框”方式（V77 前的默认）。
+      // 老书的“加框”方式（早先的默认）。
       expect(
         await state.production.confirm(
           await state.production.previewChanges({
@@ -457,7 +457,7 @@ void main() {
     await t.pump();
     expect(find.byKey(const ValueKey('block-mark-confirm')), findsNothing);
 
-    // 标为“不识别”后还能再改（V121）：点这一行选中整条标注，可以改类型，也可以恢复自动识别。
+    // 标为“不识别”后还能再改：点这一行选中整条标注，可以改类型，也可以恢复自动识别。
     Future<void> apply(Finder button) async {
       await t.ensureVisible(button);
       await t.pump();

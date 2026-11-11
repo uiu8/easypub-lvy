@@ -33,10 +33,10 @@ pub struct Request {
     plan_id: Option<String>,
     #[serde(default)]
     confirmed: bool,
-    /// 保持原格式（V27，OUT-079）：原 EPUB 的路径；给出时输出修补后的原 EPUB，不用软件排版。
+    /// 保持原格式：原 EPUB 的路径；给出时输出修补后的原 EPUB，不用软件排版。
     #[serde(default)]
     original_epub: Option<String>,
-    /// 输出格式（V131，OUT-089）：省略或 "epub" 为 EPUB；"txt" 为 TXT——先按同一出版快照生成 EPUB，
+    /// 输出格式：省略或 "epub" 为 EPUB；"txt" 为 TXT——先按同一出版快照生成 EPUB，
     /// 再按导入 EPUB 的同一套规则取出正文（章节标题、清理规则与 EPUB 成品一致）。
     #[serde(default)]
     format: Option<String>,
@@ -290,7 +290,7 @@ fn render_preview(service: &ImportService, request: &str) -> Result<String, ApiE
     };
     let source = service.source(&req.publication.source_id, req.publication.revision)?;
     let prepared = publication_resources::prepare(&source, req.publication)?;
-    // 只打包不压缩：随后马上解开（V83）。
+    // 只打包不压缩：随后马上解开。
     let bytes =
         crate::epub::write_unpacked_preview(&prepared, Cursor::new(Vec::new()))?.into_inner();
     let root = crate::storage::retain_cache("content_preview")
@@ -402,7 +402,7 @@ mod tests {
     use std::fs;
     #[test]
     fn txt_output_uses_the_same_publication_and_writes_utf8_text() {
-        // V131（OUT-089）：TXT 输出先按同一出版快照生成 EPUB，再取出正文；只写 .txt，不改原稿。
+        // TXT 输出先按同一出版快照生成 EPUB，再取出正文；只写 .txt，不改原稿。
         let dir = std::env::temp_dir().join(format!(
             "easypub-txt-export-{}-{}",
             std::process::id(),

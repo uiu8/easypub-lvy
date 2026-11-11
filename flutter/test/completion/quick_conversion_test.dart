@@ -229,7 +229,7 @@ void main() {
               'output_directory': '',
               'generate_cover': true,
               'check_before_conversion': false,
-              // V109：概览默认从左栏收起；后面要点左栏的“概览”。
+              // 概览默认从左栏收起；后面要点左栏的“概览”。
               'nav_hidden_pages': <String>[],
             })
             .then(
@@ -385,7 +385,7 @@ void main() {
       Navigator.of(t.element(find.byType(Dialog).first)).pop();
       await t.pumpAndSettle();
       expect(find.text('返回转换并重新检查'), findsOneWidget);
-      // V3：参考目录页的返回入口由“自助修复”更名为“返回章节编辑”（CH-173）。
+      // 参考目录页的返回入口由“自助修复”更名为“返回章节编辑”。
       await t.tap(find.text('返回章节编辑'));
       await until(
         () => router.routeInformationProvider.value.uri.path.endsWith(

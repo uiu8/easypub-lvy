@@ -15,7 +15,7 @@ const _sample =
     '第一章 开始\n正文一。\n【叮！检测到任务】\n正文二。\n【山门试炼】\n【任务：守住山门三日】\n【奖励：灵石一百】\n'
     '床前明月光，疑是地上霜。\n举头望明月，低头思故乡。\n正文三。\n正文四。\n第二章 下山\n天亮了。\n';
 
-/// V104：章节页排版视图（LAY-148–151）。
+/// 章节页排版视图。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -164,7 +164,7 @@ void main() {
     expect(bars(), findsNothing);
     expect(view.layoutView, false);
 
-    // V134：记住的是排版视图，但从问题跳过来（带定位行）一律打开原文视图，记住的视图不改。
+    // 记住的是排版视图，但从问题跳过来（带定位行）一律打开原文视图，记住的视图不改。
     view.layoutView = true;
     await t.pumpWidget(const SizedBox());
     await t.pumpWidget(

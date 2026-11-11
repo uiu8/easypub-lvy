@@ -1,4 +1,4 @@
-// V2d 问题位置（CH-234–240）：真实 Rust 检查结果驱动目录刻度、计数与正文批注。
+// 问题位置：真实 Rust 检查结果驱动目录刻度、计数与正文批注。
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -102,21 +102,21 @@ void main() {
       await settle();
       expect(t.takeException(), isNull);
 
-      // CH-235/236：刻度条与底栏计数。
+      // 刻度条与底栏计数。
       expect(find.byKey(const ValueKey('chapter-issue-spine')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('chapter-issue-counts')),
         findsOneWidget,
       );
 
-      // CH-237：所选章节的批注。
+      // 所选章节的批注。
       final notes = keyPrefix('chapter-issue-note-');
       expect(notes, findsWidgets);
       final noteId = (notes.evaluate().first.widget.key as ValueKey<String>)
           .value
           .substring('chapter-issue-note-'.length);
 
-      // CH-240：收起后消失，展开后恢复，开关记在视图状态里。
+      // 收起后消失，展开后恢复，开关记在视图状态里。
       await t.tap(find.byKey(const ValueKey('chapter-issue-notes-toggle')));
       await t.pump();
       expect(notes, findsNothing);
@@ -125,7 +125,7 @@ void main() {
       await t.pump();
       expect(notes, findsWidgets);
 
-      // CH-239：有修复候选时才出现“修复方案”，并转交逐项修复。
+      // 有修复候选时才出现“修复方案”，并转交逐项修复。
       final repair = keyPrefix('chapter-issue-repair-');
       if (repair.evaluate().isNotEmpty) {
         await t.tap(repair.first);
@@ -136,7 +136,7 @@ void main() {
         await settle();
       }
 
-      // CH-235：点刻度选中对应章节。
+      // 点刻度选中对应章节。
       final before = view.nodeId;
       final spine = t.getRect(
         find.byKey(const ValueKey('chapter-issue-spine')),
@@ -153,7 +153,7 @@ void main() {
       expect(map.marks.containsKey(view.nodeId), true);
       expect(notes, findsWidgets);
 
-      // CH-238：“在问题中核对”切到问题页签并选中该问题。
+      // “在问题中核对”切到问题页签并选中该问题。
       final review = keyPrefix('chapter-issue-review-');
       final reviewId = (review.evaluate().first.widget.key as ValueKey<String>)
           .value

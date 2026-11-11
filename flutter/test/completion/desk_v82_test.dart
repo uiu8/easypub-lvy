@@ -69,7 +69,7 @@ Future<void> until(WidgetTester t, bool Function() ready) async {
   fail('界面未就绪');
 }
 
-/// V82：场景样式编辑器与分享（LAY-136）。
+/// 场景样式编辑器与分享。
 void main() {
   setUpAll(
     () async => RustLib.init(

@@ -1,4 +1,4 @@
-// 编辑台基础小件：按键提示、状态点、分段选择。设计来源 design_review_v37/widgets.dart。
+// 编辑台基础小件：按键提示、状态点、分段选择。
 import 'package:flutter/material.dart';
 
 import 'tokens.dart';
@@ -56,7 +56,7 @@ class DeskSegmented<T> extends StatelessWidget {
   final Map<T, String> options;
   final ValueChanged<T>? onChanged;
 
-  /// 段名后的小字（R3-03，例如问题数）；“!”表示读取失败，用朱色。
+  /// 段名后的小字（例如问题数）；“!”表示读取失败，用朱色。
   final Map<T, String> badges;
 
   @override
@@ -259,7 +259,7 @@ class DeskTag extends StatelessWidget {
   }
 }
 
-// ---- V105 视觉语言：分组横幅、状态色条、小胶囊、进度槽 ----
+// ---- 视觉语言：分组横幅、状态色条、小胶囊、进度槽 ----
 // 问题队列、目录、正文先用；后续页面直接复用，不再各写一份装饰。
 
 extension DeskBanner on Desk {
@@ -450,7 +450,7 @@ class DeskEmptyState extends StatelessWidget {
   }
 }
 
-/// 文件大小：不足 1 KB 写字节数，其余写 KB / MB（一位小数）（TASK-025、TASK-028）。
+/// 文件大小：不足 1 KB 写字节数，其余写 KB / MB（一位小数）。
 String formatFileSize(int bytes) => bytes < 1024
     ? '$bytes 字节'
     : bytes < 1024 * 1024

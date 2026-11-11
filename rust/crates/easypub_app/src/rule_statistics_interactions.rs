@@ -51,7 +51,7 @@ pub(super) fn collect(
             })
             .collect(),
     };
-    // 清理规则对排版识别的影响：每种清理各模拟一次，彼此独立，并行计算（V83）。
+    // 清理规则对排版识别的影响：每种清理各模拟一次，彼此独立，并行计算。
     let kinds = [
         ("join_hard_wraps", "layout.verse"),
         ("site_notices", "layout.system"),

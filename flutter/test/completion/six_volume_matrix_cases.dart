@@ -10,7 +10,7 @@ import 'package:easypub_desktop/infrastructure/legacy_conversion_session.dart';
 import 'package:easypub_desktop/application/chapter_service.dart';
 import 'package:easypub_desktop/application/conversion_service.dart';
 
-/// 六卷矩阵用例（原 six_volume_current_matrix_test.dart）。V21 起拆成 4 个测试文件
+/// 六卷矩阵用例（原 six_volume_current_matrix_test.dart）。后来拆成 4 个测试文件
 /// 并行运行，各跑一部分场景；用例内容与名称不变。
 void sixVolumeMatrix(List<String> scenarios) {
   setUpAll(

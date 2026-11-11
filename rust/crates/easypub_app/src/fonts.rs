@@ -202,7 +202,7 @@ pub fn prepare_subset(
     }
     let bytes = read_font(path)?;
     let original = inspect_bytes(&bytes, index, text)?;
-    // 字体里没有的字不阻止嵌入（V123）：成品里这些字回落到阅读器字体，书里只要有一个生僻符号
+    // 字体里没有的字不阻止嵌入：成品里这些字回落到阅读器字体，书里只要有一个生僻符号
     // 不在字体里（如日文中点）以前就整本不能嵌入、真机预览也生成不了。裁剪后不能比原字体多缺字。
     if original.sha256 != expected_sha256 || !original.embedding.subset_allowed {
         return Err(invalid());

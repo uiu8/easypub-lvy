@@ -15,8 +15,8 @@ import 'package:easypub_desktop/application/conversion_snapshot.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/settings/settings_page.dart';
 
-/// V19：检查报告版本号（CHK-060）、缓存回收（CHK-061/SET-065）、
-/// 书库刷新按稿件版本缓存（LIB-114）。真实 Rust。
+/// 检查报告版本号、缓存回收（/SET-065）、
+/// 书库刷新按稿件版本缓存。真实 Rust。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -77,12 +77,12 @@ void main() {
       expect(saved['schema'], checkReportSchema);
       expect(saved['book_id'], id);
       expect(BookCheckReport.fromJson(saved).outdated, false);
-      // V12–V18 写入的报告（有检查时间、清理已结构化）：归为 1，不需要重新检查。
+      // 写入的报告（有检查时间、清理已结构化）：归为 1，不需要重新检查。
       final unversioned = Map.of(saved)
         ..remove('schema')
         ..remove('book_id');
       expect(BookCheckReport.fromJson(unversioned).schema, 1);
-      // V12 前的报告（没有检查时间）：归为 0，需要重新检查。
+      // 早先的报告（没有检查时间）：归为 0，需要重新检查。
       final legacy = Map.of(unversioned)..remove('checked_at');
       expect(BookCheckReport.fromJson(legacy).outdated, true);
       expect(
@@ -254,7 +254,7 @@ void main() {
       final third = await check(library, id);
       File name(BookCheckReport r) =>
           LegacyBookCheckSession.cacheFile(state, r.guard)!;
-      // 无法归属的旧报告（V19 前，没有书的标识）。
+      // 无法归属的旧报告（前，没有书的标识）。
       final legacy =
           File('${directory.path}/${checkReportFileName('legacy-guard')}')
             ..writeAsStringSync(

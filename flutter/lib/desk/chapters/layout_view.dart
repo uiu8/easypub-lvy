@@ -1,4 +1,4 @@
-// 章节页排版视图（V104，LAY-149–151；V120 起按真机规则画，LAY-167）：正文按成品的样子显示系统提示、诗词等识别结果，
+// 章节页排版视图（后来按真机规则画）：正文按成品的样子显示系统提示、诗词等识别结果，
 // 行号旁色条区分自动识别与手工标注，悬停时出标签；拖选几行弹出与行号栏相同的标注工具条。
 // 识别结果来自规则统计（与正文生成同一套判断）；样式取本书已保存的排版设置。只看和标注，不改文字。
 import 'dart:async';
@@ -42,7 +42,7 @@ class ChapterLayoutView extends ChangeNotifier {
   String systemBlock = 'off', verseBlock = 'off';
   Map? systemStyles;
 
-  /// 排版视图按真机画（V120，LAY-167）：机型与阅读器设置取真机预览里的选择，书内设置取本书。
+  /// 排版视图按真机画：机型与阅读器设置取真机预览里的选择，书内设置取本书。
   PreviewDeviceChoice device = const PreviewDeviceChoice();
   Map<String, Object?> book = const {};
 
@@ -64,7 +64,7 @@ class ChapterLayoutView extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  /// 在侧栏里改本书的识别设置（V121，LAY-173）：与排版页同一个写入口，进变更记录；返回失败原因。
+  /// 在侧栏里改本书的识别设置：与排版页同一个写入口，进变更记录；返回失败原因。
   /// 写入后统计会变旧，自动重读设置并重新识别。
   Future<String?> applySettings(Map<String, Object?> patch) async {
     try {
@@ -86,7 +86,7 @@ class ChapterLayoutView extends ChangeNotifier {
     }
   }
 
-  /// 在排版视图页眉里换机型或字号档位（V120）：与真机预览共用同一份选择。
+  /// 在排版视图页眉里换机型或字号档位：与真机预览共用同一份选择。
   Future<void> chooseDevice(PreviewDeviceChoice next) async {
     device = next;
     notifyListeners();
@@ -130,7 +130,7 @@ class ChapterLayoutView extends ChangeNotifier {
       align: switch (align) {
         'center' => TextAlign.center,
         'right' => TextAlign.right,
-        // 真机正文两端对齐（V118 实测）。
+        // 真机正文两端对齐（实测）。
         _ => metrics.justify ? TextAlign.justify : TextAlign.start,
       },
       indent: lengths.paragraph('paragraph_indent') + fullwidth * size,
@@ -280,7 +280,7 @@ class ChapterLayoutView extends ChangeNotifier {
   }
 }
 
-/// 排版视图的书页（V120，LAY-167）：按所选机型的视口宽与真机规则排（视口像素），章节页再整体缩放到纸面宽；
+/// 排版视图的书页：按所选机型的视口宽与真机规则排（视口像素），章节页再整体缩放到纸面宽；
 /// 每行字数、分行与诗句位置同真机。[left]、[right] 为真机页边距加本书页边距；[style] 的页边距为零。
 class KindleColumn {
   const KindleColumn({

@@ -1,4 +1,4 @@
-// 排版页的识别数量（V104，LAY-147）：本书按已保存的设置识别到多少处系统提示、诗词；
+// 排版页的识别数量：本书按已保存的设置识别到多少处系统提示、诗词；
 // “查看位置”打开识别与检查规则页并定位到这条规则，在那里逐处跳到章节页。
 import 'dart:async';
 
@@ -123,7 +123,7 @@ class _RecognitionCountsState extends State<RecognitionCounts> {
               ...children,
             ],
           ),
-          // 整行【】的判断（V121，LAY-169）。
+          // 整行【】的判断。
           if (brackets != null)
             Text(
               brackets,

@@ -1,4 +1,4 @@
-// 迁入 desk（resources，V5/V6）：逻辑与布局沿用 V5 前的同名文件；公共弹窗框架样式在 V7 统一。
+// 迁入 desk（resources）：逻辑与布局沿用早先的同名文件；公共弹窗框架样式后来统一。
 import 'package:flutter/material.dart';
 
 import '../../application/chapter_service.dart';
@@ -80,7 +80,7 @@ class _ResourcePositionDialogState extends State<ResourcePositionDialog> {
     }
   }
 
-  /// 卷与其下章节（RES-046）：卷可折叠，卷前的章节直接列出。
+  /// 卷与其下章节：卷可折叠，卷前的章节直接列出。
   List<(ChapterNode, bool)> visibleRows() {
     final q = query.trim();
     if (q.isNotEmpty) {
@@ -175,7 +175,7 @@ class _ResourcePositionDialogState extends State<ResourcePositionDialog> {
     );
   }
 
-  /// 正文行（RES-047）：空行只是淡色分隔，不可绑定的段落只有说明，都不显示选择圈。
+  /// 正文行：空行只是淡色分隔，不可绑定的段落只有说明，都不显示选择圈。
   Widget paragraphRow(ResourceParagraph row) {
     final d = context.desk;
     if (row.text.trim().isEmpty) {

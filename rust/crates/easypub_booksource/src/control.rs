@@ -63,7 +63,7 @@ pub struct Context {
     pub observed_host: Arc<Mutex<Option<Arc<crate::hosts::Host>>>>,
     pub network_route: Arc<Mutex<serde_json::Value>>,
     pub corpus: Option<Arc<crate::corpus::Tape>>,
-    /// V132：同一章已由其他书源下完时置位，正在进行的请求随即结束。
+    /// 同一章已由其他书源下完时置位，正在进行的请求随即结束。
     pub superseded: Option<Arc<AtomicBool>>,
 }
 impl Context {

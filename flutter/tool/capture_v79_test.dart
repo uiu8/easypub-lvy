@@ -17,7 +17,7 @@ import 'package:easypub_desktop/desk/grain.dart';
 
 class NoPicker extends Fake implements BookFilePicker {}
 
-/// V79 截图：宣纸 / 夜墨 / 高对比下的主要页面。输出 artifacts/v79-preview/。
+/// 截图：宣纸 / 夜墨 / 高对比下的主要页面。输出 artifacts/v79-preview/。
 void main() {
   testWidgets('截图：三种主题的主要页面', (t) async {
     t.binding.defaultBinaryMessenger.setMockMethodCallHandler(

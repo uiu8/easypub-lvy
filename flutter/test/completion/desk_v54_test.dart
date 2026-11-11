@@ -40,7 +40,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
   return result.stdout as String;
 }
 
-/// V54：插图版式（RES-050）与统一章首图（LAY-124）。
+/// 插图版式与统一章首图。
 void main() {
   setUpAll(
     () async => RustLib.init(

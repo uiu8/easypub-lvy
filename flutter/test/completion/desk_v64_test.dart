@@ -12,7 +12,7 @@ import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/rules/rules_page.dart';
 import 'package:easypub_desktop/desk/widgets.dart';
 
-/// V64：检查页进入规则页（CH-279）与规则页改版（CH-280），真实 DLL。
+/// 检查页进入规则页与规则页改版，真实 DLL。
 void main() {
   setUpAll(
     () async => RustLib.init(

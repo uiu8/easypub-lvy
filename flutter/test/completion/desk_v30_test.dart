@@ -27,7 +27,7 @@ class _Host implements KindlePreviewHost {
 
 class _RealHttp extends HttpOverrides {}
 
-/// V30：真机预览（LAY-108–111）——本机连接、按未写回的值生成、写回本书、竖排提示。
+/// 真机预览——本机连接、按未写回的值生成、写回本书、竖排提示。
 void main() {
   setUpAll(
     () async => RustLib.init(

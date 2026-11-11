@@ -1,4 +1,4 @@
-// 另存修订 TXT 与配套项目（CH-148），一键修复和目录修复共用。
+// 另存修订 TXT 与配套项目，一键修复和目录修复共用。
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 

@@ -1,4 +1,4 @@
-// 编辑台标题栏（G-001–004、G-022、G-030、G-062）：标识、面包屑、命令搜索、
+// 编辑台标题栏：标识、面包屑、命令搜索、
 // 保存状态、项目菜单与窗口按钮。拖动空白处移动窗口；关闭先走离开保护。
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

@@ -14,7 +14,7 @@ import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/fonts.dart';
 import 'package:easypub_desktop/desk/metadata/book_information_page.dart';
 
-/// V56 界面截图：书籍信息页“前后附页”卡片、编辑对话框、模板管理。输出 artifacts/v56-preview/。
+/// 界面截图：书籍信息页“前后附页”卡片、编辑对话框、模板管理。输出 artifacts/v56-preview/。
 void main() {
   testWidgets('截图：前后附页', (t) async {
     final capture = GlobalKey();

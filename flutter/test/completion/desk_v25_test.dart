@@ -9,7 +9,7 @@ import 'package:easypub_desktop/desk/rules/numeric_dialog.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
 
-/// V25：数字章节合并为“列出 → 预览识别与改写 → 核对 → 一批应用”（CH-263）。
+/// 数字章节合并为“列出 → 预览识别与改写 → 核对 → 一批应用”。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -96,7 +96,7 @@ void main() {
     await t.tap(find.text('打开'));
     await settle();
     final summary = find.byKey(const ValueKey('numeric-summary'));
-    // V113：内置规则要求数字标题后至少 3 行正文（原为 5），样书每章 3 行，直接找到。
+    // 内置规则要求数字标题后至少 3 行正文（原为 5），样书每章 3 行，直接找到。
     expect(find.byKey(const ValueKey('numeric-minimum')), findsOneWidget);
     expect(t.widget<Text>(summary).data, '找到 3 个数字标题 · 新增章节 3 · 改写标题 0');
     await t.enterText(find.byKey(const ValueKey('numeric-minimum')), '4');

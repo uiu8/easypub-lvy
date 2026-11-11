@@ -21,12 +21,12 @@ reqwest = { version = "0.13", default-features = false, features = ["blocking", 
 scraper = "0.24"
 # EPUB 里的 HTML 命名字符表，scraper 已经带着。
 markup5ever = "=0.35.0"
-# V131：AZW3 / MOBI 导入时整理 HTML（scraper 已依赖同一版本）。
+# AZW3 / MOBI 导入时整理 HTML（scraper 已依赖同一版本）。
 ego-tree = "=0.10.0"
 regex.workspace = true
 
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp", "tiff"] }
-# V24：SVG 封面与插图栅格化为 PNG（Kindle 不支持 SVG 图片资源）。
+# SVG 封面与插图栅格化为 PNG（Kindle 不支持 SVG 图片资源）。
 resvg = { version = "=0.48.1", default-features = false, features = ["text", "system-fonts", "raster-images"] }
 
 ttf-parser = "=0.25.1"

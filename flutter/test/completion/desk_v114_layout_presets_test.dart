@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// V114：内置排版预设——出厂默认之外有四套可选；内置预设直接预览并应用，
+/// 内置排版预设——出厂默认之外有四套可选；内置预设直接预览并应用，
 /// “出版社纸书”一并套用“素雅”样式包；出厂默认不变。
 void main() {
   setUpAll(

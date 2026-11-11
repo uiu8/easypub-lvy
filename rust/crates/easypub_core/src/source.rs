@@ -30,7 +30,7 @@ pub struct ChapterSummary {
     pub source_line: u32,
 }
 
-/// 放错位置、原位确实空着的章（V133）：可以整章移回 [anchor] 之后（没有 anchor 时移到这一串的第一章之前）。
+/// 放错位置、原位确实空着的章：可以整章移回 [anchor] 之后（没有 anchor 时移到这一串的第一章之前）。
 #[derive(Clone, Debug)]
 pub struct MisplacedChapter {
     pub entry_id: String,
@@ -50,7 +50,7 @@ pub struct MisplacedChapter {
     pub tail: String,
 }
 
-/// 编号写错的标题（V133）：前后两章编号连续（差 2），正好缺中间这一号，这一章写成了别的号。
+/// 编号写错的标题：前后两章编号连续（差 2），正好缺中间这一号，这一章写成了别的号。
 #[derive(Clone, Debug)]
 pub struct MisnumberedChapter {
     pub entry_id: String,
@@ -451,7 +451,7 @@ impl SourceSnapshot {
                     && self.lines[a.source_line as usize..b.source_line as usize - 1]
                         .iter()
                         .all(|&(start, end)| self.text[start..end].trim().is_empty())
-                    // 用户在识别规则中允许重复的标题不报（CH-258）。
+                    // 用户在识别规则中允许重复的标题不报。
                     && !self
                         .rules
                         .as_ref()
@@ -461,7 +461,7 @@ impl SourceSnapshot {
             .collect()
     }
 
-    /// 识别规则例外影响的两项检查数量（V17）：连续重复标题、章节编号跳跃。
+    /// 识别规则例外影响的两项检查数量：连续重复标题、章节编号跳跃。
     pub fn exception_finding_counts(&self) -> (usize, usize) {
         (
             self.duplicate_title_lines().len(),
@@ -545,7 +545,7 @@ impl SourceSnapshot {
 
     /// Numbered titles without “第” that should be offered a prefix. Prose
     /// headings and author notes are excluded: they belong back in the body,
-    /// and “第两章合一章” would be a nonsensical rename (V12).
+    /// and “第两章合一章” would be a nonsensical rename.
     pub fn missing_prefix_chapters(&self) -> Vec<&ChapterSummary> {
         let prose: std::collections::BTreeSet<u32> = self
             .prose_headings()
@@ -580,7 +580,7 @@ impl SourceSnapshot {
             .collect()
     }
 
-    /// 非标题词库命中（V12）；没有识别规则时为 false。
+    /// 非标题词库命中；没有识别规则时为 false。
     pub fn is_non_heading(&self, text: &str) -> bool {
         self.rules.as_ref().is_some_and(|r| r.is_non_heading(text))
     }
@@ -731,7 +731,7 @@ impl SourceSnapshot {
         (off > 0 && off * 5 <= segment.len()).then_some(keep)
     }
 
-    /// 放错位置、原位确实空着的章（V133）。只在三种情形下认定：在这一串主体的第一章之前；
+    /// 放错位置、原位确实空着的章。只在三种情形下认定：在这一串主体的第一章之前；
     /// 章号比主体里所有章都大；所在位置前后两章编号本来连续（它是插进来的）。另外都要求：
     /// 这一串里没有别的章用这个章号，作者的话类标题除外。
     pub fn misplaced_chapters(&self) -> Vec<MisplacedChapter> {
@@ -816,7 +816,7 @@ impl SourceSnapshot {
         out
     }
 
-    /// 编号写错的已识别标题（V133）：不算放错位置，前后相邻两章编号差 2，中间这一号在这一串里
+    /// 编号写错的已识别标题：不算放错位置，前后相邻两章编号差 2，中间这一号在这一串里
     /// 一章都没有，这一章却写成了别的号（常见是和前一章重号）。上、下篇这类分段不算。
     pub fn misnumbered_chapters(&self) -> Vec<MisnumberedChapter> {
         let misplaced: BTreeSet<u32> = self
@@ -875,7 +875,7 @@ impl SourceSnapshot {
     }
 
     fn numbering_pairs(&self) -> Vec<(&ChapterSummary, &ChapterSummary, u32, u32)> {
-        // 放错位置、可以归位的章不参与相邻比较：它带出的跳跃与回退合并到“章节放错位置”一条里（V133）。
+        // 放错位置、可以归位的章不参与相邻比较：它带出的跳跃与回退合并到“章节放错位置”一条里。
         let misplaced: BTreeSet<u32> = self
             .misplaced_chapters()
             .iter()
@@ -902,7 +902,7 @@ impl SourceSnapshot {
             .filter_map(|(a, b, old, new)| {
                 (new > old.saturating_add(1)).then_some((a, b, old + 1, new - 1))
             })
-            // 跳过的章号全部在“允许的编号跳跃”里时不报（CH-259）。
+            // 跳过的章号全部在“允许的编号跳跃”里时不报。
             .filter(|(_, _, first, last)| {
                 !self
                     .rules

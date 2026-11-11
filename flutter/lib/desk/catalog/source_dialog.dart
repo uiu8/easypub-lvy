@@ -1,6 +1,6 @@
-// 获取参考目录（CH-180–202）：在线 / 书源（V45，CH-270–276）/ 本地 / 粘贴四种来源，搜索书名、获取目录、重复片段核对、
+// 获取参考目录：在线 / 书源/ 本地 / 粘贴四种来源，搜索书名、获取目录、重复片段核对、
 // 访问设置（窗口 Cookie 与本机凭据）。获取只生成候选，不保存、不改书稿。
-// 请求、凭据与取消逻辑沿用 V3 前的 CatalogSourceDialog；设计：design_review_v37/d2_catalog.dart（D2-J）。
+// 请求、凭据与取消逻辑沿用早先的 CatalogSourceDialog。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -25,7 +25,7 @@ class CatalogSourceDialog extends StatefulWidget {
   final CatalogSession session;
   final Future<String?> Function() pickFile;
 
-  /// 选择书源 JSON（V45）；为空时“导入书源”不可用。
+  /// 选择书源 JSON；为空时“导入书源”不可用。
   final Future<String?> Function()? pickBookSourceFile;
   @override
   State<CatalogSourceDialog> createState() => _CatalogSourceDialogState();
@@ -52,7 +52,7 @@ class _CatalogSourceDialogState extends State<CatalogSourceDialog> {
   bool credentialBusy = false, savedCredential = false;
   String credentialMessage = '';
 
-  // ---- 书源目录（V45，CH-270–276）
+  // ---- 书源目录
   BookSourceSession? get bookSourceService =>
       widget.session is BookSourceSession
       ? widget.session as BookSourceSession
@@ -462,7 +462,7 @@ class _CatalogSourceDialogState extends State<CatalogSourceDialog> {
     );
   }
 
-  /// 书源页签主体（V45，CH-270–276）。
+  /// 书源页签主体。
   List<Widget> bookSourcePanel() {
     final d = context.desk;
     if (!bookSourcesLoaded && busy) {

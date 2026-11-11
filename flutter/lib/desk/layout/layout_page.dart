@@ -1,6 +1,5 @@
-// 本书排版（LAY-001–030）：左侧正文 / 页面 / 成品结构三组设置（停顿自动应用，未补全的数字只暂存），
-// 右侧阅读预览（机型与分页，LAY-092/093）与“实际生成预览”。保存、草稿、预设、来源、CSS、批量的逻辑逐行沿用 V5 前的 LayoutPage。
-// 设计：design_review_v37/d3_layout.dart（D3-D）。
+// 本书排版：左侧正文 / 页面 / 成品结构三组设置（停顿自动应用，未补全的数字只暂存），
+// 右侧阅读预览（机型与分页）与“实际生成预览”。保存、草稿、预设、来源、CSS、批量的逻辑逐行沿用早先的 LayoutPage。
 import 'dart:io';
 
 import '../../application/edition_options.dart';
@@ -89,31 +88,31 @@ class LayoutPage extends StatefulWidget {
   final Future<String?> Function() pickPresetFile, pickPresetDestination;
   final Future<({String text, String base})?> Function() importCss;
 
-  /// 统一章首图的选图对话框（V54，LAY-124）；为空时不能选图。
+  /// 统一章首图的选图对话框；为空时不能选图。
   final Future<String?> Function()? pickImage;
 
-  /// 嵌入字体的选文件对话框（V123，LAY-179）；为空时只能选原书自带的字体。
+  /// 嵌入字体的选文件对话框；为空时只能选原书自带的字体。
   final Future<String?> Function()? pickFont;
 
-  /// 章节样式包文件（V74，LAY-130）：导入时选 .zip，导出时选保存位置。
+  /// 章节样式包文件：导入时选 .zip，导出时选保存位置。
   final Future<String?> Function()? pickStylePack;
 
-  /// 选择样式包文件夹（V114）；为 null 时不显示“从文件夹导入”。
+  /// 选择样式包文件夹；为 null 时不显示“从文件夹导入”。
   final Future<String?> Function()? pickStylePackFolder;
   final Future<String?> Function(String name)? pickStylePackDestination;
   final bool openCssOnStart;
 
-  /// 打开时显示的左栏分页（V63：规则中心“去设置”可直接打开“段落与识别”）。
+  /// 打开时显示的左栏分页（规则中心“去设置”可直接打开“段落与识别”）。
   final int initialTab;
 
-  /// 真机预览组件的查找与启动（V30）；测试中替换。
+  /// 真机预览组件的查找与启动；测试中替换。
   final KindlePreviewHost kindlePreview;
   @override
   State<LayoutPage> createState() => _LayoutPageState();
 }
 
 class _LayoutPageState extends State<LayoutPage> {
-  /// 拆出的 part 文件经由扩展访问本类，用它代替受保护的 setState（R5-13）。
+  /// 拆出的 part 文件经由扩展访问本类，用它代替受保护的 setState。
   void update(VoidCallback fn) => setState(fn);
 
   LayoutSession? session;
@@ -123,33 +122,33 @@ class _LayoutPageState extends State<LayoutPage> {
   int layoutUnitsVersion = 0;
   Map<String, Object?> savedValues = {};
   String alignment = 'justify', baseline = '', message = '';
-  // 书写方向与纵中横位数（V28，LAY-104）。
+  // 书写方向与纵中横位数。
   String writingMode = 'horizontal';
   int verticalDigits = 2;
-  // 章节标题样式（V36，LAY-117）。
+  // 章节标题样式。
   String headingStyle = 'classic';
-  // 场景分隔样式（V46，LAY-118）。
+  // 场景分隔样式。
   String sceneBreakStyle = 'keep';
-  // 章首段落样式（V49，LAY-119）。
+  // 章首段落样式。
   String firstParagraphStyle = 'normal';
-  // 生僻字注音（V73，LAY-129）。
+  // 生僻字注音。
   String rareCharRuby = 'off';
   String rareCharScope = 'outside';
-  // 场景样式（V81，LAY-135）。
+  // 场景样式。
   String chatBlockStyle = 'off';
   String letterBlockStyle = 'plain';
   String insetFont = 'kai';
-  // 场景识别（V82，LAY-137）与本书的自定义规则（存在 rule_options.inset_rules）。
+  // 场景识别与本书的自定义规则（存在 rule_options.inset_rules）。
   String insetDetect = 'off';
   List<Map<String, dynamic>> insetRules = const [];
-  // 本书改过的场景样式参数（V82，LAY-136）：场景编号 → 参数；没改的用内置预设。
+  // 本书改过的场景样式参数：场景编号 → 参数；没改的用内置预设。
   Map<String, dynamic>? insetStyles;
-  // 统一章首图（V54，LAY-124）：图片路径单独保存，不进草稿；范围与宽度是排版字段。
+  // 统一章首图：图片路径单独保存，不进草稿；范围与宽度是排版字段。
   String? chapterHeadImage;
-  // 嵌入字体（V123，LAY-179）：与章首图一样单独应用；fontFamily 是检查出的字体名。
+  // 嵌入字体：与章首图一样单独应用；fontFamily 是检查出的字体名。
   Map<String, dynamic>? fontResource;
 
-  // 原书样式（G-112）：保持原格式的书用。
+  // 原书样式：保持原格式的书用。
   Map<String, dynamic> originalStyle = {};
   Map<String, dynamic> imageOptions = {...defaultImageOptions};
   Map<String, dynamic> navigationOptions = {...defaultNavigationOptions};
@@ -158,7 +157,7 @@ class _LayoutPageState extends State<LayoutPage> {
   Future<Map<String, dynamic>>? originalNavigationFuture;
   String? originalNavigationBook;
 
-  /// 从原书读到的行内样式和表格（G-113）；没有时为空。
+  /// 从原书读到的行内样式和表格；没有时为空。
   Map<String, dynamic>? sourceMarks;
   String originalError = '';
   final originalCustom = TextEditingController();
@@ -170,27 +169,27 @@ class _LayoutPageState extends State<LayoutPage> {
     'margin_right': TextEditingController(),
   };
   String? fontFamily;
-  // 章节样式包（V74，LAY-130）：与章首图一样单独应用，不进草稿。
+  // 章节样式包：与章首图一样单独应用，不进草稿。
   Map<String, dynamic>? chapterStyle;
-  // 系统提示自定义识别规则（V78，LAY-134）：在 rule_options 里，单独应用。
+  // 系统提示自定义识别规则：在 rule_options 里，单独应用。
   List<String> systemPatterns = const [];
-  // 系统提示识别范围（V121，LAY-169）：也在 rule_options 里，单独应用。
+  // 系统提示识别范围：也在 rule_options 里，单独应用。
   String systemScope = 'auto';
 
-  /// 小预览用的章首图像素（V54）；路径变化时重新读取。
+  /// 小预览用的章首图像素；路径变化时重新读取。
   dui.Image? chapterHeadPixels;
   String? _chapterHeadLoaded;
   String chapterHeadScope = 'chapter';
   String chapterHeadWidth = 'half';
-  // 系统提示与诗词（V50，LAY-121/122）。
+  // 系统提示与诗词。
   String systemBlockStyle = 'box';
-  // 系统提示分类样式参数（V77，LAY-132）。
+  // 系统提示分类样式参数。
   Map<String, dynamic>? systemStyles;
   String verseBlockStyle = 'center';
-  // 弹出注释（V51，LAY-120）。
+  // 弹出注释。
   String noteStyle = 'off';
 
-  /// 左栏分页（V60）：0 文字、1 标题、2 段落与识别、3 页面与结构。
+  /// 左栏分页：0 文字、1 标题、2 段落与识别、3 页面与结构。
   late int settingsTab = widget.initialTab;
 
   /// 段落与识别分页中已展开的项（字段名）。
@@ -202,7 +201,7 @@ class _LayoutPageState extends State<LayoutPage> {
   /// 本章正文超出预览读取范围（只预览开头一部分）。
   bool bodyPartial = false;
 
-  /// 本章正文插图（R5-01）：键是插在正文第几行之后（0 起，按 [body] 的行），-1 为紧接标题。
+  /// 本章正文插图：键是插在正文第几行之后（0 起，按 [body] 的行），-1 为紧接标题。
   Map<int, List<PreviewImage>> bodyImages = const {};
 
   /// 本章插图版式为“章首图”的那张，代替统一章首图。
@@ -221,7 +220,7 @@ class _LayoutPageState extends State<LayoutPage> {
   ChapterPage? outline;
   String? selectedChapter;
 
-  /// 真机预览窗口的本机连接；排版页关闭时停止（LAY-108）。
+  /// 真机预览窗口的本机连接；排版页关闭时停止。
   KindlePreviewServer? _kindle;
   bool generatingPreview = false;
   bool busy = false, loading = true, _restoring = false;
@@ -505,7 +504,7 @@ class _LayoutPageState extends State<LayoutPage> {
     final applied = await showDialog<bool>(
       context: context,
       builder: (_) =>
-          // 从排版页进来默认勾选全部排版字段（R5-02）。
+          // 从排版页进来默认勾选全部排版字段。
           BookBatchDialog(
             library: widget.library,
             bookId: widget.bookId,
@@ -780,7 +779,7 @@ class _LayoutPageState extends State<LayoutPage> {
     }
   }
 
-  // ---------------------------------------------------------------- 真机预览（V30，LAY-108–110）
+  // ---------------------------------------------------------------- 真机预览
 
   Map<String, Object?> _kindleState() => {
     'title': '',
@@ -797,8 +796,8 @@ class _LayoutPageState extends State<LayoutPage> {
     'values': {
       for (final e in values.entries)
         if (e.value != null) e.key: e.value,
-      // 章节样式包（V76）：预览里可开关、改卷页边框；写回时按样式包单独应用。
-      // 系统提示分类样式（V77）：预览里按预设切换，参数被改过时为 custom。
+      // 章节样式包：预览里可开关、改卷页边框；写回时按样式包单独应用。
+      // 系统提示分类样式：预览里按预设切换，参数被改过时为 custom。
       'system_note_preset': presetOf(
         (systemStyles ?? defaultSystemStyles())['note'] as Map?,
         notePresetNames,
@@ -815,7 +814,7 @@ class _LayoutPageState extends State<LayoutPage> {
     },
     'font_size_unit': units['font_size_unit'],
     'entry': selectedChapter,
-    // 设了章首图或样式包带章头图时，真机预览才显示章首图的范围与宽度（V61、V76）。
+    // 设了章首图或样式包带章头图时，真机预览才显示章首图的范围与宽度。
     'chapter_head':
         chapterHeadImage != null ||
         (chapterStyle?['head_images'] as List?)?.isNotEmpty == true,
@@ -906,7 +905,7 @@ class _LayoutPageState extends State<LayoutPage> {
     super.dispose();
   }
 
-  // ---------------------------------------------------------------- 视图（V5 起，设计 D3-D）
+  // ---------------------------------------------------------------- 视图（设计）
 
   /// 窄窗时“排版设置 / 阅读预览”分段切换。
   int pane = 0;
@@ -1021,7 +1020,7 @@ class _LayoutPageState extends State<LayoutPage> {
   /// 预览区宽度不足 760 时，设置行里的按钮只留图标。
   bool narrowPreview = false;
 
-  /// 预览区不够宽放下完整设置行时，“实际生成预览”只留图标（LAY-102）。
+  /// 预览区不够宽放下完整设置行时，“实际生成预览”只留图标。
   bool iconOnlyPreview = false;
   DateTime _lastWheel = DateTime(0);
 
@@ -1105,7 +1104,7 @@ class _LayoutPageState extends State<LayoutPage> {
                   builder: (_, _, _) => reading(),
                 );
                 // 设置栏宽度和两栏所需宽度都随字号放大；放不下时改用“排版设置 / 阅读预览”
-                // 切换，不再把选项缩成小字（R5-04）。
+                // 切换，不再把选项缩成小字。
                 final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
                 final settingsWidth = (c.maxWidth * .34).clamp(
                   340.0 * scale,
@@ -1118,7 +1117,7 @@ class _LayoutPageState extends State<LayoutPage> {
                 narrowPreview = previewWidth < 760;
                 iconOnlyPreview = previewWidth < 900;
                 if (twoColumns) {
-                  // 设置区固定较窄宽度，可收起；其余空间给预览（LAY-100）。
+                  // 设置区固定较窄宽度，可收起；其余空间给预览。
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [

@@ -1,4 +1,4 @@
-// 排版页“文字”分页与各分页共用的表单件（R5-13 从 layout_page.dart 拆出，逻辑不变）。
+// 排版页“文字”分页与各分页共用的表单件（从 layout_page.dart 拆出，逻辑不变）。
 part of 'layout_page.dart';
 
 extension _LayoutTextSection on _LayoutPageState {
@@ -8,7 +8,7 @@ extension _LayoutTextSection on _LayoutPageState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 分列时按最长标题决定列数（LAY-103），同一行的标题都放得下，输入框保持对齐；
+        // 分列时按最长标题决定列数，同一行的标题都放得下，输入框保持对齐；
         // 只剩一列仍放不下时标题换行，不再省略。原来标题与 Spacer 平分剩余宽度，
         // 较长的标题因此被省略；现在标题与帮助图标占用单位切换以外的全部宽度。
         Row(
@@ -136,8 +136,8 @@ extension _LayoutTextSection on _LayoutPageState {
     padding: const EdgeInsets.only(bottom: 10),
     child: LayoutBuilder(
       builder: (context, c) {
-        // 列数按最长的标题行决定（LAY-103）：标题、帮助图标与单位切换都放得下才分列，
-        // 输入框至少 120 宽；否则减少列数（设置区收窄后见 LAY-100）。
+        // 列数按最长的标题行决定：标题、帮助图标与单位切换都放得下才分列，
+        // 输入框至少 120 宽；否则减少列数（设置区收窄后见）。
         final widest = keys.map(labelRowWidth).fold(130.0, math.max);
         var columns = keys.length;
         while (columns > 1 &&
@@ -253,7 +253,7 @@ extension _LayoutTextSection on _LayoutPageState {
                 children: [
                   Text(label, style: ui(12.5, w: 600, c: d.ink)),
                   help,
-                  // 当前选择贴右对齐（V121：原来 Spacer 与 Flexible 平分剩余宽度，各行错位）。
+                  // 当前选择贴右对齐（原来 Spacer 与 Flexible 平分剩余宽度，各行错位）。
                   Expanded(
                     child: Text(
                       current,
@@ -286,7 +286,7 @@ extension _LayoutTextSection on _LayoutPageState {
     );
   }
 
-  /// 书写方向、竖排数字横排与注音/着重号写法（V28，LAY-104–107）。
+  /// 书写方向、竖排数字横排与注音/着重号写法。
   Widget writingControls() {
     final d = context.desk;
     final vertical = writingMode == 'vertical';
@@ -336,7 +336,7 @@ extension _LayoutTextSection on _LayoutPageState {
           ],
         ),
         const SizedBox(height: 10),
-        // 这是写法说明，不是设置项：写成一行浅色说明，详细的放在问号里（R5-08）。
+        // 这是写法说明，不是设置项：写成一行浅色说明，详细的放在问号里。
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -461,7 +461,7 @@ extension _LayoutTextSection on _LayoutPageState {
               (value) => noteStyle = value,
             ),
           ]),
-          // 场景样式（V81，LAY-135）。
+          // 场景样式。
           group('场景样式', [
             Padding(
               padding: const EdgeInsets.only(bottom: 4),

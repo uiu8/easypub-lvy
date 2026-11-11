@@ -32,9 +32,9 @@ final _root = GlobalKey();
 final _source = Platform.environment['EASYPUB_FRAME_SOURCE'];
 final _samples = <Map<String, Object>>[];
 final _issues = Platform.environment['EASYPUB_FRAME_TARGET'] == 'issues';
-// V83：拖动章节页目录与正文之间的分隔条。
+// 拖动章节页目录与正文之间的分隔条。
 final _divider = Platform.environment['EASYPUB_FRAME_TARGET'] == 'divider';
-// V121：章节页排版视图（按真机规则画的正文）滚动。
+// 章节页排版视图（按真机规则画的正文）滚动。
 final _layout = Platform.environment['EASYPUB_FRAME_TARGET'] == 'layout';
 final _data = <String, Object?>{};
 final _initialRss = ProcessInfo.currentRss;
@@ -608,7 +608,7 @@ double _median(List<double> values) {
   return sorted[sorted.length ~/ 2];
 }
 
-/// 书库规模（R0）：EASYPUB_FRAME_BOOKS 取 40 / 300 / 1000，默认 40。
+/// 书库规模：EASYPUB_FRAME_BOOKS 取 40 / 300 / 1000，默认 40。
 int get _bookCount {
   final n =
       int.tryParse(Platform.environment['EASYPUB_FRAME_BOOKS'] ?? '') ?? 40;
@@ -694,7 +694,7 @@ Map<String, double> _frameStats() {
   };
 }
 
-/// V94：侧栏切页耗时。导入 [_bookCount] 本书，在真实 RewriteApp 里按侧栏顺序切换页面 5 轮；
+/// 侧栏切页耗时。导入 [_bookCount] 本书，在真实 RewriteApp 里按侧栏顺序切换页面 5 轮；
 /// 每次记录从 go() 到首帧结束的时间，以及之后 600ms 内各帧的构建 / 光栅耗时。
 /// 设置 EASYPUB_PLUGIN_DIR 指向带书源插件的目录时，同时启用插件并包含书源页。
 Future<void> _navigationSwitch() async {
@@ -753,7 +753,7 @@ Future<void> _navigationSwitch() async {
   exit(0);
 }
 
-/// R8：书源页。脚本事先在插件数据目录写好 N 个假书源（不访问网络），这里：
+/// 书源页。脚本事先在插件数据目录写好 N 个假书源（不访问网络），这里：
 /// 1) 打开书源下载页、切到“书源”页签，记录到首帧时间并等列表读完；
 /// 2) 书源列表每 16ms 滚动 120 像素，先到底再回到顶，统计逐帧耗时；
 /// 3) 在“搜索书源”框里逐字输入再逐字删掉，每次改动记录到首帧结束的时间。
@@ -914,7 +914,7 @@ Future<void> _booksourcePage() async {
   exit(0);
 }
 
-/// R0：书库滚动与筛选。导入 [_bookCount] 本书，在书库页：
+/// 书库滚动与筛选。导入 [_bookCount] 本书，在书库页：
 /// 1) 书架列表每 16ms 滚动 120 像素，先到底再回到顶（每个方向最多 200 步），统计逐帧耗时；
 /// 2) 在搜索框里逐字输入“样本书-1”再逐字删掉，每次改动记录到首帧结束的时间。
 Future<void> _libraryScrollFilter() async {

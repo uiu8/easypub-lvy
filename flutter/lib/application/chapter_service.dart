@@ -59,7 +59,7 @@ class ChapterBodyRow {
   final bool selectable;
   final int? nextCharOffset;
 
-  /// 这一行在成品文本里的行号；排版小预览按它放插图（R5-01）。
+  /// 这一行在成品文本里的行号；排版小预览按它放插图。
   final int? outputLine;
 }
 
@@ -145,13 +145,13 @@ class ChapterStateChanged extends FormatException {
   const ChapterStateChanged(super.message);
 }
 
-/// 能直接判断一页是否还是当前书稿版本的会话（V121）：标注、文字样式、注释与排版设置都会改版本，
+/// 能直接判断一页是否还是当前书稿版本的会话：标注、文字样式、注释与排版设置都会改版本，
 /// 章节页据此自动重读本页，不再让用户看到“书稿已变化，请刷新章节后重试”。
 abstract interface class ChapterGuardSession {
   bool isCurrent(ChapterPage page);
 }
 
-/// 一次写入多项审阅结论（CHK-052），只用于当前编辑稿的检查结果。
+/// 一次写入多项审阅结论，只用于当前编辑稿的检查结果。
 abstract interface class BatchIssueReviewSession {
   Future<ChapterIssuePage> reviewIssues(
     ChapterIssuePage page,
@@ -379,7 +379,7 @@ class ChapterIssuePage {
   });
   final Map<String, int> categoryCounts, severityCounts;
 
-  /// 当前筛选结果中各类别的数量；结果按 [chapterIssueGroupOf] 分组排序（CHK-053）。
+  /// 当前筛选结果中各类别的数量；结果按 [chapterIssueGroupOf] 分组排序。
   final Map<String, int> filteredCategoryCounts;
 
   /// 已有审阅结论的项数与未筛选总数（顶部进度）；旧接口为 null。

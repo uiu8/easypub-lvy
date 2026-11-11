@@ -36,7 +36,7 @@ class EpubImportCache {
 
   final Directory root;
 
-  /// 读原书的行内样式和表格（G-113）。开关不同，工作稿也不同，缓存分开。
+  /// 读原书的行内样式和表格。开关不同，工作稿也不同，缓存分开。
   final bool keepMarks;
   final EpubTextExtractor extractText;
   final EpubResourceExtractor extractResources;

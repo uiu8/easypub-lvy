@@ -1,4 +1,4 @@
-//! easypub_updater.exe（V68，SET-073）：主程序退出后替换程序文件，再打开程序。
+//! easypub_updater.exe：主程序退出后替换程序文件，再打开程序。
 //! 由主程序从 `.update\run\` 启动（不在被替换的目录里运行，避免锁住自己）：
 //!   easypub_updater.exe --mode update|rollback --pid <主程序进程号> --app-dir <程序目录>
 //! update：用 `.update\staging` 替换；rollback：用 `.update\backup` 换回上一版。

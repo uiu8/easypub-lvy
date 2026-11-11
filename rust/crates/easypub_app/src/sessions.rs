@@ -61,12 +61,12 @@ impl JobSnapshot {
 /// 导入任务状态变化通知（桥接第 1 批）。几个服务实例共用一个；多唤醒一次没有坏处。
 pub(crate) static IMPORT_SIGNAL: crate::signal::Signal = crate::signal::Signal::new();
 
-/// 同时进行的导入任务上限（V38，LIB-115）：与设置“同时处理的书”的最大档位相同。
+/// 同时进行的导入任务上限：与设置“同时处理的书”的最大档位相同。
 pub(crate) const MAX_ACTIVE_JOBS: usize = 8;
 
 struct State {
     next_id: u32,
-    /// 正在进行的任务及其取消令牌（V38 起可以有多个）。
+    /// 正在进行的任务及其取消令牌（后来可以有多个）。
     active: BTreeMap<u32, CancellationToken>,
     jobs: BTreeMap<u32, JobSnapshot>,
     sources: BTreeMap<String, Arc<SourceSnapshot>>,
@@ -172,7 +172,7 @@ impl ImportService {
         #[serde(deny_unknown_fields)]
         struct RebaseFrom {
             cleanup: Option<serde_json::Value>,
-            /// `post_edits` 基于检查点时，创建该检查点那一步保存的原始操作（CLEAN-105）。
+            /// `post_edits` 基于检查点时，创建该检查点那一步保存的原始操作。
             #[serde(default)]
             checkpoint_root: Option<crate::edit_checkpoint::EditRequest>,
         }
@@ -193,7 +193,7 @@ impl ImportService {
             #[serde(default)]
             review: easypub_core::review::Review,
             review_change: Option<ReviewChange>,
-            /// Several decisions in one request (CHK-052), validated against the same evidence.
+            /// Several decisions in one request, validated against the same evidence.
             #[serde(default)]
             review_changes: Vec<ReviewChange>,
             positions: Option<Positions>,
@@ -319,7 +319,7 @@ impl ImportService {
         })?;
         let (book, rebase) = match (&post_edits, &rebase_from) {
             (Some(edits), Some(from)) if !edits.is_empty() => {
-                // 检查点只存了结果：需要创建它那一步保存的原始操作才能换算（CLEAN-105）。
+                // 检查点只存了结果：需要创建它那一步保存的原始操作才能换算。
                 if edits.checkpoint.is_some() && from.checkpoint_root.is_none() {
                     return Err(ApiError::new(ErrorCode::InvalidRule, "publication", "rebase_checkpoint"));
                 }
@@ -593,7 +593,7 @@ impl ImportService {
         Ok(serde_json::json!({"settings":settings,"nodes":tree.nodes.iter().skip(offset as usize).take(30).collect::<Vec<_>>(),"total":tree.nodes.len(),"offset":offset,"prefix_end":tree.prefix_end,"source_bytes_covered":tree.source_bytes_covered,"source_unchanged":true}).to_string())
     }
     pub fn new() -> Result<Self, ApiError> {
-        // 导入在阻塞线程里进行；V38 起允许多本同时导入，阻塞线程数与任务上限相同。
+        // 导入在阻塞线程里进行；后来允许多本同时导入，阻塞线程数与任务上限相同。
         let runtime = Builder::new_multi_thread()
             .worker_threads(1)
             .max_blocking_threads(MAX_ACTIVE_JOBS)
@@ -1395,7 +1395,7 @@ mod tests {
 
     #[test]
     fn cancellation_stops_worker_before_releasing_capacity() {
-        // V38 起最多 MAX_ACTIVE_JOBS 个任务同时进行；名额满时，要等某个任务真正停下才腾出来。
+        // 后来最多 MAX_ACTIVE_JOBS 个任务同时进行；名额满时，要等某个任务真正停下才腾出来。
         let service = ImportService::new().unwrap();
         let ids: Vec<u32> = (0..MAX_ACTIVE_JOBS)
             .map(|_| service.start_cancellation_probe().unwrap())
@@ -1804,7 +1804,7 @@ mod rebase_composition_tests {
             )
             .unwrap_err();
         assert_eq!(error.next_action, "rebase_checkpoint");
-        // 带上创建检查点那一步保存的原始操作，就能分两段换算（CLEAN-105）。
+        // 带上创建检查点那一步保存的原始操作，就能分两段换算。
         let moved: serde_json::Value = serde_json::from_str(
             &service
                 .effective_structure_text(

@@ -4,7 +4,7 @@ import '../application/app_update_service.dart';
 import '../application/plugin_auto_update.dart';
 import '../src/rust/api.dart' as api;
 
-/// 经 Rust `op: app_update` 完成检查、下载与启动更新程序（V68）。
+/// 经 Rust `op: app_update` 完成检查、下载与启动更新程序。
 class LegacyAppUpdateService implements AppUpdateService, PluginUpdateService {
   LegacyAppUpdateService({this.appDirectory, this.baseUrl, this.testPublicKey});
 

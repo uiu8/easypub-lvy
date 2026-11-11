@@ -1,4 +1,4 @@
-//! 场景样式（V81，LAY-135）：正文里的聊天记录、动态、论坛楼层、日记、古籍、诏书、羊皮纸、告示与剪报。
+//! 场景样式：正文里的聊天记录、动态、论坛楼层、日记、古籍、诏书、羊皮纸、告示与剪报。
 //!
 //! 聊天记录可自动识别；其余场景由手工标注（`kind: inset`，`variant` 为场景）。每种场景按行的位置
 //! 认出标题、落款、楼层、名字等角色，CSS 只用线条、浅灰底色、字号、字距与对齐，原文不改。
@@ -27,11 +27,11 @@ pub fn is_type(v: &str) -> bool {
     TYPES.iter().any(|(id, _)| *id == v)
 }
 
-/// 场景识别（V82，LAY-137）：off 不按规则识别；on 内置识别与自定义规则生效。
+/// 场景识别：off 不按规则识别；on 内置识别与自定义规则生效。
 pub const INSET_DETECT: [&str; 2] = ["off", "on"];
 /// 聊天记录样式：off 不自动识别（手工标注的仍按 window 排）。
 pub const CHAT_BLOCK_STYLES: [&str; 4] = ["off", "window", "script", "channel"];
-/// 书信样式：plain 原样（V52）；ruled 信笺格线。
+/// 书信样式：plain 原样；ruled 信笺格线。
 pub const LETTER_BLOCK_STYLES: [&str; 2] = ["plain", "ruled"];
 /// 场景字体：kai 时场景样式里选了楷体的才用楷体（KFX 生效，AZW3 由 Kindling 去掉字体设置）；body 全部退回正文字体。
 pub const INSET_FONTS: [&str; 2] = ["kai", "body"];
@@ -54,7 +54,7 @@ impl Line {
     }
 }
 
-/// 场景识别（V82，LAY-137）：内置识别（诏书、论坛楼层）与本书的自定义规则。
+/// 场景识别：内置识别（诏书、论坛楼层）与本书的自定义规则。
 #[derive(Default)]
 pub struct Rules {
     pub edict: bool,
@@ -109,7 +109,7 @@ fn unbracket(t: &str) -> &str {
 }
 
 /// 聊天行“名字：内容”：可带整行【】[]［］；名字 1–6 字，不含空白与标点、不全是数字；内容不空。
-/// 叙述里的对白不算（V82 书库实测）：名字以“说、道、问、笑”等说话动词结尾（“宁姚说道：”），
+/// 叙述里的对白不算（书库实测）：名字以“说、道、问、笑”等说话动词结尾（“宁姚说道：”），
 /// 或内容以引号开头（“露娜：“……””）。返回名字与内容在 `line` 里的字节范围。
 pub fn chat_line(line: &str) -> Option<((usize, usize), (usize, usize))> {
     let t = line.trim();
@@ -188,7 +188,7 @@ fn is_count_line(t: &str) -> bool {
 }
 
 /// 楼层行：阿拉伯数字加“楼”或“L”（可带 #），或“#数字”，或“沙发 / 板凳 / 地板 / 楼主”，
-/// 后面是冒号，或是空白 / 行尾且整行不超过 24 字。“二楼。”“二楼窗畔……”这类叙述不算（V82 书库实测）。
+/// 后面是冒号，或是空白 / 行尾且整行不超过 24 字。“二楼。”“二楼窗畔……”这类叙述不算（书库实测）。
 fn is_floor_line(t: &str) -> bool {
     let t = t.trim();
     let hash = t.starts_with(['#', '＃']);
@@ -214,7 +214,7 @@ fn is_floor_line(t: &str) -> bool {
             && t.chars().count() <= 24)
 }
 
-/// 每种场景能用的角色（V82，LAY-138）：逐行指定时只能选这些。
+/// 每种场景能用的角色：逐行指定时只能选这些。
 pub fn allowed_roles(scene: &str) -> &'static [&'static str] {
     match scene {
         "chat" => &["head", "time", "say", "body"],
@@ -360,7 +360,7 @@ pub fn plan(
             .filter(|(s, _, _)| *s >= a.start && *s < a.end)
             .collect();
         let lines: Vec<&str> = inside.iter().map(|(s, e, _)| &text[*s..*e]).collect();
-        // 逐行指定的角色优先（V82，LAY-138）；空行不改。
+        // 逐行指定的角色优先；空行不改。
         let allowed = allowed_roles(kind);
         let computed: Vec<&'static str> = roles(kind, &lines)
             .into_iter()
@@ -385,7 +385,7 @@ pub fn plan(
             );
         }
     }
-    // 每行是否被标题或手工标注占用、是否像聊天行：各算一次（V83），不再每行遍历全部标注。
+    // 每行是否被标题或手工标注占用、是否像聊天行：各算一次，不再每行遍历全部标注。
     let mut sorted: Vec<(usize, usize)> = annotations.iter().map(|a| (a.start, a.end)).collect();
     sorted.sort_unstable();
     let mut heads: Vec<usize> = nodes.iter().map(|n| n.start).collect();
@@ -412,7 +412,7 @@ pub fn plan(
         .enumerate()
         .map(|(k, &(s, e, _))| !taken[k] && chat_line(&text[s..e]).is_some())
         .collect();
-    // 规则识别（V82）：手工标注之后、聊天识别之前；只用没有标题、没有标注、还没归入场景的行。
+    // 规则识别：手工标注之后、聊天识别之前；只用没有标题、没有标注、还没归入场景的行。
     let free = |out: &BTreeMap<usize, Line>, k: usize| !taken[k] && !out.contains_key(&ranges[k].0);
     let assign = |out: &mut BTreeMap<usize, Line>,
                   first: usize,

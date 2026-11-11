@@ -1,7 +1,7 @@
-// 批量修复（V9）：不给类别时是全书的“一键修复”，给类别时只修这一类。
-// 批量修复同类问题（V9）：读取同一类别的全部可直接应用方案 → 勾选 → 合并预览 → 确认应用。
+// 批量修复：不给类别时是全书的“一键修复”，给类别时只修这一类。
+// 批量修复同类问题：读取同一类别的全部可直接应用方案 → 勾选 → 合并预览 → 确认应用。
 // 仍走“预览 → 确认 → 复查”：应用前展示合并后的修改清单，应用后由调用方重新检查。
-// 漏识别的标题还可把所选项批量标记为“不是标题”（CHK-052）：只写审阅结论，不改正文，可逐项撤销。
+// 漏识别的标题还可把所选项批量标记为“不是标题”：只写审阅结论，不改正文，可逐项撤销。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -334,7 +334,7 @@ class _BatchRepairDialogState extends State<BatchRepairDialog> {
             ),
             const SizedBox(height: 8),
           ],
-          // 原“全部选择 / 全部取消”按钮改为表头三态勾选（G-067）。
+          // 原“全部选择 / 全部取消”按钮改为表头三态勾选。
           if (!reviewing && changes.isNotEmpty)
             SelectAllHeader(
               selected: selected.length,
@@ -401,7 +401,7 @@ class _BatchRepairDialogState extends State<BatchRepairDialog> {
   Widget row(ChapterRepairChange change, bool reviewing, int index) {
     final d = context.desk;
     final on = selected.contains(change.id);
-    // Shift+点击：上次点击到本行之间统一设成同一状态（G-067）。
+    // Shift+点击：上次点击到本行之间统一设成同一状态。
     void toggle() =>
         setMany([for (final i in range.span(index)) changes[i]], !on);
     return Material(

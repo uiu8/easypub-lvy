@@ -1,6 +1,6 @@
 part of 'library_page.dart';
 
-// R2-10：从 library_page.dart 拆出，行为不变。标题行：书库名、本数、自动入库角标、提示或导入进度（R2-01）、导入按钮。
+// 从 library_page.dart 拆出，行为不变。标题行：书库名、本数、自动入库角标、提示或导入进度、导入按钮。
 extension _LibraryHeader on _LibraryPageState {
   Widget header(
     bool importing, {
@@ -16,7 +16,7 @@ extension _LibraryHeader on _LibraryPageState {
       ),
       child: Row(
         children: [
-          // 左栏开关（V94）：放在标题最左，像常见的侧边栏按钮；点一下整栏滑出或收起。
+          // 左栏开关：放在标题最左，像常见的侧边栏按钮；点一下整栏滑出或收起。
           if (railAvailable) ...[
             IconButton(
               key: const ValueKey('library-rail-toggle'),
@@ -57,7 +57,7 @@ extension _LibraryHeader on _LibraryPageState {
               },
             ),
           ],
-          // 文件夹自动入库（V26，FOLD-081/082）：新增与原稿缺失的小角标，没有时不占位置。
+          // 文件夹自动入库：新增与原稿缺失的小角标，没有时不占位置。
           if (widget.library case final FolderAutoImportService auto)
             ValueListenableBuilder<AutoImportState>(
               valueListenable: auto.autoImportState,
@@ -104,7 +104,7 @@ extension _LibraryHeader on _LibraryPageState {
             Expanded(child: importProgress(books.length))
           else
             const Spacer(),
-          // 已有右侧详情栏时不再重复这个入口（LIB-108）。
+          // 已有右侧详情栏时不再重复这个入口。
           if (!widget.showConversionActions && currentId != null && !wide)
             DeskButton(
               '当前书详情',
@@ -156,7 +156,7 @@ extension _LibraryHeader on _LibraryPageState {
     );
   }
 
-  /// 导入进度（R2-01）：按新加入书库的本数计；已在书库或失败的文件不计入。
+  /// 导入进度：按新加入书库的本数计；已在书库或失败的文件不计入。
   Widget importProgress(int count) {
     final d = context.desk;
     final added = (count - importBase).clamp(0, importTotal);

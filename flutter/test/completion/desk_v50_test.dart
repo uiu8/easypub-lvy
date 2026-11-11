@@ -48,7 +48,7 @@ const sample =
     '——他愣住了，说不出话。\n'
     '　　念完，他推门而出。\n';
 
-/// V50：系统提示（LAY-121）与诗词（LAY-122）。
+/// 系统提示与诗词。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -145,7 +145,7 @@ void main() {
       await library.savePatch({'check_after_import': false});
       final file = File('$root/样书.txt')..writeAsStringSync(sample);
       expect((await library.importFiles([file.path])).single.succeeded, true);
-      // V77 起新书默认“分类样式”；本测试针对 V50 的“加框”，导入后显式设为加框。
+      // 后来新书默认“分类样式”；本测试针对早先的“加框”，导入后显式设为加框。
       expect(
         await state.production.confirm(
           await state.production.previewChanges({
@@ -256,7 +256,7 @@ void main() {
       final file = File('$root/苏醒.txt')..writeAsStringSync(sample);
       final original = file.readAsBytesSync();
       expect((await library.importFiles([file.path])).single.succeeded, true);
-      // V77 起新书默认“分类样式”；本测试针对 V50 的“加框”，导入后显式设为加框。
+      // 后来新书默认“分类样式”；本测试针对早先的“加框”，导入后显式设为加框。
       expect(
         await state.production.confirm(
           await state.production.previewChanges({

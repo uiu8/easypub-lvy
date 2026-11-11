@@ -19,7 +19,7 @@ import 'package:easypub_desktop/desk/widgets.dart' show formatFileSize;
 
 class _NoPicker extends Fake implements BookFilePicker {}
 
-/// V16：转换页、任务页、转换历史与成品验收（OUT-070–073、TASK-024–028）。
+/// 转换页、任务页、转换历史与成品验收。
 /// 真实应用、真实 Rust、真实 Kindling 转出 EPUB。
 void main() {
   setUpAll(
@@ -125,7 +125,7 @@ void main() {
     await settle();
     final router = GoRouter.of(t.element(find.byType(Navigator).first));
 
-    // 任务页空状态（TASK-027）。
+    // 任务页空状态。
     router.go('/tasks');
     await settle();
     expect(find.byKey(const ValueKey('tasks-empty')), findsOneWidget);
@@ -133,7 +133,7 @@ void main() {
     expect(find.text('停止队列'), findsNothing);
     expect(t.takeException(), isNull);
 
-    // 转换页：与书库一致的卷章与状态、三态全选、将生成的文件名（OUT-071–073）。
+    // 转换页：与书库一致的卷章与状态、三态全选、将生成的文件名。
     router.go(
       Uri(
         path: '/conversion',
@@ -201,13 +201,13 @@ void main() {
     final again = GoRouter.of(t.element(find.byType(Navigator).first));
     again.go('/tasks');
     await settle();
-    // 标题与筛选（TASK-024）：只显示有数量的分类，空闲时没有“停止队列”。
+    // 标题与筛选：只显示有数量的分类，空闲时没有“停止队列”。
     // 页头标题位置是页内页签（任务 | 转换历史 | 修改记录），不再另有“转换任务”标题。
     expect(find.byKey(const ValueKey(('page-switcher', '任务'))), findsOneWidget);
     expect(find.textContaining('失败 0'), findsNothing);
     expect(find.text('停止队列'), findsNothing);
     expect(find.text('新建转换'), findsOneWidget);
-    // 任务行写大小（TASK-025）；详情标题是文件名、步骤横排、没有“覆盖策略”（TASK-026）。
+    // 任务行写大小；详情标题是文件名、步骤横排、没有“覆盖策略”。
     final size = formatFileSize(File(outputPath!).lengthSync());
     expect(find.textContaining(size), findsWidgets);
     expect(find.byKey(const ValueKey('task-stages')), findsOneWidget);
@@ -219,7 +219,7 @@ void main() {
     expect(find.textContaining('..'), findsNothing);
     expect(t.takeException(), isNull);
 
-    // 成品验收：大小写 KB、作者为空不多出“·”、路径规范化（TASK-028）。
+    // 成品验收：大小写 KB、作者为空不多出“·”、路径规范化。
     again.go('/tasks/output/${Uri.encodeComponent(taskId!)}');
     await settle();
     expect(find.text(size), findsOneWidget);

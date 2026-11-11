@@ -279,7 +279,7 @@ void main() {
       expect(library.selection.value.selected, {other.id});
       await t.tap(find.byTooltip('书稿操作：${book.title}'));
       await t.pumpAndSettle();
-      // R1 起书籍操作菜单是编辑台菜单，在打开的面板里找条目。
+      // 后来书籍操作菜单是编辑台菜单，在打开的面板里找条目。
       await t.tap(
         find.descendant(
           of: find.byKey(deskMenuPanelKey),

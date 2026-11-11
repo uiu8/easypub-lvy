@@ -192,7 +192,7 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(find.text('查看默认变更'));
       await t.pumpAndSettle();
-      // 提示条上也有同名按钮（OUT-066）；这里点对话框中的那个。
+      // 提示条上也有同名按钮；这里点对话框中的那个。
       await t.tap(
         find.descendant(
           of: find.byType(ConversionDefaultsDialog),

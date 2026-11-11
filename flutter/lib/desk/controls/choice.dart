@@ -39,7 +39,7 @@ class DeskChoice<T> extends StatefulWidget {
   final String? disabledReason;
   final String Function(T value)? searchText;
 
-  /// 选择框里显示的文字（例如机型短名）；为 null 时与菜单项相同（LAY-102）。
+  /// 选择框里显示的文字（例如机型短名）；为 null 时与菜单项相同。
   final Widget Function(T value)? selectedLabel;
   @override
   State<DeskChoice<T>> createState() => _DeskChoiceState<T>();
@@ -93,10 +93,10 @@ class _DeskChoiceState<T> extends State<DeskChoice<T>> {
     return LayoutBuilder(
       builder: (context, bounds) {
         final width = bounds.maxWidth.isFinite ? bounds.maxWidth : 260.0;
-        // 面板最宽 = 选择框宽度，但至少 360、至多 520（R1 后修：窄选择框里的长选项
+        // 面板最宽 = 选择框宽度，但至少 360、至多 520（后来修：窄选择框里的长选项
         // 原来按 420 排字、面板却只有约 280 宽，长文件名被截掉）；选项文字按面板实际宽度省略。
         final panel = width.clamp(360.0, 520.0);
-        // V42（G-071）：外壳透明、不裁剪，由 _MenuEntrance 画出原来的面板并负责入场动画；
+        // 外壳透明、不裁剪，由 _MenuEntrance 画出原来的面板并负责入场动画；
         // 四周留出阴影的位置，再用 alignmentOffset 抵消，面板位置与原来相同。
         return MenuAnchor(
           controller: menu,
@@ -282,7 +282,7 @@ class DeskFilter<T> extends StatelessWidget {
 /// 打开着的命令菜单面板（测试与自动化按它找菜单里的条目）。
 const deskMenuPanelKey = ValueKey<String>('desk-menu-panel');
 
-/// 命令菜单（R1 起与 [DeskMenuButton] 同一实现）：保留原来的参数，面板在按钮正下方展开、
+/// 命令菜单（后来与 [DeskMenuButton] 同一实现）：保留原来的参数，面板在按钮正下方展开、
 /// 条目紧凑、点选当帧执行；[initialValue] 与 CheckedPopupMenuItem 在条目左侧打勾。
 class DeskCommandMenu<T> extends StatelessWidget {
   const DeskCommandMenu({
@@ -323,7 +323,7 @@ class DeskCommandMenu<T> extends StatelessWidget {
   );
 }
 
-/// 命令下拉菜单（V94）：写法同 PopupMenuButton（itemBuilder 里放 PopupMenuItem），
+/// 命令下拉菜单：写法同 PopupMenuButton（itemBuilder 里放 PopupMenuItem），
 /// 但面板在按钮正下方展开、不盖住按钮；条目 32 高、13 号字，入场 120ms，与 DeskChoice 同一面板。
 /// 条目沿用 PopupMenuItem 的 Key，只在菜单打开时才构造。
 class DeskMenuButton<T> extends StatefulWidget {
@@ -454,7 +454,7 @@ class _DeskMenuButtonState<T> extends State<DeskMenuButton<T>> {
   );
 }
 
-/// 命令菜单的一行（R1 公开，分组菜单共用）：32 高、13 号字，悬停凹底；不可用时变浅、不响应。
+/// 命令菜单的一行（公开，分组菜单共用）：32 高、13 号字，悬停凹底；不可用时变浅、不响应。
 /// [checked] 不为 null 时左侧留出勾的位置（为 true 时打勾）。
 class DeskMenuRow extends StatelessWidget {
   const DeskMenuRow({
@@ -481,10 +481,7 @@ class DeskMenuRow extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(checked == null ? 10 : 6, 6, 10, 6),
           alignment: Alignment.centerLeft,
           child: DefaultTextStyle.merge(
-            style: ui(
-              13,
-              c: onTap == null ? d.ink3 : d.ink,
-            ),
+            style: ui(13, c: onTap == null ? d.ink3 : d.ink),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             child: IconTheme.merge(
@@ -514,7 +511,7 @@ class DeskMenuRow extends StatelessWidget {
   }
 }
 
-/// 编辑台菜单面板（R1 公开）：表面色、10 圆角、细边与阴影，120ms 入场；分组菜单与命令菜单共用。
+/// 编辑台菜单面板（公开）：表面色、10 圆角、细边与阴影，120ms 入场；分组菜单与命令菜单共用。
 class DeskMenuSurface extends StatelessWidget {
   const DeskMenuSurface({
     super.key,
@@ -652,7 +649,7 @@ class _DeskSearchScopeState extends State<DeskSearchScope> {
   );
 }
 
-/// 下拉菜单面板（V42，G-071）：外观与主题里的菜单相同（表面色、10 圆角、细边、6 级阴影、4 内边距），
+/// 下拉菜单面板：外观与主题里的菜单相同（表面色、10 圆角、细边、6 级阴影、4 内边距），
 /// 打开时淡入并下滑 4 像素，[DeskMotion.snap] + [DeskMotion.easeOut]；减少动效时直接出现。
 /// 关闭仍由 MenuAnchor 立即移除。
 class _MenuEntrance extends StatefulWidget {

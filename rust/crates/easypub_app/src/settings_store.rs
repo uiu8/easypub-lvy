@@ -34,7 +34,7 @@ pub struct Configuration {
     pub favorite_folders: Vec<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub favorite_folder_names: BTreeMap<String, String>,
-    /// 自动入库的文件夹（V26，FOLD-080）：其中新出现的书自动导入书库。
+    /// 自动入库的文件夹：其中新出现的书自动导入书库。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub auto_import_folders: Vec<String>,
     /// 用户从书库移除过的、位于自动入库文件夹中的文件：不再自动导入。
@@ -62,7 +62,7 @@ pub struct Configuration {
     pub ui_scale: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_density: Option<String>,
-    /// V69：主题色编号（ink / teal / blue / violet / ochre / rose）。
+    /// 主题色编号（ink / teal / blue / violet / ochre / rose）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_accent: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -75,13 +75,13 @@ pub struct Configuration {
     pub import_directory: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub import_skip_existing: Option<bool>,
-    /// V78：我的系统提示样式（所有书可用）。
+    /// 我的系统提示样式（所有书可用）。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub block_style_library: Vec<crate::block_styles::SavedStyle>,
-    /// V82：我的场景样式（所有书可用）。
+    /// 我的场景样式（所有书可用）。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inset_style_library: Vec<crate::inset_styles::SavedInset>,
-    /// V72：从文件名提取作者（auto / custom / off）、自定义格式、书名里是否去掉作者名。
+    /// 从文件名提取作者（auto / custom / off）、自定义格式、书名里是否去掉作者名。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filename_author_mode: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -112,31 +112,31 @@ pub struct Configuration {
     pub attach_conversion_report: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub check_after_import: Option<bool>,
-    /// 导入时保留原书的行内样式和表格（G-113）：没有写就是开。
+    /// 导入时保留原书的行内样式和表格：没有写就是开。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keep_source_marks: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub check_before_conversion: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restore_window: Option<bool>,
-    /// V68：启动时检查更新（缺省为开）。
+    /// 启动时检查更新（缺省为开）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update_check_on_start: Option<bool>,
     /// 已装的插件随软件版本自动更新（缺省为开）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plugin_update_with_app: Option<bool>,
-    /// V68：用户选择“跳过这个版本”的批次号。
+    /// 用户选择“跳过这个版本”的批次号。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update_skipped_release: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generate_cover: Option<bool>,
-    /// V109：自动把 Kindle 不支持的图片转成 JPEG / PNG（缺省为开）。
+    /// 自动把 Kindle 不支持的图片转成 JPEG / PNG（缺省为开）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub convert_kindle_images: Option<bool>,
-    /// V134：开始转换后自动打开“转换任务”页（缺省为开）。
+    /// 开始转换后自动打开“转换任务”页（缺省为开）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub open_tasks_on_start: Option<bool>,
-    /// V109：左栏可关掉的页面（overview / folders / booksource / plugins），缺省只关概览。
+    /// 左栏可关掉的页面（overview / folders / booksource / plugins），缺省只关概览。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nav_hidden_pages: Option<Vec<String>>,
     #[serde(default, skip_serializing)]
@@ -155,10 +155,10 @@ pub struct Configuration {
     pub kindle_converter: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kfx_converter: Option<String>,
-    /// EPUB 原稿的默认转换路径（V27，OUT-080）：layout 使用软件排版，original 保持原格式。
+    /// EPUB 原稿的默认转换路径：layout 使用软件排版，original 保持原格式。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub epub_conversion_mode: Option<String>,
-    /// 同时处理的书（V38，SET-069）：auto 按逻辑处理器数决定，或 1 / 2 / 4 / 8 本。
+    /// 同时处理的书：auto 按逻辑处理器数决定，或 1 / 2 / 4 / 8 本。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parallel_books: Option<String>,
 }
@@ -256,7 +256,7 @@ impl Configuration {
         if self
             .ui_theme
             .as_deref()
-            // 跟随系统（V79，SET-074）；银灰（2026-10-23）。
+            // 跟随系统；银灰（2026-10-23）。
             .is_some_and(|theme| {
                 !matches!(theme, "paper" | "silver" | "night" | "contrast" | "system")
             })
@@ -866,7 +866,7 @@ mod tests {
         );
         assert_eq!(fs::read(dir.join(filename(1))).unwrap(), bytes);
     }
-    /// V26（FOLD-080）：自动入库文件夹与忽略列表可往返；相对路径被拒绝；旧设置没有这两项也能读。
+    /// 自动入库文件夹与忽略列表可往返；相对路径被拒绝；旧设置没有这两项也能读。
     #[test]
     fn auto_import_folders_roundtrip_and_reject_relative_paths() {
         let dir = directory();
@@ -896,7 +896,7 @@ mod tests {
         assert!(save(&dir, first.token.as_deref(), relative).is_err());
         let empty = serde_json::to_value(Configuration::default()).unwrap();
         assert!(empty.get("auto_import_folders").is_none());
-        // V27：EPUB 默认转换路径只接受 layout / original。
+        // EPUB 默认转换路径只接受 layout / original。
         let mode = Configuration {
             epub_conversion_mode: Some("original".into()),
             ..Default::default()
@@ -915,7 +915,7 @@ mod tests {
             ..Default::default()
         };
         assert!(save(&dir, saved.token.as_deref(), bad).is_err());
-        // V38：同时处理的书只接受 auto / 1 / 2 / 4 / 8。
+        // 同时处理的书只接受 auto / 1 / 2 / 4 / 8。
         let books = Configuration {
             parallel_books: Some("4".into()),
             ..Default::default()

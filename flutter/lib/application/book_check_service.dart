@@ -27,7 +27,7 @@ class CheckFinding {
   );
 }
 
-/// 文本清理检测的一条结果（CHK-055）：结构化保存，供检查页按规则分组显示。
+/// 文本清理检测的一条结果：结构化保存，供检查页按规则分组显示。
 class CleanupCheckItem {
   const CleanupCheckItem(
     this.line,
@@ -85,7 +85,7 @@ class CheckDomain {
   final List<CleanupCheckItem> cleanup;
 }
 
-/// 检查报告的格式版本（V19，CHK-060）。报告格式改变时加一；低于它的报告
+/// 检查报告的格式版本。报告格式改变时加一；低于它的报告
 /// 需要重新检查才能按当前方式显示。
 const checkReportSchema = 1;
 
@@ -115,10 +115,10 @@ class BookCheckReport {
   /// 报告的格式版本；没有版本号的旧报告读取时归类一次，见 [BookCheckReport.fromJson]。
   final int schema;
 
-  /// 书的标识（V19 起写入），用于按书回收缓存；更早的报告为空。
+  /// 书的标识（后来写入），用于按书回收缓存；更早的报告为空。
   final String bookId;
 
-  /// 需要重新检查才能按当前方式显示（CHK-058/060）。
+  /// 需要重新检查才能按当前方式显示。
   bool get outdated => schema < checkReportSchema;
 
   /// 检查完成的时间；旧报告没有记录时为 null。
@@ -188,8 +188,8 @@ class BookCheckReport {
           count: d['count'] as int?,
         ),
     ];
-    // V19 前的报告没有版本号：只在这里按 V14 的规则归类一次。没有检查时间，
-    // 或文本清理只有文字清单（V12 前）的为 0，其余为 1。
+    // 早先的报告没有版本号：只在这里按早先的规则归类一次。没有检查时间，
+    // 或文本清理只有文字清单（前）的为 0，其余为 1。
     final schema =
         value['schema'] as int? ??
         (checkedAt == null ||

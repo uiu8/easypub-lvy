@@ -83,7 +83,7 @@ class FolderController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 一次设置多本（全选、清空、Shift 选一段；G-067）；书库已有的书跳过。
+  /// 一次设置多本（全选、清空、Shift 选一段）；书库已有的书跳过。
   void setMany(Iterable<String> paths, bool value) {
     if (busy) return;
     final allowed = {

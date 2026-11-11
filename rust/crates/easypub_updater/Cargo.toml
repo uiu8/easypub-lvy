@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-# V68 自动更新：更新清单与签名校验、程序目录替换（主程序与更新程序共用），
+# 自动更新：更新清单与签名校验、程序目录替换（主程序与更新程序共用），
 # 以及随发布包分发的 easypub_updater.exe。release_sign 只在发布者本机使用，不进发布包。
 [[bin]]
 name = "easypub_updater"

@@ -1,5 +1,5 @@
-// 编辑台页面通用件（设计来源 design_review_v37/d4_*.dart 的 _hdr、_info 与表格卡片）：
-// 页头、提示条、浮起卡片、表头。D4 各页共用，避免每页自造。
+// 编辑台页面通用件：
+// 页头、提示条、浮起卡片、表头。各页共用，避免每页自造。
 import 'package:flutter/material.dart';
 
 import 'tokens.dart';
@@ -157,7 +157,7 @@ class DeskInfoBar extends StatelessWidget {
 }
 
 /// 浮起卡片：表面色、10 圆角、轻阴影，内容裁切；列表项在其中用 Material 承接点按效果。
-/// 内容区贴边（V135）：在它下面的第一层 [DeskCard] 画成直角、无阴影的整块，
+/// 内容区贴边：在它下面的第一层 [DeskCard] 画成直角、无阴影的整块，
 /// 更里面的卡片照常（每张卡片会把范围关掉再交给子组件）。
 class DeskEdgeScope extends InheritedWidget {
   const DeskEdgeScope({super.key, required super.child, this.flush = true});

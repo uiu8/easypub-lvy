@@ -1,4 +1,4 @@
-//! 场景样式参数（V82，LAY-136）：每种场景一组参数，内置预设就是参数；V82 的编辑器改的也是这组参数。
+//! 场景样式参数：每种场景一组参数，内置预设就是参数；早先的编辑器改的也是这组参数。
 //!
 //! CSS 由参数生成，只用线条、浅灰底色、字号、字距、对齐与字体；文字块的背景图只有“淡纸纹”
 //! （平均亮度约 245，Kindle 深色模式实测会随页面反转）。背景放在内层、边框放在外层，
@@ -304,7 +304,7 @@ impl InsetStyle {
     }
 }
 
-/// “我的场景样式”（V82，LAY-136）：存在全局设置里，所有书可用。
+/// “我的场景样式”：存在全局设置里，所有书可用。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SavedInset {
@@ -353,7 +353,7 @@ pub fn css(
     kai: bool,
 ) -> String {
     let mut css = String::from(
-        "/* 场景样式（V81、V82） */\n\
+        "/* 场景样式 */\n\
 .inset { margin: 0.8em 0; }\n\
 .inset .inset-line { text-indent: 0; margin: 0; }\n\
 .inset .inset-body { text-indent: 2em; }\n\

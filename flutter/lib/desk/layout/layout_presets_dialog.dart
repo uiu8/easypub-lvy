@@ -1,4 +1,4 @@
-// 迁入 desk（layout，V5/V6）：逻辑与布局沿用 V5 前的同名文件；公共弹窗框架样式在 V7 统一。
+// 迁入 desk（layout）：逻辑与布局沿用早先的同名文件；公共弹窗框架样式后来统一。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -87,7 +87,7 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
     });
   });
   Future<void> preview() => run(() async {
-    // 内置预设（V114）不必先复制到本项目，直接按它的数值预览。
+    // 内置预设不必先复制到本项目，直接按它的数值预览。
     final result = scope == 'builtin'
         ? await widget.session.previewBuiltin(selectedPreset!)
         : await widget.session.previewPreset(selected!);
@@ -226,7 +226,7 @@ class _LayoutPresetsDialogState extends State<LayoutPresetsDialog> {
   }
 
   @override
-  // 编辑台弹窗（R5-03）：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
+  // 编辑台弹窗：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
   Widget build(BuildContext context) => DeskDialog(
     title: plan == null ? '预设库' : '应用排版预设',
     closeTooltip: '关闭',

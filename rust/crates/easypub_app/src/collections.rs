@@ -1,4 +1,4 @@
-//! Book collections (LIB-118–126): named groups of library books saved with the
+//! Book collections: named groups of library books saved with the
 //! project. A collection only records membership and an optional metadata
 //! preset; applying the preset is an ordinary production patch that the user
 //! previews, so membership itself never edits a book.

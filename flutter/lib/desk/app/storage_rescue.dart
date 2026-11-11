@@ -1,4 +1,4 @@
-// 启动救援（V104，SET-112）：读不出软件数据的位置记录时只显示这一页，不新建工作区，
+// 启动救援：读不出软件数据的位置记录时只显示这一页，不新建工作区，
 // 以免空数据覆盖原来的书库。位置记录在固定位置 %LOCALAPPDATA%\EasyPub-RustFlutter\location.json。
 import 'dart:io';
 

@@ -51,7 +51,7 @@ class _Fake implements AppUpdateService {
   Future<void> launch(String mode) async {}
 }
 
-/// V68 界面截图：顶栏提示、更新对话框各状态、设置页“版本与更新”。输出 artifacts/v68-preview/。
+/// 界面截图：顶栏提示、更新对话框各状态、设置页“版本与更新”。输出 artifacts/v68-preview/。
 void main() {
   testWidgets('截图：自动更新', (t) async {
     final capture = GlobalKey();

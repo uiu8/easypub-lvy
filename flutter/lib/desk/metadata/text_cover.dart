@@ -1,4 +1,4 @@
-// 迁入 desk（V5a）：逻辑与布局沿用 V5 前的同名文件，只换面板与切换样式；见 docs/evidence/v5-meta-layout-resources-20261011.md。
+// 迁入 desk：逻辑与布局沿用早先的同名文件，只换面板与切换样式。
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -14,7 +14,7 @@ class TextCoverPainter extends CustomPainter {
   final String title, author, series;
   final Color color;
 
-  /// 样式包封面背景（V74b）：有背景时文字用深色，并在文字下铺浅底。
+  /// 样式包封面背景：有背景时文字用深色，并在文字下铺浅底。
   final ui.Image? background;
 
   /// Measures complete text; a null result means it cannot remain readable.

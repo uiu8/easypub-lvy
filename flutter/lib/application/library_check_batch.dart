@@ -16,7 +16,7 @@ class LibraryCheckBatch extends ChangeNotifier {
   int total = 0;
   String currentTitle = '';
 
-  /// 正在检查的书（V38 起可以同时几本）；关闭时全部取消。
+  /// 正在检查的书（后来可以同时几本）；关闭时全部取消。
   final Set<BookCheckSession> _active = {};
   final List<String> _runningTitles = [];
   void reset() {
@@ -41,7 +41,7 @@ class LibraryCheckBatch extends ChangeNotifier {
     _publish();
   }
 
-  /// [parallel] 为同时检查的本数（V38，LIB-115）；1 与原来的逐本检查相同。
+  /// [parallel] 为同时检查的本数；1 与原来的逐本检查相同。
   /// “停止”后不再开始新的书，正在检查的几本完成后结束。
   Future<void> run(
     List<(String, String)> books,

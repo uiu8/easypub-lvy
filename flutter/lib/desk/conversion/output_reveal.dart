@@ -1,4 +1,4 @@
-// 打开某次输出所在的文件夹（V18，LIB-113）。
+// 打开某次输出所在的文件夹。
 import 'dart:io';
 
 import '../../application/conversion_desktop.dart';

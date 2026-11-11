@@ -115,7 +115,7 @@ class RewriteApp extends StatefulWidget {
 }
 
 class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
-  /// 跟随系统时的深浅色（V79）：系统切换时重建主题。
+  /// 跟随系统时的深浅色：系统切换时重建主题。
   bool systemDark =
       WidgetsBinding.instance.platformDispatcher.platformBrightness ==
       Brightness.dark;
@@ -171,7 +171,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
             appearance?.configuration['ui_scale'] &&
         next.configuration['ui_accent'] ==
             appearance?.configuration['ui_accent'] &&
-        // 主题与密度（V79）：变化时重建主题。
+        // 主题与密度：变化时重建主题。
         next.configuration['ui_theme'] ==
             appearance?.configuration['ui_theme'] &&
         next.configuration['ui_density'] ==
@@ -232,7 +232,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
       );
       unawaited(updates!.start());
     }
-    // 文件夹自动入库（V26，FOLD-080）：窗口回到前台时同步一次。
+    // 文件夹自动入库：窗口回到前台时同步一次。
     if (widget.library case final FolderAutoImportService auto) {
       autoImportResume = AppLifecycleListener(
         onResume: () => unawaited(auto.syncAutoImport()),
@@ -242,7 +242,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
 
   AppLifecycleListener? autoImportResume;
 
-  /// 自动更新（V68）：整个程序一个；顶栏提示与设置页共用。
+  /// 自动更新：整个程序一个；顶栏提示与设置页共用。
   AppUpdateController? updates;
 
   final quickActivity = ValueNotifier<bool>(false);
@@ -388,7 +388,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
 
   bool convertChecked = false;
 
-  /// 书库页：有勾选时右下角默认转换已勾选的书；可在范围菜单改回“当前书”（LIB-094）。
+  /// 书库页：有勾选时右下角默认转换已勾选的书；可在范围菜单改回“当前书”。
   bool libraryConvertChecked = true;
   bool preparingOutput = false;
   String outputMessage = '';
@@ -619,7 +619,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
     });
   }
 
-  /// 书源下载为 EPUB（LIB-215），见 download_epub.dart。
+  /// 书源下载为 EPUB，见 download_epub.dart。
   Future<DownloadEpubResult> exportDownloadedEpub(String path) =>
       exportDownloadAsEpub(
         library: widget.library,
@@ -629,12 +629,12 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
         onImported: (out) => noteDownloadImport(path, out),
       );
 
-  /// 书源下载加入书库后，书库里已有这本书、下载内容却变了（追更、重新整理）的路径（V111）：
+  /// 书源下载加入书库后，书库里已有这本书、下载内容却变了（追更、重新整理）的路径：
   /// 草稿保留没动，下载队列据此提示“书库里是旧版本”并给出“刷新来源”。
   final outdatedDownloads = <String>{};
   String _downloadKey(String path) => path.replaceAll('/', r'\').toLowerCase();
 
-  /// 删除书源下载的书（V134）：可选移出书库；[files] 移到回收站。删了文件的那批移除不能撤销。
+  /// 删除书源下载的书：可选移出书库；[files] 移到回收站。删了文件的那批移除不能撤销。
   Future<String?> deleteDownloadedBook(
     List<String> files, {
     required String path,
@@ -673,7 +673,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
     }
   }
 
-  /// 文件解不开时一本本问编码（G-114）。
+  /// 文件解不开时一本本问编码。
   bool askingEncoding = false;
   Future<void> askEncoding() async {
     final service = widget.library;
@@ -780,7 +780,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
           choice.plan!,
           acknowledgeWarnings: choice.plan!.needsAcknowledgement,
         );
-        // 开始转换后是否打开“转换任务”页（V134，设置 · 成品与输出，缺省打开）。
+        // 开始转换后是否打开“转换任务”页（设置 · 成品与输出，缺省打开）。
         if (appearanceSettings
                 ?.snapshot
                 .value
@@ -876,7 +876,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
 
   var libraryView = LibraryViewState();
 
-  /// 左侧导航栏是否展开（G-084）：默认窄栏，本次运行内记住。
+  /// 左侧导航栏是否展开：默认窄栏，本次运行内记住。
   final navExpanded = ValueNotifier<bool>(false);
   final checkViews = <String, CheckViewState>{};
   final chapterViews = <String, ChapterViewState>{};
@@ -919,8 +919,8 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
   });
   final settingsPageTitle = ValueNotifier<String>('外观与交互');
 
-  /// 待应用登记（G-061）：页面报告未确认的预览，托盘只读展示。
-  /// 检查进度（docs/42）：跨页面常驻，状态放在这里，页面切换时不丢。
+  /// 待应用登记：页面报告未确认的预览，托盘只读展示。
+  /// 检查进度：跨页面常驻，状态放在这里，页面切换时不丢。
   late final checkBoard = CheckBoard(
     library: widget.library,
     go: (location) => router.go(location),

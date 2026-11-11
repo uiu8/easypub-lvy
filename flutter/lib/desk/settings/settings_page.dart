@@ -1,4 +1,4 @@
-// 设置（D4-I，V8 按设计换视图外壳）：分类导航、分组卡片与开关行按设计重写；各分类内容与保存逻辑沿用原实现。
+// 设置（按设计换视图外壳）：分类导航、分组卡片与开关行按设计重写；各分类内容与保存逻辑沿用原实现。
 import '../dialogs.dart';
 import '../tokens.dart';
 import '../widgets.dart';
@@ -47,11 +47,11 @@ class SettingsPage extends StatefulWidget {
     this.focusItem,
   });
 
-  /// 打开时的分组与要定位的设置项（R1，命令面板“设置项”组）。
+  /// 打开时的分组与要定位的设置项（命令面板“设置项”组）。
   final int? initialTab;
   final String? focusItem;
 
-  /// 读取版本与本版更新（V22，SET-066）；测试可以替换。
+  /// 读取版本与本版更新；测试可以替换。
   final Future<AppInfo> Function() appInfo;
   final SettingsService settings;
   final ConversionDesktop? desktop;
@@ -80,16 +80,16 @@ class _SettingsPageState extends State<SettingsPage> {
   String? kfxPath;
   Map<String, dynamic>? backupInspection;
 
-  /// 版本与本版更新（SET-066），进入页面时读取一次。
+  /// 版本与本版更新，进入页面时读取一次。
   AppInfo? info;
 
-  /// 检查缓存的统计（SET-065）；进入“数据与迁移”时读取。
+  /// 检查缓存的统计；进入“数据与迁移”时读取。
   CheckCachePreview? checkCache;
   bool checkCacheBusy = false;
   String checkCacheError = '';
   final _emptyFavorites = ValueNotifier<List<String>>(const []);
 
-  /// 分区名称与各页标题一致（SET-062）；配置迁移并入“数据与迁移”，
+  /// 分区名称与各页标题一致；配置迁移并入“数据与迁移”，
   /// 设置的来源层级并入“关于与许可”。
   static const tabs = settingsTabNames;
   static const tabIcons = [
@@ -115,7 +115,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _focusItem(item);
     }
     // load() 一开始就会同步通知共享状态；放到首帧之后，避免在构建期间刷新其他页面
-    // （从“变更记录”进入设置时，正在释放的记录页会收到通知而报错，V15）。
+    // （从“变更记录”进入设置时，正在释放的记录页会收到通知而报错）。
     widget.appInfo().then((value) {
       if (mounted) setState(() => info = value);
     });
@@ -352,7 +352,7 @@ class _SettingsPageState extends State<SettingsPage> {
     ),
   );
 
-  /// 版本与更新（V68，SET-071–073）：检查、下载、重启更新与回退；没有更新服务时不显示。
+  /// 版本与更新：检查、下载、重启更新与回退；没有更新服务时不显示。
   List<Widget> _updateGroup() {
     if (AppUpdateScope.maybeOf(context) == null) return const [];
     final library = widget.library, picker = widget.picker;
@@ -373,7 +373,7 @@ class _SettingsPageState extends State<SettingsPage> {
     ];
   }
 
-  /// 本版更新（SET-066）：摘自包内说明；开发版本不显示。
+  /// 本版更新：摘自包内说明；开发版本不显示。
   List<Widget> _releaseNotesGroup() {
     final current = info;
     if (current == null || !current.packaged || current.releaseNotes.isEmpty) {
@@ -404,7 +404,7 @@ class _SettingsPageState extends State<SettingsPage> {
     ];
   }
 
-  /// 崩溃日志（SET-067）：只读，保存在本机设置目录。
+  /// 崩溃日志：只读，保存在本机设置目录。
   List<Widget> _crashLogGroup() {
     final service = widget.settings is CrashLogService
         ? widget.settings as CrashLogService
@@ -498,7 +498,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  /// 清理检查缓存（CHK-061）：先列出将删除的份数与大小，确认后才删除。
+  /// 清理检查缓存：先列出将删除的份数与大小，确认后才删除。
   Future<void> _cleanCheckCache() async {
     final service = _checkCacheService;
     final preview = checkCache;
@@ -655,7 +655,7 @@ class _SettingsPageState extends State<SettingsPage> {
     ];
   }
 
-  /// 存储位置搬家后重启（V104）：先走离开保护，再启动新进程并关闭本窗口。
+  /// 存储位置搬家后重启：先走离开保护，再启动新进程并关闭本窗口。
   Future<String?> _restartForStorage() async {
     final library = widget.library, picker = widget.picker;
     if (library != null &&
@@ -905,7 +905,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return ok;
   }
 
-  // 分区只留标题；说明一律收进各组标题旁的“?”（SET-068）。
+  // 分区只留标题；说明一律收进各组标题旁的“?”。
   static const settingsWidth = 720.0;
 
   Widget section(String title, List<Widget> children) {
@@ -975,7 +975,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           child: Row(
             children: [
-              // 文字与问号占满剩余宽度，开关始终靠右（V43，SET-070）。
+              // 文字与问号占满剩余宽度，开关始终靠右。
               Expanded(
                 child: Row(
                   children: [
@@ -998,7 +998,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  /// 左栏页面开关（V109）：打开为显示，存的是收起的页面列表。
+  /// 左栏页面开关：打开为显示，存的是收起的页面列表。
   Widget navToggle(
     SettingsSnapshot state,
     String page,
@@ -1166,7 +1166,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget body(SettingsSnapshot state) => switch (tab) {
     0 => section('外观与交互', [
-      // 界面主题（V79，SET-074）：立即生效并保存；跟随系统时随 Windows 深浅色切换。
+      // 界面主题：立即生效并保存；跟随系统时随 Windows 深浅色切换。
       Row(
         children: [
           Text('主题', style: ui(13, c: context.desk.ink)),
@@ -1188,7 +1188,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
       const SizedBox(height: 12),
-      // 主题色（V69，G-072）：点色块立即生效并保存。
+      // 主题色：点色块立即生效并保存。
       Row(
         key: const ValueKey('settings-accent'),
         children: [
@@ -1448,7 +1448,7 @@ class _SettingsPageState extends State<SettingsPage> {
         'check_after_import',
         state.configuration['check_after_import'] != false,
       ),
-      // 从文件名提取作者（V72，LIB-116）。
+      // 从文件名提取作者。
       FileNameAuthorSettings(
         configuration: state.configuration,
         saving: saving,
@@ -1477,7 +1477,7 @@ class _SettingsPageState extends State<SettingsPage> {
     ]),
     2 => section('成品与输出', [
       groupTitle('默认输出格式', ''),
-      // KFX 需要的 Bokai 在“转换工具”中管理，这里只在 KFX 选项下注明（SET-063）。
+      // KFX 需要的 Bokai 在“转换工具”中管理，这里只在 KFX 选项下注明。
       DeskFormGrid(
         columns: 4,
         minColumnWidth: 150,
@@ -1529,7 +1529,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
         ],
       ),
-      // 同时处理的书（V38，SET-069）：导入、书库检查、转换前检查与转换共用。
+      // 同时处理的书：导入、书库检查、转换前检查与转换共用。
       const SizedBox(height: 14),
       groupTitle(
         '同时处理的书',
@@ -1623,7 +1623,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         value == null ? null : save({'output_naming': value}),
             ),
           ),
-          // EPUB 的默认转换路径（V27，OUT-080）；转换页每本书还可以单独切换。
+          // EPUB 的默认转换路径；转换页每本书还可以单独切换。
           choiceRow(
             'EPUB 原稿转换',
             DeskChoice<String>(
@@ -1695,7 +1695,7 @@ class _SettingsPageState extends State<SettingsPage> {
       toggle(
         state,
         '开始转换后打开转换任务页',
-        '关掉后留在当前页面，进度在左栏“转换任务”和底部输出栏里看（V134）',
+        '关掉后留在当前页面，进度在左栏“转换任务”和底部输出栏里看',
         'open_tasks_on_start',
         state.configuration['open_tasks_on_start'] != false,
       ),
@@ -1980,7 +1980,7 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     ]),
     5 => section('数据与迁移', [
-      // 存储位置（V104，SET-108–112）：生产入口初始化过存储布局时才有。
+      // 存储位置：生产入口初始化过存储布局时才有。
       if (widget.library case final StorageSettingsService storage
           when storage.storageAvailable) ...[
         groupTitle('存储位置', '软件数据、缓存和图片放在哪里。软件数据搬家要重启后生效，原位置的数据保留；缓存可以按类清理。'),
@@ -2048,7 +2048,7 @@ class _SettingsPageState extends State<SettingsPage> {
           '字段：${(backupInspection!['fields'] as List?)?.whereType<String>().join('、') ?? ''}',
         ),
       ..._checkCacheGroup(),
-      // 配置迁移直接放在这里，不再单独占一个分区（SET-062）。
+      // 配置迁移直接放在这里，不再单独占一个分区。
       groupTitle('迁移旧版配置', '先检查旧 XML/JSON，再由你确认写入新配置；检查不会自动覆盖当前设置。'),
       ..._migration(state),
       const SizedBox(height: 14),
@@ -2174,7 +2174,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
       ),
-      // 原“字段来源”分区只有说明文字，并入这里（SET-062）。
+      // 原“字段来源”分区只有说明文字，并入这里。
       groupTitle('设置的来源与优先级', '同一项设置有多个来源时，后面的覆盖前面的。'),
       for (final entry in const [
         ('元信息', '书籍信息页 / 文件夹映射'),
@@ -2428,7 +2428,7 @@ class _SettingsPageState extends State<SettingsPage> {
         '$value';
   }
 
-  /// 定位设置项（R1）：等分组内容出来后找到同名文字，滚到可见处并短暂框出。
+  /// 定位设置项：等分组内容出来后找到同名文字，滚到可见处并短暂框出。
   Future<void> _focusItem(String label) async {
     for (var i = 0; i < 60 && mounted; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 50));

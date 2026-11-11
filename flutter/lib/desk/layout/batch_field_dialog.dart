@@ -1,4 +1,4 @@
-// 迁入 desk（layout，V5/V6）：逻辑与布局沿用 V5 前的同名文件；公共弹窗框架样式在 V7 统一。
+// 迁入 desk（layout）：逻辑与布局沿用早先的同名文件；公共弹窗框架样式后来统一。
 import 'package:flutter/material.dart';
 
 import '../../application/book_information_service.dart';
@@ -115,7 +115,7 @@ class BatchFieldDialog extends StatefulWidget {
 class _BatchFieldDialogState extends State<BatchFieldDialog> {
   late final draft = Set<String>.of(widget.selected);
 
-  /// 全部字段（全选用；G-067）。
+  /// 全部字段（全选用）。
   Iterable<String> get allFields => batchFieldLabels.keys;
   void setMany(Iterable<String> keys, bool value) => setState(() {
     value ? draft.addAll(keys) : draft.removeAll(keys);
@@ -159,7 +159,7 @@ class _BatchFieldDialogState extends State<BatchFieldDialog> {
       ),
     ],
   );
-  // 编辑台弹窗（R5-03）：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
+  // 编辑台弹窗：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
   @override
   Widget build(BuildContext context) => DeskDialog(
     title: '选择要复制的字段',

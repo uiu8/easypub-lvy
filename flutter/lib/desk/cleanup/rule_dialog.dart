@@ -1,6 +1,5 @@
-// 编辑清理规则（CLEAN-042–067）：左栏规则参数，右栏本书试算。试算只读，迟到的旧结果与过期结果都不显示；
-// 采用只返回规则，正文仍须检测并确认后才改变。逻辑沿用 V4 前的 CleanupRuleDialog。
-// 设计：design_review_v37/d3_cleanup.dart（D3-J 编辑清理规则）。
+// 编辑清理规则：左栏规则参数，右栏本书试算。试算只读，迟到的旧结果与过期结果都不显示；
+// 采用只返回规则，正文仍须检测并确认后才改变。逻辑沿用早先的 CleanupRuleDialog。
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -356,7 +355,7 @@ class _CleanupRuleDialogState extends State<CleanupRuleDialog> {
     Key? key,
   }) {
     final d = context.desk;
-    // R4-10：编辑台的选择框（原为 Material 下拉）。
+    // 编辑台的选择框（原为 Material 下拉）。
     return DeskChoice<String>(
       key: key,
       initialValue: value,
@@ -414,7 +413,7 @@ class _CleanupRuleDialogState extends State<CleanupRuleDialog> {
       choice('转换方向', direction, const {
         't2s': '繁体 → 简体',
         's2t': '简体 → 繁体',
-        // V113：台湾、香港字形与台湾常用词。
+        // 台湾、香港字形与台湾常用词。
         'tw2s': '台湾正体 → 简体',
         'tw2sp': '台湾正体 → 简体（含用词，如“軟體”→“软件”）',
         'hk2s': '香港繁体 → 简体',
@@ -556,7 +555,7 @@ class _CleanupRuleDialogState extends State<CleanupRuleDialog> {
             for (final v in {...editable, kind}) v: cleanupLabels[v] ?? v,
           },
           (v) {
-            // V134：名称还是上一个类型的默认名（或空）时跟着换，
+            // 名称还是上一个类型的默认名（或空）时跟着换，
             // 否则选了“简繁转换”仍叫“行尾空白”；用户自己改过的名称保留。
             final current = name.text.trim();
             if (current.isEmpty || current == (cleanupLabels[kind] ?? kind)) {

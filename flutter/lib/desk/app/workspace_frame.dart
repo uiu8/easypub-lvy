@@ -34,7 +34,7 @@ class _SaveStatus extends StatelessWidget {
   }
 }
 
-/// 标题栏面包屑：当前书（书稿页面）+ 页面名；末段打开页面导航（G-023–026）。
+/// 标题栏面包屑：当前书（书稿页面）+ 页面名；末段打开页面导航。
 class _Crumbs extends StatelessWidget {
   const _Crumbs({
     required this.library,
@@ -169,7 +169,7 @@ class _Workspace extends StatelessWidget {
               status: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 自动更新（V68）：有新版本 / 下载中 / 待重启时出现。
+                  // 自动更新：有新版本 / 下载中 / 待重启时出现。
                   if (AppUpdateScope.maybeOf(context) case final updates?)
                     UpdatePill(
                       controller: updates,
@@ -216,7 +216,7 @@ class _Workspace extends StatelessWidget {
                             ),
                           ),
                         Expanded(
-                          // 内容区贴边（V135）：不再四周留白、套圆角框；与顶栏、左栏只隔一条淡线，
+                          // 内容区贴边：不再四周留白、套圆角框；与顶栏、左栏只隔一条淡线，
                           // 页面最外层的卡片自动拉平（DeskEdgeScope）。
                           child: DecoratedBox(
                             decoration: BoxDecoration(
@@ -241,7 +241,7 @@ class _Workspace extends StatelessWidget {
                             ),
                           ),
                         ),
-                        // 检查进度（docs/42）：占内容区下面一行，不盖住任何东西。
+                        // 检查进度：占内容区下面一行，不盖住任何东西。
                         CheckProgressBar(
                           board: app.checkBoard,
                           bookId: GoRouterState.of(context)
@@ -292,7 +292,7 @@ class _Workspace extends StatelessWidget {
             label: '书库',
             icon: Icons.library_books_outlined,
             shortcut: 'Alt 1',
-            // 只有书库页本身（没有页面标题）才高亮；书源、插件等页不再连带点亮书库（V94）。
+            // 只有书库页本身（没有页面标题）才高亮；书源、插件等页不再连带点亮书库。
             selected: !folders && title == null,
             onTap: () => context.go('/'),
           ),
@@ -304,7 +304,7 @@ class _Workspace extends StatelessWidget {
               selected: folders,
               onTap: () => context.go('/folders'),
             ),
-          // 书源下载插件启用后才出现；也可在设置里从左栏收起（V109）。
+          // 书源下载插件启用后才出现；也可在设置里从左栏收起。
           if (PluginRegistry.instance.isActive('booksource') &&
               !hidden.contains('booksource'))
             DeskRailEntry(
@@ -326,7 +326,7 @@ class _Workspace extends StatelessWidget {
           onTap: () => app.chooseBook(context),
         ),
         bookEntries: [
-          // V109：概览默认从左栏收起，可在设置里打开。
+          // 概览默认从左栏收起，可在设置里打开。
           if (!hidden.contains('overview'))
             DeskRailEntry(
               label: '概览',
@@ -339,7 +339,7 @@ class _Workspace extends StatelessWidget {
             shortLabel: '检查',
             icon: Icons.fact_check_outlined,
             shortcut: 'Alt 3',
-            // 规则页从检查页进入（V64，CH-279），左栏不单列，打开时仍高亮“检查”。
+            // 规则页从检查页进入，左栏不单列，打开时仍高亮“检查”。
             selected: title == '检查与修复' || title == '识别与检查规则',
             onTap: () => openBook('checks'),
             // 状态点取自书稿的缓存检查状态（BookSummary.status），不触发新的检查。
@@ -499,7 +499,7 @@ class _AccessibleCanvas extends StatelessWidget {
   Widget build(BuildContext context) => child;
 }
 
-/// 合并页面的页内页签（V109）：书籍信息 | 图片与资源；任务 | 转换历史 | 修改记录。
+/// 合并页面的页内页签：书籍信息 | 图片与资源；任务 | 转换历史 | 修改记录。
 /// 显示在页头标题的位置（DeskPageTitle），当前页签加底色。
 class _PageSwitcher extends StatelessWidget {
   const _PageSwitcher({required this.group, required this.current});

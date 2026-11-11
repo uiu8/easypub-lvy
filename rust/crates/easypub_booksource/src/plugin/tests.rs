@@ -52,7 +52,7 @@ fn v88_storage_stream_queue_and_legacy_rebuild() {
         "header":"{\"Cookie\":\"sid=fake-test-secret\",\"Authorization\":\"fake-auth\"}",
         "ruleSearch":{"bookList":"li","name":"a@text","author":"span@text","bookUrl":"a@href"},
         "ruleBookInfo":{"tocUrl":"#toc@href"},"ruleToc":{"chapterList":"li","chapterName":"a@text","chapterUrl":"a@href"},"ruleContent":{"content":"#c@html"}});
-    // V87 的扁平 sources.json 无管理字段，新版可直接读取。
+    // 的扁平 sources.json 无管理字段，新版可直接读取。
     let mut legacy = rules.clone();
     legacy["header"] = json!("");
     std::fs::write(root.join("sources.json"), json!([legacy]).to_string()).unwrap();
@@ -197,7 +197,7 @@ fn v88_storage_stream_queue_and_legacy_rebuild() {
         .unwrap();
     assert_eq!(before["check"]["ok"], false);
     assert_eq!(before["check"]["stage"], "content");
-    // V103：显式单源交互、独立校验记录、重叠拒绝及取消。
+    // 显式单源交互、独立校验记录、重叠拒绝及取消。
     for params in [
         json!({"interactive":true}),
         json!({"interactive":true,"ids":[base,check_id],"checkId":"bad"}),
@@ -337,7 +337,7 @@ fn v88_storage_stream_queue_and_legacy_rebuild() {
     assert_eq!(records.len(), 1);
     let path = PathBuf::from(records[0]["path"].as_str().unwrap());
     assert!(path.is_file());
-    // 单独清除下载记录（LIB-223）：只删这一条记录，文件与书架记录不动。
+    // 单独清除下载记录：只删这一条记录，文件与书架记录不动。
     assert!(handle("queue.remove", &json!({"taskId":"no-such-task"})).is_err());
     handle("queue.remove", &json!({"taskId":id})).unwrap();
     assert!(state().queue.iter().all(|t| t.id != id));
@@ -368,7 +368,7 @@ fn v88_storage_stream_queue_and_legacy_rebuild() {
     assert_eq!(listed[1]["enabled"], true);
     handle("sources.dedupe", &json!({"action":"delete"})).unwrap();
     assert_eq!(runtime(&base).unwrap().source.meta.id, listed[1]["id"]);
-    // 重置运行状态（V108）：书源脚本存的变量随运行状态一起丢掉，下次用时是新的。
+    // 重置运行状态：书源脚本存的变量随运行状态一起丢掉，下次用时是新的。
     let before = runtime(&base).unwrap();
     before
         .vars
@@ -560,7 +560,7 @@ fn explore_refresh_rejects_stale_results() {
     .unwrap();
 }
 
-/// V91：导入偏好（名称 / 分组覆盖、新书源位置）对文件导入生效，并持久化。
+/// 导入偏好（名称 / 分组覆盖、新书源位置）对文件导入生效，并持久化。
 fn import_options_keep_user_fields_and_place_new_sources(base: &str, root: &std::path::Path) {
     let defaults = handle("sources.importOptions.get", &json!({})).unwrap();
     assert_eq!(

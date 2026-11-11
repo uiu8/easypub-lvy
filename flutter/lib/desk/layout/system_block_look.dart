@@ -1,4 +1,4 @@
-// 系统提示分类样式在小预览里的画法（V104，LAY-146）：数值与 Rust `block_styles` 生成的 CSS 相同，
+// 系统提示分类样式在小预览里的画法：数值与 Rust `block_styles` 生成的 CSS 相同，
 // 括号、键名、面板标题的判断与 Rust `strip_brackets`、`mark_key`、`is_title`、`is_ding_line` 一致。
 import 'package:flutter/painting.dart';
 
@@ -30,7 +30,7 @@ class SystemBlockLook {
   final String border, title, spacing;
   final bool doubleLine, thick, center, bold, keyBold, removeBrackets;
 
-  /// V119：灰色线、楷体、块缩进（none / small / large / narrow）、圆角。
+  /// 灰色线、楷体、块缩进（none / small / large / narrow）、圆角。
   final bool gray, kai, radius;
   final String inset;
 

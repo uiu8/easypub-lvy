@@ -8,7 +8,7 @@ import 'desk_v88_booksource_test.dart' as v88;
 import 'desk_v89_booksource_test.dart' as v89;
 import 'desk_v90_booksource_test.dart' as v90;
 
-/// V91：导入偏好与书架定时检查保存在插件端；两项并发随调用传给插件。
+/// 导入偏好与书架定时检查保存在插件端；两项并发随调用传给插件。
 class V91Api extends v90.V90Api {
   Map<String, dynamic> importOptions = {
     'position': 'bottom',

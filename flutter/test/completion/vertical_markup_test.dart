@@ -9,7 +9,7 @@ import 'package:easypub_desktop/infrastructure/legacy_conversion_session.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
 
-/// V28 样书：《论语》选段（公有领域），带注音、着重号和不同位数的数字。
+/// 样书：《论语》选段（公有领域），带注音、着重号和不同位数的数字。
 const sample =
     '第一章 ｜学而《xué ér》\n'
     '子曰：学而时习之，不亦｜说《yuè》乎？有朋自远方来，不亦乐乎？人不知而不愠，不亦｜君子《・・》乎？\n'

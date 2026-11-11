@@ -48,7 +48,7 @@ PreviewStyle style(String first) => PreviewStyle(
   firstParagraph: first,
 );
 
-/// V49：章首段落样式（LAY-119）。
+/// 章首段落样式。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -254,7 +254,7 @@ void main() {
       expect(xhtml, contains('<span class="first-char">天</span>亮了。'));
       expect(
         xhtml,
-        // V114：弯引号连同相邻的字放进不断行片段，以引号开头的首段仍不放大。
+        // 弯引号连同相邻的字放进不断行片段，以引号开头的首段仍不放大。
         contains(
           'first-para" data-source="true" data-eol="lf">'
           '<span class="nb">“明</span>天出海吗<span class="nb">？”</span>',

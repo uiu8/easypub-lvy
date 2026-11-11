@@ -1,7 +1,7 @@
-// 命令面板（G-062）：Ctrl+K 或标题栏搜索框打开。每条命令带稳定功能 ID；
+// 命令面板：Ctrl+K 或标题栏搜索框打开。每条命令带稳定功能 ID；
 // 支持中文、拼音首字母与功能 ID 检索；不可用命令显示原因且不能执行。
 // 面板只负责跳转与打开既有入口，不直接执行任何修改正文的应用动作。
-// V70（G-075/076）：未输入时最上方列出“最近使用”；书名一类命令只在输入后出现。
+// 未输入时最上方列出“最近使用”；书名一类命令只在输入后出现。
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,7 +22,7 @@ class DeskCommand {
     this.searchOnly = false,
   });
 
-  /// 功能对照表中的稳定 ID，例如 G-005。
+  /// 命令的稳定标识，例如 G-005。
   final String id;
   final String label, group, initials, keywords;
   final String? shortcut, disabledReason;
@@ -60,7 +60,7 @@ class DeskCommand {
 }
 
 /// [recent] 为最近执行命令的 [DeskCommand.key]（最近的在前）；[onRun] 在执行前调用，用于记录。
-/// [more] 是打开后才读取的命令（R1：当前书的章节），读到后并入，不耽误面板打开。
+/// [more] 是打开后才读取的命令（当前书的章节），读到后并入，不耽误面板打开。
 Future<void> showDeskCommandPalette(
   BuildContext context,
   List<DeskCommand> commands, {

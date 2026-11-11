@@ -13,7 +13,7 @@ pub enum Kind {
     Quote,
     Verse,
     System,
-    /// 场景（V81，LAY-135）：variant 为场景编号，见 [crate::insets::TYPES]。
+    /// 场景：variant 为场景编号，见 [crate::insets::TYPES]。
     Inset,
     None,
 }
@@ -27,10 +27,10 @@ pub struct Annotation {
     pub end: usize,
     pub kind: Kind,
     pub fingerprint: String,
-    /// 系统提示的样式（V78，LAY-134）：note 单行提示、panel 面板；不填按行数。
+    /// 系统提示的样式：note 单行提示、panel 面板；不填按行数。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variant: Option<String>,
-    /// 场景逐行指定的角色（V82，LAY-138）：标注内第几行（从 0 起）→ 角色；不指定的行自动判断。
+    /// 场景逐行指定的角色：标注内第几行（从 0 起）→ 角色；不指定的行自动判断。
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub roles: BTreeMap<usize, String>,
 }
@@ -212,7 +212,7 @@ fn variant_ok(kind: Kind, v: Option<&str>) -> bool {
         _ => v.is_none(),
     }
 }
-/// 有效标注所在的正文分节与行号（V53，与 line_range 同一编号），供章节页在行号旁画出标注。
+/// 有效标注所在的正文分节与行号（与 line_range 同一编号），供章节页在行号旁画出标注。
 pub(crate) fn locate(book: &EffectiveBook, start: usize, end: usize) -> Value {
     let (entry_id, mut offset) = match book
         .tree
@@ -251,7 +251,7 @@ pub(crate) fn locate(book: &EffectiveBook, start: usize, end: usize) -> Value {
     }
     Value::Null
 }
-/// 有效场景标注的各行文字（每行最多 200 字，最多 200 行）与自动判断的角色（V82，LAY-138）。
+/// 有效场景标注的各行文字（每行最多 200 字，最多 200 行）与自动判断的角色。
 fn inset_lines(a: &Annotation, book: &EffectiveBook, valid: bool) -> (Value, Value) {
     let Some(scene) = a
         .variant
@@ -507,7 +507,7 @@ mod tests {
     }
     #[test]
     fn locate_inverts_line_range_for_prefix_chapters_and_line_endings() {
-        // V53：章节页用 location 在行号旁画标注，必须与 resolveLines 的行号互逆。
+        // 章节页用 location 在行号旁画标注，必须与 resolveLines 的行号互逆。
         let (_, book) =
             book("卷首语甲\n卷首语乙\n第一章 开始\r\n甲\r\n乙\r\n丙\r\n第二章 下山\n丁\n戊");
         let mut cases = vec![("$prefix".to_owned(), 1, 2)];

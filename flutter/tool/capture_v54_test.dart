@@ -17,7 +17,7 @@ import 'package:easypub_desktop/desk/layout/layout_page.dart';
 const ornamentPng =
     'iVBORw0KGgoAAAANSUhEUgAAAHgAAAAoCAIAAAC6iKlyAAAAcklEQVR4nO3QQREAMAjAMOTgX+FchMcaBb3OhpjrgF80Gmk00mik0UijkUYjjUYajTQaaTTSaKTRSKORRiONRhqNNBppNNJopNFIo5FGI41GGo00Gmk00mik0UijkUYjjUYajTQaaTTSaKTRSKORRq/xAMdpynmBG6HUAAAAAElFTkSuQmCC';
 
-/// V54 界面截图：排版页“章首图”一组（已设图，显示用于与宽度）。输出 artifacts/v54-preview/。
+/// 界面截图：排版页“章首图”一组（已设图，显示用于与宽度）。输出 artifacts/v54-preview/。
 void main() {
   testWidgets('截图：排版页章首图', (t) async {
     final capture = GlobalKey();

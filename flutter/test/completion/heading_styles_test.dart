@@ -10,7 +10,7 @@ import 'package:easypub_desktop/infrastructure/legacy_conversion_session.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
 
-/// V36 样书：章前引言加三章（文字为本测试自拟）。
+/// 样书：章前引言加三章（文字为本测试自拟）。
 const sample =
     '这是一段写在第一章之前的引言。\n'
     '第一章 我祖上封过神\n'
@@ -84,9 +84,8 @@ void main() {
         Platform.environment['EASYPUB_TEST_DLL']!,
       ),
     );
-    final root = (await Directory(
-      '../artifacts',
-    ).createTemp('heading-styles-')).absolute;
+    final root = (await Directory('../artifacts').createTemp('heading-styles-'))
+        .absolute;
     final bokai = Platform.environment['EASYPUB_TEST_BOKAI']!;
     final state = PrototypeState(settingsDirectory: '${root.path}/settings');
     final library = LegacyLibraryAdapter(backend: state);
@@ -136,10 +135,7 @@ void main() {
 
     try {
       await library.load();
-      expect(
-        await library.savePatch({'check_after_import': false}),
-        true,
-      );
+      expect(await library.savePatch({'check_after_import': false}), true);
       for (final style in headingStyles.keys) {
         expect(
           await library.savePatch({
@@ -149,7 +145,10 @@ void main() {
         );
         final source = File('${root.path}/$style.txt')
           ..writeAsStringSync(sample);
-        expect((await library.importFiles([source.path])).single.succeeded, true);
+        expect(
+          (await library.importFiles([source.path])).single.succeeded,
+          true,
+        );
         final id = state.currentId;
         expect(state.production.settings(id)['heading_style'], style);
         final directory = '${root.path}/$style';
@@ -163,7 +162,9 @@ void main() {
         expect(css, contains('text-align: center'));
         expect(
           css,
-          contains('.chapter-start, .volume-start, .front-start { break-before: page;'),
+          contains(
+            '.chapter-start, .volume-start, .front-start { break-before: page;',
+          ),
         );
         final xhtml = joined(epub, '.xhtml');
         if (style == 'two_line') {
@@ -213,8 +214,10 @@ void main() {
           'epub_chapter_files': epubChapters.keys.toList(),
           'azw3': azw3,
           'azw3_chapter_files': azw3Chapters.keys.toList(),
-          'azw3_css_has_heading': expected[style]!
-              .every((part) => azw3Css.replaceAll(' ', '').contains(part.replaceAll(' ', ''))),
+          'azw3_css_has_heading': expected[style]!.every(
+            (part) =>
+                azw3Css.replaceAll(' ', '').contains(part.replaceAll(' ', '')),
+          ),
           'kfx': kfx,
           'kfx_chapter_files': kfxChapters.keys.toList(),
           'kfx_has_dotted': kfxAll.contains('dotted'),

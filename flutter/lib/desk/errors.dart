@@ -1,4 +1,4 @@
-// 错误原因对照表（V15，G-065）：把后端返回的 next_action 换成“发生了什么、接下来怎么做”。
+// 错误原因对照表：把后端返回的 next_action 换成“发生了什么、接下来怎么做”。
 // 所有页面在 catch 里用 deskErrorText(e, 兜底说明)，不再只显示“失败，请重试”。
 // 对照表里没有的后端错误，在兜底说明后附上错误代码，便于反馈定位。
 import 'dart:io';
@@ -154,7 +154,7 @@ const _reasons = <String, String>{
   'restart_application': '请重新启动程序后再试。',
   'use_action_object': '内部请求格式不对。请重新打开页面。',
   'use_supported_action': '这个操作不受支持。请换一种方式。',
-  // 自动更新（V68）。
+  // 自动更新。
   'update_network': '连不上 GitHub。请检查网络，或稍后再试；也可以到发布页手动下载。',
   'update_not_found': '发布页上没有找到更新信息。请稍后再试，或到发布页手动下载。',
   'update_signature_invalid': '更新信息的签名不对，已拒绝。请到发布页手动下载，或向作者反馈。',
@@ -175,7 +175,7 @@ const _reasons = <String, String>{
   'update_replace_failed': '替换文件失败',
   'update_staging_invalid': '下载的新版本不完整',
   'update_staging_missing': '下载的新版本不见了',
-  // R9：后端已有、界面原来没有中文说明的原因码。
+  // 后端已有、界面原来没有中文说明的原因码。
   'update_action_invalid': '更新请求不完整。请关闭本窗口后重新检查更新。',
   'update_cancelled': '已取消更新，没有替换任何文件。',
   'update_job_missing': '找不到这次更新任务，可能已经结束。请重新检查更新。',
@@ -213,7 +213,7 @@ const _reasons = <String, String>{
   'choose_file_under_128_mib': '文件超过 128 MB，超出处理上限。请拆分后再导入。',
   'reduce_epub_entry_count': 'EPUB 里的文件太多，超出处理上限。请换一份 EPUB，或先用其他工具整理。',
   'reduce_epub_file_size': 'EPUB 太大，超出处理上限。请换一份较小的 EPUB。',
-  // AZW3 / MOBI 导入（V131）
+  // AZW3 / MOBI 导入
   'kindle_file_has_drm': '这本书有 DRM 保护，不能导入。只能导入没有 DRM 的 AZW3 / MOBI 文件。',
   'choose_azw3_or_mobi_file': '这不是 AZW3 / MOBI 文件，或文件已损坏。请换一份文件。',
   'choose_valid_kindle_file': 'AZW3 / MOBI 文件结构不完整，可能已损坏。请换一份文件。',
@@ -266,7 +266,7 @@ String deskErrorText(Object error, String fallback) {
   return fallback;
 }
 
-/// 书源插件错误转译（V105，P0-04）：将 PluginError、Rust 原因码或底层异常转为可读说明，
+/// 书源插件错误转译：将 PluginError、Rust 原因码或底层异常转为可读说明，
 /// 剥离 Exception/AnyhowException 等技术前缀，不吞掉插件已给出的中文原因。
 String bookSourceErrorText(Object error, [String fallback = '书源操作未完成，请重试。']) {
   if (error is PluginError ||
@@ -285,7 +285,7 @@ String bookSourceErrorText(Object error, [String fallback = '书源操作未完�
   return _reasons[raw] ?? raw;
 }
 
-/// 结构化深比较（V105，P0-05）：在内存中递归比对 Map/List/Set 与基本类型，避免高频 jsonEncode。
+/// 结构化深比较：在内存中递归比对 Map/List/Set 与基本类型，避免高频 jsonEncode。
 bool deskDeepEquals(Object? a, Object? b) {
   if (identical(a, b)) return true;
   if (a is Map && b is Map) {

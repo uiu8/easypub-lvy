@@ -136,7 +136,7 @@ void main() {
         ),
       );
       await settle();
-      // V2c：问题浏览器宽于 760 时队列常驻，980 宽窗口下队列与详情并排，不需要“返回问题列表”。
+      // 问题浏览器宽于 760 时队列常驻，980 宽窗口下队列与详情并排，不需要“返回问题列表”。
       expect(find.byKey(const ValueKey('check-issue-list')), findsOneWidget);
       expect(find.byTooltip('返回问题列表'), findsNothing);
       await shot('chapters-980-list');

@@ -71,7 +71,7 @@ class _SampleState extends State<_Sample> {
   );
 }
 
-/// V23：列表三态全选与默认勾选（G-067/068）、识别规则入口（CH-261/262）。
+/// 列表三态全选与默认勾选、识别规则入口。
 void main() {
   setUpAll(
     () async => RustLib.init(

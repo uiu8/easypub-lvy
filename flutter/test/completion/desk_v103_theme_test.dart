@@ -1,4 +1,4 @@
-// V103 银灰主题与主题色（SET-101、SET-102）：取用户截图里头发的灰。
+// 银灰主题与主题色：取用户截图里头发的灰。
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/tokens.dart';
 import 'package:flutter/material.dart';

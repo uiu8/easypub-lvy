@@ -1,6 +1,6 @@
-// 自动保存状态（G-030）：位于标题栏右侧，悬停显示具体信息。
-// V15：已保存状态写作“草稿已自动保存”，悬停说明与项目文件的区别（G-066）。
-// R1：点击打开小浮层——状态、上次保存时间、失败原因、草稿与项目文件的区别、“立即保存”。
+// 自动保存状态：位于标题栏右侧，悬停显示具体信息。
+// 已保存状态写作“草稿已自动保存”，悬停说明与项目文件的区别。
+// 点击打开小浮层——状态、上次保存时间、失败原因、草稿与项目文件的区别、“立即保存”。
 import 'package:flutter/material.dart';
 
 import '../controls/controls.dart';
@@ -153,7 +153,7 @@ class DeskSaveBadge extends StatelessWidget {
         ),
       ],
       builder: (context, controller, _) => Tooltip(
-        // 草稿自动保存与项目文件是两回事（G-066）：悬停时说明两者的区别。
+        // 草稿自动保存与项目文件是两回事：悬停时说明两者的区别。
         message: [
           message.isNotEmpty ? message : text,
           '草稿保存在本机，关闭后再打开可以继续。',

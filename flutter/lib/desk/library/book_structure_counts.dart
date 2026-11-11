@@ -1,4 +1,4 @@
-// 迁入 desk（library，V5/V6）：逻辑与布局沿用 V5 前的同名文件；公共弹窗框架样式在 V7 统一。
+// 迁入 desk（library）：逻辑与布局沿用早先的同名文件；公共弹窗框架样式后来统一。
 import 'package:flutter/material.dart';
 
 import '../../application/library_service.dart';
@@ -18,7 +18,7 @@ class BookStructureCounts extends StatefulWidget {
   final bool compact;
   final String prefix;
 
-  /// 指定时替换默认字号与颜色，便于与同一行的其他文字对齐（LIB-105）。
+  /// 指定时替换默认字号与颜色，便于与同一行的其他文字对齐。
   final TextStyle? style;
   @override
   State<BookStructureCounts> createState() => _BookStructureCountsState();
@@ -57,10 +57,7 @@ class _BookStructureCountsState extends State<BookStructureCounts> {
       if (snapshot.hasError) {
         return InkWell(
           onTap: () => setState(read),
-          child: Text(
-            '统计读取失败，点击重试',
-            style: ui(12, c: context.desk.accent),
-          ),
+          child: Text('统计读取失败，点击重试', style: ui(12, c: context.desk.accent)),
         );
       }
       final data = snapshot.connectionState == ConnectionState.done
@@ -69,18 +66,14 @@ class _BookStructureCountsState extends State<BookStructureCounts> {
       return Text(
         data == null
             ? (value == null ? '统计不可用' : '统计读取中…')
-            // 没有分卷时不显示“0 卷”（V12）。
+            // 没有分卷时不显示“0 卷”。
             : data['volumes'] == 0
             ? '${widget.prefix}${data['chapters']} 章'
             : '${widget.prefix}${data['volumes']} 卷 · ${data['chapters']} 章',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style:
-            widget.style ??
-            ui(
-              widget.compact ? 12 : 14,
-              c: context.desk.ink2,
-            ),
+            widget.style ?? ui(widget.compact ? 12 : 14, c: context.desk.ink2),
       );
     },
   );

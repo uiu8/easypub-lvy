@@ -1,4 +1,4 @@
-// 转换百分比显示（V134）：任务运行时每半秒按估算刷新一次。
+// 转换百分比显示：任务运行时每半秒按估算刷新一次。
 import 'dart:async';
 
 import 'package:flutter/material.dart';

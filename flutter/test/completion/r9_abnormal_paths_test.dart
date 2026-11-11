@@ -7,7 +7,7 @@ import 'package:easypub_desktop/src/rust/frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// R9 异常环境：路径含特殊字符与超长路径、原文件被其他程序独占、成品目标只读。
+/// 异常环境：路径含特殊字符与超长路径、原文件被其他程序独占、成品目标只读。
 /// 真实 DLL、隔离设置目录；只验证“能完成或给出可读原因，不崩溃、不改原文件”。
 void main() {
   late Directory root;

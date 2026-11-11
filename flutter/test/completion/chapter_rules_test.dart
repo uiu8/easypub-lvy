@@ -82,9 +82,9 @@ void main() {
       );
       await t.tap(find.text('打开规则'));
       await settle();
-      // V3：规则字段标签移到输入框上方，改用稳定 key 定位（CH-104）。
+      // 规则字段标签移到输入框上方，改用稳定 key 定位。
       final field = find.byKey(const ValueKey('rules-chapter_pattern'));
-      // V9：底栏显示已应用规则的标识；编辑后另显示编辑中的标识。
+      // 底栏显示已应用规则的标识；编辑后另显示编辑中的标识。
       String footer() =>
           t.widget<Text>(find.byKey(const ValueKey('rules-fingerprint'))).data!;
       expect(footer(), startsWith('已应用规则 #'));

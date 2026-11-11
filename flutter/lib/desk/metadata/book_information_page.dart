@@ -1,6 +1,5 @@
-// 书籍信息（META-001–020）：左侧基本信息与系列分类（停顿自动应用，不合法输入只暂存），右侧封面预览、
-// 适配与封面入口。保存、草稿、离开保护的逻辑逐行沿用 V5 前的 BookInformationPage。
-// 设计：design_review_v37/d3_meta.dart（D3-A）。
+// 书籍信息：左侧基本信息与系列分类（停顿自动应用，不合法输入只暂存），右侧封面预览、
+// 适配与封面入口。保存、草稿、离开保护的逻辑逐行沿用早先的 BookInformationPage。
 import 'dart:async';
 
 import 'package:desktop_drop/desktop_drop.dart';
@@ -207,7 +206,7 @@ class _BookInformationPageState extends State<BookInformationPage> {
     return await autosave?.flushWorkspace() ?? !busy;
   }
 
-  /// 拖入的图片（R1 后，用户反馈）：与“选择图片”同一流程，预先核验这张图。
+  /// 拖入的图片（后，用户反馈）：与“选择图片”同一流程，预先核验这张图。
   bool dropHover = false;
   Future<void> dropImage(DropDoneDetails details) async {
     setState(() => dropHover = false);
@@ -330,7 +329,7 @@ class _BookInformationPageState extends State<BookInformationPage> {
     }
   }
 
-  // ---------------------------------------------------------------- 视图（V5 起，设计 D3-A）
+  // ---------------------------------------------------------------- 视图（设计）
 
   /// 窄窗时“书籍信息 / 封面”分段切换。
   int pane = 0;
@@ -370,7 +369,7 @@ class _BookInformationPageState extends State<BookInformationPage> {
         maxLines: lines,
         enabled: !busy,
         style: ui(13, c: context.desk.ink),
-        // 语言留空时成品用设置里的默认语言，写明并给入口（R5-07）。
+        // 语言留空时成品用设置里的默认语言，写明并给入口。
         decoration: key == 'language'
             ? marked(key, deskInput(context)).copyWith(
                 hintText: '留空时用设置里的默认语言',

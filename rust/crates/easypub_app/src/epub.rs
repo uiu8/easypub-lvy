@@ -38,7 +38,7 @@ pub fn write_controlled<W: Write + Seek>(
 ) -> Result<W, ApiError> {
     write_profile(prepared, writer, false, false, false, checkpoint)
 }
-/// 真机预览用（V83）：内容与 [write] 相同，但只打包不压缩——随后马上解开，压缩只是白费时间。
+/// 真机预览用：内容与 [write] 相同，但只打包不压缩——随后马上解开，压缩只是白费时间。
 pub fn write_unpacked_preview<W: Write + Seek>(
     prepared: &Prepared,
     writer: W,
@@ -57,7 +57,7 @@ pub fn write_kindling_input<W: Write + Seek>(
             "choose_cover_before_kindling_export",
         ));
     }
-    // 转换器的输入只在本机临时目录里读一次（V83）：只打包不压缩。
+    // 转换器的输入只在本机临时目录里读一次：只打包不压缩。
     write_profile(prepared, writer, true, false, true, &|| Ok(()))
 }
 /// KFX renders its cover as a native image; preserve its aspect ratio.
@@ -109,7 +109,7 @@ fn write_profile<W: Write + Seek>(
             }
         }
     }
-    // KFX（Bokai）的封面页用普通图片、高度随宽度，保持原图比例（OUT-074）。
+    // KFX（Bokai）的封面页用普通图片、高度随宽度，保持原图比例。
     if bokai && let Some(cover) = crate::publication_documents::cover_page(prepared, false)? {
         docs.pages.insert("cover.xhtml".into(), cover);
     }
@@ -122,7 +122,7 @@ fn write_profile<W: Write + Seek>(
             crate::kindling_navigation::prepare(&docs.pages["nav.xhtml"], &m.title, prepared.id())?;
         docs.pages.insert("kindling.ncx".into(), ncx);
     }
-    // 导航地标（V46，OUT-084）：封面、目录、正文开头；在生成 Kindling 的 NCX 之后加入，不影响其目录。
+    // 导航地标：封面、目录、正文开头；在生成 Kindling 的 NCX 之后加入，不影响其目录。
     // 在调整阅读顺序之后计算，Kindling 输入因此不含封面地标，不会把封面页带回正文流。
     let mut landmarks = landmarks(&docs);
     let start = match m.navigation_options.start.as_str() {
@@ -187,8 +187,8 @@ fn write_profile<W: Write + Seek>(
     files.insert(
         m.stylesheet.id.clone(),
         if bokai {
-            // KFX 的封面页是普通图片；Bokai 不支持 vh，去掉 SVG 封面规则（OUT-074）。
-            // Bokai 也不支持 text-shadow：经典章节标题的阴影只留给 EPUB 与 Kindling（V36，LAY-117）。
+            // KFX 的封面页是普通图片；Bokai 不支持 vh，去掉 SVG 封面规则。
+            // Bokai 也不支持 text-shadow：经典章节标题的阴影只留给 EPUB 与 Kindling。
             Cow::Owned(
                 m.stylesheet
                     .css
@@ -223,7 +223,7 @@ fn write_profile<W: Write + Seek>(
             Cow::Borrowed(prepared.font_bytes(&font.id).ok_or_else(invalid)?),
         );
     }
-    // 每章一个文件（V36，OUT-081）：三千章的长篇加上插图也在上限之内。
+    // 每章一个文件：三千章的长篇加上插图也在上限之内。
     if files.len() > 16384 || files.values().map(|b| b.len()).sum::<usize>() > 384 * 1024 * 1024 {
         return Err(invalid());
     }
@@ -283,7 +283,7 @@ fn write_profile<W: Write + Seek>(
             escaped(&m.isbn)?
         ));
     }
-    // 竖排（V28，LAY-104）：Kindle 与 Bokai 从这里读取主书写方向。
+    // 竖排：Kindle 与 Bokai 从这里读取主书写方向。
     if m.writing_mode == "vertical" {
         opf.push_str("<meta name=\"primary-writing-mode\" content=\"vertical-rl\"/>");
     }
@@ -337,7 +337,7 @@ fn write_profile<W: Write + Seek>(
         let properties = if name == "nav.xhtml" {
             " properties=\"nav\""
         } else if name == "cover.xhtml" && !bokai {
-            // 封面页里有 SVG，EPUB 3 要求在清单中声明（OUT-074）。
+            // 封面页里有 SVG，EPUB 3 要求在清单中声明。
             " properties=\"svg\""
         } else if m.cover.as_ref() == Some(name) {
             " properties=\"cover-image\""
@@ -460,7 +460,7 @@ fn write_profile<W: Write + Seek>(
     zip.finish().map_err(|_| invalid())
 }
 
-/// 导航地标目标（V46，OUT-084）：(epub:type, 名称, 链接)。封面页与可见目录在阅读顺序中才列出；
+/// 导航地标目标：(epub:type, 名称, 链接)。封面页与可见目录在阅读顺序中才列出；
 /// 正文开头取第一个卷或章所在的文件，没有卷章时取第一个正文文件。
 fn landmarks(
     docs: &crate::publication_documents::Documents,
@@ -747,7 +747,7 @@ mod tests {
                                 1
                             );
                         }
-                        // 导航地标与 guide（V46，OUT-084）：正文开头必有，且都指向阅读顺序中的文件。
+                        // 导航地标与 guide：正文开头必有，且都指向阅读顺序中的文件。
                         let spine_files: Vec<&str> = opf
                             .descendants()
                             .filter(|n| n.has_tag_name("itemref"))
@@ -777,7 +777,7 @@ mod tests {
                             .collect();
                         assert!(guide.contains(&"text".to_owned()));
                         assert_eq!(guide.len(), landmarks.len());
-                        // 每章一个文件（V36，OUT-081）：按 spine 顺序读全部正文文件。
+                        // 每章一个文件：按 spine 顺序读全部正文文件。
                         let docs: Vec<_> = opf
                             .descendants()
                             .filter(|n| n.has_tag_name("itemref"))

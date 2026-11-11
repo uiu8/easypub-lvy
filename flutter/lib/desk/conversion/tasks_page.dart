@@ -1,5 +1,5 @@
-// 转换任务（D4-G，V8 按设计重写视图）：任务流、停止、按原批次重试与详情逻辑沿用原实现。
-// V16：标题与筛选、任务行封面与大小、详情精简、空状态（TASK-024–027）。
+// 转换任务（按设计重写视图）：任务流、停止、按原批次重试与详情逻辑沿用原实现。
+// 标题与筛选、任务行封面与大小、详情精简、空状态。
 import 'conversion_percent.dart';
 
 import 'dart:io';
@@ -37,7 +37,7 @@ class TasksPage extends StatefulWidget {
   final VoidCallback onAdd;
   final VoidCallback onHistory;
 
-  /// 页头的“转换历史”按钮；程序里由顶部切换条代替（V109），单独使用时保留。
+  /// 页头的“转换历史”按钮；程序里由顶部切换条代替，单独使用时保留。
   final bool historyButton;
   final void Function(String taskId) onOutput;
   final void Function(List<String> bookIds) onRetry;
@@ -52,7 +52,7 @@ class _TasksPageState extends State<TasksPage> {
       item.taskId ?? '${item.bookId}\u0000${item.format}\u0000${item.path}';
   bool stopping = false, retrying = false;
 
-  /// 成品文件的大小与修改时间：只读一次磁盘，读不到就不显示（TASK-025）。
+  /// 成品文件的大小与修改时间：只读一次磁盘，读不到就不显示。
   final _stats = <String, FileStat?>{};
   FileStat? statOf(ConversionOutput item) {
     if (!item.complete || item.path.isEmpty) return null;
@@ -635,7 +635,7 @@ class _TasksPageState extends State<TasksPage> {
 }
 
 extension on _TasksPageState {
-  /// 还没有任何转换任务时：居中说明与入口，不再显示两块空白（TASK-027）。
+  /// 还没有任何转换任务时：居中说明与入口，不再显示两块空白。
   Widget emptyState(BuildContext context) {
     final d = context.desk;
     return Center(
@@ -679,7 +679,7 @@ extension on _TasksPageState {
 }
 
 /// 任务的封面：优先用本次任务保存的封面缩略快照，其次用本次设置的封面，
-/// 都没有时用与书库一致的生成封面（TASK-025）。
+/// 都没有时用与书库一致的生成封面。
 class TaskCover extends StatelessWidget {
   const TaskCover(this.item, {super.key, required this.width});
   final ConversionOutput item;
@@ -790,7 +790,7 @@ class TaskStages extends StatelessWidget {
               flex: 1,
               child: Padding(
                 padding: const EdgeInsets.only(top: 8),
-                // 阶段之间的进度槽：走到下一阶段才填满（V105 视觉语言）。
+                // 阶段之间的进度槽：走到下一阶段才填满（视觉语言）。
                 child: DeskProgressTrack(
                   value: active >= i ? 1 : 0,
                   color: d.add,

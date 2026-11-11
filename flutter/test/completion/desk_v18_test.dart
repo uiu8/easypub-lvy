@@ -15,7 +15,7 @@ import 'package:easypub_desktop/desk/conversion/output_history_page.dart';
 import 'package:easypub_desktop/desk/conversion/output_reveal.dart';
 import 'package:easypub_desktop/desk/library/book_summary_panel.dart';
 
-/// V18：输出记录对应书库中的书（OUT-076/077），书库详情“最近输出”（LIB-113）。真实 Rust。
+/// 输出记录对应书库中的书，书库详情“最近输出”。真实 Rust。
 class _Desktop implements ConversionDesktop, BookSourceDesktop {
   final calls = <String>[];
   @override

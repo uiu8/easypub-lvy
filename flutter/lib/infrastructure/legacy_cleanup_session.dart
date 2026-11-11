@@ -429,7 +429,7 @@ class LegacyCleanupSession extends ChangeNotifier
               'rebase_from': {
                 'cleanup':
                     history['history'][history['cursor']]['base']['cleanup'],
-                // 章节修改基于检查点时带上原始操作，才能分两段换算（CLEAN-105）。
+                // 章节修改基于检查点时带上原始操作，才能分两段换算。
                 'checkpoint_root': ?backend.manuscript.effectiveCheckpointRoot(
                   bookId,
                 ),

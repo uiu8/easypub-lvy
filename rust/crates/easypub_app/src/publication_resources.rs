@@ -22,7 +22,7 @@ pub struct Request {
     pub cleanup: Option<Value>,
     pub catalog: Option<crate::catalog::CompositionSelection>,
     pub post_edits: Option<crate::edit_checkpoint::EditRequest>,
-    /// V109：设置里关掉“自动转换 Kindle 不支持的图片”时为真，封面与插图保留原图。
+    /// 设置里关掉“自动转换 Kindle 不支持的图片”时为真，封面与插图保留原图。
     #[serde(default)]
     pub keep_original_images: bool,
 }
@@ -43,7 +43,7 @@ pub struct Placement {
     pub after_utf8: usize,
     pub caption: String,
     pub alt: String,
-    /// 插图版式（V54，RES-050）。
+    /// 插图版式。
     pub layout: String,
 }
 #[derive(Serialize)]
@@ -110,31 +110,31 @@ pub struct Manifest {
     pub include_toc: bool,
     pub visible_toc: bool,
     pub chapter_navigation: bool,
-    /// 竖排（V28）与纵中横位数。
+    /// 竖排与纵中横位数。
     pub writing_mode: String,
     pub vertical_digits: u8,
-    /// 章节标题样式（V36，LAY-117）：精排两行要在标题里分出“第 N 章”。
+    /// 章节标题样式：精排两行要在标题里分出“第 N 章”。
     pub heading_style: String,
-    /// 场景分隔样式（V46，LAY-118）。
+    /// 场景分隔样式。
     pub scene_break_style: String,
-    /// 成对注释（V48，LAY-120）：默认关闭，仅改变成品结构。
+    /// 成对注释：默认关闭，仅改变成品结构。
     #[serde(skip_serializing_if = "crate::production::note_style_is_off")]
     pub note_style: String,
-    /// 章首段落样式（V49，LAY-119）。
+    /// 章首段落样式。
     pub first_paragraph_style: String,
-    /// 生僻字注音（V73，LAY-129）：关闭时不写入，旧书的成品参数不变。
+    /// 生僻字注音：关闭时不写入，旧书的成品参数不变。
     #[serde(skip_serializing_if = "crate::production::rare_char_ruby_is_off")]
     pub rare_char_ruby: String,
     #[serde(skip_serializing_if = "crate::production::rare_char_scope_is_default")]
     pub rare_char_scope: String,
-    /// 系统提示样式（V50，LAY-121）。
+    /// 系统提示样式。
     pub system_block_style: String,
-    /// 分类样式参数（V77）：只在 styled 时写入，旧书的成品参数不变。
+    /// 分类样式参数：只在 styled 时写入，旧书的成品参数不变。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_styles: Option<crate::block_styles::SystemStyles>,
-    /// 诗词样式（V50，LAY-122）。
+    /// 诗词样式。
     pub verse_block_style: String,
-    /// 场景样式（V81，LAY-135）：默认值不写入，旧书的成品参数不变。
+    /// 场景样式：默认值不写入，旧书的成品参数不变。
     #[serde(skip_serializing_if = "crate::production::chat_block_style_is_off")]
     pub chat_block_style: String,
     #[serde(skip_serializing_if = "crate::production::letter_block_style_is_plain")]
@@ -156,7 +156,7 @@ pub struct Manifest {
     pub manual_notes: Vec<crate::manual_notes::Note>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inline_styles: Vec<crate::inline_styles::Annotation>,
-    /// 原书表格（G-113）：放在这一行的位置上。
+    /// 原书表格：放在这一行的位置上。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source_tables: Vec<crate::source_marks::PlacedTable>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -170,20 +170,20 @@ pub struct Manifest {
     pub font: Option<FontResource>,
     pub resources: Vec<Resource>,
     pub placements: Vec<Placement>,
-    /// 统一章首图资源（V54，LAY-124）；未设置时为空。
+    /// 统一章首图资源；未设置时为空。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chapter_head_image_id: Option<String>,
     pub chapter_head_scope: String,
     pub chapter_head_width: String,
-    /// 章节样式包（V74，LAY-130）；未使用时为空，旧书的成品参数不变。
+    /// 章节样式包；未使用时为空，旧书的成品参数不变。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chapter_style: Option<crate::style_packs::StyleIds>,
-    /// 为 Kindle 转换过的封面与插图（V24，OUT-078）；没有转换时为空。
+    /// 为 Kindle 转换过的封面与插图；没有转换时为空。
     pub image_conversions: Vec<crate::kindle_images::Conversion>,
-    /// V109：保留原图、不做 Kindle 转换（只有为真时写进清单，旧的计划标识不变）。
+    /// 保留原图、不做 Kindle 转换（只有为真时写进清单，旧的计划标识不变）。
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub keep_original_images: bool,
-    /// 保持原格式时对原书样式的改动（G-112）。
+    /// 保持原格式时对原书样式的改动。
     #[serde(skip_serializing_if = "crate::epub_restyle::OriginalStyle::is_default")]
     pub original_style: crate::epub_restyle::OriginalStyle,
     #[serde(
@@ -470,7 +470,7 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
     for placement in &mut placements {
         placement.resource_id = paths[&settings.illustrations[placement.list_index].path].clone();
     }
-    // 场景样式（V81、V82）：用到卷轴杆或淡纸纹时程序生成图片，按内容寻址。
+    // 场景样式：用到卷轴杆或淡纸纹时程序生成图片，按内容寻址。
     let (rods, paper) = crate::insets::image_needs(&settings);
     let inset_images = if rods || paper {
         let mut ids = Vec::new();
@@ -513,7 +513,7 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         .chapter_head_image
         .as_ref()
         .map(|p| paths[p].clone());
-    // V114：竖排时样式包的章头图与标题装饰线是横向图案，按页宽会占满一整页、把标题挤到下一页，
+    // 竖排时样式包的章头图与标题装饰线是横向图案，按页宽会占满一整页、把标题挤到下一页，
     // 所以竖排不放这两样；章末装饰与卷页边框照常。
     let vertical = settings.writing_mode == "vertical";
     let chapter_style = settings
@@ -781,7 +781,7 @@ mod tests {
           "cover_fit":"contain","font_family":"SimSun","font_size":20.0,"line_height":1.8,
           "include_toc":true,"illustrations":[{"path":path,"caption":"图注","alt":"替代文字","source_line":2}]}})).unwrap()
     }
-    /// V54（RES-050、LAY-124）：章首插图挂到所在章标题之前并代替统一章首图；统一章首图按范围插入、只存一份；整页插图前后分页。
+    /// 章首插图挂到所在章标题之前并代替统一章首图；统一章首图按范围插入、只存一份；整页插图前后分页。
     #[test]
     fn chapter_head_images_and_full_page_illustrations() {
         let dir = std::env::temp_dir().join(format!("easypub-v54-{}", std::process::id()));
@@ -864,7 +864,7 @@ mod tests {
         assert_eq!(body.matches(&format!("src=\"{ornament_id}\"")).count(), 2);
         let _ = std::fs::remove_dir_all(&dir);
     }
-    /// V24（OUT-078）：WebP 封面兼插图转成 JPEG 进入制作计划，只转一次并写进清单；原文件不变。
+    /// WebP 封面兼插图转成 JPEG 进入制作计划，只转一次并写进清单；原文件不变。
     #[test]
     fn webp_cover_is_converted_once_and_recorded() {
         let path = std::env::temp_dir().join(format!("easypub-v24-{}.webp", std::process::id()));
@@ -902,7 +902,7 @@ mod tests {
             image::ImageFormat::Jpeg
         );
         assert_eq!(std::fs::read(&path).unwrap(), original);
-        // V109：关掉自动转换时保留原图（WebP），不记转换；计划标识随之改变。
+        // 关掉自动转换时保留原图（WebP），不记转换；计划标识随之改变。
         let mut keep = request(&source, path.to_str().unwrap());
         keep.keep_original_images = true;
         let kept = prepare(&source, keep).unwrap();

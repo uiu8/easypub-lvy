@@ -1,5 +1,5 @@
-// 问题浏览器（CHK-012–036、CHK-050）：左侧问题队列 + 右侧问题详情与对照 + 底部决策栏。
-// 读取、定位、审阅、单项方案预览与应用、撤销的流程沿用 V2c 前实现，只重写视图。
+// 问题浏览器：左侧问题队列 + 右侧问题详情与对照 + 底部决策栏。
+// 读取、定位、审阅、单项方案预览与应用、撤销的流程沿用早先的实现，只重写视图。
 // 宽度 ≥ 760 时队列常驻（可收起），以下为单栏：列表与详情切换（“返回问题列表”）。
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -54,10 +54,10 @@ class CheckIssueBrowser extends StatefulWidget {
   /// 把一行文字加入本书非标题词库（打开识别规则面板核对后应用）。
   final Future<void> Function(String phrase)? onAddNonHeading;
 
-  /// 点问题类型名：打开规则页并定位到这类问题的规则（V64，CH-279）。
+  /// 点问题类型名：打开规则页并定位到这类问题的规则。
   final void Function(String ruleId)? onRule;
 
-  /// 发现纯数字标题时的汇总提示按钮（V113）：打开“数字章节”，一次识别并统一为“第X章 标题”。
+  /// 发现纯数字标题时的汇总提示按钮：打开“数字章节”，一次识别并统一为“第X章 标题”。
   final Future<void> Function()? onNumericHeadings;
 
   /// 检查页：只看不改。预览和应用去掉，换成“去处理”，到现场再改；审阅和批量留着。
@@ -620,7 +620,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
 
   // ---------------------------------------------------------------- 视图
 
-  /// 问题列表较窄时，筛选下拉的“全部”项写短（R3-01），免得只剩“全部…”。
+  /// 问题列表较窄时，筛选下拉的“全部”项写短，免得只剩“全部…”。
   bool narrowFilters = false;
 
   List<Widget> filters() => [
@@ -683,7 +683,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
 
   Widget queue(Desk d, {required bool docked}) {
     final total = page?.total;
-    // 顶部进度（CHK-054）：不另占一行。数字跟在标题后，进度条代替标题区底部分隔线。
+    // 顶部进度：不另占一行。数字跟在标题后，进度条代替标题区底部分隔线。
     final reviewed = page?.reviewed, all = page?.unfilteredTotal;
     final progress = reviewed != null && all != null && all > 0
         ? (reviewed / all).clamp(0.0, 1.0)
@@ -706,7 +706,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                 Row(
                   children: [
                     // 标题与进度占用按钮以外的全部宽度：进度只在确实放不下时才省略
-                    // （原来与 Spacer 平分剩余宽度，总被截断，V15）。
+                    // （原来与 Spacer 平分剩余宽度，总被截断）。
                     Expanded(
                       child: Row(
                         children: [
@@ -743,7 +743,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                         ],
                       ),
                     ),
-                    // 列较窄时只留图标，让“已核对”完整显示（V15）。
+                    // 列较窄时只留图标，让“已核对”完整显示。
                     Builder(
                       builder: (context) => docked
                           ? IconButton(
@@ -816,7 +816,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
               ],
             ),
           ),
-          // 静态色条（不用 LinearProgressIndicator：那是“正在读取”的含义；V105 升级为 5px 圆角双色进度槽）。
+          // 静态色条（不用 LinearProgressIndicator：那是“正在读取”的含义；升级为 5px 圆角双色进度槽）。
           if (progress != null)
             Container(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 7),
@@ -1124,7 +1124,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                 ),
               ],
               const Spacer(),
-              // 队列收起或单栏时，“重新检查”随详情显示（CHK-016）。
+              // 队列收起或单栏时，“重新检查”随详情显示。
               if (showQueueButton)
                 IconButton(
                   tooltip: '重新检查',
@@ -1161,8 +1161,8 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
             color: d.surface,
             border: Border(top: BorderSide(color: d.line)),
           ),
-          // 按用途分三组（V12）：查看 | 处理 | 当前修改；组间细竖线。
-          // R3-02：窄时不再换行，“定位章节”只留图标，处理组收进“⋯”，主按钮始终在同一行。
+          // 按用途分三组：查看 | 处理 | 当前修改；组间细竖线。
+          // 窄时不再换行，“定位章节”只留图标，处理组收进“⋯”，主按钮始终在同一行。
           child: LayoutBuilder(
             builder: (context, box) {
               final narrow =
@@ -1228,7 +1228,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                   _ActionGroup(
                     divider: true,
                     children: [
-                      // 重复类问题：直接打开两处所在章节的正文对照（CH-247）。
+                      // 重复类问题：直接打开两处所在章节的正文对照。
                       if (issue.category.startsWith('duplicate') ||
                           issue.category == 'number-reset')
                         DeskButton(
@@ -1321,7 +1321,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
         : () => widget.onChapter(issue.atAnchor(selectedAnchor)),
   );
 
-  /// 窄时的操作条（R3-02）：一行放下；对比两章、批量修复同类、完整方案收进“⋯”。
+  /// 窄时的操作条：一行放下；对比两章、批量修复同类、完整方案收进“⋯”。
   Widget compactActions(Desk d, ChapterIssue issue) {
     final disabled = busy || locating;
     final compare =
@@ -1529,7 +1529,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
     child: Center(child: child),
   );
 
-  /// 纯数字标题汇总提示（V113）：不再导入时悄悄打开纯数字识别，改为在这里提示，
+  /// 纯数字标题汇总提示：不再导入时悄悄打开纯数字识别，改为在这里提示，
   /// 一个按钮打开“数字章节”，预览后一次识别并统一为“第X章 标题”，可整批撤销。
   Widget numericHint(Desk d, int count) {
     final example = page?.items

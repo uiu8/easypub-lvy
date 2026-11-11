@@ -1,4 +1,4 @@
-// 读取失败路径（D4-D，V8 按设计重写视图）：只读列出，路径可选择复制。
+// 读取失败路径（按设计重写视图）：只读列出，路径可选择复制。
 import 'package:flutter/material.dart';
 
 import '../dialogs.dart';

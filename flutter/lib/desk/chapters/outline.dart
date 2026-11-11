@@ -1,4 +1,4 @@
-// 章节目录（CH-029–036）：全书标题虚拟列表。分页续载；支持整书目录一次读取；
+// 章节目录：全书标题虚拟列表。分页续载；支持整书目录一次读取；
 // 搜索标题（忽略大小写）或精确行号；卷可折叠；方向键单步选择；行尾菜单。
 import 'dart:async';
 
@@ -15,7 +15,7 @@ import '../tokens.dart';
 import '../widgets.dart';
 import 'issue_marks.dart';
 
-/// 行尾菜单与“更多”菜单共用的十项结构/正文操作（CH-032）。
+/// 行尾菜单与“更多”菜单共用的十项结构/正文操作。
 const chapterRowActions = [
   DeskActionGroup('章节结构', [
     DeskMenuAction('rename', '重命名章节', Icons.edit_outlined),
@@ -52,10 +52,10 @@ class ChapterOutline extends StatefulWidget {
     this.titleTrailing,
   });
 
-  /// “目录”标题右侧的入口（V23：识别规则摘要，CH-261）。
+  /// “目录”标题右侧的入口（识别规则摘要）。
   final Widget? titleTrailing;
 
-  /// 全书问题位置（CH-234–236）；与 [snapshot] 不同版本时不显示。
+  /// 全书问题位置；与 [snapshot] 不同版本时不显示。
   final ChapterIssueMap? issueMap;
 
   /// 'loading' 汇总中，'error' 读取失败，空串为正常。
@@ -608,7 +608,7 @@ class _ChapterOutlineState extends State<ChapterOutline> {
   );
 }
 
-/// 目录行上直接显示的常用操作（V134）：悬停或选中时出现，其余仍在“⋯”菜单里。
+/// 目录行上直接显示的常用操作：悬停或选中时出现，其余仍在“⋯”菜单里。
 const chapterQuickActions = [
   ('demote', '标题改为正文（保留文字）', Icons.text_snippet_outlined),
   ('merge', '合并章节', Icons.merge_rounded),

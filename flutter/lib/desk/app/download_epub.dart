@@ -1,6 +1,6 @@
-// 书源下载为 EPUB（LIB-215）：下载好的 TXT 加入书库后，按全局默认排版（含自动规则）转换为 EPUB，
+// 书源下载为 EPUB：下载好的 TXT 加入书库后，按全局默认排版（含自动规则）转换为 EPUB，
 // 放在 TXT 同一文件夹，TXT 保留。不弹窗、不切页面；不能转换时返回原因，书仍留在书库。
-// 书库里已有这本书而下载内容变了（追更、重新整理）时不生成：草稿还是旧的，要先“刷新来源”（V111）。
+// 书库里已有这本书而下载内容变了（追更、重新整理）时不生成：草稿还是旧的，要先“刷新来源”。
 import 'dart:io';
 
 import '../../application/conversion_defaults.dart';
@@ -12,7 +12,7 @@ import '../metadata/cover_drop.dart' show bindSidecarCover;
 
 typedef DownloadEpubResult = ({bool imported, String? error});
 
-/// 书库里的这本书还是下载变化前的版本（V111）。
+/// 书库里的这本书还是下载变化前的版本。
 const downloadOutdatedInLibrary =
     '书库里的这本书还是之前的版本，下载的新内容没有采用，所以没有生成 EPUB。请点“刷新来源”确认采用，之后会自动生成。';
 

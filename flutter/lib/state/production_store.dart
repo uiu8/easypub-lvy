@@ -1,4 +1,4 @@
-// 每本书的制作设置（书籍信息、封面、插图、排版）与其历史、资源核对（V20 从 PrototypeState 拆出）。
+// 每本书的制作设置（书籍信息、封面、插图、排版）与其历史、资源核对（从 PrototypeState 拆出）。
 // 只通过 PrototypeState 的公开接口读写书库与章节；行为与拆分前相同。
 import 'dart:convert';
 
@@ -217,7 +217,7 @@ class ProductionStore {
 
   String guardFor(String id) => jsonEncode(guardInputs(id));
 
-  /// [guardFor] 的组成部分。稿件版本直接嵌入它们（V117）：嵌入已编码的 [guardFor] 字符串会把
+  /// [guardFor] 的组成部分。稿件版本直接嵌入它们：嵌入已编码的 [guardFor] 字符串会把
   /// 约 5 KB 的设置再转义编码一次，书库每次刷新给每本书算一遍，300 本时约占刷新的六成。
   List<Object?> guardInputs(String id) {
     final b = _core.shelf.books.firstWhere((b) => b.id == id && !b.isDemo);

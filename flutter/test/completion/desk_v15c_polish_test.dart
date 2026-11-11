@@ -19,7 +19,7 @@ import 'package:easypub_desktop/desk/shell/save_badge.dart';
 
 class _NoPicker extends Fake implements BookFilePicker {}
 
-/// V15c：按用户取舍处理巡检问题（第 2、4、5、9、10、14、15、16、19、20 条）
+/// 按用户取舍处理巡检问题（第 2、4、5、9、10、14、15、16、19、20 条）
 /// 与书库详情栏对齐。真实应用、真实 Rust。
 void main() {
   setUpAll(
@@ -194,11 +194,11 @@ void main() {
       await t.pumpWidget(RewriteApp(library: library, picker: _NoPicker()));
       await settle();
       final book = library.books.value.firstWhere((b) => b.id == foggy);
-      // 作者为空：不再是占位文字“待补充作者”（LIB-107）。
+      // 作者为空：不再是占位文字“待补充作者”。
       expect(book.author, isEmpty);
       expect(find.textContaining('待补充作者'), findsNothing);
       expect(find.text('未填作者'), findsWidgets);
-      // 角标只算章节问题；清理建议与书籍信息在详情中分行（LIB-106）。
+      // 角标只算章节问题；清理建议与书籍信息在详情中分行。
       final pending = book.pending!;
       expect(pending.chapters, greaterThan(0));
       expect(pending.total, greaterThan(pending.chapters));
@@ -211,14 +211,14 @@ void main() {
       );
       expect(find.text('章节问题 ${pending.chapters} 项'), findsOneWidget);
       expect(find.text('清理建议'), findsOneWidget);
-      // 宽窗口：有详情栏，不再显示“当前书详情”（LIB-108）；数量在标题里。
+      // 宽窗口：有详情栏，不再显示“当前书详情”；数量在标题里。
       expect(
         find.byKey(const ValueKey('library-detail-column')),
         findsOneWidget,
       );
       expect(find.text('当前书详情'), findsNothing);
       expect(find.text('2 本'), findsOneWidget);
-      // 两栏封面顶端对齐（LIB-105）。
+      // 两栏封面顶端对齐。
       Rect coverOf(Finder scope) => t.getRect(
         find
             .descendant(
@@ -256,7 +256,7 @@ void main() {
       await t.pump();
       expect(find.byKey(const ValueKey('library-selection-bar')), findsNothing);
 
-      // 排版：1100 宽时机型写短名、预览设置一行、标题不省略（LAY-102、LAY-103）。
+      // 排版：1100 宽时机型写短名、预览设置一行、标题不省略。
       final router = GoRouter.of(t.element(find.byType(Navigator).first));
       t.view.physicalSize = const Size(1100, 720);
       router.go('/books/${Uri.encodeComponent(foggy)}/layout');
@@ -273,11 +273,11 @@ void main() {
       expect(t.getSize(indent).height, lessThan(24));
       expect(t.takeException(), isNull);
 
-      // 清理：只标出行尾空白；分隔线可拖动；编辑 / 删除规则带图标（CLEAN-100–102）。
+      // 清理：只标出行尾空白；分隔线可拖动；编辑 / 删除规则带图标。
       t.view.physicalSize = const Size(1500, 950);
       router.go('/books/${Uri.encodeComponent(foggy)}/cleanup');
       await settle();
-      // V134：编辑 / 删除规则在“执行顺序”页里（默认显示内置规则清单）。
+      // 编辑 / 删除规则在“执行顺序”页里（默认显示内置规则清单）。
       await t.tap(find.text('执行顺序'));
       await settle();
       expect(find.byIcon(Icons.edit_outlined), findsWidgets);
@@ -303,7 +303,7 @@ void main() {
       await t.pump();
       expect(t.getRect(handle).top, lessThan(top - 40));
       expect(list, findsOneWidget);
-      // V112：一帧里来多个移动事件时，分隔线仍跟着鼠标的总位移走。
+      // 一帧里来多个移动事件时，分隔线仍跟着鼠标的总位移走。
       final before = t.getRect(handle).top;
       final fast = await t.startGesture(
         t.getCenter(handle),
@@ -318,7 +318,7 @@ void main() {
       expect(t.getRect(handle).top, closeTo(before + 40, 1));
       expect(t.takeException(), isNull);
 
-      // 概览：只有底部的转换入口，项目文件状态写在“项目与来源”（LIB-109、LIB-110）。
+      // 概览：只有底部的转换入口，项目文件状态写在“项目与来源”。
       router.go('/books/${Uri.encodeComponent(foggy)}/overview');
       await settle();
       expect(find.text('转换本书'), findsNothing);

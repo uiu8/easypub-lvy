@@ -111,7 +111,7 @@ fn crud_reorder_history_project_and_template_snapshot() {
         json!({"kind":"reorder", "ids":[back, front]}),
     );
     assert_eq!(reordered["supplemental_pages"][0]["id"], back);
-    // V56：拖到另一组一次完成改位置与重排；撤销一步即回到原位置。
+    // 拖到另一组一次完成改位置与重排；撤销一步即回到原位置。
     let moved = apply(
         &service,
         &mut request,
@@ -325,7 +325,7 @@ fn reading_order_tocs_source_map_and_kindle_start_target() {
     settings["supplemental_pages"] = json!(pages);
     settings["fullwidth_indent"] = json!(2);
     settings["cover_path"] = json!(cover);
-    // 合并 V54：统一章首图只放在原正文章节，不进附页。
+    // 合并后，统一章首图只放在原正文章节，不进附页。
     settings["chapter_head_image"] = json!(cover);
     settings["chapter_head_scope"] = json!("both");
     let request = serde_json::from_value(
@@ -415,7 +415,7 @@ fn reading_order_tocs_source_map_and_kindle_start_target() {
             .unwrap()
             .attribute("href")
             .unwrap();
-        // V47 guide 指向第一章所在文件，章节锚点用于目录而非 guide。
+        // guide 指向第一章所在文件，章节锚点用于目录而非 guide。
         assert!(start.starts_with("body"), "{start}");
         let mut body = String::new();
         zip.by_name(&format!("EPUB/{start}"))

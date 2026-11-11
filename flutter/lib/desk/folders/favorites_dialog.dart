@@ -1,4 +1,4 @@
-// 收藏文件夹管理（D4-D，V8 按设计重写视图）：添加、重命名、取消收藏、重新定位逻辑沿用原实现。
+// 收藏文件夹管理（按设计重写视图）：添加、重命名、取消收藏、重新定位逻辑沿用原实现。
 import 'package:flutter/material.dart';
 
 import '../dialogs.dart';

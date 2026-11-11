@@ -43,7 +43,7 @@ PreviewStyle _style({Map? styles, String block = 'styled'}) => PreviewStyle(
   systemStyles: styles ?? defaultSystemStyles(),
 );
 
-/// V104：系统提示分类样式在小预览里照实画（LAY-146）；排版页的识别数量（LAY-147）。
+/// 系统提示分类样式在小预览里照实画；排版页的识别数量。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -65,7 +65,7 @@ void main() {
       expect(isDingLine(ding), true, reason: ding);
     }
     expect(isDingLine('叮！击杀成功'), false);
-    // V92 起含白话虚词的 7+7 句子不算诗句（与 Rust 相同）。
+    // 后来含白话虚词的 7+7 句子不算诗句（与 Rust 相同）。
     expect(isVerseLine('这份潜在的商机，是我不能忽视的！'), false);
   });
 
@@ -107,7 +107,7 @@ void main() {
     ).single;
     expect(boxed.where((p) => p.role.isNotEmpty), isEmpty);
     expect(boxed.firstWhere((p) => p.text == '叮！').kind, '');
-    // 单句诗不居中（V104 前小预览会把它当诗句）。
+    // 单句诗不居中（前小预览会把它当诗句）。
     expect(
       paginatePreview(
         title: 'T',
@@ -155,7 +155,7 @@ void main() {
     );
     expect(pages.length, greaterThan(3));
     final width = page.width - style.padding.horizontal;
-    // 页底按文字下沿判断（V124；V130 起文字高度按一个字号）：最后一行行框下面的半个行间留白可以超出版心。
+    // 页底按文字下沿判断（后来文字高度按一个字号）：最后一行行框下面的半个行间留白可以超出版心。
     final em = style.body.fontSize ?? 16;
     final lead = (em * (style.body.height ?? 1) - em) / 2;
     for (final pieces in pages) {

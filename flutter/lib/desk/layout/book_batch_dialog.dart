@@ -1,4 +1,4 @@
-// 迁入 desk（layout，V5/V6）：逻辑与布局沿用 V5 前的同名文件；公共弹窗框架样式在 V7 统一。
+// 迁入 desk（layout）：逻辑与布局沿用早先的同名文件；公共弹窗框架样式后来统一。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -25,7 +25,7 @@ class BookBatchDialog extends StatefulWidget {
   final String bookId;
   final Set<String>? initialTargets;
 
-  /// 打开时已勾选的字段；排版页传全部排版字段（R5-02）。
+  /// 打开时已勾选的字段；排版页传全部排版字段。
   final Set<String>? initialFields;
   @override
   State<BookBatchDialog> createState() => _BookBatchDialogState();
@@ -41,7 +41,7 @@ class _BookBatchDialogState extends State<BookBatchDialog> {
   };
   final range = RangeSelection();
 
-  /// 表头全选 / 清空与 Shift 选一段（G-067）。
+  /// 表头全选 / 清空与 Shift 选一段。
   void setMany(Iterable<String> ids, bool value) => setState(() {
     final usable = ids.where((id) => id != widget.bookId);
     value ? targets.addAll(usable) : targets.removeAll(usable);
@@ -59,11 +59,11 @@ class _BookBatchDialogState extends State<BookBatchDialog> {
   void initState() {
     super.initState();
     session;
-    // 来源书不作为目标：列出来标“来源”，不可勾选（R5-02）。
+    // 来源书不作为目标：列出来标“来源”，不可勾选。
     targets.removeWhere(
       (id) => id == widget.bookId || !books.any((b) => b.id == id),
     );
-    // 没有指定目标、书库也没有勾选时默认全选（G-068）。
+    // 没有指定目标、书库也没有勾选时默认全选。
     if (targets.isEmpty && widget.initialTargets == null) {
       targets.addAll(others);
     }
@@ -108,7 +108,7 @@ class _BookBatchDialogState extends State<BookBatchDialog> {
     }
   }
 
-  // 编辑台弹窗（R5-03）：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
+  // 编辑台弹窗：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
   @override
   Widget build(BuildContext context) => DeskDialog(
     title: '应用到多本书',
@@ -199,7 +199,7 @@ class _BookBatchDialogState extends State<BookBatchDialog> {
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            // 工具行（R5-10）：标题用普通文字，清理规则用编辑台勾选框。
+            // 工具行：标题用普通文字，清理规则用编辑台勾选框。
             DeskText('要复制的设置', size: 13, color: context.desk.ink2),
             DeskButton(
               fields.isEmpty ? '选择字段…' : '已选 ${fields.length} 项字段…',

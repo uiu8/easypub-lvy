@@ -1,4 +1,4 @@
-//! V132：疑似不完整的章换书源核对；卡住的章由空闲书源抢下。仅本机自拟内容。
+//! 疑似不完整的章换书源核对；卡住的章由空闲书源抢下。仅本机自拟内容。
 use crate::{
     download::{self, Options},
     engine::SourceRt,
@@ -66,7 +66,7 @@ fn run(
         folder: folder.clone(),
         threads: 4,
         retries: 0,
-        // V134 起默认关闭；这里测的就是多源分摊下的核对与抢下。
+        // 后来默认关闭；这里测的就是多源分摊下的核对与抢下。
         multi_source: true,
         ..Default::default()
     };

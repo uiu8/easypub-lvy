@@ -1,13 +1,13 @@
-// Kindle（KPW5）中文断行（V124）：排版页小预览与章节页排版视图共用，规则与真机预览 plugins/kindle-preview 一致。
+// Kindle（KPW5）中文断行：排版页小预览与章节页排版视图共用，规则与真机预览 plugins/kindle-preview 一致。
 //
-// 依据：V118 起按用户 KPW5 真机截图实测的规则，以及 2026-10-30 固件逆向交接包（KPW5 5.17.1.0.3
+// 依据：后来按用户 KPW5 真机截图实测的规则，以及 2026-10-30 固件逆向交接包（KPW5 5.17.1.0.3
 // libYJR-shared.so）中原函数执行得到的简体中文字符类别、间距描述与中文禁则码点集合：
 // · 后置标点（类别 16 句号问号叹号、18 顿号分号冒号、19 逗号与闭括号类）在行末只占半个字宽；
 //   后面紧跟另一个后置标点时，前一个只占半个字宽（间距描述 0、0）；
 // · 段首全角空格或另一个前置标点之后的前置标点只占半个字宽；
 // · 汉字与西文字母、数字相邻处多 0.075 个字宽（间距描述 19）；
 // · 固件左侧禁则 17 项（不能放在行末）、右侧禁则 43 项（不能放在行首）；“——”“……”不拆开；
-// · V129（KPW5 宋体与苹方截图逐字同位）：弯引号与其他中文标点一样按一个字宽，与字体无关；后置引号在行末、
+// ·（KPW5 宋体与苹方截图逐字同位）：弯引号与其他中文标点一样按一个字宽，与字体无关；后置引号在行末、
 //   紧跟后置标点时半宽；后置标点紧跟前置标点时前一个半宽；省略号可以放在行首；
 // · 除段末一行外两端对齐。
 // 这是普通中文正文的近似模型，不是完整的 Kindle 排版引擎：没有实现伸缩评分选择断点、孤行回退等。
@@ -19,7 +19,7 @@ const kindleClosing = '。，、；：？！」』）》】〉';
 /// 相邻挤压时可以作为“后一个”的标点（含闭引号）。
 const kindleClosingAll = '$kindleClosing”’';
 
-/// 弯引号（V129）：不论字体，按一个字宽。
+/// 弯引号：不论字体，按一个字宽。
 const kindleQuotes = '“”‘’';
 
 /// 前置标点。
@@ -77,13 +77,13 @@ List<KindleLine> kindleLines(
   }
   offsets.add(o);
   final n = runes.length;
-  // 弯引号按一个字宽排（V129）；画的时候字体里的实际宽度与一个字宽之差补进字距（drawFix）。
+  // 弯引号按一个字宽排；画的时候字体里的实际宽度与一个字宽之差补进字距（drawFix）。
   final drawn = [for (final r in runes) advance(r)];
   final quote = [for (final r in runes) kindleQuotes.runes.contains(r)];
   final base = [for (var i = 0; i < n; i++) quote[i] ? em : drawn[i]];
   // 全角标点才挤压：比例宽度的字体里本来就窄的不再减。
   bool full(int i) => base[i] >= em * .9;
-  // 后置标点（V129 起含后置引号）。
+  // 后置标点（后来含后置引号）。
   final closing = [for (final r in runes) kindleClosingAll.runes.contains(r)];
   // 行中的固定调整：相邻后置标点、段首或连续的前置标点、汉字与西文间距。
   final adjust = List<double>.filled(n, 0);

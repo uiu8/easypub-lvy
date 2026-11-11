@@ -69,7 +69,7 @@ void main() {
         ),
       );
       await t.pumpAndSettle();
-      // V8：全局/项目规则改为页头分段切换。
+      // 全局/项目规则改为页头分段切换。
       await t.tap(find.text('项目规则'));
       await t.pumpAndSettle();
       expect(find.text('项目优先：关'), findsOneWidget);

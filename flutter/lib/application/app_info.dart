@@ -1,4 +1,4 @@
-// 应用版本与本版更新（V22，SET-066）：读取发布包中的 version.json 与“先读我.txt”。
+// 应用版本与本版更新：读取发布包中的 version.json 与“先读我.txt”。
 import 'dart:convert';
 import 'dart:io';
 

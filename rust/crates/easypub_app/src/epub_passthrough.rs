@@ -1,7 +1,7 @@
-//! EPUB 保持原格式（V27，OUT-079）：不重排正文，只对原 EPUB 做必要修补后交给 EPUB 输出、Kindling 或 Bokai。
+//! EPUB 保持原格式：不重排正文，只对原 EPUB 做必要修补后交给 EPUB 输出、Kindling 或 Bokai。
 //!
 //! 修补只有三类，其余文件逐字节保留：
-//! · 图片：Kindle 不支持的格式（WebP、GIF、BMP、TIFF、SVG）与超大、CMYK、渐进式 JPEG 按 V24 的规则转换；
+//! · 图片：Kindle 不支持的格式（WebP、GIF、BMP、TIFF、SVG）与超大、CMYK、渐进式 JPEG 按早先的规则转换；
 //!   换了格式的文件名后加扩展名（如 cover.webp → cover.webp.jpg），并改写 OPF、XHTML、CSS、NCX 里的引用；
 //! · 书目：书名、作者、语言改为书籍信息里的值（用户在本软件里改过的书目要生效）；
 //! · 封面：Kindling 需要封面而原 EPUB 没有时，加入本书封面。
@@ -78,7 +78,7 @@ pub struct Overrides {
     /// Bokai（KFX）输入：只包一张图的 SVG（常见的封面写法）换成普通 &lt;img&gt;，
     /// 因为 Bokai 会丢掉 SVG 里的文字，校验不能通过。软件排版的 KFX 封面页也是这样做的。
     pub plain_svg_images: bool,
-    /// V109：设置里关掉“自动转换 Kindle 不支持的图片”时为真，图片保留原样。
+    /// 设置里关掉“自动转换 Kindle 不支持的图片”时为真，图片保留原样。
     pub keep_images: bool,
     pub image_options: kindle_images::Options,
     pub output_options: crate::edition_options::OutputOptions,
@@ -86,7 +86,7 @@ pub struct Overrides {
     pub title_sort: String,
     pub author_sort: String,
     pub book_producer: String,
-    /// 去除原书字体、样式和附加 CSS（G-112）。
+    /// 去除原书字体、样式和附加 CSS。
     pub style: crate::epub_restyle::OriginalStyle,
 }
 
@@ -1626,7 +1626,7 @@ mod tests {
         assert!(text.contains(r#"<img src="cover.png" alt="样书"/>"#));
     }
 
-    /// 摘自真实的 `bokai validate all` 输出（V27 测试中的 KFX 转换）。
+    /// 摘自真实的 `bokai validate all` 输出（测试中的 KFX 转换）。
     const LOG: &str = "--- Dropped properties [first 10] (sorted by frequency) ---\n      1×  height                            e.g. \"100vh\"\n\n=== Tags ===\n=== Scorecard ===\n  Ruby pairs:   100.00% preserved\n  Text chars:   100.0000% preserved\n  CSS props:    98.61% covered\n  HTML tags:    22.22% semantic\n  External URLs:100.00% preserved\n  Images:       100.00% preserved\n  Writing mode: preserved\n  Page progression: preserved (ltr on KFX side)\nerror: one or more checks failed\n";
 
     #[test]

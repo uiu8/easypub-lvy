@@ -14,7 +14,7 @@ import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/fonts.dart';
 import 'package:easypub_desktop/desk/rules/rules_page.dart';
 
-/// V64 界面截图：检查页“规则”入口、规则页各页签。输出 artifacts/v64-preview/。
+/// 界面截图：检查页“规则”入口、规则页各页签。输出 artifacts/v64-preview/。
 void main() {
   testWidgets('截图：检查页入口与规则页改版', (t) async {
     final capture = GlobalKey();

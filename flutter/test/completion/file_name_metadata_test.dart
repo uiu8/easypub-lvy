@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/settings/file_name_author_settings.dart';
 
-/// V72：从文件名取书名和作者（LIB-116）。
+/// 从文件名取书名和作者。
 void main() {
   (String, String) parse(String name) {
     final m = fileNameMetadata(name);
@@ -26,7 +26,7 @@ void main() {
     expect(parse('道诡异仙_作者：狐尾的笔（完结）.txt'), ('道诡异仙', '狐尾的笔'));
     expect(parse('凡人修仙传（精校版）作者：忘语.epub'), ('凡人修仙传', '忘语'));
     expect(parse('《三体》作者：刘慈欣 著.txt'), ('三体', '刘慈欣'));
-    // V107：书源插件默认的“书名 - 作者”。
+    // 书源插件默认的“书名 - 作者”。
     expect(parse('诡秘之主 - 爱潜水的乌贼.txt'), ('诡秘之主', '爱潜水的乌贼'));
     expect(parse('精灵女王审讯录 - 社畜宅宅 (1).txt'), ('精灵女王审讯录', '社畜宅宅'));
   });
@@ -106,7 +106,7 @@ void main() {
     const dash = FileNameOptions(mode: 'custom', pattern: '{作者} - {书名}');
     expect(with_('爱潜水的乌贼 - 诡秘之主.txt', dash), ('诡秘之主', '爱潜水的乌贼'));
     expect(with_('诡秘之主.txt', dash), ('诡秘之主', ''));
-    // 不符合格式时按自动识别（V107）。
+    // 不符合格式时按自动识别。
     expect(with_('剑来(烽火戏诸侯).txt', dash), ('剑来', '烽火戏诸侯'));
     // 多行：按顺序逐行尝试，用第一个符合的。
     const many = FileNameOptions(
@@ -179,7 +179,7 @@ void main() {
     expect(refresh.incoming['title'], '雾港来信');
     expect(refresh.incoming['author'], '林岚');
 
-    // 书源下载的 TXT：文件名里没有作者，开头写着“书名 / 作者：”（V107）。
+    // 书源下载的 TXT：文件名里没有作者，开头写着“书名 / 作者：”。
     final downloaded = File('${root.path}/海港夜话.txt')
       ..writeAsStringSync('海港夜话\n作者：沈舟\n\n\n第一章 远行\n\n　　山路很长。\n');
     expect(

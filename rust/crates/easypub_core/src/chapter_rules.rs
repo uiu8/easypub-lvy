@@ -28,20 +28,20 @@ pub struct RuleSet {
     pub numeric_minimum_body_lines: u16,
     pub normalize_numeric_titles: bool,
     pub number_corrections: String,
-    /// 非标题词库（V12）：每行一条，命中的行永远不算标题；`re:` 开头为正则。
+    /// 非标题词库：每行一条，命中的行永远不算标题；`re:` 开头为正则。
     /// 为空时不参与序列化，已有规则的指纹不变。
     #[serde(skip_serializing_if = "String::is_empty")]
     pub non_heading: String,
     /// 标题词库：命中的行按章节识别（非标题词库优先）。
     #[serde(skip_serializing_if = "String::is_empty")]
     pub force_heading: String,
-    /// 允许重复的标题（V17，CH-258）：每行一条，命中的相邻同名标题不再报“连续重复标题”。
+    /// 允许重复的标题：每行一条，命中的相邻同名标题不再报“连续重复标题”。
     #[serde(skip_serializing_if = "String::is_empty")]
     pub allowed_duplicate_titles: String,
-    /// 允许的编号跳跃（CH-259）：章号或范围，如 9、101-104；跳过的章号全部在列表里时才不报。
+    /// 允许的编号跳跃：章号或范围，如 9、101-104；跳过的章号全部在列表里时才不报。
     #[serde(skip_serializing_if = "String::is_empty")]
     pub allowed_number_gaps: String,
-    /// 标题后缀清理（CH-260）：每行一条，标题以它结尾时去掉；只改标题，不动正文。
+    /// 标题后缀清理：每行一条，标题以它结尾时去掉；只改标题，不动正文。
     #[serde(skip_serializing_if = "String::is_empty")]
     pub title_suffixes: String,
 }
@@ -59,7 +59,7 @@ impl Default for RuleSet {
             section_pattern: String::new(),
             numeric: false,
             numeric_pattern: String::new(),
-            // V113：与检查页“漏识别的标题”同一门槛（原为 5）。
+            // 与检查页“漏识别的标题”同一门槛（原为 5）。
             numeric_minimum_body_lines: 3,
             normalize_numeric_titles: false,
             number_corrections: "久=九".into(),
@@ -373,12 +373,12 @@ impl CompiledRules {
             && !self.is_non_heading(text)
             && self.force_heading.iter().any(|p| p.matches(text))
     }
-    /// 用户允许重复的标题（CH-258）：相邻同名时不报“连续重复标题”。
+    /// 用户允许重复的标题：相邻同名时不报“连续重复标题”。
     pub fn allows_duplicate_title(&self, title: &str) -> bool {
         let title = title.trim();
         self.allowed_duplicates.iter().any(|p| p.matches(title))
     }
-    /// 跳过的章号 first..=last 全部在“允许的编号跳跃”里时为真（CH-259）。
+    /// 跳过的章号 first..=last 全部在“允许的编号跳跃”里时为真。
     pub fn allows_number_gap(&self, first: u32, last: u32) -> bool {
         let mut next = first;
         loop {
@@ -397,7 +397,7 @@ impl CompiledRules {
             next = end + 1;
         }
     }
-    /// 按“标题后缀清理”去掉标题末尾的后缀（CH-260）；没有变化或会清空标题时返回 None。
+    /// 按“标题后缀清理”去掉标题末尾的后缀；没有变化或会清空标题时返回 None。
     pub fn clean_title(&self, title: &str) -> Option<String> {
         if !self.rules.enabled("title_suffixes") || self.suffixes.is_empty() {
             return None;
@@ -770,7 +770,7 @@ pub fn rebuild(
     }
     let before = book.tree.nodes.len();
     book.tree = tree;
-    // 标题改写：规范数字标题，再按“标题后缀清理”去掉后缀（CH-260）。只改标题行。
+    // 标题改写：规范数字标题，再按“标题后缀清理”去掉后缀。只改标题行。
     let renames = book
         .tree
         .nodes

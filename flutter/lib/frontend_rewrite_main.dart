@@ -38,7 +38,7 @@ String? _savedTheme(String settingsDirectory) {
   }
 }
 
-/// 启动底色：与主题同色的空白页，让窗口先出来（V134）。
+/// 启动底色：与主题同色的空白页，让窗口先出来。
 class _StartupCanvas extends StatelessWidget {
   const _StartupCanvas(this.mode);
   final String mode;
@@ -67,7 +67,7 @@ Future<void> main() async {
       startupTimed('grain', () => prepareDeskGrain()),
     ]),
   );
-  // 读不出数据位置记录时只显示救援页，不新建工作区（V104，SET-112）。
+  // 读不出数据位置记录时只显示救援页，不新建工作区。
   try {
     await startupTimed('storage', () => StorageLocations.initialize());
   } catch (error) {

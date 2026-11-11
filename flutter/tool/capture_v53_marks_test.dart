@@ -14,7 +14,7 @@ import 'package:easypub_desktop/desk/chapters/chapter_workspace.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/fonts.dart';
 
-/// V53 界面截图：已有书信标注（括号与标签）与新框选的工具条。
+/// 界面截图：已有书信标注（括号与标签）与新框选的工具条。
 /// `tools/test_flutter.ps1 -TestPaths tool/capture_v53_marks_test.dart`，输出 artifacts/v53-preview/。
 void main() {
   testWidgets('截图：章节页手工标注', (t) async {

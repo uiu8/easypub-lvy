@@ -90,7 +90,7 @@ impl Manager {
 
     fn start_worker(&self, work: impl FnOnce(&Control) -> Result<Value, ApiError> + Send + 'static) -> Result<u64, ApiError> {
         let mut registry = self.registry.lock().unwrap();
-        // 同时进行的转换最多 8 个（V38，OUT-083：设置“同时处理的书”的最大档位）。
+        // 同时进行的转换最多 8 个（设置“同时处理的书”的最大档位）。
         if registry.jobs.len() >= 32
             || registry
                 .jobs

@@ -1,4 +1,4 @@
-//! Minimal, filesystem-backed output transaction for the R1 safety gate.
+//! Minimal, filesystem-backed output transaction for the safety gate.
 //!
 //! It intentionally publishes a new file only.  The source is read and
 //! fingerprinted before staging and checked again before the final rename;

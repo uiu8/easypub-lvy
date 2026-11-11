@@ -112,48 +112,48 @@ pub struct ProjectBook {
     pub line_height_unit: String,
     #[serde(default = "crate::production::default_text_alignment")]
     pub text_alignment: String,
-    /// 书写方向（V28，LAY-104）：horizontal 横排、vertical 竖排（从右往左翻页）。
+    /// 书写方向：horizontal 横排、vertical 竖排（从右往左翻页）。
     #[serde(default = "crate::production::default_writing_mode")]
     pub writing_mode: String,
     /// 竖排时连续不超过这么多位的半角数字横着排（纵中横）；0 关闭。
     #[serde(default = "crate::production::default_vertical_digits")]
     pub vertical_digits: u8,
-    /// 章节标题样式（V36，LAY-117）。
+    /// 章节标题样式。
     #[serde(default = "crate::production::default_heading_style")]
     pub heading_style: String,
-    /// 场景分隔样式（V46，LAY-118）。
+    /// 场景分隔样式。
     #[serde(default = "crate::production::default_scene_break_style")]
     pub scene_break_style: String,
     #[serde(default = "crate::production::default_note_style")]
     pub note_style: String,
-    /// 章首段落样式（V49，LAY-119）。
+    /// 章首段落样式。
     #[serde(default = "crate::production::default_first_paragraph_style")]
     pub first_paragraph_style: String,
-    /// 生僻字注音与范围（V73，LAY-129）。
+    /// 生僻字注音与范围。
     #[serde(default = "crate::production::default_rare_char_ruby")]
     pub rare_char_ruby: String,
     #[serde(default = "crate::production::default_rare_char_scope")]
     pub rare_char_scope: String,
-    /// 系统提示样式（V50，LAY-121）。
+    /// 系统提示样式。
     #[serde(default = "crate::production::default_system_block_style")]
     pub system_block_style: String,
-    /// 分类样式参数（V77，LAY-132）。
+    /// 分类样式参数。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_styles: Option<crate::block_styles::SystemStyles>,
-    /// 诗词样式（V50，LAY-122）。
+    /// 诗词样式。
     #[serde(default = "crate::production::default_verse_block_style")]
     pub verse_block_style: String,
-    /// 场景样式（V81，LAY-135）。
+    /// 场景样式。
     #[serde(default = "crate::production::default_chat_block_style")]
     pub chat_block_style: String,
     #[serde(default = "crate::production::default_letter_block_style")]
     pub letter_block_style: String,
     #[serde(default = "crate::production::default_inset_font")]
     pub inset_font: String,
-    /// 场景识别（V82，LAY-137），见 [crate::insets::INSET_DETECT]。
+    /// 场景识别，见 [crate::insets::INSET_DETECT]。
     #[serde(default = "crate::production::default_inset_detect")]
     pub inset_detect: String,
-    /// 本书改过的场景样式（V82，LAY-136）：按场景编号；没改的用内置预设。
+    /// 本书改过的场景样式：按场景编号；没改的用内置预设。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inset_styles: Option<std::collections::BTreeMap<String, crate::inset_styles::InsetStyle>>,
     #[serde(default)]
@@ -205,14 +205,14 @@ pub struct ProjectBook {
     pub chapter_navigation: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cover_path: Option<String>,
-    /// 统一章首图（V54，LAY-124）：图片路径，与封面一样属于本书，不进排版预设。
+    /// 统一章首图：图片路径，与封面一样属于本书，不进排版预设。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chapter_head_image: Option<String>,
     #[serde(default = "crate::production::default_chapter_head_scope")]
     pub chapter_head_scope: String,
     #[serde(default = "crate::production::default_chapter_head_width")]
     pub chapter_head_width: String,
-    /// 章节样式包（V74，LAY-130）：图片路径，与章首图一样属于本书。
+    /// 章节样式包：图片路径，与章首图一样属于本书。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chapter_style: Option<crate::style_packs::ChapterStyle>,
     #[serde(default = "default_cover_fit")]
@@ -227,10 +227,10 @@ pub struct ProjectBook {
     pub font_resource: Option<crate::fonts::Selection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_marks: Option<crate::source_marks::Selection>,
-    /// 手动选的 TXT 编码（G-114）；path 是转好的 UTF-8 工作稿，重读原文件要用。
+    /// 手动选的 TXT 编码；path 是转好的 UTF-8 工作稿，重读原文件要用。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_encoding: Option<String>,
-    /// 自动判断的结果像乱码，书库里提示（G-114）。
+    /// 自动判断的结果像乱码，书库里提示。
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub encoding_suspect: bool,
     #[serde(
@@ -287,7 +287,7 @@ pub struct Illustration {
     pub alt: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_line: Option<u32>,
-    /// 插图版式（V54，RES-050）：inline 随正文；full_page 整页；chapter_head 放在所在章的标题上方。
+    /// 插图版式：inline 随正文；full_page 整页；chapter_head 放在所在章的标题上方。
     #[serde(
         default = "crate::production::default_illustration_layout",
         skip_serializing_if = "crate::production::illustration_layout_is_inline"
@@ -761,7 +761,7 @@ pub fn open(service: &ImportService, path: &str) -> Result<String, ApiError> {
     let mut sources = BTreeMap::new();
     let mut summaries = Vec::new();
     let mut resident = 0usize;
-    // V134：各书互不相关，并行读取与校验；结果与第一个错误仍按书的顺序。
+    // 各书互不相关，并行读取与校验；结果与第一个错误仍按书的顺序。
     let loaded = parallel_books(&project.books, |book| -> Result<SourceSnapshot, ApiError> {
         let bytes = read_bounded(Path::new(&book.path), &CancellationToken::new(), |_| {})?;
         let source = SourceSnapshot::from_bytes(

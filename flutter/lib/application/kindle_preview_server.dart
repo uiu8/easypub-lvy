@@ -1,4 +1,4 @@
-// 真机预览组件的本机连接（V30，LAY-108/110）。组件是 plugins/kindle-preview/ 里的网页，
+// 真机预览组件的本机连接。组件是 plugins/kindle-preview/ 里的网页，
 // 由系统 Edge 以应用窗口打开；它通过这里读取本书、按还没写回的排版值生成内容、取阅读器参数、
 // 写回本书。只听 127.0.0.1，所有路径以随机口令开头，并校验 Host，其他网页无法访问。
 import 'dart:async';
@@ -11,7 +11,7 @@ import 'package:crypto/crypto.dart';
 
 import 'layout_service.dart';
 
-/// 认出 Kindle 自带的中文字体（V128，LAY-183）：按字体内部的字族名，不看文件名。
+/// 认出 Kindle 自带的中文字体：按字体内部的字族名，不看文件名。
 /// 返回 {face: song|hei|kai|yuan, script: sc|tc, bold}；不是这几种时返回 null。
 /// 名字来自 KPW5 固件 5.17.1.0.3 与 5.19.2 的字体：简体宋体内部名是“STBShusong”
 /// （粗体“STBShusong-Bold”，字重字段仍写 400），简体圆体常规体是“STZhongyuan”。
@@ -99,7 +99,7 @@ class KindlePreviewServer {
     this.fontDirectory,
   });
 
-  /// 导入的预览字体放在这里（V123，LAY-178）：fonts.json 记名字与上次选的阅读器字体。
+  /// 导入的预览字体放在这里：fonts.json 记名字与上次选的阅读器字体。
   /// 只给预览用，不进书里；为 null 时不能导入。
   final String? fontDirectory;
 
@@ -344,7 +344,7 @@ class KindlePreviewServer {
     Directory(dir).createSync(recursive: true);
     File('$dir${Platform.pathSeparator}$file').writeAsBytesSync(data);
     final index = _fontIndex();
-    // 同一种 Kindle 字体（字体、简繁、粗细都相同）只留最新导入的一份（V128）。
+    // 同一种 Kindle 字体（字体、简繁、粗细都相同）只留最新导入的一份。
     bool same(Map f) {
       final k = f['kindle'];
       return kindle != null &&
@@ -421,7 +421,7 @@ class KindlePreviewServer {
         var selected = value['selected'] is String
             ? value['selected'] as String
             : null;
-        // V128 以前导入的字体还没认过：读一次字体文件，认出 Kindle 字体后记进清单。
+        // 以前导入的字体还没认过：读一次字体文件，认出 Kindle 字体后记进清单。
         // 同一种 Kindle 字体有几份时，最后导入的那份对应到宋体等选项，较早的按普通导入字体列出。
         final unchecked = fonts
             .where((f) => f['kindle'] == null && f['plain'] == null)

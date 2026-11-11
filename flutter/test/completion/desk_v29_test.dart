@@ -11,7 +11,7 @@ import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/settings/settings_page.dart';
 import 'package:easypub_desktop/desk/widgets.dart';
 
-/// V29：设置页说明精简——分区说明去掉，组标题与开关的说明收进“?”（SET-068）。
+/// 设置页说明精简——分区说明去掉，组标题与开关的说明收进“?”。
 void main() {
   testWidgets('设置页各分区不再显示说明行，说明在“?”里，点“?”不切换开关', (t) async {
     t.view.physicalSize = const Size(1100, 760);

@@ -4,8 +4,8 @@ import 'package:easypub_desktop/prototype/prototype_state.dart';
 import 'package:easypub_desktop/state/cleanup_store.dart';
 import 'package:easypub_desktop/state/production_store.dart';
 
-// V39：旧原型的几个薄包装。生产代码不用，只给 `tool/` 下的历史验证脚本搭建场景；
-// 方法体与 V39 删除前的生产源码相同，全部只经公开接口。
+// 旧原型的几个薄包装。生产代码不用，只给 `tool/` 下的历史验证脚本搭建场景；
+// 方法体与删除前的生产源码相同，全部只经公开接口。
 
 extension LegacyGlobalSaves on PrototypeState {
   Future<bool> saveGlobalLayout(

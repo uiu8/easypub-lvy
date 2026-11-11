@@ -1,4 +1,4 @@
-// 文本清理的设置、历史与批量（V20 从 PrototypeState 拆出，原 cleanupDrafts 等）。
+// 文本清理的设置、历史与批量（从 PrototypeState 拆出，原 cleanupDrafts 等）。
 // 只通过 PrototypeState 的公开接口读写书库与章节修改；行为与拆分前相同。
 import 'dart:convert';
 
@@ -58,7 +58,7 @@ class CleanupStore {
   }
 
   /// 改变清理历史（设置、撤销、重做）。已有章节修改时，把它们换算到新的清理结果上，
-  /// 作为章节历史中的新一步（CLEAN-103）；有无法换算的修改且未 [dropSkipped] 时
+  /// 作为章节历史中的新一步；有无法换算的修改且未 [dropSkipped] 时
   /// 抛出 [CleanupEditsNeedConfirmation]，由界面列出并请用户确认，不改变任何状态。
   Future<bool> editSettings(
     String bookId,
@@ -95,12 +95,16 @@ class CleanupStore {
         return false;
       }
       final candidate = (next['history'] as List)[next['cursor'] as int];
-      final nextBase = {..._core.manuscript.effectiveBase(bookId), 'cleanup': candidate};
+      final nextBase = {
+        ..._core.manuscript.effectiveBase(bookId),
+        'cleanup': candidate,
+      };
       // 有章节修改时换算到新的清理结果上；没有时只核对新依据能否组成书稿。
       final rebased = _core.manuscript.effectiveSelection(bookId) == null
           ? null
           : await _core.manuscript.rebaseEffectiveHistory(bookId, nextBase);
-      if (rebased == null) await _core.manuscript.validateEffectiveBase(bookId, nextBase);
+      if (rebased == null)
+        await _core.manuscript.validateEffectiveBase(bookId, nextBase);
       if (guard != _core.publicationContext(bookId)) {
         throw const FormatException('书稿已变化，清理历史未更改，请重新操作。');
       }
@@ -122,7 +126,8 @@ class CleanupStore {
         );
       }
       _core.change(() {
-        if (rebased != null) _core.manuscript.effectiveHistories[bookId] = rebased.history;
+        if (rebased != null)
+          _core.manuscript.effectiveHistories[bookId] = rebased.history;
         histories[bookId] = next;
         final current = (next['history'] as List)[next['cursor'] as int];
         if (current == null) {

@@ -102,7 +102,7 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(find.text('导入与收藏').first);
       await t.pumpAndSettle();
-      // V16：保存状态只在左下角一处（SET-064）。
+      // 保存状态只在左下角一处。
       final status = find.byKey(const ValueKey('settings-save-status'));
       expect(t.widget<Text>(status).data, '修改后自动保存');
       final initial = t.getCenter(status);

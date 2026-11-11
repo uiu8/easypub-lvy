@@ -1,4 +1,4 @@
-// 规则开关的预览对话框（V66，CH-282）：展示 previewToggles 返回的改动、本书影响与联动，
+// 规则开关的预览对话框：展示 previewToggles 返回的改动、本书影响与联动，
 // 用户点“确认应用”才调用 applyToggles。不改原稿和正文；清理开关只保存配置。
 import 'package:flutter/material.dart';
 

@@ -203,7 +203,7 @@ pub(super) fn load() {
         && let Ok(v) = serde_json::from_slice::<Value>(&b)
         && let Ok(mut c) = serde_json::from_value::<crate::network_config::ProxyConfig>(v.clone())
     {
-        // V89 旧配置原来只对勾选书源生效，升级不能悄悄扩大范围。
+        // 旧配置原来只对勾选书源生效，升级不能悄悄扩大范围。
         if v.get("scope").is_none() {
             c.scope = "marked".into();
         }

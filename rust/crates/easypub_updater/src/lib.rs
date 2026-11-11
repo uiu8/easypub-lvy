@@ -1,4 +1,4 @@
-//! V68 自动更新（SET-071–073）：更新清单与签名校验、程序目录替换。
+//! 自动更新：更新清单与签名校验、程序目录替换。
 //! 主程序（easypub_app::app_update）用前半部分检查和下载；easypub_updater.exe 用后半部分替换文件。
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ pub const APP_EXE: &str = "easypub_desktop.exe";
 /// 程序目录下的更新工作区：下载、解压、备份、日志都在这里，替换时不会被移走。
 pub const WORK_DIR: &str = ".update";
 
-/// 发布签名公钥（Ed25519）。私钥只在发布者本机（见 docs/V68 说明），不进仓库。
+/// 发布签名公钥（Ed25519）。私钥只在发布者本机（见 docs/自动更新与签名说明.md），不进仓库。
 pub const PUBLIC_KEYS: &[[u8; 32]] = &[RELEASE_KEY];
 /// 2026-10-17 生成；私钥在发布者的 %USERPROFILE%\.easypub-lvy\release-signing.key。
 const RELEASE_KEY: [u8; 32] = [
@@ -224,7 +224,7 @@ pub fn verify_manifest(
     Ok(manifest)
 }
 
-/// 本机版本号：version.json 的 release 字段；V68 之前的包没有这个字段，从包名里的 “-vNN-” 取。
+/// 本机版本号：version.json 的 release 字段；早先的包没有这个字段，从包名里的 “-vNN-” 取。
 pub fn release_of(version: &serde_json::Value) -> Option<u32> {
     if let Some(n) = version["release"].as_u64() {
         return u32::try_from(n).ok();

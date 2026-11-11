@@ -1,4 +1,4 @@
-// 全页面图集（R0，正式版打磨）：真实字体、测试假数据，按窗口宽度 × 主题 × 字号给每个页面出图，
+// 全页面图集（正式版打磨）：真实字体、测试假数据，按窗口宽度 × 主题 × 字号给每个页面出图，
 // 另出书源插件五个页签，最后写一个 index.html 便于逐页翻看。
 // 只在设置 DESK_ATLAS_OUT=<目录> 时运行（tools/run_desk_atlas.ps1），全量回归里跳过。
 import 'dart:convert';
@@ -45,7 +45,7 @@ const _themes = ['paper', 'night', 'silver'];
 const _scales = {'1.0': 1.0, '1.3': 1.3};
 
 /// 样书：两卷、40 章，含一处跳号、一处重复标题与一个疑似标题的正文行，检查页有内容可看；
-/// 另有行尾空白、连续空行和广告行（R4），清理页有差异与提示候选可看。
+/// 另有行尾空白、连续空行和广告行，清理页有差异与提示候选可看。
 String _sampleBook() {
   final b = StringBuffer('山海之间\n作者：样例\n\n');
   for (var c = 1; c <= 40; c++) {
@@ -56,8 +56,8 @@ String _sampleBook() {
     b.writeln(title);
     for (var p = 0; p < 6; p++) {
       b.writeln('　　这是第$c章的第${p + 1}段正文，山路很长，海风很轻，行人一步一步走向远方。');
-      // V104：第 1 章第 3 段后放一条单行提示、一个面板和一联诗句，排版小预览能看到分类样式。
-      // 放在原稿第 7 行（插图位置）之后，不影响 R5 的插图。
+      // 第 1 章第 3 段后放一条单行提示、一个面板和一联诗句，排版小预览能看到分类样式。
+      // 放在原稿第 7 行（插图位置）之后，不影响早先的插图。
       if (c == 1 && p == 2) {
         b.writeln('【叮！检测到隐藏任务】');
         b.writeln('　　他停下脚步，眼前浮出一行字。');
@@ -162,7 +162,7 @@ void main() {
       await prepareDeskGrain();
       await Directory(_out!).create(recursive: true);
       final tmp = await Directory.systemTemp.createTemp('desk-atlas-');
-      // V104：存储布局放进临时目录，设置页才显示“存储位置”，也不碰真实的应用目录。
+      // 存储布局放进临时目录，设置页才显示“存储位置”，也不碰真实的应用目录。
       await StorageLocations.initialize(
         local: '${tmp.path}/local',
         temp: '${tmp.path}/temp',
@@ -188,7 +188,7 @@ void main() {
       }
       await library.importFiles(files);
       bookId = library.books.value.firstWhere((b) => b.title == '山海之间').id;
-      // V104：样书的系统提示用分类样式（单行提示条、标题面板）。
+      // 样书的系统提示用分类样式（单行提示条、标题面板）。
       final styled = await state.production.previewChanges({
         bookId: {
           'op': 'patch',
@@ -198,7 +198,7 @@ void main() {
         },
       });
       await state.production.confirm(styled);
-      // R5：给样书一张插图（第 1 章第 2 段之后，原稿第 7 行），资源页和排版预览才有内容。图在测试里画，不用外部文件。
+      // 给样书一张插图（第 1 章第 2 段之后，原稿第 7 行），资源页和排版预览才有内容。图在测试里画，不用外部文件。
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
       canvas.drawRect(
@@ -224,7 +224,7 @@ void main() {
     });
     final wuxia = library.createCollection('武侠');
     final later = library.createCollection('待读');
-    // V104：收藏夹模式要有成员才看得出封面叠放；留几本不在收藏夹里，归入“未分类”。
+    // 收藏夹模式要有成员才看得出封面叠放；留几本不在收藏夹里，归入“未分类”。
     final ids = [for (final b in library.books.value) b.id];
     library.addToCollection(wuxia.id, ids.take(3));
     library.addToCollection(later.id, ids.skip(2).take(2));
@@ -288,7 +288,7 @@ void main() {
               entries.last['error'] = '$error'.split('\n').first;
             }
           }
-          // R4：清理页的“逐步骤差异”“提示候选”“清理差异（待确认）”三种状态。
+          // 清理页的“逐步骤差异”“提示候选”“清理差异（待确认）”三种状态。
           Future<void> tapText(String text) async {
             await t.tap(find.text(text).first);
             await settle(t);
@@ -314,7 +314,7 @@ void main() {
             t.takeException();
           }
 
-          // 一键修复（CH-244）：就地打开的弹窗。
+          // 一键修复：就地打开的弹窗。
           await cleanupShot('repair-all', '一键修复', () async {
             router.go('/books/$book/chapters');
             await settle(t);
@@ -326,7 +326,7 @@ void main() {
             await t.tap(repairClose);
             await settle(t);
           }
-          // 检查进度（docs/42）：从检查页到章节问题页签，再到文本清理页和书籍信息页。
+          // 检查进度：从检查页到章节问题页签，再到文本清理页和书籍信息页。
           await cleanupShot('checks-cleanup', '检查页 · 文本清理', () async {
             router.go('/books/$book/checks');
             await settle(t, max: 300);
@@ -362,7 +362,7 @@ void main() {
             await t.tap(barClose);
             await settle(t);
           }
-          // V104：章节页排版视图（鼠标停在单行提示上，显示自动识别标签），看完切回原文。
+          // 章节页排版视图（鼠标停在单行提示上，显示自动识别标签），看完切回原文。
           router.go('/books/$book/chapters');
           await settle(t);
           final chapterOne = find.text('第1章 云涌1');
@@ -399,7 +399,7 @@ void main() {
           }
           t.takeException();
 
-          // V104：排版页“段落与识别”：分类样式的小预览与识别数量。
+          // 排版页“段落与识别”：分类样式的小预览与识别数量。
           router.go('/books/$book/layout');
           await settle(t);
           await cleanupShot('layout-paragraph', '排版 · 段落与识别', () async {
@@ -428,7 +428,7 @@ void main() {
             );
           }
 
-          // V134：书库列表视图（用户常用），看完切回书架视图。
+          // 书库列表视图（用户常用），看完切回书架视图。
           router.go('/');
           await settle(t);
           await cleanupShot('library-list', '书库 · 列表视图', () async {
@@ -439,7 +439,7 @@ void main() {
             await t.tap(find.byTooltip('切换书架视图'));
             await settle(t);
           }
-          // V104：书库收藏夹模式（顶层与点进一个收藏夹），看完切回平铺。
+          // 书库收藏夹模式（顶层与点进一个收藏夹），看完切回平铺。
           router.go('/');
           await settle(t);
           await cleanupShot('library-folders', '书库 · 收藏夹模式', () async {
@@ -493,7 +493,7 @@ void main() {
           );
           final back = find.text('返回调整');
           if (back.evaluate().isNotEmpty) await tapText('返回调整');
-          // 导航栏展开（G-084）：宽窗时栏底有“展开导航栏”，展开后出一张书库图再收回。
+          // 导航栏展开：宽窗时栏底有“展开导航栏”，展开后出一张书库图再收回。
           final toggle = find.byKey(const ValueKey('desk-rail-toggle'));
           if (toggle.evaluate().isNotEmpty) {
             router.go('/');
@@ -510,7 +510,7 @@ void main() {
             await t.tap(toggle);
             await settle(t);
           }
-          // 外壳弹窗与菜单（R1）：只出两个组合，打开后截图，再按 Esc 关掉。
+          // 外壳弹窗与菜单：只出两个组合，打开后截图，再按 Esc 关掉。
           final combo = '$size-$theme-$scale';
           if (combo == '1500-paper-1.0' || combo == '1100-night-1.3') {
             router.go('/books/$book/chapters');
@@ -566,7 +566,7 @@ void main() {
             await overlay(
               'shell-quick-layout',
               '外壳 · 快速排版',
-              // 窄窗时提示后面还接着当前预设名（R1），按开头匹配。
+              // 窄窗时提示后面还接着当前预设名，按开头匹配。
               () => t.tap(
                 find
                     .byWidgetPredicate(
@@ -587,7 +587,7 @@ void main() {
               '外壳 · 保存状态',
               () => t.tap(find.byKey(const ValueKey('desk-save-badge')).first),
             );
-            // R5：排版页的三个弹窗、窄窗时的阅读预览，书籍信息的文字封面。
+            // 排版页的三个弹窗、窄窗时的阅读预览，书籍信息的文字封面。
             router.go('/books/$book/layout');
             await settle(t);
             for (final (id, label, text) in [
@@ -603,7 +603,7 @@ void main() {
                 await settle(t, max: 30);
               }
             }
-            // 第 1 章的插图排在小预览第 2 页（R5-01）。
+            // 第 1 章的插图排在小预览第 2 页。
             final next = find.text('下一页');
             if (next.evaluate().isNotEmpty) {
               await t.tap(next.first);
@@ -633,7 +633,7 @@ void main() {
         }
       }
     }
-    // R4：最后一个组合里真的采用一次清理，拍“采用结果”和有记录的变更记录页（采用会改样书，所以只做一次）。
+    // 最后一个组合里真的采用一次清理，拍“采用结果”和有记录的变更记录页（采用会改样书，所以只做一次）。
     final last =
         '${_pick('SIZES', _sizes.keys.toList()).last}-${_pick('THEMES', _themes).last}-${_pick('SCALES', _scales.keys.toList()).last}';
     try {
@@ -667,7 +667,7 @@ void main() {
     }
     t.takeException();
     await t.pumpWidget(const SizedBox.shrink());
-    // V134：书库有后台重查的定时器，测试结束前关掉。
+    // 书库有后台重查的定时器，测试结束前关掉。
     library.dispose();
     t.view.resetPhysicalSize();
     t.view.resetDevicePixelRatio();

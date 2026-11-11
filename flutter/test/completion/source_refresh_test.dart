@@ -215,7 +215,7 @@ void main() {
           '-X',
           'utf8',
           '-c',
-          // 每章一个文件（V36，OUT-081）：按文件名顺序读全部正文文件（body、body-0001…与阅读顺序一致）。
+          // 每章一个文件：按文件名顺序读全部正文文件（body、body-0001…与阅读顺序一致）。
           r"import re,sys,zipfile,xml.etree.ElementTree as E; z=zipfile.ZipFile(sys.argv[1]); docs=[E.fromstring(z.read(p)) for p in sorted((p for p in z.namelist() if re.fullmatch(r'EPUB/body(-\d{4})?\.xhtml',p)),key=lambda p:int(p[10:14]) if '-' in p else -1)]; n={'h':'http://www.w3.org/1999/xhtml'}; assert [x.text for b in docs for x in b.findall('.//h:p',n)]==['　　新的正文甲','　　新的正文乙']; assert [x.text for b in docs for x in b.findall('.//h:h1',n)]==['第一章 新章节','第二章 续篇']",
           files.single.path,
         ],

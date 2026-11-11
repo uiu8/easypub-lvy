@@ -23,7 +23,7 @@ extension _BookSourceShelf on _BookSourcePageState {
     });
     try {
       final result = await api!.call('library.rebuild', {'key': key}) as Map;
-      // 重新整理只改下载的 TXT，不碰书库里的草稿（V111）。
+      // 重新整理只改下载的 TXT，不碰书库里的草稿。
       final message =
           '已重新整理并保留备份：${result['backup']}。这本书已在书库时，书库里还是原来的版本，可在书库的书籍菜单里用“刷新来源”采用。';
       update(() {
@@ -341,7 +341,7 @@ extension _BookSourceShelf on _BookSourcePageState {
     ].where((p) => File(p).existsSync()).toList();
   }
 
-  /// 删除下载的书（V134）：删除下载记录与章节缓存；勾选时下载的文件移到回收站、同时移出书库。
+  /// 删除下载的书：删除下载记录与章节缓存；勾选时下载的文件移到回收站、同时移出书库。
   Future<void> _deleteDownload(Map<String, dynamic> r) async {
     final path = '${r['path'] ?? ''}';
     final files = _downloadFiles(path);

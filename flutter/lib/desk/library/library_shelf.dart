@@ -1,8 +1,8 @@
 part of 'library_page.dart';
 
-// R2-10：从 library_page.dart 拆出，行为不变。书架（封面格子）、列表行、表头、状态列与空书库引导。
+// 从 library_page.dart 拆出，行为不变。书架（封面格子）、列表行、表头、状态列与空书库引导。
 extension _LibraryShelf on _LibraryPageState {
-  /// 拖动已勾选的书（V84，LIB-121）：按在已勾选的书上拖动时带上全部勾选的书。
+  /// 拖动已勾选的书：按在已勾选的书上拖动时带上全部勾选的书。
   Widget bookDrag(BookSummary b, bool checked, Widget child) {
     if (collectionService == null) return child;
     final d = context.desk;
@@ -80,10 +80,10 @@ extension _LibraryShelf on _LibraryPageState {
     );
   }
 
-  /// 状态列（LIB-099）：需要处理时小圆点 + 短词，处理完浅灰；数量取自检查报告。
+  /// 状态列：需要处理时小圆点 + 短词，处理完浅灰；数量取自检查报告。
   Widget statusCell(BookSummary b) {
     final d = context.desk;
-    // 只算章节问题（LIB-106）；清理建议与书籍信息写在悬停提示里。转换页共用同一说法。
+    // 只算章节问题；清理建议与书籍信息写在悬停提示里。转换页共用同一说法。
     final label = bookStatusLabel(b);
     final text = label.text;
     final Color? dot = label.attention ? d.warn : null;
@@ -111,7 +111,7 @@ extension _LibraryShelf on _LibraryPageState {
     );
   }
 
-  /// 书架视图（LIB-101，默认）：按宽度排成固定列，几何信息同时用于拖动框选。
+  /// 书架视图（默认）：按宽度排成固定列，几何信息同时用于拖动框选。
   Widget shelf(List<BookSummary> visible, BookSummary current) => LayoutBuilder(
     builder: (context, box) {
       final scale = MediaQuery.textScalerOf(context).scale(1);
@@ -288,7 +288,7 @@ extension _LibraryShelf on _LibraryPageState {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Dot(d.warn, size: 6),
-                                  // R2-08：数字后写“待核”，不用悬停也知道是什么。
+                                  // 数字后写“待核”，不用悬停也知道是什么。
                                   if (pending > 0) ...[
                                     const SizedBox(width: 4),
                                     Text('$pending', style: mono(11, c: d.ink)),
@@ -348,7 +348,7 @@ extension _LibraryShelf on _LibraryPageState {
                     ],
                   ),
                   const SizedBox(height: 2),
-                  // R2-08：卡片第二行写作者、格式与章数，不用看右栏就知道是什么书。
+                  // 卡片第二行写作者、格式与章数，不用看右栏就知道是什么书。
                   if (b.encodingSuspect)
                     InkWell(
                       key: ValueKey(('encoding-suspect', b.id)),
@@ -388,7 +388,7 @@ extension _LibraryShelf on _LibraryPageState {
         child: _Hover(
           builder: (hovering) => InkWell(
             borderRadius: BorderRadius.circular(8),
-            // Ctrl+点击：单独加选或取消；Shift+点击：从上次勾选处连续勾选（LIB-096）。
+            // Ctrl+点击：单独加选或取消；Shift+点击：从上次勾选处连续勾选。
             onTap: () {
               final keys = HardwareKeyboard.instance;
               if (keys.isControlPressed) {

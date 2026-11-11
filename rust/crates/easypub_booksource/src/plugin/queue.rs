@@ -429,7 +429,7 @@ fn run_task(task: Task, cancel: Arc<AtomicBool>) {
             let primary_host = crate::scheduler::content_site(&book, &toc);
             let mut hosts = std::collections::HashSet::new();
             hosts.insert(primary_host);
-            // V132：按最近下载记录排序（成功率高、单章快的在前；没有记录的排中间）。
+            // 按最近下载记录排序（成功率高、单章快的在前；没有记录的排中间）。
             let ranked = {
                 let st = state();
                 let mut ranked: Vec<_> = alternates
@@ -650,7 +650,7 @@ fn chapter_no(t: &str) -> Option<u64> {
 /// 在其他书源里按标题（再按章号）找到失败的章节，取到的写进本书缓存。返回补上的章数。
 /// 没有下载记录的书源排在中间：比明显又慢又常失败的靠前，比实测又快又稳的靠后。
 const UNKNOWN_RANK: (u64, u64) = (3, 20);
-/// 书源实测排名（V132）：先比失败率（每 10% 一档），再比单章网络用时中位数（每 100 毫秒一档）。
+/// 书源实测排名：先比失败率（每 10% 一档），再比单章网络用时中位数（每 100 毫秒一档）。
 /// 至少 3 条记录才算数；限流桩页也算失败。
 fn speed_rank(samples: &[crate::source::DownloadSample]) -> (u64, u64) {
     if samples.len() < 3 {

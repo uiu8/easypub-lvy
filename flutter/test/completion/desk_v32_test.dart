@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:easypub_desktop/desk/layout/device_preview.dart';
 import 'package:easypub_desktop/desk/layout/kindle_firmware_profiles.dart';
 
-/// V32：阅读器字号与页边距按 Kindle 固件参数（LAY-113）。
+/// 阅读器字号与页边距按 Kindle 固件参数。
 void main() {
   KindleDevice device(String id) => kindleDevices.firstWhere((k) => k.id == id);
   PreviewDeviceChoice choice(
@@ -27,14 +27,14 @@ void main() {
   test('页边距按固件磅值与屏幕系数换算：KPW5 窄边距约 6.5%，中、宽为窄的 2、3 倍', () {
     final kpw5 = device('kpw5');
     final narrow = readerSideMargin(kpw5, 'narrow');
-    // V131：固件 pixVal，6.8 英寸屏乘 1.13。
+    // 固件 pixVal，6.8 英寸屏乘 1.13。
     expect(
       narrow / kpw5.viewportWidth,
       closeTo(16.98 * 1.13 * 300 / 72 / 1236, 1e-9),
     );
     expect(readerSideMargin(kpw5, 'medium'), closeTo(narrow * 2, 1e-9));
     expect(readerSideMargin(kpw5, 'wide'), closeTo(narrow * 3, 1e-9));
-    // V131：上下边距按固件 13.58 磅 × 屏幕系数 × ppi ÷ 72 向下取整，换机型时随之变化。
+    // 上下边距按固件 13.58 磅 × 屏幕系数 × ppi ÷ 72 向下取整，换机型时随之变化。
     final k5 = readerMetrics(choice('kpw5'));
     expect((k5.padding.top, k5.padding.bottom), (63, 63));
     expect(readerMetrics(choice('kpw6')).padding.top, 65);
@@ -56,7 +56,7 @@ void main() {
   });
 
   test('14 档逐档变大；同一档位在 300 ppi 机型上物理字号相同', () {
-    // V118：各机型按 KPW5 真机规则，字号 = 固件字号表 × ppi/72（取整）× 书内 110%。
+    // 各机型按 KPW5 真机规则，字号 = 固件字号表 × ppi/72（取整）× 书内 110%。
     for (final id in [
       'kpw3',
       'kpw5',

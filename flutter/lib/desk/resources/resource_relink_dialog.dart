@@ -1,4 +1,4 @@
-// 迁入 desk（resources，V5/V6）：逻辑与布局沿用 V5 前的同名文件；公共弹窗框架样式在 V7 统一。
+// 迁入 desk（resources）：逻辑与布局沿用早先的同名文件；公共弹窗框架样式后来统一。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -114,7 +114,7 @@ class _ResourceRelinkDialogState extends State<ResourceRelinkDialog> {
   @override
   Widget build(BuildContext context) {
     final unavailable = rows.where((r) => r.image == null).length;
-    // 编辑台弹窗（R5-03）：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
+    // 编辑台弹窗：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
     return DeskDialog(
       title: '重新定位资源',
       closeTooltip: '关闭',
@@ -289,10 +289,7 @@ class _ResourceRelinkDialogState extends State<ResourceRelinkDialog> {
                         const SizedBox(height: 6),
                         SelectableText(
                           '→ ${paths[row.index]}',
-                          style: ui(
-                            12,
-                            c: context.desk.ink2,
-                          ),
+                          style: ui(12, c: context.desk.ink2),
                         ),
                       ],
                     ],

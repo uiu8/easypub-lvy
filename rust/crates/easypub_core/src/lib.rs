@@ -1,4 +1,4 @@
-//! Read-only R1 source experiments. No Flutter, I/O, or implicit legacy rules.
+//! Read-only source experiments. No Flutter, I/O, or implicit legacy rules.
 mod cp936_table;
 pub mod encoding;
 pub mod heading_typos;

@@ -88,7 +88,7 @@ extension _Routes on _RewriteAppState {
             child: service == null
                 ? const Center(child: DeskText('当前运行环境未提供设置服务。'))
                 : SettingsPage(
-                    // 命令面板“设置项”（R1）：?tab=分组&item=设置项名称；换了参数就重建页面。
+                    // 命令面板“设置项”：?tab=分组&item=设置项名称；换了参数就重建页面。
                     key: ValueKey(state.uri.query),
                     initialTab: int.tryParse(
                       state.uri.queryParameters['tab'] ?? '',

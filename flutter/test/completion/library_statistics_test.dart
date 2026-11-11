@@ -102,7 +102,7 @@ void main() {
       expect(find.textContaining('999'), findsNothing);
       await t.tap(find.text('统计读取失败，点击重试'));
       await t.pumpAndSettle();
-      // V12：没有分卷时只显示章数。
+      // 没有分卷时只显示章数。
       expect(find.text('3 章'), findsOneWidget);
     },
   );

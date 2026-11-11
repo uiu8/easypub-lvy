@@ -43,7 +43,7 @@ pub struct ReviewEvidence {
     pub(crate) stamp: String,
     diagnostic: Value,
     items: Vec<Value>,
-    /// 报告顺序：`items` 的下标按“要做的事”排好（CHK-053）。问题可能上万条，只排一次。
+    /// 报告顺序：`items` 的下标按“要做的事”排好。问题可能上万条，只排一次。
     order: std::sync::OnceLock<Vec<u32>>,
     /// 问题 id → 它在报告里的位置。筛选后的列表要用它和进度条对上。
     offsets: std::sync::OnceLock<BTreeMap<String, u32>>,
@@ -346,7 +346,7 @@ impl Review {
         )
     }
 }
-/// 问题分组（CHK-053）：0 认全（漏识别、缺章）；1 去重；2 归位（编号、层级与误收的标题）。
+/// 问题分组：0 认全（漏识别、缺章）；1 去重；2 归位（编号、层级与误收的标题）。
 pub fn issue_group(category: &str) -> u8 {
     match category {
         "unrecognized-heading" | "number-gap" | "heading-number-typo" | "no-headings" => 0,

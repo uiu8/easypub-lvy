@@ -30,7 +30,7 @@ fn error(reason: &'static str) -> ApiError {
 fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
-/// 把彼此独立的整本书遍历分给多个线程（V83）：最多 8 个工作线程，结果按输入顺序返回，
+/// 把彼此独立的整本书遍历分给多个线程：最多 8 个工作线程，结果按输入顺序返回，
 /// 与逐个计算完全相同；只有一项或单核时直接按顺序计算。
 fn par_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
     let workers = std::thread::available_parallelism()
@@ -108,7 +108,7 @@ impl Statistic {
     }
 }
 
-/// Effective source-line numbers and V53 body-line numbers are deliberately separate.
+/// Effective source-line numbers and body-line numbers are deliberately separate.
 struct Locations<'a> {
     book: &'a EffectiveBook,
     lines: &'a [(usize, usize)],
@@ -187,7 +187,7 @@ pub(crate) fn calculate(
             )
         })
         .collect();
-    // 清理统计只改 cleanup.* 行，识别与排版统计只改各自的行：两组同时算，再按前缀合并（V83）。
+    // 清理统计只改 cleanup.* 行，识别与排版统计只改各自的行：两组同时算，再按前缀合并。
     let mut cleanup_stats = stats.clone();
     let mut layout_lines = layout::LayoutLines::new();
     let (cleaned, others) = std::thread::scope(|scope| {
@@ -233,7 +233,7 @@ pub(crate) fn calculate(
     let invalid =
         stats["layout.manual_block"].invalid_count + stats["layout.manual_note"].invalid_count;
     stats.get_mut("manual.invalid").unwrap().count = invalid;
-    // 规则交互只追加 affects，假设统计只改关闭规则的计数：读同一份统计，同时算后合并（V83）。
+    // 规则交互只追加 affects，假设统计只改关闭规则的计数：读同一份统计，同时算后合并。
     let mut interaction_stats = stats.clone();
     let (interacted, supposed) = std::thread::scope(|scope| {
         let interacted = scope.spawn(|| {

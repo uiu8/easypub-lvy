@@ -1,5 +1,5 @@
-// 导入文件夹弹窗（D4-D，V8 按设计重写视图）：扫描、续扫、勾选与导入逻辑沿用原实现。
-// V84（FOLD-083–087）：全选 / 取消全选 / 反选按钮、拖动连选与框选、按名称 / 类型 / 大小 / 修改时间
+// 导入文件夹弹窗（按设计重写视图）：扫描、续扫、勾选与导入逻辑沿用原实现。
+// 全选 / 取消全选 / 反选按钮、拖动连选与框选、按名称 / 类型 / 大小 / 修改时间
 // 排序与类型筛选；可选“导入后加入收藏夹”。
 import 'package:flutter/material.dart';
 
@@ -54,7 +54,7 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
       ? widget.library as BookCollectionService
       : null;
 
-  /// 表头全选 / 清空（G-067）：书库已有的书不可勾选。
+  /// 表头全选 / 清空：书库已有的书不可勾选。
   void setAll(List<FolderBook> books, bool value) =>
       setMany(books.map((b) => b.path), value);
 
@@ -191,7 +191,7 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
           results.where((r) => r.succeeded).map((r) => r.path),
         );
       });
-      // 导入后加入收藏夹（V84，FOLD-087）：成功的与书库已有的都加入。
+      // 导入后加入收藏夹：成功的与书库已有的都加入。
       final target = collection, service = collections;
       if (target != null && service != null && mounted) {
         final ids = [
@@ -306,7 +306,7 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
               ),
               const SizedBox(width: 4),
               Text('包含子文件夹', style: ui(12.5, c: d.ink)),
-              // 导入默认识别规则（V23，CH-262）：导入前先设好；只加图标。
+              // 导入默认识别规则：导入前先设好；只加图标。
               if (widget.library is ChapterRulesService) ...[
                 const SizedBox(width: 4),
                 IconButton(

@@ -1,4 +1,4 @@
-//! R1 的唯一规则目录；只描述现有能力，不新增设置或改变算法。
+//! 的唯一规则目录；只描述现有能力，不新增设置或改变算法。
 use serde_json::{Value, json};
 
 pub fn catalog() -> Value {

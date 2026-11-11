@@ -1,4 +1,4 @@
-// 待应用登记（G-061）：各页已生成但尚未确认的预览。只登记、只读，不执行任何应用。
+// 待应用登记：各页已生成但尚未确认的预览。只登记、只读，不执行任何应用。
 //
 // 页面在 build 中用 [PendingReporter.reportPending] 报告当前预览；页面卸载时自动撤销。
 // 依据版本取登记时书稿的 contentVersion，之后书稿版本变化即判为“已过期”。
@@ -222,7 +222,7 @@ Future<void> showPendingList(
   ),
 );
 
-/// 待应用列表（设计 D1 PendingList）：领域、书、生成时间、有效/过期；可打开或放弃。
+/// 待应用列表（设计 PendingList）：领域、书、生成时间、有效/过期；可打开或放弃。
 class PendingList extends StatelessWidget {
   const PendingList({super.key, required this.registry, required this.onOpen});
   final PendingChangeRegistry registry;

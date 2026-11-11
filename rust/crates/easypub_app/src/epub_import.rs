@@ -355,7 +355,7 @@ pub fn extract(source_path: &str, output_path: &str, keep_marks: bool) -> Result
 }
 
 /// EPUB 的阅读顺序正文转成 UTF-8 文字（每段一行，文档之间空一行）。导入时写成 TXT 工作稿；
-/// V131 起 TXT 输出也用它把生成的 EPUB 转成 TXT。返回文字、有正文的文档数与行数。
+/// 后来TXT 输出也用它把生成的 EPUB 转成 TXT。返回文字、有正文的文档数与行数。
 pub(crate) fn text_from_epub(
     bytes: Vec<u8>,
     reading: Reading,
@@ -364,7 +364,7 @@ pub(crate) fn text_from_epub(
     Ok((text, documents, lines))
 }
 
-/// 已在书库的书补读（G-113）：按当时的读法读一遍，文字和工作稿一字不差才算数，
+/// 已在书库的书补读：按当时的读法读一遍，文字和工作稿一字不差才算数，
 /// 否则行号对不上。旧书的表格已经是一行行文字，这里不动。
 pub fn reread_marks(
     source_path: &str,
@@ -601,7 +601,7 @@ pub fn extract_resources(
     let publisher = metadata_value("publisher");
     let date = metadata_value("date");
     fs::create_dir_all(root).map_err(|_| invalid("choose_writable_epub_resource_directory"))?;
-    // 原书字体的混淆声明与标识（V123，LAY-179）：提取时还原成可检查、可嵌入的字体。
+    // 原书字体的混淆声明与标识：提取时还原成可检查、可嵌入的字体。
     let obfuscated = if archive.by_name("META-INF/encryption.xml").is_ok() {
         String::from_utf8(read_entry(
             &mut archive,
@@ -661,7 +661,7 @@ pub fn extract_resources(
         fs::create_dir_all(&target_dir)
             .map_err(|_| invalid("choose_writable_epub_resource_directory"))?;
         let mut name = resource_name(kind, resource_index, &zip_path);
-        // V24（RES-048）：TIFF、SVG 转成 PNG / JPEG 工作副本，界面能预览，输出也能用；
+        // TIFF、SVG 转成 PNG / JPEG 工作副本，界面能预览，输出也能用；
         // 转换失败的保留原文件，列为待确认。原 EPUB 不变。
         let (data, media, converted_from, conversion_failed) = if is_image {
             match crate::kindle_images::import_ready(&data, &media) {
@@ -743,7 +743,7 @@ pub fn extract_resources(
         } else if is_css {
             css.push(entry);
         } else {
-            // 字体格式与还原情况（V123）：format 为 ttf / otf / ttc 的可直接嵌入。
+            // 字体格式与还原情况：format 为 ttf / otf / ttc 的可直接嵌入。
             if let Some((note, format)) = font_notes.get(&name) {
                 entry["format"] = json!(format);
                 if let Some(note) = note {
@@ -929,7 +929,7 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
-    /// V123（LAY-179）：encryption.xml 声明 IDPF 混淆的字体提取时还原，WOFF2 原样列出并标明格式。
+    /// encryption.xml 声明 IDPF 混淆的字体提取时还原，WOFF2 原样列出并标明格式。
     #[test]
     fn obfuscated_fonts_are_restored_on_extraction() {
         let root = std::env::temp_dir().join(format!("easypub-epub-fonts-{}", std::process::id()));
@@ -1021,7 +1021,7 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
-    /// V24（RES-048）：SVG 封面、TIFF 插图转成工作副本；GIF 原样保留；坏的 SVG 列为待确认。
+    /// SVG 封面、TIFF 插图转成工作副本；GIF 原样保留；坏的 SVG 列为待确认。
     #[test]
     fn svg_cover_and_tiff_illustration_become_usable_copies() {
         use image::{DynamicImage, ImageBuffer, ImageFormat, Rgb};

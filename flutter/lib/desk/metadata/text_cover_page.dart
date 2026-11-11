@@ -1,4 +1,4 @@
-// 迁入 desk（V5a）：逻辑与布局沿用 V5 前的同名文件，只换面板与切换样式；见 docs/evidence/v5-meta-layout-resources-20261011.md。
+// 迁入 desk：逻辑与布局沿用早先的同名文件，只换面板与切换样式。
 import 'dart:ui' as dart_ui;
 
 import 'package:flutter/material.dart';
@@ -66,7 +66,7 @@ class _TextCoverPageState extends State<TextCoverPage> {
     widget.initialDesign?['color'] as int? ?? textCoverColors.first.toARGB32(),
   );
   bool busy = false;
-  // 样式包封面背景（V74b，LAY-130）：书用了带背景的样式包时可选。
+  // 样式包封面背景：书用了带背景的样式包时可选。
   late final String? backgroundPath = widget.session.styleCoverBackground;
   late bool useBackground =
       backgroundPath != null &&
@@ -203,7 +203,7 @@ class _TextCoverPageState extends State<TextCoverPage> {
     ),
   );
 
-  /// 编辑台面板：浮起卡片 + 标题行（V5 换样式，布局沿用）。
+  /// 编辑台面板：浮起卡片 + 标题行（换样式，布局沿用）。
   Widget panel(String label, Widget child) {
     final d = context.desk;
     return Container(
@@ -265,7 +265,7 @@ class _TextCoverPageState extends State<TextCoverPage> {
                   field('封面标题', title),
                   field('作者署名', author),
                   field('系列文字', series),
-                  // 只有一个模板时写成一行说明，不画成单个勾选项（R5-12）。
+                  // 只有一个模板时写成一行说明，不画成单个勾选项。
                   if (backgroundImage == null)
                     Padding(
                       key: const ValueKey('cover-template-only'),

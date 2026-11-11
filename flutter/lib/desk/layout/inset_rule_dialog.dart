@@ -6,7 +6,7 @@ import '../dialogs.dart';
 import '../tokens.dart';
 import '../widgets.dart';
 
-/// 场景识别规则（V82，LAY-137）：与 Rust `rule_options::InsetRule` 同形，开头锚定行首、结尾锚定行尾。
+/// 场景识别规则：与 Rust `rule_options::InsetRule` 同形，开头锚定行首、结尾锚定行尾。
 String insetRuleLabel(Map rule) {
   String plain(String p) => p.replaceAllMapped(RegExp(r'\\(.)'), (m) => m[1]!);
   final scene = insetTypes[rule['scene']] ?? '${rule['scene']}';

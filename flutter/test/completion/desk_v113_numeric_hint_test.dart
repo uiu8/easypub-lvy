@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// V113：纯数字标题改为提示式。导入不再悄悄打开纯数字识别；检查页顶部汇总提示，
+/// 纯数字标题改为提示式。导入不再悄悄打开纯数字识别；检查页顶部汇总提示，
 /// 一个按钮打开“数字章节”，核对后一次识别并统一为“第X章 标题”，之后提示消失。
 void main() {
   setUpAll(

@@ -1,4 +1,4 @@
-// 清理源行范围（CLEAN-018–021）：导入原稿行号，含起止行；留空表示该侧不限。
+// 清理源行范围：导入原稿行号，含起止行；留空表示该侧不限。
 import 'package:flutter/material.dart';
 
 import '../controls/controls.dart' show DeskButton;

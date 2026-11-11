@@ -21,7 +21,7 @@ import 'package:easypub_desktop/desk/resources/resource_position_dialog.dart';
 
 class _NoPicker extends Fake implements BookFilePicker {}
 
-/// V14：插图错误原因、插入位置按卷折叠、排版预览分页与滚轮、检查页重排、书库书架视图。
+/// 插图错误原因、插入位置按卷折叠、排版预览分页与滚轮、检查页重排、书库书架视图。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -98,7 +98,7 @@ void main() {
     final id = state.currentId;
     await t.runAsync(() async {
       final good = File('$root/good.png')..writeAsBytesSync(base64Decode(png));
-      // V24 起 GIF、BMP 可以选；TIFF 仍不支持直接选择（只在导入 EPUB 时转换）。
+      // 后来GIF、BMP 可以选；TIFF 仍不支持直接选择（只在导入 EPUB 时转换）。
       final tiff = File('$root/plate.tif')..writeAsBytesSync([73, 73, 42, 0]);
       final broken = File('$root/broken.png')..writeAsStringSync('不是图片');
       final resources = library.openResources(id);
@@ -217,7 +217,7 @@ void main() {
     expect(pages.length, greaterThan(3));
     final width = page.width - style.padding.horizontal;
     final height = page.height - style.padding.vertical;
-    // 页底按文字下沿判断（V124；V130 起文字高度按一个字号）：最后一行行框下面的半个行间留白可以超出版心。
+    // 页底按文字下沿判断（后来文字高度按一个字号）：最后一行行框下面的半个行间留白可以超出版心。
     final lead = (metrics.fontPx * metrics.lineRatio - metrics.fontPx) / 2;
     for (final p in pages) {
       expect(
@@ -318,8 +318,8 @@ void main() {
     expect(find.textContaining('前：'), findsNothing);
     expect(t.takeException(), isNull);
     await t.pumpWidget(const SizedBox());
-    // 旧格式：没有检查时间，或清理只有文字清单。V19 起这一判断只在读取没有版本号的
-    // 报告时做一次（CHK-060），页面看版本号。
+    // 旧格式：没有检查时间，或清理只有文字清单。后来这一判断只在读取没有版本号的
+    // 报告时做一次，页面看版本号。
     Map<String, dynamic> saved(List<String> items, {String? checkedAt}) => {
       'guard': 'g',
       'evidence': '',

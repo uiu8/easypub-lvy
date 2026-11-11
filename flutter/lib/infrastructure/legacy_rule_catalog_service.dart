@@ -314,7 +314,7 @@ class LegacyRuleCatalogService implements RuleCatalogService {
       _jobId = null;
       if (id != null) await _call('release', {'job_id': id});
       _running = false;
-      // 释放句柄期间书稿或设置变了（V63 修正）：cancel() 已把状态设为“取消中”，
+      // 释放句柄期间书稿或设置变了（修正）：cancel 已把状态设为“取消中”，
       // 但计算其实已经结束，这里补发最终状态，否则会一直停在“取消中”。
       if (_state.value.phase == RuleStatisticsPhase.cancelling) {
         _publish(

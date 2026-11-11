@@ -11,7 +11,7 @@ import '../layout/batch_field_dialog.dart'
     show batchFieldLabels, describeBatchValue;
 import '../tokens.dart';
 
-// 快速排版（G-032–034；R1 改用编辑台弹窗）：列出出厂默认、本项目、全局预设，每个预设显示要点；
+// 快速排版（改用编辑台弹窗）：列出出厂默认、本项目、全局预设，每个预设显示要点；
 // 点选后先列出与本书当前排版的不同，确认后才应用（走正常的排版事务，可在历史里回退）。
 // 预设读取中也可以关闭；只有应用时不能关闭。
 

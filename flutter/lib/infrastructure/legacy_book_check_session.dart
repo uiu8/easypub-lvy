@@ -31,10 +31,10 @@ class LegacyBookCheckSession extends ChangeNotifier
   }
   static final _reports = Expando<Map<String, BookCheckReport>>();
 
-  /// 按稿件版本缓存的检查指纹（LIB-114）：书 → (稿件版本 + 清理规则标识, 指纹)。
+  /// 按稿件版本缓存的检查指纹：书 → (稿件版本 + 清理规则标识, 指纹)。
   static final _guards = Expando<Map<String, (String, String)>>();
 
-  /// 已确认磁盘上没有报告文件的指纹（LIB-114）：书 → 指纹。
+  /// 已确认磁盘上没有报告文件的指纹：书 → 指纹。
   static final _missing = Expando<Map<String, String>>();
 
   /// 每一项的版本：书 → (稿件版本 + 清理规则标识, 各项版本)。
@@ -205,7 +205,7 @@ class LegacyBookCheckSession extends ChangeNotifier
   ) {
     final existing = _reports[backend]?[id];
     if (existing?.guard == guard) return existing;
-    // 这一稿已确认没有报告文件时不再查磁盘（LIB-114）。检查完成后报告先进内存，
+    // 这一稿已确认没有报告文件时不再查磁盘。检查完成后报告先进内存，
     // 不会走到这里。
     if (_missing[backend]?[id] == guard) return existing;
     try {
@@ -231,7 +231,7 @@ class LegacyBookCheckSession extends ChangeNotifier
   static String? statusFor(PrototypeState backend, String id) =>
       summaryFor(backend, id).status;
 
-  /// 书库显示的状态与待处理数量（LIB-099/100）：只算一次稿件指纹、读一次报告。
+  /// 书库显示的状态与待处理数量：只算一次稿件指纹、读一次报告。
   /// 报告不是当前稿的结果时没有数量。
   static ({String? status, BookPendingSummary? pending}) summaryFor(
     PrototypeState backend,
@@ -241,7 +241,7 @@ class LegacyBookCheckSession extends ChangeNotifier
     final guard = contextFor(backend, id, version: version);
     final report = _lookup(backend, id, guard);
     if (report == null) return (status: null, pending: null);
-    // 稿件变了，或报告格式太旧（CHK-060）：都需要重新检查。
+    // 稿件变了，或报告格式太旧：都需要重新检查。
     if (report.guard != guard || report.outdated) {
       return (status: '检查已过期', pending: null);
     }
@@ -604,7 +604,7 @@ class LegacyBookCheckSession extends ChangeNotifier
         final options = await chapters.repairs(page);
         validate();
         safe = options.total;
-        // 摘录只取有原稿行的问题：“全书未识别标题”没有行号，以前排在第一时整个章节检查会失败（V113）。
+        // 摘录只取有原稿行的问题：“全书未识别标题”没有行号，以前排在第一时整个章节检查会失败。
         final located = options.report.items.where((i) => i.lines.isNotEmpty);
         first =
             located.where((i) => i.autoApplicable).firstOrNull ??

@@ -1,4 +1,4 @@
-// 书库左栏（V84，LIB-118–125）：全部书稿 / 收藏夹 / 类别。点选只改书库显示范围；
+// 书库左栏：全部书稿 / 收藏夹 / 类别。点选只改书库显示范围；
 // 收藏夹行接受从书架拖来的已勾选书，也接受从资源管理器拖入的文件（由书库页按位置判断）。
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
@@ -21,7 +21,7 @@ class LibraryBookDrag {
 String collectionScope(String id) => 'c:$id';
 String categoryScope(String category) => 'k:$category';
 
-/// 收藏夹模式里的“未分类”（V104）：不在任何收藏夹里的书。
+/// 收藏夹模式里的“未分类”：不在任何收藏夹里的书。
 const unfiledScope = 'u:';
 
 /// 这本书是否不在任何收藏夹里。
@@ -84,7 +84,7 @@ class CollectionRail extends StatelessWidget {
     this.collapsed = false,
   });
 
-  /// 收成图标条（V84b）：只有全部书稿、各收藏夹与新建；收藏夹仍可点选、可拖书进来。
+  /// 收成图标条：只有全部书稿、各收藏夹与新建；收藏夹仍可点选、可拖书进来。
   final bool collapsed;
   final BookCollectionService service;
   final List<BookSummary> books;
@@ -285,7 +285,7 @@ class _StripButton extends StatelessWidget {
   }
 }
 
-/// 可伸缩的左栏（V84b）：拖右边缘调宽度（150–320），拖到 110 以下收成 48 宽的图标条，
+/// 可伸缩的左栏：拖右边缘调宽度（150–320），拖到 110 以下收成 48 宽的图标条，
 /// 从图标条往右拖即展开；双击边缘收起或展开。拖动中只改本栏宽度，松手后交给书库保存。
 class ResizableRail extends StatefulWidget {
   const ResizableRail({

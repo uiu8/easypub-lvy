@@ -116,7 +116,7 @@ void main() {
       await expectLater(history.undo(detail(domain)), throwsFormatException);
       expect(jsonEncode(state.projectDocument()), frozen);
     }
-    // V17（CLEAN-103）起，撤销 / 重做清理会把章节修改换算到新文本上，不再拒绝。
+    // 后来，撤销 / 重做清理会把章节修改换算到新文本上，不再拒绝。
     await history.undo(detail('文本清理'));
     expect((await chapters.read(0)).nodes.last.title, '第二章 新版编辑');
     expect(state.cleanup.historyStatus[id], contains('1 处章节修改已换算'));
@@ -198,7 +198,7 @@ void main() {
         '-X',
         'utf8',
         '-c',
-        // 每章一个文件（V36，OUT-081）：合并全部正文文件的文字。
+        // 每章一个文件：合并全部正文文件的文字。
         r"import re,sys,zipfile,xml.etree.ElementTree as E;z=zipfile.ZipFile(sys.argv[1]);t=''.join(''.join(E.fromstring(z.read(n)).itertext()) for n in z.namelist() if re.fullmatch(r'EPUB/body(-\d{4})?\.xhtml',n));assert '第一章 旧版改名' in t and '第二章 新版编辑' in t and '正文  ' not in t",
         output.path,
       ],

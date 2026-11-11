@@ -28,7 +28,7 @@ class _RealHttp extends HttpOverrides {}
 const ornamentPng =
     'iVBORw0KGgoAAAANSUhEUgAAAHgAAAAoCAIAAAC6iKlyAAAAcklEQVR4nO3QQREAMAjAMOTgX+FchMcaBb3OhpjrgF80Gmk00mik0UijkUYjjUYajTQaaTTSaKTRSKORRiONRhqNNBppNNJopNFIo5FGI41GGo00Gmk00mik0UijkUYjjUYajTQaaTTSaKTRSKORRq/xAMdpynmBG6HUAAAAAElFTkSuQmCC';
 
-/// V61：真机预览适配新排版（LAY-127）——组件有全部排版项的控件，状态带“是否设了章首图”，
+/// 真机预览适配新排版——组件有全部排版项的控件，状态带“是否设了章首图”，
 /// 生成内容含章首图、弹出注释与前后附页，目录里列出附页。
 void main() {
   setUpAll(

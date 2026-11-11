@@ -1,5 +1,5 @@
-// 完整范围 / 完整步骤对照（CLEAN-035、CLEAN-039–041）：两侧各自按 2000 字符分段读取，
-// 字符位置不表示逐字对应。逻辑沿用 V4 前的 CleanupRegionDialog。
+// 完整范围 / 完整步骤对照：两侧各自按 2000 字符分段读取，
+// 字符位置不表示逐字对应。逻辑沿用早先的 CleanupRegionDialog。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';

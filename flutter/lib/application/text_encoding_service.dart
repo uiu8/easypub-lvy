@@ -1,4 +1,4 @@
-// TXT 的编码（G-114）：解不开时让用户选，已导入的书能换。
+// TXT 的编码：解不开时让用户选，已导入的书能换。
 import 'package:flutter/foundation.dart';
 
 import 'source_refresh_service.dart';

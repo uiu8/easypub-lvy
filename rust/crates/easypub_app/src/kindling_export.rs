@@ -38,7 +38,7 @@ pub struct Request {
     plan_id: Option<String>,
     #[serde(default)]
     confirmed: bool,
-    /// 保持原格式（V27，OUT-079）：原 EPUB 的路径；给出时用修补后的原 EPUB 作转换器输入。
+    /// 保持原格式：原 EPUB 的路径；给出时用修补后的原 EPUB 作转换器输入。
     #[serde(default)]
     original_epub: Option<String>,
 }
@@ -113,13 +113,13 @@ impl Control {
         Ok(())
     }
 }
-/// 转换引擎的工作线程数（V37，OUT-082）：Kindling 用 `--threads`，Bokai 用 `--max-workers`。
+/// 转换引擎的工作线程数：Kindling 用 `--threads`，Bokai 用 `--max-workers`。
 pub(crate) const KINDLING_THREADS: &str = "4";
 const BOKAI_WORKERS: &str = "4";
 fn error(code: ErrorCode, action: &str) -> ApiError {
     ApiError::new(code, "kindling_export", action)
 }
-/// `build --help` 的说明里是否有 `--threads`（V37）与 `--no-embed-source`（V117）：用户在设置里自选的
+/// `build --help` 的说明里是否有 `--threads`与 `--no-embed-source`：用户在设置里自选的
 /// 旧版 Kindling 或其他程序没有这些参数，传了会直接失败。按引擎哈希缓存，同一个程序只问一次；
 /// 问不出来（超时、退出码非 0）按不支持处理。
 fn kindling_flags(
@@ -323,14 +323,14 @@ fn execute_inner(
             staged_output.as_os_str(),
         ]
     };
-    // 固定 4 个工作线程（V37，OUT-082）：本地 Kindling 的逐文件步骤可并行，输出与单线程逐字节相同；
+    // 固定 4 个工作线程：本地 Kindling 的逐文件步骤可并行，输出与单线程逐字节相同；
     // 实测 4 与 8 线程耗时相近，不占满全部核心，转换时电脑仍能流畅使用。只对支持的版本传。
     let (threads, no_embed, can_skip_validation) = if is_kfx {
         (false, false, false)
     } else {
         kindling_flags(&engine, &engine_hash, &stage, || control.cancelled())?
     };
-    // 不把中间 EPUB 嵌进 AZW3/MOBI（V117，用户决定一律不嵌）：Kindling 默认把整个 EPUB 存成一条
+    // 不把中间 EPUB 嵌进 AZW3/MOBI（用户决定一律不嵌）：Kindling 默认把整个 EPUB 存成一条
     // SRCS 记录，只供 Kindle Previewer 使用。书大时这条记录超过 16 MB，会被 Kindling 自己的回读检查
     // 判为 Kindle 打不开而拒绝输出（实测 39 MB 的书，SRCS 60 MB）；不嵌时同一本书 102 MB 降到 39 MB。
     let skip_source = no_embed;
@@ -364,7 +364,7 @@ fn execute_inner(
             .to_ascii_lowercase()
     };
     if is_azw3 || (!is_kfx && prepared.manifest().output_options.document_type != "default") {
-        // OUT-087：类型和配套 EXTH 113 由引擎一起写入，Calibre 用两者关联设备封面。
+        // 类型和配套 EXTH 113 由引擎一起写入，Calibre 用两者关联设备封面。
         // Kindling 从 EPUB 标识确定性生成 UUID，同一出版快照重复转换不会更换标识。
         arguments.extend([OsStr::new("--doc-type"), OsStr::new(&doc_type)]);
     }
@@ -430,7 +430,7 @@ fn execute_inner(
                 "log":validation_log,"log_sha256":fingerprint(&validation_log)?})
             }
             Outcome::Cancelled => return Err(error(ErrorCode::Cancelled, "export_cancelled")),
-            // 保持原格式（V27）：原 EPUB 的样式不一定都被 Bokai 支持。正文、图片、链接、注音、
+            // 保持原格式：原 EPUB 的样式不一定都被 Bokai 支持。正文、图片、链接、注音、
             // 书写方向都完整保留时接受，并记下没能保留的样式；内容有缺失仍然拒绝。
             _ if original.is_some() => {
                 let text = fs::read_to_string(&validation_log).unwrap_or_default();
@@ -534,7 +534,7 @@ mod tests {
                 (false, false, false)
             );
         }
-        // 本地优化版 Kindling：说明里有 --threads（V37）与 --no-embed-source（V117）。
+        // 本地优化版 Kindling：说明里有 --threads与 --no-embed-source。
         let kindling = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../../third_party/kindling/target/release/kindling-cli.exe");
         if kindling.is_file() {

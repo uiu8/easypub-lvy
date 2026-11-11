@@ -66,7 +66,7 @@ Future<(PrototypeState, LegacyLibraryAdapter, String, String)> book(
   return (state, library, root, state.currentId);
 }
 
-/// V81：场景样式（LAY-135）。
+/// 场景样式。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -337,7 +337,7 @@ void main() {
             .where((e) => e.key.endsWith('.css'))
             .map((e) => e.value)
             .join('\n');
-        // V82 起聊天块按名字位置分类：群聊窗口在上方、剧本居中、频道同一行。
+        // 后来聊天块按名字位置分类：群聊窗口在上方、剧本居中、频道同一行。
         final names = {
           'window': 'block',
           'script': 'center',

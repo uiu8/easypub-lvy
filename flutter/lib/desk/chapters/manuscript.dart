@@ -1,4 +1,4 @@
-// 章节正文（CH-037–040）：纸面阅读区。按块双向续读（center sliver 保持阅读位置），
+// 章节正文：纸面阅读区。按块双向续读（center sliver 保持阅读位置），
 // 超长行按字符偏移续读；左侧有效稿行号栏不参与选择复制；正文只读可复制。
 import 'package:flutter/material.dart';
 
@@ -49,33 +49,33 @@ class ChapterManuscript extends StatefulWidget {
     this.onStale,
   });
 
-  /// 排版视图（V104，LAY-149）：不为空时正文按排版设置显示识别结果，可拖选几行标注；不能选字复制。
+  /// 排版视图：不为空时正文按排版设置显示识别结果，可拖选几行标注；不能选字复制。
   final ChapterLayoutView? layout;
 
   /// 页眉“原文 | 排版”切换；书库不提供识别结果时为空，不显示切换。
   final ValueChanged<bool>? onLayoutMode;
 
-  /// 样式片段侧栏（V120，LAY-166）：跳到本节某行（本节正文行号，从 1 开始）；全书各章处数；打开某章。
+  /// 样式片段侧栏：跳到本节某行（本节正文行号，从 1 开始）；全书各章处数；打开某章。
   final ValueChanged<int>? onLocateLine;
   final Future<List<StyleSegmentChapter>> Function()? styleBook;
   final ValueChanged<String>? onOpenChapter;
 
-  /// 读正文时发现书稿版本变了（V121）：交给章节页自动重读本页，不显示错误。
+  /// 读正文时发现书稿版本变了：交给章节页自动重读本页，不显示错误。
   final VoidCallback? onStale;
 
-  /// 手工标注（V53，LAY-123）；书库不提供标注能力时为空，行号栏不可点。
+  /// 手工标注；书库不提供标注能力时为空，行号栏不可点。
   final BlockMarkController? marks;
 
-  /// 手工注释（V62，LAY-128）；书库不提供注释能力时为空。
+  /// 手工注释；书库不提供注释能力时为空。
   final NoteMarkController? noteMarks;
 
-  /// 文字样式（V106，LAY-152）；书库不提供样式能力时为空。排版视图里按样式显示。
+  /// 文字样式；书库不提供样式能力时为空。排版视图里按样式显示。
   final InlineStyleController? inlineStyles;
 
   /// 本章问题超过单次上限（200 条）时为真；页眉提示只列出了前 200 条。
   final bool issuesTruncated;
 
-  /// 本章内或触及本章的问题（CH-237）；只为未处理的插入批注。
+  /// 本章内或触及本章的问题；只为未处理的插入批注。
   final List<ChapterIssue> issues;
   final bool showNotes;
   final ValueChanged<bool>? onToggleNotes;
@@ -482,7 +482,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
                 .map((i) => i.severity)
                 .reduce((a, b) => severityRank(a) <= severityRank(b) ? a : b),
           ).$1;
-    // 排版视图（V120）：这一行在书里的样子，按真机规则画；生成时去掉的空行为空。
+    // 排版视图：这一行在书里的样子，按真机规则画；生成时去掉的空行为空。
     final page = layout == null ? null : kindle;
     final piece = page?.piece(
       lineText,
@@ -694,8 +694,8 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
               ),
             ],
           ),
-          // 排版视图：行号旁色条，手工标注与自动识别颜色不同；悬停时右上角出标签（V104）。
-          // V122：色条只在悬停或选中时显示，平时不和样式自己的边线叠在一起。
+          // 排版视图：行号旁色条，手工标注与自动识别颜色不同；悬停时右上角出标签。
+          // 色条只在悬停或选中时显示，平时不和样式自己的边线叠在一起。
           if (layout != null &&
               ((mark != null && mark.view.kind != BlockAnnotationKind.none) ||
                   (mark == null && auto != null)))
@@ -745,7 +745,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
                       ),
               ),
             ),
-          // 跳转目标：原文视图左侧画竖线；排版视图只留底色，不再多一条线（V122）。
+          // 跳转目标：原文视图左侧画竖线；排版视图只留底色，不再多一条线。
           if (focused && layout == null)
             Positioned(
               left: 0,
@@ -754,7 +754,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
               width: 3,
               child: DeskStripe(d.accent),
             ),
-          // 手工标注的括号叠在行号栏右侧，上下与本行等高（V53）。
+          // 手工标注的括号叠在行号栏右侧，上下与本行等高。
           if (mark != null && layout == null)
             Positioned(
               left: gutter - 10,
@@ -826,7 +826,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     );
   }
 
-  /// 标注面板里“现在”的说明（V120）：手工标注、自动识别或普通段落（原文视图里不知道识别结果，只说手工标注）。
+  /// 标注面板里“现在”的说明：手工标注、自动识别或普通段落（原文视图里不知道识别结果，只说手工标注）。
   String? currentMark(int line) {
     final mark = markLines[line];
     if (mark != null) {
@@ -848,7 +848,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
   /// 本节每行所属的手工标注；每次构建时按最新列表计算。
   Map<int, BlockMarkLine> markLines = const {};
 
-  /// 排版视图（V104）：本节每行的识别结果、系统提示所属的块，悬停中的行，拖选起点。
+  /// 排版视图：本节每行的识别结果、系统提示所属的块，悬停中的行，拖选起点。
   Map<int, LayoutLine> layoutLines = const {};
   Map<int, SystemRole> systemRoles = const {};
   final hoverLine = ValueNotifier<int?>(null);
@@ -882,7 +882,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     marks.selectRange(widget.node.id, a, b);
   }
 
-  /// 页眉：本节识别到的数量与“原文 | 排版”切换（V104，LAY-149）。
+  /// 页眉：本节识别到的数量与“原文 | 排版”切换。
   Widget layoutHeader(Desk d) {
     final layout = widget.layout;
     final counts = layout?.counts(layoutLines, markLines);
@@ -890,7 +890,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     final styleCount = styleLines.values.fold(0, (n, l) => n + l.length);
     return Container(
       key: const ValueKey('chapter-layout-header'),
-      // 排版视图没有上方的编辑工具条（V120），页眉多留一点上边距。
+      // 排版视图没有上方的编辑工具条，页眉多留一点上边距。
       padding: EdgeInsets.fromLTRB(16, layout == null ? 6 : 10, 12, 0),
       child: Row(
         children: [
@@ -930,7 +930,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     );
   }
 
-  /// 排版视图按哪台机型、哪档字号排（V120）：点开可直接换，与真机预览共用同一份选择。
+  /// 排版视图按哪台机型、哪档字号排：点开可直接换，与真机预览共用同一份选择。
   Widget deviceMenu(Desk d, ChapterLayoutView layout) {
     final device = layout.device;
     return MenuAnchor(
@@ -997,7 +997,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     );
   }
 
-  /// 本节每行的文字样式（V106）；每次构建时按最新列表计算。
+  /// 本节每行的文字样式；每次构建时按最新列表计算。
   Map<int, List<InlineStyleView>> styleLines = const {};
 
   /// 本节里的原书表格：行号 → 表格，占位行下面只读显示。
@@ -1093,7 +1093,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     }
   }
 
-  /// 本节每行的手工注释标签（V62）；每次构建时按最新列表计算。
+  /// 本节每行的手工注释标签；每次构建时按最新列表计算。
   Map<int, List<NoteLineTag>> noteLines = const {};
 
   /// 本节正文行号对应的显示行号，例如“第 13 行”。
@@ -1248,7 +1248,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
           child: LayoutBuilder(
             builder: (context, outer) {
               final body = paper(d, layout);
-              // 排版视图且够宽时，右侧列出本章套了样式的文字（V120）。
+              // 排版视图且够宽时，右侧列出本章套了样式的文字。
               if (layout == null || outer.maxWidth < 760) return body;
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1287,7 +1287,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
               ..sort();
             final narrow = c.maxWidth < 700;
             final margin = narrow ? 10.0 : 24.0;
-            // 排版视图（V120）：按所选机型的版心排（分行、诗句位置同真机），整体放大到纸面宽；
+            // 排版视图：按所选机型的版心排（分行、诗句位置同真机），整体放大到纸面宽；
             // 页边距按真机，色条画在左页边距里。
             final page = kindle = layout?.column();
             final paper = (c.maxWidth - margin * 2).clamp(0.0, 780.0);

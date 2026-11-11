@@ -1,4 +1,4 @@
-// 书源下载插件的页面（PLG-010–022）：搜索 / 书源 / 下载。插件进程不可用时整页给出原因。
+// 书源下载插件的页面：搜索 / 书源 / 下载。插件进程不可用时整页给出原因。
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -54,11 +54,11 @@ class BookSourcePage extends StatefulWidget {
   /// 把下载好的 TXT 加入书库，返回失败原因（成功为 null）。
   final Future<String?> Function(String path) importToLibrary;
 
-  /// 把下载好的 TXT 加入书库并按全局默认排版生成 EPUB（LIB-215）；不提供时不显示 EPUB 选项。
+  /// 把下载好的 TXT 加入书库并按全局默认排版生成 EPUB；不提供时不显示 EPUB 选项。
   final Future<({bool imported, String? error})> Function(String path)?
   exportEpub;
 
-  /// 加入书库后，书库里已有这本书、下载内容却变了（追更、重新整理），草稿保留没采用（V111）。
+  /// 加入书库后，书库里已有这本书、下载内容却变了（追更、重新整理），草稿保留没采用。
   final bool Function(String path)? outdatedInLibrary;
 
   /// 打开“刷新来源”对比确认；返回书库里是否已是新版本。
@@ -66,10 +66,10 @@ class BookSourcePage extends StatefulWidget {
   final void Function(String path)? openFolder;
   final VoidCallback? openPlugins;
 
-  /// 这个下载文件是否已加入书库（V134）。
+  /// 这个下载文件是否已加入书库。
   final bool Function(String path)? inLibrary;
 
-  /// 删除下载的书（V134）：[files] 移到回收站（可为空），[removeFromLibrary] 时同时移出书库；
+  /// 删除下载的书：[files] 移到回收站（可为空），[removeFromLibrary] 时同时移出书库；
   /// 返回没做完的原因，全部完成为 null。
   final Future<String?> Function(
     List<String> files, {
@@ -151,7 +151,7 @@ class _BookSourcePageState extends State<BookSourcePage> {
   String? checkStatus;
   bool checking = false;
 
-  /// 正在“去验证”（单源交互式校验）的书源：书源 ID → 本轮 checkId（LIB-279）。
+  /// 正在“去验证”（单源交互式校验）的书源：书源 ID → 本轮 checkId。
   final Map<String, String> verifying = {};
   List<Map<String, dynamic>> shelf = [];
   bool shelfBusy = false;
@@ -165,7 +165,7 @@ class _BookSourcePageState extends State<BookSourcePage> {
   };
   int autoCheckHours = 0;
 
-  /// 章节缓存位置（V107）：路径、默认路径、是否自选、占用字节与书数；旧版插件没有时为空。
+  /// 章节缓存位置：路径、默认路径、是否自选、占用字节与书数；旧版插件没有时为空。
   Map<String, dynamic>? cacheLocation;
   bool cacheMoving = false;
   String? cacheMessage;
@@ -173,7 +173,7 @@ class _BookSourcePageState extends State<BookSourcePage> {
   /// 上次定时检查的时间（秒）；0 表示还没检查过。
   int autoCheckLast = 0;
 
-  // 书源交互（V97）：已启用交互的书源、等待回复的弹窗、后端已关闭的请求、登录中提交的字段。
+  // 书源交互：已启用交互的书源、等待回复的弹窗、后端已关闭的请求、登录中提交的字段。
   final Set<String> interactionSources = {};
   final Map<String, BuildContext> interactionDialogs = {};
   final Set<String> interactionClosed = {};

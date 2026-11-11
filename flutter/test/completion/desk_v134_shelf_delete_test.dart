@@ -40,7 +40,7 @@ class ShelfApi extends v88.V88Api {
   }
 }
 
-/// V134：书源书架可以真正删除下载的书。
+/// 书源书架可以真正删除下载的书。
 void main() {
   testWidgets('删除下载的书：删记录与缓存，文件交给回收站、同时移出书库', (tester) async {
     final temp = Directory.systemTemp.createTempSync('v134-shelf-');

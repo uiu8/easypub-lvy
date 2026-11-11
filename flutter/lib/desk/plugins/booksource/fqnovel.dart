@@ -1,6 +1,6 @@
 part of '../booksource_page.dart';
 
-/// 接入本机 FQNovel（LIB-211）：只填端口，地址固定为本机 127.0.0.1。先检测，就绪后经订阅导入；
+/// 接入本机 FQNovel：只填端口，地址固定为本机 127.0.0.1。先检测，就绪后经订阅导入；
 /// 已订阅过时转到订阅差异确认。EasyPub 不内置 FQNovel 的签名或设备程序。
 extension _BookSourceFqnovel on _BookSourcePageState {
   static const _workers = {

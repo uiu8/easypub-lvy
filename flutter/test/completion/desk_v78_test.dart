@@ -25,7 +25,7 @@ Future<void> until(WidgetTester t, bool Function() ready) async {
   fail('界面未就绪');
 }
 
-/// V78：系统提示样式编辑器、我的样式、样式包带块样式（LAY-133）。
+/// 系统提示样式编辑器、我的样式、样式包带块样式。
 void main() {
   setUpAll(
     () async => RustLib.init(

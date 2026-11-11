@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'controls.dart';
 import '../tokens.dart';
 
-// 分组菜单（页面导航、章节“更多”、目录行菜单）。R1 起与命令菜单同一面板：贴着按钮下方展开、
+// 分组菜单（页面导航、章节“更多”、目录行菜单）。后来与命令菜单同一面板：贴着按钮下方展开、
 // 放不下时翻到上方，120ms 入场；条目 32 高、13 号字，带图标与当前项的勾；点外面或按 Esc 关闭。
 
 class DeskMenuAction {

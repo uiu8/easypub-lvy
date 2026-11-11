@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-/// 输出记录与书库中的书的对应关系（V18，OUT-076/077）。
+/// 输出记录与书库中的书的对应关系。
 /// 记录自 schema 1 起保存书的标识（原稿路径）与原稿内容标识。
 enum OutputBookMatch {
   /// 书库中有这本书，原稿与成品所用的相同。
@@ -128,7 +128,7 @@ abstract class OutputHistoryService {
 }
 
 extension OutputHistoryForBook on OutputHistoryService {
-  /// 这本书最近的输出，新的在前（LIB-113）。
+  /// 这本书最近的输出，新的在前。
   List<OutputRecord> recentForBook(String bookId, {int limit = 3}) {
     final result = <OutputRecord>[];
     for (

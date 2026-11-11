@@ -11,7 +11,7 @@ import 'package:easypub_desktop/desk/layout/batch_field_dialog.dart';
 import 'package:easypub_desktop/desk/layout/layout_page.dart';
 import 'package:easypub_desktop/desk/widgets.dart';
 
-/// V28：排版页书写方向、竖排中数字横排与注音/着重号写法说明（LAY-104–107）。
+/// 排版页书写方向、竖排中数字横排与注音/着重号写法说明。
 void main() {
   setUpAll(
     () async => RustLib.init(

@@ -1,6 +1,6 @@
 part of '../booksource_page.dart';
 
-/// 收藏书源（LIB-219）与搜索范围里的“选择书源”（LIB-220）、收藏快捷搜索（LIB-221）。
+/// 收藏书源与搜索范围里的“选择书源”、收藏快捷搜索。
 /// 收藏只存在书源页的 ui.json，不改插件里的书源数据。
 extension _BookSourceFavorites on _BookSourcePageState {
   bool _isFavorite(String id) => settings.favoriteSources.contains(id);

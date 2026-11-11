@@ -24,7 +24,7 @@ Finder lineNumber(int line) => find.byWidgetPredicate((w) {
       value.$3 == line;
 });
 
-/// V62 / V63 界面截图：章节页手工注释、注释对话框、规则中心。输出 artifacts/v62-preview/。
+/// 界面截图：章节页手工注释、注释对话框、规则中心。输出 artifacts/v62-preview/。
 void main() {
   testWidgets('截图：手工注释与规则中心', (t) async {
     final capture = GlobalKey();

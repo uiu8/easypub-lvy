@@ -44,11 +44,11 @@ class BookSourceSettings {
       removePagePrompts = true;
   String groupBy = 'file';
 
-  /// 下载格式（LIB-215）：txt 只存 TXT；epub 另按全局默认排版生成 EPUB。
+  /// 下载格式：txt 只存 TXT；epub 另按全局默认排版生成 EPUB。
   String downloadFormat = 'txt';
   String resultSort = 'overall';
 
-  /// 多源分摊下载（V134 起默认关闭）：不同站点的章节可能对不上。
+  /// 多源分摊下载（后来默认关闭）：不同站点的章节可能对不上。
   bool onlyPriority = false, multiSource = false;
   int maxAlternates = 2;
 
@@ -59,7 +59,7 @@ class BookSourceSettings {
   /// 最近搜索（R1c）：最近的在前，最多 8 条，空的搜索页上可以点着再搜。
   final List<String> recentSearches = [];
 
-  /// 收藏的书源 ID（LIB-219）；只存在书源页设置里。
+  /// 收藏的书源 ID；只存在书源页设置里。
   final Set<String> favoriteSources = {};
 
   void rememberSearch(String query) {
@@ -93,7 +93,7 @@ class BookSourceSettings {
             ? j['resultSort'] as String
             : 'overall'
         ..onlyPriority = j['onlyPriority'] == true
-        // V134 之前保存的“开”是旧默认值，统一改为关；之后用户自己打开的才算数。
+        // 以前保存的“开”是旧默认值，统一改为关；之后用户自己打开的才算数。
         ..multiSource = j['multiSourceV134'] == true && j['multiSource'] == true
         ..maxAlternates = ((j['maxAlternates'] as num?) ?? 2).toInt().clamp(
           0,
@@ -177,10 +177,10 @@ class DownloadTask {
   List<Map<String, dynamic>> failures = [];
   bool finished = false, cancelled = false, imported = false;
 
-  /// 书库里这本书还是下载变化前的版本（V111）。
+  /// 书库里这本书还是下载变化前的版本。
   bool libraryOutdated = false;
 
-  /// 生成 EPUB（LIB-215）：进行中、已生成、失败原因。
+  /// 生成 EPUB：进行中、已生成、失败原因。
   bool epubBusy = false, epubDone = false;
   String? epubError;
   bool outputPreserved = false;
@@ -232,7 +232,7 @@ class DownloadTask {
     total = (o['chapters'] as num? ?? 0).toInt();
     duplicateHeadings =
         ((o['quality'] as Map?)?['duplicateHeadings'] as num? ?? 0).toInt();
-    // V132：目录按章号整理过的章数（最新章节栏、夹在中间的最新章）。
+    // 目录按章号整理过的章数（最新章节栏、夹在中间的最新章）。
     reorderedToc = ((o['quality'] as Map?)?['reorderedTocItems'] as num? ?? 0)
         .toInt();
     libraryKey = result['libraryKey']?.toString();

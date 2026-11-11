@@ -64,7 +64,7 @@ pub struct Snapshot {
     /// Never replayed; request remains the authoritative effective state.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recorded_request: Option<Request>,
-    /// 这一步是清理变化时由上一步换算出来的（V17）。清理再变回上一步的依据时，
+    /// 这一步是清理变化时由上一步换算出来的。清理再变回上一步的依据时，
     /// 直接退回上一步，不再追加换算，撤销 / 重做清理才是真正的往返。
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub rebased: bool,
@@ -552,7 +552,7 @@ impl History {
     fn rebase(&mut self, source: &SourceSnapshot, base: Base) -> Result<Value, ApiError> {
         self.validate(source)?;
         let (current_book, current_id) = base.compose_identified(source)?;
-        // 往返（V17）：当前一步是换算结果，上一步正好建立在新依据上时退回上一步。
+        // 往返：当前一步是换算结果，上一步正好建立在新依据上时退回上一步。
         // 依据按合成后的书稿标识比较：同一套清理在草稿与历史中的 JSON 写法可能不同。
         if self.current().rebased
             && self.cursor > 0
@@ -603,7 +603,7 @@ impl History {
             json!({"kept":moved.kept,"skipped":moved.skipped,"total":request.actions.len(),"changed":true}),
         )
     }
-    /// 检查点之上的章节修改换算（CLEAN-105），换算本身见 [`rebase_across_checkpoint`]。
+    /// 检查点之上的章节修改换算，换算本身见 [`rebase_across_checkpoint`]。
     /// 原始操作取自创建这个检查点的那一步保存的 `recorded_request`。
     fn rebase_checkpoint(
         &mut self,
@@ -681,7 +681,7 @@ fn rebase_unsupported() -> ApiError {
     )
 }
 
-/// 跨检查点换算的结果（CLEAN-105）。
+/// 跨检查点换算的结果。
 pub(crate) struct AcrossCheckpoint {
     /// 原始操作换算到新依据后的书稿（新的检查点书稿）。
     pub checkpoint_book: EffectiveBook,
@@ -966,7 +966,7 @@ mod tests {
             false
         );
         assert_eq!(history.history.len(), len);
-        // V17：清理变回上一步的依据时退回原来那一步（往返不留换算步骤），
+        // 清理变回上一步的依据时退回原来那一步（往返不留换算步骤），
         // 之后章节修改仍能按顺序撤销。
         let restored = history.rebase(&source, base.clone()).unwrap();
         assert_eq!(restored["restored"], true);

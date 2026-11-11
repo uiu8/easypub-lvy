@@ -1,6 +1,6 @@
 part of 'library_page.dart';
 
-// R2-10：从 library_page.dart 拆出，行为不变。搜索、格式与状态筛选、排序、显示范围；窄时收成“筛选”菜单。
+// 从 library_page.dart 拆出，行为不变。搜索、格式与状态筛选、排序、显示范围；窄时收成“筛选”菜单。
 extension _LibraryFilters on _LibraryPageState {
   /// 当前搜索与筛选下可见的书。
   List<BookSummary> filtered(List<BookSummary> books) => sortBooks(
@@ -31,7 +31,7 @@ extension _LibraryFilters on _LibraryPageState {
         .toList(),
   );
 
-  /// 排序方式（V84，LIB-127）；“默认顺序”为导入顺序（新导入的在前）。
+  /// 排序方式；“默认顺序”为导入顺序（新导入的在前）。
   static const sortLabels = <String, String>{
     'default': '默认顺序（最近导入在前）',
     'title': '书名',
@@ -95,7 +95,7 @@ extension _LibraryFilters on _LibraryPageState {
     rememberView();
   }
 
-  /// 筛选行高度：与详情栏顶部“当前书”一行相同，两栏封面顶端因此对齐（LIB-105）。
+  /// 筛选行高度：与详情栏顶部“当前书”一行相同，两栏封面顶端因此对齐。
   double filterRowHeight(BuildContext context) =>
       40 * MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.4);
 
@@ -108,10 +108,10 @@ extension _LibraryFilters on _LibraryPageState {
     final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.4);
     final allVisible =
         visible.isNotEmpty && visible.every((b) => selected.contains(b.id));
-    // 搜索框在放得下时为 300 宽；放不下时先缩短搜索框，让控件留在同一行（LIB-105 两栏封面对齐）。
+    // 搜索框在放得下时为 300 宽；放不下时先缩短搜索框，让控件留在同一行（两栏封面对齐）。
     // 完整一行约需：搜索 200 + 格式、状态、仅看已勾选 + 全选、排序、视图。
-    // 再窄时（V84b）格式、状态、仅看已勾选与显示范围收进一个“筛选”菜单。
-    // 左栏开关 V94 移到标题行最左，筛选行不再给它留位置。
+    // 再窄时格式、状态、仅看已勾选与显示范围收进一个“筛选”菜单。
+    // 左栏开关移到标题行最左，筛选行不再给它留位置。
     const railToggle = 0;
     final full =
         464 +
@@ -359,7 +359,7 @@ extension _LibraryFilters on _LibraryPageState {
     );
   }
 
-  /// 窄时的“筛选”菜单（V84b）：格式、状态、仅看已勾选；没有左栏时还有显示范围。
+  /// 窄时的“筛选”菜单：格式、状态、仅看已勾选；没有左栏时还有显示范围。
   Widget filterMenu() {
     final d = context.desk;
     final active = [

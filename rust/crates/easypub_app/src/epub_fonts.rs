@@ -1,4 +1,4 @@
-//! EPUB 自带字体还原成可直接嵌入的 TTF / OTF（V123，LAY-179）。
+//! EPUB 自带字体还原成可直接嵌入的 TTF / OTF。
 //!
 //! 很多 EPUB 按 IDPF 或 Adobe 的办法把字体前 1040 / 1024 字节异或混淆，或者打包成 WOFF；
 //! 原样提取出来的文件不能检查、也不能嵌入。这里只按 META-INF/encryption.xml 声明的方式还原，

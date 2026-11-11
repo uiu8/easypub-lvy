@@ -41,7 +41,7 @@ impl Default for Options {
             include_volumes: true,
             file_name: "{name} - {author}".into(),
             remove_page_prompts: true,
-            // V134：多源分摊默认关闭——不同站点的章节可能对不上，容易标题对、正文不对。
+            // 多源分摊默认关闭——不同站点的章节可能对不上，容易标题对、正文不对。
             multi_source: false,
             max_alternates: 2,
             alternate_concurrency: 2,
@@ -121,7 +121,7 @@ pub fn file_name(book: &Book, template: &str) -> String {
         safe_name(name.trim().trim_end_matches(['-', ' ']))
     )
 }
-/// 章节缓存的根目录（V107）。插件启动时设为数据目录下的 `chapter-cache` 或用户选的位置；
+/// 章节缓存的根目录。插件启动时设为数据目录下的 `chapter-cache` 或用户选的位置；
 /// 没设（单独调用下载、测试）时沿用旧位置：下载文件夹里的 `.easypub-cache`。
 static CACHE_ROOT: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
 /// 旧缓存搬家时串行，免得两个线程同时搬同一本。
@@ -421,7 +421,7 @@ pub fn assemble(
     Ok(quality)
 }
 
-/// V87 没有存目录。只恢复旧合成器明确写出的无缩进标题，不从正文猜章号。
+/// 没有存目录。只恢复旧合成器明确写出的无缩进标题，不从正文猜章号。
 pub fn legacy_toc(path: &Path, expected: usize) -> Result<Vec<Chapter>, String> {
     let text = std::fs::read_to_string(path).map_err(|_| "原 TXT 无法读取，不能恢复旧目录")?;
     let lines: Vec<_> = text.lines().collect();

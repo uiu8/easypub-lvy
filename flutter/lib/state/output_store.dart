@@ -1,4 +1,4 @@
-// 转换任务与输出记录（V20 从 PrototypeState 拆出，原 outputTasks、outputBatchRecords 等）。
+// 转换任务与输出记录（从 PrototypeState 拆出，原 outputTasks、outputBatchRecords 等）。
 // 只通过 PrototypeState 的公开接口读写书库与全局设置；行为与拆分前相同。
 import '../application/output_formats.dart';
 
@@ -24,7 +24,7 @@ class OutputStore {
   String historyStatus = '';
 
   /// 已开始的任务记录保存全部完成；核验前等待它。
-  /// V38 起几本可以同时完成，新的保存并入等待，不替换之前的（每个任务各写自己的文件）。
+  /// 后来几本可以同时完成，新的保存并入等待，不替换之前的（每个任务各写自己的文件）。
   Future<void> historySaved = Future.value();
   void _trackSave(Future<void> save) =>
       historySaved = Future.wait([historySaved, save]).then((_) {});

@@ -11,7 +11,7 @@ import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/rules/rules_page.dart';
 import 'package:easypub_desktop/desk/widgets.dart';
 
-/// V63：识别与检查规则中心（CH-278，R2），真实 DLL。
+/// 识别与检查规则中心，真实 DLL。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -92,7 +92,7 @@ void main() {
         )
         .text;
     await until(() => status().startsWith('已统计'), '统计完成');
-    // V64 起规则按页签分组：逐个页签确认四个自动组都在。
+    // 后来规则按页签分组：逐个页签确认四个自动组都在。
     for (final title in ['文本清理', '章节识别', '章节检查', '排版识别']) {
       final i = ruleGroups.indexWhere((g) => g.$3 == title);
       await t.tap(find.byKey(ValueKey('rules-tab-$i')));

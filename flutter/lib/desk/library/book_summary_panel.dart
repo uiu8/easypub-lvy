@@ -1,6 +1,6 @@
-// 迁入 desk（library，V5/V6）：逻辑与布局沿用 V5 前的同名文件；公共弹窗框架样式在 V7 统一。
-// V14：生成封面重新设计（LIB-102），当前书详情精简（LIB-103）。V16：生成封面画法移到 generated_cover.dart，与转出的封面共用。
-// V18：“最近输出”（LIB-113）。
+// 迁入 desk（library）：逻辑与布局沿用早先的同名文件；公共弹窗框架样式后来统一。
+// 生成封面重新设计，当前书详情精简。生成封面画法移到 generated_cover.dart，与转出的封面共用。
+// “最近输出”。
 import 'package:flutter/material.dart';
 
 import '../../application/chapter_rules_service.dart';
@@ -57,7 +57,7 @@ class LibraryCover extends StatelessWidget {
   );
 }
 
-/// 没有封面时的生成封面（LIB-102）：与转出的书里的生成封面用同一画法（OUT-070）。
+/// 没有封面时的生成封面：与转出的书里的生成封面用同一画法。
 class _GeneratedCover extends StatelessWidget {
   const _GeneratedCover({required this.book, required this.width});
   final BookSummary book;
@@ -80,7 +80,7 @@ bool bookNeedsReview(BookSummary book) =>
     book.status.contains('失败') ||
     book.status.contains('异常');
 
-/// 书库里“待核对”的数量只算章节问题（LIB-106）；清理建议与书籍信息在详情中分列。
+/// 书库里“待核对”的数量只算章节问题；清理建议与书籍信息在详情中分列。
 int chapterIssueCount(BookSummary book) => book.pending?.chapters ?? 0;
 
 /// 书库需要提醒的书：有章节问题，或检查没有完成、已过期、失败。
@@ -91,7 +91,7 @@ bool bookNeedsAttention(BookSummary book) {
   return const ['未完成', '过期', '失败', '异常'].any(book.status.contains);
 }
 
-/// 书的状态短词，书库列表与转换页共用（LIB-106、OUT-071）：只有章节问题写“待核对 N”；
+/// 书的状态短词，书库列表与转换页共用：只有章节问题写“待核对 N”；
 /// 已检查且只剩清理建议或书籍信息时写“已检查 · 有建议”。[attention] 为 true 时加提醒圆点，
 /// [active] 为 true 时（检查中）用较深的字色。
 ({String text, bool attention, bool active}) bookStatusLabel(BookSummary b) {
@@ -143,7 +143,7 @@ String bookStatusTip(BookSummary b) {
   ].join('\n');
 }
 
-/// 作者为空时以浅灰色“未填作者”显示，不把占位文字当成作者（LIB-107）。
+/// 作者为空时以浅灰色“未填作者”显示，不把占位文字当成作者。
 class BookAuthorText extends StatelessWidget {
   const BookAuthorText(
     this.author, {
@@ -168,7 +168,7 @@ class BookAuthorText extends StatelessWidget {
   }
 }
 
-/// 当前书详情（LIB-103、LIB-105）：大封面、书名与信息一行；检查状态与分项；
+/// 当前书详情：大封面、书名与信息一行；检查状态与分项；
 /// 主按钮“编辑章节”与四个入口；底部为来源文件与最近检查时间。
 class BookSummaryPanel extends StatelessWidget {
   const BookSummaryPanel({
@@ -344,7 +344,7 @@ class BookSummaryPanel extends StatelessWidget {
     );
   }
 
-  /// 最近输出（LIB-113）：这本书最近 3 次输出的格式、时间与状态。
+  /// 最近输出：这本书最近 3 次输出的格式、时间与状态。
   Widget _recentOutputs(BuildContext context) {
     final d = context.desk;
     final history = outputs!;
@@ -472,7 +472,7 @@ class BookSummaryPanel extends StatelessWidget {
       _bytes(book.bytes),
     ].where((v) => v.isNotEmpty).join(' · ');
     final source = book.path.replaceAll('\\', '/').split('/').last;
-    // 左栏收起概览时（V109 默认收起），这里也不显示“书稿概览”（V111）。
+    // 左栏收起概览时（默认收起），这里也不显示“书稿概览”。
     final hidden = navHiddenPages(switch (library) {
       final SettingsService s => s.snapshot.value.configuration,
       _ => const {},
@@ -495,7 +495,7 @@ class BookSummaryPanel extends StatelessWidget {
             icon: Icon(Icons.folder_open_outlined, color: d.ink3),
             onPressed: () => onReveal!(book.path),
           );
-    // 本书识别规则（V23，CH-262）：只加图标，放在打开文件夹的左边。
+    // 本书识别规则：只加图标，放在打开文件夹的左边。
     final rules = library is! ChapterRulesService
         ? null
         : IconButton(

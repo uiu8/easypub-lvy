@@ -12,7 +12,7 @@ import 'package:easypub_desktop/desk/cleanup/cleanup_page.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/history/change_history_page.dart';
 
-/// R4：文本清理与变更记录的界面打磨（CLEAN-106～111、HIS-021～023）。
+/// 文本清理与变更记录的界面打磨。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -97,7 +97,7 @@ void main() {
     expect(find.textContaining('个连续空行）'), findsOneWidget);
     await t.tap(group);
     await t.pump();
-    // V116：后端已把这段空行记成一处，整组保留，不再逐行展开。
+    // 后端已把这段空行记成一处，整组保留，不再逐行展开。
     expect(find.text('保留这些行'), findsOneWidget);
     expect(find.text('逐行'), findsNothing);
     // 空白标记开关在“⋯”菜单里。

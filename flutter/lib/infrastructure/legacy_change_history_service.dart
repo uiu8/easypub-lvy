@@ -301,7 +301,7 @@ class LegacyChangeHistoryService
 
   String metadataValue(Object? value) => value == '' ? '已清空' : summary(value);
 
-  /// R4-01：文本清理记录存的是采用的清理方案（规则、范围、保留与排除的行），
+  /// 文本清理记录存的是采用的清理方案（规则、范围、保留与排除的行），
   /// 没有存改了多少处，所以说明里只写方案本身，不写处数。
   static List<Map<String, dynamic>> cleanupSteps(Object? state) {
     if (state is! Map) return const [];

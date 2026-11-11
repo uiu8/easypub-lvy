@@ -1,5 +1,5 @@
 //! Physical XHTML splits leave source paragraphs and logical node IDs intact.
-//! 每卷、每章、每个前置部分从新文件开始（V36，OUT-081）：与市面成品书一致，阅读器在文件之间
+//! 每卷、每章、每个前置部分从新文件开始：与市面成品书一致，阅读器在文件之间
 //! 必然换页，不只依赖 CSS 分页规则；单章过长时再按大小在段落之间续排拆分。
 use crate::publication_documents::Documents;
 use easypub_core::{ApiError, ErrorCode};

@@ -24,7 +24,7 @@ class _Host implements KindlePreviewHost {
 
 class _RealHttp extends HttpOverrides {}
 
-/// V76：真机预览适配生僻字注音与章节样式包（LAY-131）。
+/// 真机预览适配生僻字注音与章节样式包。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -231,7 +231,7 @@ void main() {
       expect(plain, isNot(contains('<ruby>')));
       expect(plain, isNot(contains('title-rule')));
       expect(plain, isNot(contains('chapter-head-image')));
-      // 新书默认开着场景样式（V81），样式表里别处也有双线，只看卷页边框。
+      // 新书默认开着场景样式，样式表里别处也有双线，只看卷页边框。
       expect(plainCss, isNot(contains('.volume-heading { border:')));
       // 卷页边框改单线。
       final (_, _, single) = await render({

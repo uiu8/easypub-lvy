@@ -1,6 +1,6 @@
-// 变更记录（HIS-001–019）：全局页为“记录列表 + 详情”，章节工作区“变更记录”页签为紧凑列表。
+// 变更记录：全局页为“记录列表 + 详情”，章节工作区“变更记录”页签为紧凑列表。
 // 撤销 / 重做先确认，只作用于该领域当前一步或紧接其后的已撤销记录；原文件与已导出成品不变。
-// 逻辑沿用 V4 前的 ChangeHistoryPage；设计：design_review_v37/d2_history.dart。
+// 逻辑沿用早先的 ChangeHistoryPage。
 import '../../application/cleanup_service.dart'
     show CleanupEditsNeedConfirmation;
 import '../cleanup/dropped_edits_dialog.dart';
@@ -89,7 +89,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
           await widget.history.undo(detail);
         }
       } on CleanupEditsNeedConfirmation catch (request) {
-        // 撤销 / 重做清理时有章节修改无法换算：列出并请用户确认（CLEAN-103）。
+        // 撤销 / 重做清理时有章节修改无法换算：列出并请用户确认。
         if (!mounted ||
             !await resolveCleanupEditConfirmation(context, request)) {
           return;
@@ -146,7 +146,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
     );
   }
 
-  /// R4-01：逐字段的原始差异，默认折叠；只有服务给了说明（如文本清理）时才单独列出。
+  /// 逐字段的原始差异，默认折叠；只有服务给了说明（如文本清理）时才单独列出。
   Widget technical(ChangeDetail detail) {
     final d = context.desk;
     if (detail.technical.isEmpty) return const SizedBox.shrink();
@@ -283,7 +283,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                                               ? null
                                               : () => undo(change),
                                         ),
-                                        // R4-08：章节页的紧凑列表也能重做，与全局记录页一致。
+                                        // 章节页的紧凑列表也能重做，与全局记录页一致。
                                         if (widget.history
                                             is RedoChangeHistoryService)
                                           DeskButton(
@@ -420,7 +420,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                             selected = null;
                             error = '';
                           }),
-                    // R4-09：每类带数量；这本书没有记录的类型不列（当前选中的除外）。
+                    // 每类带数量；这本书没有记录的类型不列（当前选中的除外）。
                     items: [
                       for (final value in {
                         '全部类型',
@@ -473,7 +473,7 @@ class _ChangeHistoryPageState extends State<ChangeHistoryPage> {
                       itemBuilder: (context, index) {
                         final item = rows[index];
                         if (item is String) {
-                          // 日期分组用凹底横幅加条数胶囊（V105 视觉语言）。
+                          // 日期分组用凹底横幅加条数胶囊（视觉语言）。
                           final count = groupCounts[item] ?? 0;
                           return Padding(
                             padding: const EdgeInsets.fromLTRB(2, 8, 2, 4),

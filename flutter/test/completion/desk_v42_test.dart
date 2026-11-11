@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 
-/// V42：下拉菜单入场（G-071）。
+/// 下拉菜单入场。
 void main() {
   Widget app(
     List<String> values,

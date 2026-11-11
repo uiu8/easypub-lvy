@@ -110,7 +110,7 @@ class LegacyLibraryAdapter
         BookCollectionService,
         FolderAutoImportService,
         StorageSettingsService {
-  // ---------------------------------------------------------------- 书库收藏夹（V84，LIB-118–126）
+  // ---------------------------------------------------------------- 书库收藏夹
   // 第一次用到时才建（订阅后端通知）；dispose 只释放已建的，不在释放时新建。
   LegacyCollections? _collections;
   LegacyCollections get _collectionStore =>
@@ -156,7 +156,7 @@ class LegacyLibraryAdapter
   Future<String> undoFields(BookFieldApplied applied) =>
       _collectionStore.undoFields(applied);
 
-  // ---------------------------------------------------------------- 文件夹自动入库（V26，FOLD-080–082）
+  // ---------------------------------------------------------------- 文件夹自动入库
   List<String> _configList(String key) => [
     for (final v in (_backend.globalConfiguration[key] as List? ?? const []))
       if (v is String) v,
@@ -239,7 +239,7 @@ class LegacyLibraryAdapter
       ? null
       : Directory(paths.join(_backend.settingsDirectory!, 'check-reports'));
 
-  /// 书库中每本书当前稿的检查指纹（CHK-061 保留规则）。
+  /// 书库中每本书当前稿的检查指纹（保留规则）。
   Map<String, String> _currentCheckGuards() => {
     for (final b in _backend.shelf.books.where((b) => !b.isDemo))
       b.id: LegacyBookCheckSession.contextFor(_backend, b.id),
@@ -499,8 +499,8 @@ class LegacyLibraryAdapter
 
   String? _storageMoveJob;
 
-  /// V104：UI 在此调用搬家，不能直接向 native 伪报插件已停。
-  // ---------------------------------------------------------------- 存储位置界面（V104，SET-108–112）
+  /// UI 在此调用搬家，不能直接向 native 伪报插件已停。
+  // ---------------------------------------------------------------- 存储位置界面
   @override
   bool get storageAvailable => StorageLocations.initialized;
   @override
@@ -671,7 +671,7 @@ class LegacyLibraryAdapter
   Future<void> closeWorkspaceStorage() async => _autosave?.close();
   final _checking = <String>{};
 
-  /// 检查过期的书在后台逐本重查（V134）：稿件改过或检查规则升级后不再显示“检查已过期”。
+  /// 检查过期的书在后台逐本重查：稿件改过或检查规则升级后不再显示“检查已过期”。
   /// 跟随“导入后检查章节识别结果”设置；同一书同一稿件版本只自动重查一次；
   /// 有导入、批量检查等操作时等它们结束；启动后先等几秒，不拖慢首屏。
   final _recheckQueue = <String>{};
@@ -813,7 +813,7 @@ class LegacyLibraryAdapter
       ? _recycler(paths)
       : await api.recycleFiles(paths: paths);
 
-  /// 测试用：代替真实回收站（V134），避免测试往本机回收站放文件。
+  /// 测试用：代替真实回收站，避免测试往本机回收站放文件。
   final Future<List<String>> Function(List<String> paths)? _recycler;
 
   @override
@@ -1050,7 +1050,7 @@ class LegacyLibraryAdapter
   RuleCatalogService openRuleCatalog(String bookId) =>
       LegacyRuleCatalogService(_backend, bookId);
 
-  /// 自动更新（V68）：与书库无关，整个程序一个。
+  /// 自动更新：与书库无关，整个程序一个。
   @override
   late final AppUpdateService appUpdates = LegacyAppUpdateService();
 
@@ -1137,12 +1137,12 @@ class LegacyLibraryAdapter
     }
 
     final checking = _checking.contains(b.id);
-    // 稿件版本只算一次，检查指纹按它缓存（LIB-114）。
+    // 稿件版本只算一次，检查指纹按它缓存。
     final version = _backend.publicationContext(b.id);
     final check = checking
         ? null
         : LegacyBookCheckSession.summaryFor(_backend, b.id, version: version);
-    // 过期的检查结果排队自动重查，显示“检查中…”（V134）。
+    // 过期的检查结果排队自动重查，显示“检查中…”。
     final queued =
         check?.status == '检查已过期' &&
         (_recheckQueue.contains(b.id) || _queueRecheck(b.id, version));
@@ -1297,7 +1297,7 @@ class LegacyLibraryAdapter
     final knownPaths = _books.value
         .map((b) => folderImportPathKey(b.path))
         .toSet();
-    // 同时处理的书（V38，LIB-115）：前面几本解析的同时，后面的已开始读取；导入后的检查也几本同时进行。
+    // 同时处理的书：前面几本解析的同时，后面的已开始读取；导入后的检查也几本同时进行。
     final parallel = parallelBooks(_backend.globalConfiguration);
     final checks = ConcurrencyLimit(parallel);
     final pendingChecks = <Future<void>>[];

@@ -60,7 +60,7 @@ class _InvalidOnlySession implements ManualNoteSession {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-/// V62：章节页手工注释界面（LAY-128），真实 DLL。
+/// 章节页手工注释界面，真实 DLL。
 void main() {
   setUpAll(
     () async => RustLib.init(

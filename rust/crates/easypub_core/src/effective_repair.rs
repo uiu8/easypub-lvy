@@ -40,7 +40,7 @@ pub fn candidates(book: &EffectiveBook) -> Value {
 
 pub fn candidates_for(book: &EffectiveBook, focus: Option<&str>) -> Value {
     let mut items = Vec::new();
-    // 用户在识别规则中允许重复的标题不提议移除（CH-258）。
+    // 用户在识别规则中允许重复的标题不提议移除。
     let rules = book
         .tree
         .recognition_rules
@@ -201,7 +201,7 @@ pub fn candidates_for(book: &EffectiveBook, focus: Option<&str>) -> Value {
     json!({"total":total,"items":items})
 }
 
-/// 一条方案是否覆盖某个问题：自己的 finding_id 或 also_for 里列出的（V133）。
+/// 一条方案是否覆盖某个问题：自己的 finding_id 或 also_for 里列出的。
 pub fn covers(proposal: &Value, id: &Value) -> bool {
     &proposal["finding_id"] == id
         || proposal["also_for"]
@@ -209,7 +209,7 @@ pub fn covers(proposal: &Value, id: &Value) -> bool {
             .is_some_and(|ids| ids.iter().any(|v| v == id))
 }
 
-/// 放错位置的章整体归位（V133）：所有可归位的章合成一条方案，按章号从大到小依次移动，
+/// 放错位置的章整体归位：所有可归位的章合成一条方案，按章号从大到小依次移动，
 /// 每章移到“全部归位后紧跟它的那一章”之前，所以整体执行后顺序正确。只移动没有下级的章。
 fn misplaced_proposal(
     book: &EffectiveBook,
@@ -329,7 +329,7 @@ fn renumbered_title(title: &str, number: u32) -> Option<String> {
     (crate::source::numbered_heading(&renamed) == Some((number, unit))).then_some(renamed)
 }
 
-/// 编号写错的标题改回应有的章号（V133）：前后两章编号差 2、中间这一号一章都没有。
+/// 编号写错的标题改回应有的章号：前后两章编号差 2、中间这一号一章都没有。
 /// 写错的号与别的章重复时推荐；不重复时只提议。
 fn misnumbered_proposals(
     book: &EffectiveBook,
@@ -532,7 +532,7 @@ mod tests {
             let book = compose(&source, &Structure::new(&source), None).unwrap();
             let proposals = candidates_for(&book, Some(&format!("{category}:")));
             let candidate = &proposals["items"][0];
-            // V133：编号错字与整章重复改为推荐。
+            // 编号错字与整章重复改为推荐。
             assert_eq!(candidate["recommended"], category != "unrecognized-heading");
             let request = Request {
                 base_id: effective_edit::base_id(&book),
@@ -645,7 +645,7 @@ mod tests {
             .collect()
     }
 
-    /// V133：网页“最新章节”栏倒序放在第一章前、最新一章夹在中间——合成一条“归位”，一键移回。
+    /// 网页“最新章节”栏倒序放在第一章前、最新一章夹在中间——合成一条“归位”，一键移回。
     #[test]
     fn misplaced_chapters_merge_into_one_recommended_move() {
         let mut order: Vec<(u32, &str)> = vec![(22, "二二"), (21, "二一")];

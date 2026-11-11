@@ -15,16 +15,16 @@ pub struct Stylesheet {
     #[serde(skip)]
     custom_offset: usize,
 }
-/// 封面页 SVG 的样式（OUT-074）：取视口高度，阅读器按页面大小放下整张封面，
+/// 封面页 SVG 的样式：取视口高度，阅读器按页面大小放下整张封面，
 /// 比例由封面页的 preserveAspectRatio 决定。KFX 的封面页是普通图片，Bokai 也不支持 vh，
 /// 因此 KFX 样式表去掉这一条（见 epub.rs）。
 pub const COVER_SVG_RULE: &str = ".cover svg { display: block; width: 100%; height: 100vh; }\n";
-/// 竖排（V28，LAY-104）：整本书从上到下、从右往左；图片按高度限制；纵中横。
+/// 竖排：整本书从上到下、从右往左；图片按高度限制；纵中横。
 pub const VERTICAL_RULES: &str = "/* EasyPub vertical writing */\n\
 html { writing-mode: vertical-rl; -webkit-writing-mode: vertical-rl; -epub-writing-mode: vertical-rl; }\n\
 figure img { max-height: 100%; }\n\
 .tcy { text-combine-upright: all; -webkit-text-combine: horizontal; -epub-text-combine: horizontal; }\n";
-/// 章节标题样式（V36，LAY-117），按用户书库里的成品书复刻（`docs/evidence/v36-heading-styles-20261014.md`）。
+/// 章节标题样式，按用户书库里的成品书复刻。
 /// 序言等前置标题（front-heading）与章标题同样处理，与原版 EasyPub 一致。
 /// - classic：原版 EasyPub v1.50 的 titlel2std（居中、x-large、点线下框、浅阴影）；
 /// - amazon：亚马逊中国官方书的 kindle-cn-heading（居中、1.2em 粗黑体、灰色虚线下框）；
@@ -52,7 +52,7 @@ pub fn heading_rules(style: &str) -> &'static str {
 /// 原版 EasyPub 的章节标题；阴影单列，KFX 输入去掉（Bokai 不支持 text-shadow，见 epub.rs）。
 pub const CLASSIC_SHADOW: &str = " text-shadow: 1px 1px 1px #333333;";
 const CLASSIC_HEADING: &str = ".chapter-heading, .front-heading { font-size: x-large; line-height: 125%; text-align: center; margin: 0 0 1.2em; padding: 10px 0; border-bottom: 1px dotted #c1ccc0; text-shadow: 1px 1px 1px #333333; }\n";
-/// 注音与着重号（V28，LAY-105/106）；中文着重号横排在下、竖排在右。
+/// 注音与着重号；中文着重号横排在下、竖排在右。
 pub const INLINE_MARKUP_RULES: &str = "/* EasyPub ruby and emphasis */\n\
 rt { font-size: 0.5em; }\n\
 .em-dot { text-emphasis-style: filled dot; -webkit-text-emphasis-style: filled dot; -epub-text-emphasis-style: filled dot; text-emphasis-position: under right; -webkit-text-emphasis-position: under right; -epub-text-emphasis-position: under right; }\n";
@@ -60,7 +60,7 @@ rt { font-size: 0.5em; }\n\
 pub fn add_inline_markup(style: Stylesheet) -> Stylesheet {
     add_rules(style, INLINE_MARKUP_RULES)
 }
-/// 上标、下标、链接（G-113）：只有用到时才加，其余书的样式表不变。
+/// 上标、下标、链接：只有用到时才加，其余书的样式表不变。
 pub const INLINE_SOURCE_RULES: &str = ".inline-sup { vertical-align: super; font-size: 0.75em; }\n\
 .inline-sub { vertical-align: sub; font-size: 0.75em; }\n\
 .inline-link { text-decoration: underline; }\n";
@@ -84,7 +84,7 @@ pub fn prepare(settings: &Settings) -> Result<Stylesheet, ApiError> {
         !settings.manual_notes.is_empty(),
     )
 }
-/// 两个开关含原书标记（G-113）：它们不在设置里，也不走设置校验。
+/// 两个开关含原书标记：它们不在设置里，也不走设置校验。
 pub fn prepare_with(
     settings: &Settings,
     inline_styles: bool,
@@ -96,7 +96,7 @@ pub fn prepare_with(
     } else {
         "sans-serif"
     };
-    // 封面页（OUT-074）：SVG 规则见 COVER_SVG_RULE；KFX 的封面页仍是普通图片、高度随宽度。
+    // 封面页：SVG 规则见 COVER_SVG_RULE；KFX 的封面页仍是普通图片、高度随宽度。
     let mut css = format!(
         "/* EasyPub publication styles v3 */\n\
          @page {{ margin: {} {} {} {}; }}\n\
@@ -208,7 +208,7 @@ pub fn prepare_with(
         css.push_str(".note-ref { font-size: 0.75em; vertical-align: super; line-height: 0; }\n.footnote { margin: 1em 0; }\n.footnote p { text-indent: 0; }\n");
     }
     css.push_str(heading_rules(&settings.heading_style));
-    // 系统提示分类样式（V77，LAY-132）。
+    // 系统提示分类样式。
     if settings.system_block_style == "styled" {
         css.push_str(
             &settings
@@ -218,7 +218,7 @@ pub fn prepare_with(
                 .css(),
         );
     }
-    // 场景样式（V81，LAY-135）：用到时才写入，旧书的样式表不变。
+    // 场景样式：用到时才写入，旧书的样式表不变。
     if crate::insets::used(settings) {
         let paper = crate::insets::image_needs(settings)
             .1
@@ -230,7 +230,7 @@ pub fn prepare_with(
             settings.inset_font == "kai",
         ));
     }
-    // 章节样式包（V74，LAY-130）：标题下装饰线、章末装饰、卷页边框。
+    // 章节样式包：标题下装饰线、章末装饰、卷页边框。
     if let Some(style) = &settings.chapter_style {
         if style.title_rule.is_some() {
             css.push_str(".title-rule { margin: -0.4em 0 1em; text-indent: 0; text-align: center; }\n.title-rule img { width: 40%; height: auto; }\n");
@@ -239,7 +239,7 @@ pub fn prepare_with(
             css.push_str(".chapter-end { margin: 1.5em 0 0; text-indent: 0; text-align: center; }\n.chapter-end img { width: 16%; height: auto; }\n");
         }
         match style.volume_frame.as_str() {
-            // V114：两侧外边距由 15% 收窄到 5%，卷名稍长（如“第一卷　远行”）时不再被拆成两行。
+            // 两侧外边距由 15% 收窄到 5%，卷名稍长（如“第一卷　远行”）时不再被拆成两行。
             "single" => css.push_str(
                 ".volume-heading { border: 1px solid; padding: 1em 0.4em; margin: 2em 5%; }\n",
             ),
@@ -478,7 +478,7 @@ mod tests {
         let base = prepare(&s).unwrap();
         assert!(base.css.contains("font-size: 20px; line-height: 2;"));
         assert!(base.css.contains("\"SimSun\", serif"));
-        // 封面适配方式不再写进样式（OUT-074），由封面页的 preserveAspectRatio 承担。
+        // 封面适配方式不再写进样式，由封面页的 preserveAspectRatio 承担。
         assert!(!base.css.contains("object-fit"));
         assert!(base.css.contains(COVER_SVG_RULE));
         assert!(!base.font_embedded);
@@ -489,7 +489,7 @@ mod tests {
         s = settings();
         s.line_height = 1.5;
         assert_ne!(prepare(&s).unwrap().id, base.id);
-        // 封面适配方式只影响封面页（OUT-074），不再改变样式表；成品身份仍随整个清单变化。
+        // 封面适配方式只影响封面页，不再改变样式表；成品身份仍随整个清单变化。
         s = settings();
         s.cover_fit = "fill".into();
         assert_eq!(prepare(&s).unwrap().id, base.id);

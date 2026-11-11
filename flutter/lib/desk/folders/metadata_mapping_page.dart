@@ -1,4 +1,4 @@
-// 元数据映射（D4-E，V8 按设计重写视图）：规则编辑、保存核对、逐书差异与保护字段逻辑沿用原实现。
+// 元数据映射（按设计重写视图）：规则编辑、保存核对、逐书差异与保护字段逻辑沿用原实现。
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
@@ -338,7 +338,7 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
   );
   @override
   Widget build(BuildContext context) {
-    // G-061：逐书差异已生成、尚未确认应用时登记为待应用；涉及多本书，确认时由会话复核。
+    // 逐书差异已生成、尚未确认应用时登记为待应用；涉及多本书，确认时由会话复核。
     final pending = preview;
     reportPending(
       pending != null && pending.changedBooks > 0
@@ -427,7 +427,7 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
                   }),
                   quiet: true,
                 ),
-              // R2-09：没有未应用的改动时不显示。
+              // 没有未应用的改动时不显示。
               if (dirty)
                 action(
                   '放弃未应用规则',
@@ -628,7 +628,7 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
     });
   }
 
-  /// 没有规则时的说明（R2-09）：用一条示例讲清规则是什么，再给“添加第一条规则”。
+  /// 没有规则时的说明：用一条示例讲清规则是什么，再给“添加第一条规则”。
   Widget emptyRules() {
     final d = context.desk;
     Widget step(String a, String b) => Row(
@@ -999,7 +999,7 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
                         : '当前规则没有需要覆盖的保护字段。',
                     style: ui(12.5, c: d.ink2),
                   ),
-                // 表头三态勾选（G-067）；默认仍不勾选，只覆盖明确选中的字段（G-068）。
+                // 表头三态勾选；默认仍不勾选，只覆盖明确选中的字段。
                 if (fields.length > 1)
                   SelectAllHeader(
                     selected: fields.where(selected.contains).length,

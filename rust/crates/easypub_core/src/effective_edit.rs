@@ -27,7 +27,7 @@ pub struct ChapterBoundary {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
     Recognize {
-        // 装箱：规则含多段文本（V17 又加了三项例外），避免撑大每个操作。
+        // 装箱：规则含多段文本（又加了三项例外），避免撑大每个操作。
         rules: Box<crate::chapter_rules::RuleSet>,
         #[serde(default = "default_preserve_decisions")]
         preserve_decisions: bool,

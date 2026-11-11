@@ -1,4 +1,4 @@
-// 整行【】的用途（V121，LAY-169）：与 Rust `system_scope.rs` 同一套规则，供排版页小预览判断系统提示。
+// 整行【】的用途：与 Rust `system_scope.rs` 同一套规则，供排版页小预览判断系统提示。
 // 网文里【】除了系统提示，还常用来写角色台词或心声、聊天消息、书前标签与作者说明：
 // 逐行按内容分类，再按全书（小预览里是本章）倾向决定拿不准的行。
 import 'layout_service.dart' show isSystemLine;

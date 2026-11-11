@@ -132,7 +132,7 @@ const cleanupCheckpointMessage =
     '这本书的章节修改经过多次压缩，原始操作不完整，无法逐条换算到清理后的文本。'
     '可在变更记录中撤销到压缩之前再清理，或先不清理。';
 
-/// 撤销或重做清理时，有章节修改无法换算到新的文本（CLEAN-103）。不替用户决定：
+/// 撤销或重做清理时，有章节修改无法换算到新的文本。不替用户决定：
 /// 界面列出 [skipped]，用户确认放弃后调用 [proceed] 完成这一步。
 class CleanupEditsNeedConfirmation implements Exception {
   const CleanupEditsNeedConfirmation({

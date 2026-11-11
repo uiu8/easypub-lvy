@@ -27,7 +27,7 @@ class _Host implements KindlePreviewHost {
 
 class _RealHttp extends HttpOverrides {}
 
-/// V36：章节标题样式（LAY-117）与每章单独文件（OUT-081）在排版页、小预览、真机预览中的接通。
+/// 章节标题样式与每章单独文件在排版页、小预览、真机预览中的接通。
 void main() {
   setUpAll(
     () async => RustLib.init(

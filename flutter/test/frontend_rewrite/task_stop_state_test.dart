@@ -112,7 +112,7 @@ void main() {
           ),
         );
         expect(button.onPressed, isNull);
-        // V134：运行中的任务显示百分比进度。
+        // 运行中的任务显示百分比进度。
         expect(find.byKey(const ValueKey('conversion-percent')), findsWidgets);
         expect(tester.takeException(), isNull);
         session.finish();
@@ -123,7 +123,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('尚未执行'), findsWidgets);
         expect(find.text('当前文件'), findsNothing);
-        // 取消不算失败；V16 起数量为 0 的分类不显示（TASK-024）。
+        // 取消不算失败；后来数量为 0 的分类不显示。
         expect(find.textContaining(RegExp(r'^失败 ')), findsNothing);
         expect(tester.takeException(), isNull);
       },

@@ -281,7 +281,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('check-issue-2')));
     await tester.pumpAndSettle();
-    // V15：问题列表停靠在窄列时“重新检查”只留图标。
+    // 问题列表停靠在窄列时“重新检查”只留图标。
     await tester.tap(find.byTooltip('重新检查'));
     await tester.pumpAndSettle();
     expect(find.text('有效上下文 2'), findsOneWidget);

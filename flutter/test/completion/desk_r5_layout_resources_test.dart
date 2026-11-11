@@ -22,7 +22,7 @@ import 'package:easypub_desktop/desk/resources/resources_page.dart';
 const pagePng =
     'iVBORw0KGgoAAAANSUhEUgAAAFoAAACgCAIAAAADw+wqAAAA6ElEQVR4nO3QMQ0AIADAMJSgBNkI5EMC42gyAUvHXFu3kR98FQ4cOHDgwIEDBw4cfThw4MCBAwcOHDhw9OHAgQMHDhw4cODA0YcDBw4cOHDgwIEDRx8OHDhw4MCBAwcOHH04cODAgQMHDhw4cPThwIEDBw4cOHDgwNGHAwcOHDhw4MCBA0cfDhw4cODAgQMHDhx9OHDgwIEDBw4cOHD04cCBAwcOHDhw4MDRhwMHDhw4cODAgQNHHw4cOHDgwIEDBw4cfThw4MCBAwcOHDhw9OHAgQMHDhw4cODA0YcDBw4cOHDgwLEecRyN+1b2vJkg2QAAAABJRU5ErkJggg==';
 
-/// R5：书籍信息、排版、资源（LAY-140～145、RES-051～053、META-051～052）。
+/// 书籍信息、排版、资源。
 void main() {
   setUpAll(
     () async => RustLib.init(
@@ -245,7 +245,7 @@ void main() {
     expect(find.text('来源'), findsOneWidget);
     expect(find.text('同时应用清理规则'), findsOneWidget);
     expect(find.text('封面与元信息 · 排版'), findsNothing);
-    // Esc 关闭（R5-03）。
+    // Esc 关闭。
     await t.sendKeyEvent(LogicalKeyboardKey.escape);
     await t.pumpAndSettle();
     expect(find.text('应用到多本书'), findsNothing);

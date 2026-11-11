@@ -1,4 +1,4 @@
-// 迁入 desk（settings，V5/V6）：逻辑与布局沿用 V5 前的同名文件；公共弹窗框架样式在 V7 统一。
+// 迁入 desk（settings）：逻辑与布局沿用早先的同名文件；公共弹窗框架样式后来统一。
 import '../../application/cleanup_rule_resolution.dart';
 
 import 'package:flutter/material.dart';
@@ -93,7 +93,7 @@ class AutomaticRulesEditor extends StatelessWidget {
     await store(before);
   }
 
-  /// 全部启用或停用（表头三态勾选；G-067），默认状态不变。
+  /// 全部启用或停用（表头三态勾选），默认状态不变。
   Future<bool> enableAll(bool enabled) => store([
     for (final old in rules)
       old['kind'] == 'configured'
@@ -207,7 +207,7 @@ class AutomaticRulesEditor extends StatelessWidget {
                   .map((v) => (v as Map).cast<String, dynamic>())
                   .toList(),
             ),
-            // 与旁边的按钮同样外观，看得出可以点（V12）。
+            // 与旁边的按钮同样外观，看得出可以点。
             child: Builder(
               builder: (context) {
                 final d = context.desk;

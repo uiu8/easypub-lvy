@@ -10,7 +10,7 @@ import 'package:easypub_desktop/infrastructure/legacy_conversion_session.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
 import 'package:easypub_desktop/prototype/txt_import.dart';
-// V21：旧原型的 createTextCover 已移除，改用书库与转换共用的生成封面。
+// 旧原型的 createTextCover 已移除，改用书库与转换共用的生成封面。
 import 'package:easypub_desktop/desk/library/generated_cover.dart'
     show renderGeneratedCover;
 

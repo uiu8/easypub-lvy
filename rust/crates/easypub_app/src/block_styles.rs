@@ -1,6 +1,6 @@
-//! 系统提示块样式（V77，LAY-132）：单行提示与多行面板各一组样式参数。
+//! 系统提示块样式：单行提示与多行面板各一组样式参数。
 //!
-//! 内置样式只是预设好的参数；V78 的样式编辑器改的也是同一组参数。CSS 由参数生成，
+//! 内置样式只是预设好的参数；早先的样式编辑器改的也是同一组参数。CSS 由参数生成，
 //! 只用边框、极浅灰底、字号、粗细与对齐，不写文字颜色，不用表格（Kindle 夜间模式与 KFX 兼容）。
 //! 公开类名：`.blk`、`.blk-note`、`.blk-panel`、`.blk-has-title`、`.blk-panel-title`、`.blk-key`。
 use easypub_core::{ApiError, ErrorCode};
@@ -41,16 +41,16 @@ pub struct BlockStyle {
     pub brackets: String,
     /// 与前后正文的距离：tight / medium / loose
     pub spacing: String,
-    /// 边框线颜色（V119）：black 黑 / gray 灰。旧样式没有这一项时为 black，成品不变。
+    /// 边框线颜色：black 黑 / gray 灰。旧样式没有这一项时为 black，成品不变。
     #[serde(default = "black", skip_serializing_if = "is_black")]
     pub tone: String,
-    /// 字体（V119）：body 随正文 / kai 楷体。
+    /// 字体：body 随正文 / kai 楷体。
     #[serde(default = "body", skip_serializing_if = "is_body")]
     pub font: String,
-    /// 块的缩进（V119）：none / small 左缩 1 字 / large 左缩 2 字 / narrow 左右各收 12%。
+    /// 块的缩进：none / small 左缩 1 字 / large 左缩 2 字 / narrow 左右各收 12%。
     #[serde(default = "no_inset", skip_serializing_if = "is_no_inset")]
     pub inset: String,
-    /// 圆角（V119）。
+    /// 圆角。
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub radius: bool,
 }
@@ -86,7 +86,7 @@ fn style(v: Value) -> BlockStyle {
     serde_json::from_value(v).expect("constant block style")
 }
 
-/// “我的样式”（V78，LAY-133）：用户保存的一组参数，存在全局设置里，所有书可用。
+/// “我的样式”：用户保存的一组参数，存在全局设置里，所有书可用。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SavedStyle {
@@ -118,7 +118,7 @@ pub fn validate_library(items: &[SavedStyle]) -> Result<(), ApiError> {
 }
 
 /// 内置预设：(编号, 名称, 适用的类, 参数)。适用的类为 note、panel，或两类都可用的 both。
-/// V119 新增的五种参照中文精排（多看“章前语”与色块、台湾 EPUB3 指引的框线），
+/// 新增的五种参照中文精排（多看“章前语”与色块、台湾 EPUB3 指引的框线），
 /// 只用线条、楷体与缩进；“浅灰底”在 AZW3 上不显示底色。
 pub fn presets() -> Vec<(&'static str, &'static str, &'static str, BlockStyle)> {
     vec![
@@ -201,7 +201,7 @@ pub fn preset(id: &str) -> Option<BlockStyle> {
     presets().into_iter().find(|p| p.0 == id).map(|p| p.3)
 }
 
-/// 新书的默认：单行“提示条”，面板“标题面板”（V119 新增的五种只作可选，默认不变）。
+/// 新书的默认：单行“提示条”，面板“标题面板”（新增的五种只作可选，默认不变）。
 pub fn default_styles() -> SystemStyles {
     SystemStyles {
         note: preset("bar").expect("bar"),
@@ -264,7 +264,7 @@ impl BlockStyle {
             _ => "0.8em",
         };
         let pad = if boxed { "0.3em 0" } else { "0" };
-        // V119：块缩进、灰色线、楷体与圆角；旧样式都是默认值，生成的 CSS 与以前相同。
+        // 块缩进、灰色线、楷体与圆角；旧样式都是默认值，生成的 CSS 与以前相同。
         let margin = match self.inset.as_str() {
             "small" => format!("{margin} 0 {margin} 1em"),
             "large" => format!("{margin} 0 {margin} 2em"),
@@ -399,7 +399,7 @@ mod tests {
             s.validate(kind == "panel")
                 .unwrap_or_else(|_| panic!("{id}"));
         }
-        // V119 新增的“细线楷体”：灰色左细线、楷体、左缩 1 字。
+        // 新增的“细线楷体”：灰色左细线、楷体、左缩 1 字。
         let quiet = SystemStyles {
             note: preset("quiet").unwrap(),
             panel: preset("quiet").unwrap(),
@@ -419,7 +419,7 @@ mod tests {
                 .css("blk-note")
                 .contains("background-color: #ececec; border-radius: 0.5em;")
         );
-        // 默认（提示条 + 标题面板）没有新参数：序列化不多出字段，生成的 CSS 与 V118 以前相同。
+        // 默认（提示条 + 标题面板）没有新参数：序列化不多出字段，生成的 CSS 与以前相同。
         let json = serde_json::to_value(&all.note).unwrap();
         assert!(json.get("tone").is_none() && json.get("radius").is_none());
         let css = all.css();

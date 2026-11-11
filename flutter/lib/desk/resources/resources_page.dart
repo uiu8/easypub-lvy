@@ -1,4 +1,4 @@
-// 图片与资源（D3-M，V8 按设计重写视图）：读取、编辑、定位、重新关联逻辑沿用原实现。
+// 图片与资源（按设计重写视图）：读取、编辑、定位、重新关联逻辑沿用原实现。
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -57,7 +57,7 @@ class _ResourcesPageState extends State<ResourcesPage> {
   String query = '', error = '';
   bool busy = false;
 
-  /// 插图位置的章节写法（R5-05），按资源序号；没算出来的仍写原稿行号。
+  /// 插图位置的章节写法，按资源序号；没算出来的仍写原稿行号。
   Map<int, String> anchors = const {};
   String locationOf(BookResource r) => anchors[r.index] ?? r.location;
 
@@ -74,7 +74,7 @@ class _ResourcesPageState extends State<ResourcesPage> {
               .toList(growable: false);
   }
 
-  /// 插图位置写成“章节 · 第 N 段之后”（R5-05）：按插图在成品里的行号，数所在章节
+  /// 插图位置写成“章节 · 第 N 段之后”：按插图在成品里的行号，数所在章节
   /// 标题之后到这一行的非空段落。读不出时保留原稿行号的写法，不报错。
   Future<void> loadAnchors(List<BookResource> list) async {
     final s = session;
@@ -549,7 +549,7 @@ class _ResourcesPageState extends State<ResourcesPage> {
         child: Text('选择资源查看详情', style: ui(12.5, c: d.ink3)),
       );
     }
-    // 整栏一起滚动，按钮跟在信息后面（R5-06）；大字号时预览图矮一些，信息少被挤出。
+    // 整栏一起滚动，按钮跟在信息后面；大字号时预览图矮一些，信息少被挤出。
     final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
     return DeskScrollView(
       child: Column(
@@ -710,7 +710,7 @@ class _ResourceEditState extends State<_ResourceEdit> {
   );
   ResourcePositionChoice? position;
 
-  /// 插图版式（V54，RES-050）。
+  /// 插图版式。
   late String layout = widget.resource?.layout ?? 'inline';
   BookInformationPreview? plan;
   bool busy = false;
@@ -990,7 +990,7 @@ class _ResourceEditState extends State<_ResourceEdit> {
             onPressed: busy ? null : () => setState(() => plan = null),
             child: const Text('返回编辑'),
           ),
-        // 没选图片时不可预览，并说明原因（RES-045）。
+        // 没选图片时不可预览，并说明原因。
         Tooltip(
           message: missingImage ? '先点“浏览图片…”选择 PNG、JPG、WebP、GIF 或 BMP 图片' : '',
           child: FilledButton(

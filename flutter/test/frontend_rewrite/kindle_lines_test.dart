@@ -6,7 +6,7 @@ import 'package:easypub_desktop/desk/layout/kindle_lines.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// V124：Kindle 中文断行模型（小预览、排版视图共用）。
+/// Kindle 中文断行模型（小预览、排版视图共用）。
 void main() {
   List<String> split(
     String text, {
@@ -48,7 +48,7 @@ void main() {
     expect(split('一二三四五六七八九，十'), ['一二三四五六七八九，', '十']);
     // 10 个字加逗号：逗号不能放在行首，最后一个字随逗号换行。
     expect(split('一二三四五六七八九十，再'), ['一二三四五六七八九', '十，再']);
-    // 问号、叹号与句号同类（V124）。
+    // 问号、叹号与句号同类。
     expect(split('一二三四五六七八九？十'), ['一二三四五六七八九？', '十']);
   });
 
@@ -79,7 +79,7 @@ void main() {
   test('禁则：前置标点不在行末，破折号、省略号不拆开，西文单词不拆开', () {
     expect(split('一二三四五六七八九「十」'), ['一二三四五六七八九', '「十」']);
     expect(split('一二三四五六七八九——十'), ['一二三四五六七八', '九——十']);
-    // V129：省略号可以放在行首（KPW5 宋体实测“……您是怎么”开头的一行），两个省略号仍不拆开。
+    // 省略号可以放在行首（KPW5 宋体实测“……您是怎么”开头的一行），两个省略号仍不拆开。
     expect(split('一二三四五六七八九……'), ['一二三四五六七八九', '……']);
     expect(split('一二三四五六七八九十…'), ['一二三四五六七八九十', '…']);
     // 半角字母宽 0.5：“word”放不下整词时整词换行。

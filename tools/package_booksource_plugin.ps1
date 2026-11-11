@@ -1,4 +1,4 @@
-# 书源下载插件单独打包（V102）：主程序包不再附带，Release 里另放一个插件压缩包。
+# 书源下载插件单独打包：主程序包不再附带，Release 里另放一个插件压缩包。
 # 先运行 tools/build_booksource_plugin.ps1 生成 artifacts/plugins/booksource，再运行本脚本。
 # 用法：./tools/package_booksource_plugin.ps1 -PackageName easypub-lvy-booksource-v102-20261023-win-x64
 param(

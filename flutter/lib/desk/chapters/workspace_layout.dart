@@ -1,4 +1,4 @@
-// 章节工作区分栏（CH-041–044）：按工作区可用宽度在三栏 / 两栏 / 单栏间切换。
+// 章节工作区分栏：按工作区可用宽度在三栏 / 两栏 / 单栏间切换。
 // 侧栏改为浮层时保持挂载（Offstage），搜索词与输入不丢失。
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
@@ -20,7 +20,7 @@ class DeskChapterLayout extends StatefulWidget {
   /// 问题、记录页签占满工作区时为 false。
   final bool showAuxiliary;
 
-  /// 排版视图里不显示章节设置（V120），空间让给正文旁的样式片段。
+  /// 排版视图里不显示章节设置，空间让给正文旁的样式片段。
   final bool showInspector;
 
   /// 目录常驻所需的工作区宽度；以下目录改为浮层。
@@ -41,7 +41,7 @@ class DeskChapterLayoutState extends State<DeskChapterLayout> {
   double outlineWidth = 272, inspectorWidth = 304;
   String? drawer;
 
-  /// 拖动开始时的栏宽：宽度 = 起始栏宽 + 指针总位移（V83）。
+  /// 拖动开始时的栏宽：宽度 = 起始栏宽 + 指针总位移。
   /// 以前每个移动事件都从上一帧的宽度加增量，一帧内多个事件只算最后一个，
   /// 分隔条跟不上鼠标。
   double dragWidth = 0;

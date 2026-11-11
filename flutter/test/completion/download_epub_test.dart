@@ -1,4 +1,4 @@
-// LIB-215 书源下载为 EPUB：真实书库与转换会话。TXT 加入书库后按全局默认排版生成 EPUB，放在同一文件夹。
+// 书源下载为 EPUB：真实书库与转换会话。TXT 加入书库后按全局默认排版生成 EPUB，放在同一文件夹。
 import 'dart:io';
 
 import 'package:easypub_desktop/desk/app/download_epub.dart';

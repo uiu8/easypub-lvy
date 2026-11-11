@@ -1577,7 +1577,7 @@ impl<'js> Scope<'_, 'js> {
                 };
                 response_json(&self.net().fetch_no_redirect(&request).map_err(|e| e.0)?)
             }
-            // java.net.URL.openConnection 子集（V97）：只允许 HTTP/HTTPS 与常见方法，二进制请求体，
+            // java.net.URL.openConnection 子集：只允许 HTTP/HTTPS 与常见方法，二进制请求体，
             // 走与 java.ajax 相同的网络通道；跟随重定向，4xx/5xx 交给脚本按响应码读错误流。
             "httpConnect" => {
                 let spec = arg(args, 0);

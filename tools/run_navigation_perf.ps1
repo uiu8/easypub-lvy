@@ -1,4 +1,4 @@
-# 切页与书库流畅度基线（R0，正式版打磨）：用 profile 构建的帧性能探针跑两个场景，
+# 切页与书库流畅度基线（正式版打磨）：用 profile 构建的帧性能探针跑两个场景，
 #   switch  — 按侧栏顺序切换页面 5 轮，记录到首帧时间与单帧最长构建；
 #   library — 书库滚动到底再回顶，搜索框逐字输入再删除。
 # 每个场景按书库规模（40 / 300 / 1000 本）各跑 -Runs 次；有书源插件程序时一并启用插件。
@@ -7,7 +7,7 @@
 param(
   [ValidateSet('switch', 'library', 'booksource')][string[]]$Scenes = @('switch', 'library'),
   [ValidateSet(40, 300, 1000)][int[]]$Books = @(40, 300, 1000),
-  # booksource 场景（R8）：书源数，每个数各测一组；书库固定 40 本。
+  # booksource 场景：书源数，每个数各测一组；书库固定 40 本。
   [int[]]$Sources = @(368, 2425),
   [ValidateRange(1, 3)][int]$Runs = 2,
   [string]$Name = '',

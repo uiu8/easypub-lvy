@@ -48,12 +48,12 @@ struct Job {
     primary_only: bool,
     single: bool,
     queued: Instant,
-    /// V132：核对或抢下用的附加任务；None 为普通下载。
+    /// 核对或抢下用的附加任务；None 为普通下载。
     extra: Option<Extra>,
     /// 不交给这个书源（核对时避开原来那个书源）。
     avoid: Option<usize>,
 }
-/// 附加任务（V132）。
+/// 附加任务。
 #[derive(Clone, Copy, PartialEq)]
 enum Extra {
     /// 正文明显短于本书常见长度：换一个书源再下一次，明显更完整（多三成以上）时换用。
@@ -91,7 +91,7 @@ struct Work {
     current_hash: HashMap<usize, (usize, String)>,
     recent: VecDeque<Instant>,
     done: usize,
-    /// V132：正在下的普通任务（章 → 书源、开始时间），用于判断卡住的章。
+    /// 正在下的普通任务（章 → 书源、开始时间），用于判断卡住的章。
     inflight: HashMap<usize, (usize, Instant)>,
     /// 已经由某个任务写入正文的章；同一章后到的结果丢弃。
     claimed: HashSet<usize>,
@@ -485,7 +485,7 @@ pub fn run(
                                     }
                                     break jobs;
                                 }
-                                // V132：没有可取的章、本站还有额度时，看其他书源上有没有卡太久的章，同时下。
+                                // 没有可取的章、本站还有额度时，看其他书源上有没有卡太久的章，同时下。
                                 if lanes.len() > 1
                                     && !host.cooling()
                                     && w.lane_workers.get(&lane_index).copied().unwrap_or(0)
@@ -684,7 +684,7 @@ pub fn run(
                                 continue;
                             }
                             let mut w = shared.0.lock().unwrap();
-                            // V132：同一章已由抢下的任务写好，这一份丢弃。
+                            // 同一章已由抢下的任务写好，这一份丢弃。
                             if w.claimed.contains(&job.i) {
                                 w.active -= 1;
                                 w.inflight.remove(&job.i);

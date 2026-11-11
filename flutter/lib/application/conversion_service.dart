@@ -15,7 +15,7 @@ class ConversionRequest {
        keepOriginalEpub = Set.unmodifiable(keepOriginalEpub);
   final List<String> books;
 
-  /// 保持原格式转换的 EPUB 书（V27，OUT-079）：用修补后的原 EPUB，不用软件排版。
+  /// 保持原格式转换的 EPUB 书：用修补后的原 EPUB，不用软件排版。
   final Set<String> keepOriginalEpub;
   final String directory, format, engine;
   final bool generateCover;
@@ -169,7 +169,7 @@ abstract interface class ConversionTaskFeed {
 }
 
 /// 按与实际转换相同的命名规则给出将生成的文件名（不含同名时追加的序号），
-/// 供转换页列出“本次将生成”的文件（OUT-073）。
+/// 供转换页列出“本次将生成”的文件。
 abstract interface class ConversionNaming {
   String plannedFileName(String bookId, String format);
 }

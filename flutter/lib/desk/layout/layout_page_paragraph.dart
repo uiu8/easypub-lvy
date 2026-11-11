@@ -1,8 +1,8 @@
-// 排版页“段落与识别”分页：系统提示、诗词、场景块、生僻字注音（R5-13 拆出，逻辑不变）。
+// 排版页“段落与识别”分页：系统提示、诗词、场景块、生僻字注音（拆出，逻辑不变）。
 part of 'layout_page.dart';
 
 extension _LayoutParagraphSection on _LayoutPageState {
-  /// 系统提示自定义识别规则（V78）：写进本书 rule_options，进变更记录。
+  /// 系统提示自定义识别规则：写进本书 rule_options，进变更记录。
   Future<void> setSystemPatterns(List<String> next, String done) async {
     final current = session;
     if (current == null) return;
@@ -32,7 +32,7 @@ extension _LayoutParagraphSection on _LayoutPageState {
     }
   }
 
-  /// 系统提示识别范围（V121，LAY-169）：写进本书 rule_options，进变更记录。
+  /// 系统提示识别范围：写进本书 rule_options，进变更记录。
   Future<void> setSystemScope(String next) async {
     final current = session;
     if (current == null || next == systemScope) return;
@@ -88,7 +88,7 @@ extension _LayoutParagraphSection on _LayoutPageState {
                 ),
                 const SizedBox(height: 4),
                 Text(switch (systemScope) {
-                  'all' => '每一行整行【】都按系统提示排（V121 以前的规则）。',
+                  'all' => '每一行整行【】都按系统提示排（早先的规则）。',
                   'keyword' => '只把带系统用语（叮、任务、奖励、等级、属性等）或数值的整行【】按系统提示排。',
                   _ =>
                     '按内容区分：台词、聊天消息、书前标签不算系统提示；'
@@ -162,7 +162,7 @@ extension _LayoutParagraphSection on _LayoutPageState {
     );
   }
 
-  /// 样式包带的系统提示块样式（V78）：一并切到分类样式并套用。
+  /// 样式包带的系统提示块样式：一并切到分类样式并套用。
   void applyPackBlocks(Object? blocks) {
     if (blocks is! Map || !mounted) return;
     edit(() {
@@ -171,7 +171,7 @@ extension _LayoutParagraphSection on _LayoutPageState {
     });
   }
 
-  /// 样式包带的场景样式（V82）：聊天记录样式、书信样式与改过的各场景参数一并套用。
+  /// 样式包带的场景样式：聊天记录样式、书信样式与改过的各场景参数一并套用。
   void applyPackInsets(Object? insets) {
     if (insets is! Map || !mounted) return;
     edit(() {
@@ -183,7 +183,7 @@ extension _LayoutParagraphSection on _LayoutPageState {
     });
   }
 
-  /// 系统提示与诗词（V50，LAY-121/122）：三个选项，问号说明识别规则。
+  /// 系统提示与诗词：三个选项，问号说明识别规则。
   Widget blockControls(
     String label,
     String help,
@@ -206,7 +206,7 @@ extension _LayoutParagraphSection on _LayoutPageState {
     ),
   );
 
-  /// 场景识别规则（V82，LAY-137）：写进本书 rule_options.inset_rules，进变更记录；添加规则时一并开启识别。
+  /// 场景识别规则：写进本书 rule_options.inset_rules，进变更记录；添加规则时一并开启识别。
   Future<void> setInsetRules(
     List<Map<String, dynamic>> next,
     String done, {
@@ -322,7 +322,7 @@ extension _LayoutParagraphSection on _LayoutPageState {
     );
   }
 
-  /// 各场景的样式（V82，LAY-136）：预设、我的场景样式、自定义，“编辑…”打开编辑器。
+  /// 各场景的样式：预设、我的场景样式、自定义，“编辑…”打开编辑器。
   Widget insetStyleControls() {
     final d = context.desk;
     final settings = widget.library is SettingsService
@@ -493,7 +493,7 @@ extension _LayoutParagraphSection on _LayoutPageState {
     );
   }
 
-  /// 系统提示（V50、V77，LAY-121/132）：识别方式；“分类样式”下单行提示与多行面板各选一种样式。
+  /// 系统提示：识别方式；“分类样式”下单行提示与多行面板各选一种样式。
   Widget systemControls() {
     final d = context.desk;
     final styles = systemStyles ?? defaultSystemStyles();
@@ -685,7 +685,7 @@ extension _LayoutParagraphSection on _LayoutPageState {
     );
   }
 
-  /// 生僻字注音（V73，LAY-129）：注音方式与范围；只标正文。
+  /// 生僻字注音：注音方式与范围；只标正文。
   Widget rareCharControls() => foldRow(
     field: 'rare_char_ruby',
     label: '生僻字注音',

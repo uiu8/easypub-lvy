@@ -25,7 +25,7 @@ def main():
         offsets = [nav.u32(data, 78 + 8 * i) for i in range(nav.u16(data, 76))] + [len(data)]
         records = [data[a:b] for a, b in zip(offsets, offsets[1:])]
         text = nav.text_flow(records, 0).decode('utf-8')
-        # 新书的书信默认信笺格线（V81），类名多一个 letter-ruled。
+        # 新书的书信默认信笺格线，类名多一个 letter-ruled。
         assert len(re.findall(r'class="letter-block(?: letter-ruled)?"', text)) == 1
         assert len(re.findall(r'\bsystem-line\b', text)) == 1
         print(json.dumps({'mobi7_letter_blocks': 1, 'mobi7_system_lines': 1}))
@@ -51,7 +51,7 @@ def main():
     nodes = [n for p in pages for n in p.iter()]
     letter = [n for n in nodes if 'letter-block' in n.get('class', '').split()]
     if not letter and args.roundtrip and not args.invalidated:
-        # 书信带两个类（V81 信笺格线：letter-block letter-ruled）时，Bokai 回读把它们合成一个类（如 s7），
+        # 书信带两个类（信笺格线：letter-block letter-ruled）时，Bokai 回读把它们合成一个类（如 s7），
         # 按内容找最内层的书信块，下面仍按它实际的 CSS 检查对齐与边距。
         letter = [n for n in nodes if n.tag.endswith('}div') and '亲爱的友人：' in ''.join(n.itertext()) and '林舟' in ''.join(n.itertext())][-1:]
     assert len(letter) == (0 if args.invalidated else 1), [n.attrib for n in letter]

@@ -30,7 +30,7 @@ Future<(PrototypeState, LegacyLibraryAdapter, String)> _fixture() async {
 void _book(String folder, String name) =>
     File('$folder/$name.txt').writeAsStringSync('第一章 开始\n$name的正文。\n');
 
-/// V26：文件夹自动入库（FOLD-080–082）。
+/// 文件夹自动入库。
 void main() {
   setUpAll(
     () async => RustLib.init(

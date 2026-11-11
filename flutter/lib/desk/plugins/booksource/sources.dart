@@ -92,7 +92,7 @@ extension _BookSourceSources on _BookSourcePageState {
           for (final f in ui)
             if (f is Map && f['type'] != 'button') Map<String, dynamic>.from(f),
         ];
-        // 登录界面按钮（阅读 loginUi 的 button，LIB-216）：按序号让插件执行书源自带的动作。
+        // 登录界面按钮（阅读 loginUi 的 button）：按序号让插件执行书源自带的动作。
         final buttons = [
           for (final (i, f) in ui.indexed)
             if (f is Map && f['type'] == 'button') (i, '${f['name']}'),
@@ -233,7 +233,7 @@ extension _BookSourceSources on _BookSourcePageState {
           final info = {
             for (final e in controllers.entries) e.key: e.value.text,
           };
-          // 书源脚本登录时可能用 upLoginData() 取回本次填写的字段（LIB-212）。
+          // 书源脚本登录时可能用 upLoginData 取回本次填写的字段。
           loginDrafts[id] = info;
           await _enableInteractions(id);
           final r =
@@ -368,7 +368,7 @@ extension _BookSourceSources on _BookSourcePageState {
     });
   }
 
-  /// 重置书源运行状态（V108，LIB-289）：丢掉本次运行里书源脚本存的设备、临时 Cookie 与缓存，
+  /// 重置书源运行状态：丢掉本次运行里书源脚本存的设备、临时 Cookie 与缓存，
   /// 下次使用时重新生成；登录信息保留。番茄 APP 书源搜不到、目录取不到时用它换一批新设备。
   Future<void> _resetSource(Map<String, dynamic> s) async {
     try {
@@ -382,7 +382,7 @@ extension _BookSourceSources on _BookSourcePageState {
     }
   }
 
-  /// “去验证”（LIB-279）：单源交互式校验，插件自己弹出验证网页；每次用新的 checkId。
+  /// “去验证”：单源交互式校验，插件自己弹出验证网页；每次用新的 checkId。
   /// 结果作为新的一次校验写入，关窗或取消记为验证未完成，不把旧失败改成通过。
   Future<void> _verifySource(String id) async {
     if (verifying.containsKey(id) || api == null) return;
@@ -450,7 +450,7 @@ extension _BookSourceSources on _BookSourcePageState {
     }
   }
 
-  /// 书源详情里的“最近一次校验”（V102）：结果、停在哪步、原因、校验词、兼容提示。
+  /// 书源详情里的“最近一次校验”：结果、停在哪步、原因、校验词、兼容提示。
   Widget _lastCheck(Map<String, dynamic> source) {
     final d = context.desk;
     final check = source['check'] as Map?;
@@ -1148,7 +1148,7 @@ extension _BookSourceSources on _BookSourcePageState {
             ],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              // R1：用图标代替“▾”文字（缺字时会显示成方框）。
+              // 用图标代替“▾”文字（缺字时会显示成方框）。
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1182,7 +1182,7 @@ extension _BookSourceSources on _BookSourcePageState {
       'content': '正文',
     }[check?['stage']];
     final ms = (check?['ms'] as num?)?.toInt();
-    // 静态告警只是提示（V102 A）：能试跑的书源不再标“不能用”，从说明里分出来单独写。
+    // 静态告警只是提示：能试跑的书源不再标“不能用”，从说明里分出来单独写。
     final warnings = List<String>.from(s['staticWarnings'] as List? ?? []);
     final reasons = List<String>.from(s['reasons'] as List? ?? [])
         .where((r) => s['supported'] != true || !warnings.contains(r))

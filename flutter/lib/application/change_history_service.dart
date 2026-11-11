@@ -37,7 +37,7 @@ class ChangeDetail {
        technical = List.unmodifiable(technical);
   final ChangeRecord record;
 
-  /// 给人看的修改前后；[technical] 是逐字段的原始差异，界面默认折叠（R4-01）。
+  /// 给人看的修改前后；[technical] 是逐字段的原始差异，界面默认折叠。
   final List<ChangedField> fields, technical;
   final String guard;
 }

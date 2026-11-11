@@ -1,4 +1,4 @@
-// 转换前检查（D4-F，V8 按设计重写视图）：分组、逐项选择、提醒确认与阻止弹窗逻辑沿用原实现。
+// 转换前检查（按设计重写视图）：分组、逐项选择、提醒确认与阻止弹窗逻辑沿用原实现。
 import 'package:flutter/material.dart';
 
 import '../dialogs.dart';

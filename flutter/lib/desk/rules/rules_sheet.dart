@@ -1,6 +1,6 @@
-// 识别规则面板（CH-102–133）：左栏规则字段（正则着色、命名组、不支持写法就地提示、预设），
+// 识别规则面板：左栏规则字段（正则着色、命名组、不支持写法就地提示、预设），
 // 右栏单行试匹配记录与全书差异预览。试匹配与全书差异都由 Rust 识别器生成，只读；
-// 应用必须先预览并勾选核对，作为一批写入、可整批撤销。设计：design_review_v37/rules.dart（D2-F）。
+// 应用必须先预览并勾选核对，作为一批写入、可整批撤销。
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -27,7 +27,7 @@ Future<void> showChapterRulesDialog(
   ),
 );
 
-/// 内置的三套常用预设（CH-250）：只覆盖下列字段，其余沿用内置默认；不能改名或删除。
+/// 内置的三套常用预设：只覆盖下列字段，其余沿用内置默认；不能改名或删除。
 /// 填写常规标题正则后内置识别整体停用，所以“第X话”“英文”两套同时给出卷级表达式。
 const commonRulePresets = <String, Map<String, Object>>{
   '常用：第X话 / 第X集': {
@@ -74,7 +74,7 @@ const _helpPresets =
     '载入只会填入左栏，仍需试匹配、核对全书差异后再应用。\n'
     '“常用：”开头的三套是内置预设，不能改名或删除。同名保存会覆盖；最多 64 个。';
 
-/// 识别规则的三种例外（V17，CH-258–260）；留空时不计入规则标识。
+/// 识别规则的三种例外；留空时不计入规则标识。
 const _exceptionFields = [
   'allowed_duplicate_titles',
   'allowed_number_gaps',
@@ -245,7 +245,7 @@ class _RulesSheetState extends State<_RulesSheet> {
   int generation = 0;
   ChapterRulesPreview? preview;
 
-  /// 内置规则说明（CH-248）；读取失败时不显示入口。
+  /// 内置规则说明；读取失败时不显示入口。
   Map<String, dynamic>? builtinInfo;
 
   /// 已应用规则的标识：对可编辑字段内容取摘要，用来分辨检查结果对应哪一套规则。
@@ -342,7 +342,7 @@ class _RulesSheetState extends State<_RulesSheet> {
     super.dispose();
   }
 
-  // ---------------------------------------------------------------- 逻辑（与 V3 前逐行对应）
+  // ---------------------------------------------------------------- 逻辑（与前逐行对应）
 
   Future<void> run(Future<void> Function() task) async {
     if (busy) return;
@@ -493,7 +493,7 @@ class _RulesSheetState extends State<_RulesSheet> {
     saveDraft();
   }
 
-  /// 以内置规则为起点（CH-249）：把参考正则填入输入框，仍是未应用草稿。
+  /// 以内置规则为起点：把参考正则填入输入框，仍是未应用草稿。
   void seedFromBuiltin(String key, String pattern) {
     if (key == 'numeric_pattern') rules!['numeric'] = true;
     fields[key]!.text = pattern;
@@ -1495,7 +1495,7 @@ class _RulesSheetState extends State<_RulesSheet> {
   }
 }
 
-/// 内置规则说明（CH-248/249）：内容全部来自 Rust 的只读说明，不在界面里另写一份。
+/// 内置规则说明：内容全部来自 Rust 的只读说明，不在界面里另写一份。
 class _BuiltinRuleDialog extends StatelessWidget {
   const _BuiltinRuleDialog({required this.info, required this.numeric});
   final Map<String, dynamic> info;

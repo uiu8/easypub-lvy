@@ -99,7 +99,7 @@ class V88Api extends v86.FakeApi {
   }
 }
 
-/// V93：书源页的批量、维护等操作收进菜单，先打开菜单再点菜单项。
+/// 书源页的批量、维护等操作收进菜单，先打开菜单再点菜单项。
 Future<void> menu(WidgetTester tester, String key) async {
   await tester.ensureVisible(find.byKey(ValueKey(key)));
   await tester.tap(find.byKey(ValueKey(key)));

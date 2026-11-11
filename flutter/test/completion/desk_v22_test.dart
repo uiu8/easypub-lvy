@@ -14,7 +14,7 @@ import 'package:easypub_desktop/application/crash_log_service.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/settings/settings_page.dart';
 
-/// V22：应用版本与本版更新（SET-066）、本地崩溃日志（SET-067）。
+/// 应用版本与本版更新、本地崩溃日志。
 void main() {
   const notes = '''EasyPub++ · 编辑台版
 说明更新于 2026-10-13；交付包：EasyPub-desk-v22-20261013-win-x64.zip。

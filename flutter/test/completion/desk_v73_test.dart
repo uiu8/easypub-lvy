@@ -49,7 +49,7 @@ Future<void> until(WidgetTester t, bool Function() ready) async {
 String ruby(String c, String py) =>
     '<ruby>$c<rp>（</rp><rt>$py</rt><rp>）</rp></ruby>';
 
-/// V73：生僻字注音（LAY-129）。
+/// 生僻字注音。
 void main() {
   setUpAll(
     () async => RustLib.init(

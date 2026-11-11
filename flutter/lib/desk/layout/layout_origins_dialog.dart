@@ -1,4 +1,4 @@
-// 迁入 desk（layout，V5/V6）：逻辑与布局沿用 V5 前的同名文件；公共弹窗框架样式在 V7 统一。
+// 迁入 desk（layout）：逻辑与布局沿用早先的同名文件；公共弹窗框架样式后来统一。
 import 'package:flutter/material.dart';
 
 import '../../application/layout_service.dart';
@@ -86,7 +86,7 @@ class _LayoutOriginsDialogState extends State<LayoutOriginsDialog> {
     }
   }
 
-  // 编辑台弹窗（R5-03）：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
+  // 编辑台弹窗：统一标题与关闭按钮，Esc 关闭；内容与行为不变。
   @override
   Widget build(BuildContext context) => DeskDialog(
     title: plan == null ? '排版设置来源' : '确认按字段恢复',

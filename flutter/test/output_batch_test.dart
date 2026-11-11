@@ -35,7 +35,7 @@ class StoredBatchState extends BatchState {
   final savedRecords = <Map<String, dynamic>>[];
   @override
   String? get settingsDirectory => enabled ? r'D:\test-settings' : null;
-  // V20：保存任务与批次记录的方法在 OutputStore 上，测试替换它来模拟保存失败。
+  // 保存任务与批次记录的方法在 OutputStore 上，测试替换它来模拟保存失败。
   @override
   OutputStore createOutputs() => _StoredOutputs(this);
 }
@@ -101,11 +101,11 @@ void main() {
             commits++;
             return {'committed': true};
           },
-        )..parallelOverride = 1; // V38：本测试检验逐本时“保存失败即停止后续”。
+        )..parallelOverride = 1; // 本测试检验逐本时“保存失败即停止后续”。
         await batch.previewAll(() {});
         if (failAt == 0) {
           await batch.commitAll(() {});
-          // R6：每本完成后的“进行中”记录合并保存、最多每 10 秒一次，批次结束由最终保存代替。
+          // 每本完成后的“进行中”记录合并保存、最多每 10 秒一次，批次结束由最终保存代替。
           expect(state.savedStates.first, 'running');
           expect(state.savedStates.last, 'complete');
           expect(state.savedStates.length, lessThanOrEqualTo(4));
@@ -113,7 +113,7 @@ void main() {
         } else {
           await expectLater(batch.commitAll(() {}), throwsFormatException);
           // 开始前的记录存不下：一本都不写。进行中的记录存不下：发现失败后不再开始新书
-          // （R6 起不再逐本等保存，失败被发现前已开始的那本仍会完成），结束时报错。
+          // （后来不再逐本等保存，失败被发现前已开始的那本仍会完成），结束时报错。
           expect(commits, failAt == 1 ? 0 : lessThanOrEqualTo(2));
           expect(state.savedStates, isNot(contains('complete')));
         }
@@ -209,7 +209,7 @@ void main() {
         await batch.stop();
         return {'committed': true};
       },
-    )..parallelOverride = 1; // V38：逐本时“停止”跳过尚未开始的书。
+    )..parallelOverride = 1; // 逐本时“停止”跳过尚未开始的书。
     await batch.previewAll(() {});
     state.guards[a] = 'changed';
     await batch.commitAll(() {});
