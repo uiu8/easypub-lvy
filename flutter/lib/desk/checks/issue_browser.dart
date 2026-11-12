@@ -10,6 +10,7 @@ import '../../application/chapter_service.dart';
 import '../../application/rule_catalog_service.dart';
 import '../controls/controls.dart';
 import 'batch_repair_dialog.dart';
+import 'cause_copy.dart';
 import '../chapters/dialogs/body_compare_dialog.dart';
 import 'check_view_state.dart';
 import 'comparison.dart';
@@ -96,6 +97,9 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
 
   int resumeOffset = 0, resumeAnchor = 0;
   String? resumeIssueId;
+
+  /// 右边打开的是一个成片的原因而不是单条问题。
+  ChapterIssueCause? cause;
 
   @override
   void initState() {
@@ -209,6 +213,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
       error = '';
       page = null;
       selected = null;
+      cause = null;
       excerpt = '';
       contextPair = null;
     });
@@ -242,6 +247,15 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
         resumeOffset = next.offset;
         busy = false;
       });
+      // 没有指定要看哪一条时，先看成片的原因：一次能处理掉一大片。
+      final leading = next.causes.where((c) => c.open > 0).firstOrNull;
+      if (preferredId == null && next.offset == 0 && leading != null) {
+        setState(() => cause = leading);
+        resumeIssueId = null;
+        resumeAnchor = 0;
+        rememberView();
+        return;
+      }
       final target =
           next.items.where((issue) => issue.id == preferredId).firstOrNull ??
           next.items.firstOrNull;
@@ -841,7 +855,12 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                       generation,
                     )),
                     initial: page!,
-                    selectedId: selected?.id,
+                    selectedId: cause == null ? selected?.id : null,
+                    selectedCause: cause?.kind,
+                    onCause: (c) => setState(() {
+                      cause = c;
+                      detailOpen = true;
+                    }),
                     enabled: !busy,
                     read: (offset) => widget.session is FilteredChapterSession
                         ? (widget.session as FilteredChapterSession)
@@ -862,6 +881,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
                         page = owner;
                         resumeOffset = owner.offset;
                         detailOpen = true;
+                        cause = null;
                       });
                       locate(issue);
                     },
@@ -942,7 +962,318 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
     );
   }
 
+  /// 成片原因的一次处理：按原因取方案，仍是勾选、合并预览、确认。
+  Future<void> repairCause(
+    ChapterIssueCause c, {
+    bool alternate = false,
+  }) async {
+    final tree = structure;
+    if (tree == null || busy) return;
+    // 只对应一个类别、没有带出别类问题的原因，和“批量修复同类”是同一件事，用同一个弹窗
+    // （漏识别的标题还能整批标成“不是标题”）。
+    final category = c.linked.isEmpty && !alternate ? c.category : null;
+    final issues = page;
+    final reviewer =
+        category != null &&
+            widget.session is BatchIssueReviewSession &&
+            issues != null &&
+            issues.effective
+        ? widget.session as BatchIssueReviewSession
+        : null;
+    final result = await showDialog<({int applied, int marked})>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => category != null
+          ? BatchRepairDialog(
+              session: widget.session,
+              page: tree,
+              category: category,
+              label: chapterIssueCategories[category] ?? causeDialogLabel(c),
+              markNormal: reviewer == null
+                  ? null
+                  : (ids) async {
+                      await reviewer.reviewIssues(
+                        issues!,
+                        ids,
+                        'confirmed_normal',
+                      );
+                    },
+            )
+          : BatchRepairDialog(
+              session: widget.session,
+              page: tree,
+              focus: alternate ? 'cause:${c.kind}-alt:' : c.focus,
+              label: alternate
+                  ? '${causeDialogLabel(c)}（保留后一份）'
+                  : causeDialogLabel(c),
+            ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      busy = true;
+      repairOptions = null;
+      repairPlan = null;
+      comparison = 'evidence';
+    });
+    try {
+      editedHere = true;
+      if (widget.onChanged != null) {
+        await widget.onChanged!();
+      } else if (mounted) {
+        await load(0);
+      }
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          deskSnackBar(
+            content: Text(
+              result.marked > 0
+                  ? '已把 ${result.marked} 项标记为“不是标题”，可在“标记结论”中逐项撤销。'
+                  : '已应用 ${result.applied} 项修改，并已重新检查。',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  /// 整类写“核对无误”：这一类以后不再算待处理，可在“标记结论”里撤销。
+  Future<void> dismissCause(ChapterIssueCause c) async {
+    final snapshot = page, category = c.category;
+    if (snapshot == null || category == null || busy) return;
+    final ticket = ++generation;
+    setState(() {
+      busy = true;
+      error = '';
+    });
+    try {
+      await widget.session.reviewIssue(snapshot, category, 'confirmed_normal');
+      if (!mounted || ticket != generation) return;
+      await load(0);
+    } catch (e) {
+      if (mounted && ticket == generation) {
+        setState(() => error = deskErrorText(e, '核对未完成，请重新检查。'));
+      }
+    } finally {
+      if (mounted && ticket == generation) setState(() => busy = false);
+    }
+  }
+
+  Widget causeDetail(
+    Desk d,
+    ChapterIssueCause c, {
+    required bool showQueueButton,
+    required bool narrow,
+  }) {
+    final (tone, soft) = d.tone(Tone.warn);
+    // 检查页只看不改，但批量处理照样可以（和“批量修复同类”一样）。
+    final canRepair = widget.session is TargetedChapterRepairSession;
+    return Column(
+      key: ValueKey('check-cause-detail-${c.kind}'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    if (showQueueButton)
+                      IconButton(
+                        tooltip: narrow ? '返回问题列表' : '问题列表',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => setState(() {
+                          if (narrow) {
+                            detailOpen = false;
+                          } else {
+                            listOpen = true;
+                          }
+                          rememberView();
+                        }),
+                        icon: Icon(
+                          narrow
+                              ? Icons.arrow_back_rounded
+                              : Icons.format_list_bulleted_rounded,
+                          size: 18,
+                        ),
+                      ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: soft,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text('成片', style: ui(11.5, w: 620, c: tone)),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        causeTitle(c),
+                        key: const ValueKey('cause-title'),
+                        style: ui(15.5, w: 650, c: d.ink),
+                      ),
+                    ),
+                    DeskPill(
+                      Text(causeCount(c), style: ui(11.5, w: 600, c: d.ink2)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 820),
+                  child: Text(
+                    causeBody(c),
+                    style: ui(13, c: d.ink2).copyWith(height: 1.7),
+                  ),
+                ),
+                if (c.samples.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Text('例子', style: ui(12, w: 650, c: d.ink3)),
+                  const SizedBox(height: 6),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: d.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: d.line),
+                    ),
+                    child: Column(
+                      children: [
+                        for (final (i, s) in c.samples.indexed)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 9,
+                            ),
+                            decoration: BoxDecoration(
+                              border: i == 0
+                                  ? null
+                                  : Border(top: BorderSide(color: d.line)),
+                            ),
+                            child: Builder(
+                              builder: (_) {
+                                final (left, right, note) = causeSample(c, s);
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      flex: 5,
+                                      child: Text(
+                                        left,
+                                        style: ui(12.5, c: d.ink),
+                                      ),
+                                    ),
+                                    if (right.isNotEmpty) ...[
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        flex: 5,
+                                        child: Text(
+                                          right,
+                                          style: ui(12.5, c: d.ink),
+                                        ),
+                                      ),
+                                    ],
+                                    if (note.isNotEmpty) ...[
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          note,
+                                          textAlign: TextAlign.right,
+                                          style: ui(12, c: d.ink2),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (c.count > c.samples.length)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        '还有 ${c.count - c.samples.length} 处。点左边这一行末尾的箭头可以逐条看；点下面的按钮可以在预览里逐项勾选。',
+                        style: ui(12, c: d.ink3),
+                      ),
+                    ),
+                ],
+                if (error.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  DeskNote(error, tone: Tone.pen),
+                ],
+              ],
+            ),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: d.line)),
+          ),
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Text('先预览、再确认；只改草稿，可在修改记录里撤销。', style: ui(12, c: d.ink3)),
+              if (c.category != null && c.open > 0)
+                DeskButton(
+                  '不是问题，不再提示',
+                  key: const ValueKey('cause-dismiss'),
+                  tooltip: '把这一类整类标成“核对无误”，可在“标记结论”里撤销',
+                  onPressed: busy ? null : () => dismissCause(c),
+                ),
+              if (c.kind == 'unrecognized' && widget.onNumericHeadings != null)
+                DeskButton(
+                  '识别并统一成“第X章”…',
+                  key: const ValueKey('cause-numeric'),
+                  tooltip: '纯数字开头的标题一次识别，并统一写成“第X章 标题”',
+                  onPressed: busy ? null : widget.onNumericHeadings,
+                ),
+              if (canRepair && c.kind == 'twin' && c.near > 0)
+                DeskButton(
+                  '改为保留后一份…',
+                  key: const ValueKey('cause-alternate'),
+                  tooltip: '只列两份都完整、内容有出入的章节；逐字相同的留哪一份都一样',
+                  onPressed: busy
+                      ? null
+                      : () => repairCause(c, alternate: true),
+                ),
+              if (canRepair)
+                DeskButton(
+                  causeAction(c),
+                  key: const ValueKey('cause-repair'),
+                  primary: true,
+                  icon: Icons.preview_outlined,
+                  onPressed: busy ? null : () => repairCause(c),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget detail(Desk d, {required bool showQueueButton, required bool narrow}) {
+    final current = cause;
+    if (current != null) {
+      return causeDetail(
+        d,
+        current,
+        showQueueButton: showQueueButton,
+        narrow: narrow,
+      );
+    }
     final issue = selected;
     if (issue == null) return const SizedBox.shrink();
     final (tone, toneSoft) = d.tone(issueTone(issue.severity));
@@ -1606,7 +1937,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
           ],
         );
       } else if (narrow) {
-        body = detailOpen && selected != null
+        body = detailOpen && (selected != null || cause != null)
             ? detail(d, showQueueButton: true, narrow: true)
             : queue(d, docked: false);
       } else {

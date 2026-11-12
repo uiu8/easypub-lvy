@@ -329,7 +329,8 @@ void main() {
       ),
     );
     await idle(t);
-    final batch = find.byKey(const ValueKey('batch-repair'));
+    // 6 处漏识别归成一个原因，批量入口在原因的说明里。
+    final batch = find.byKey(const ValueKey('cause-repair'));
     await until(t, () => batch.evaluate().isNotEmpty);
     await t.tap(batch);
     await until(t, () => find.byType(BatchRepairDialog).evaluate().isNotEmpty);

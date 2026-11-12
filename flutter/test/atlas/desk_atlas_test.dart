@@ -54,6 +54,8 @@ String _sampleBook() {
     if (c == 13) continue; // 跳号
     final title = c == 30 ? '第三十章 风起' : '第$c章 ${c.isEven ? '风起' : '云涌'}$c';
     b.writeln(title);
+    // 第 33 至 36 章：正文开头又写了一遍标题（少了空格），检查页有一个成片的原因可看。
+    if (c >= 33 && c <= 36) b.writeln('　　${title.replaceAll(' ', '')}');
     for (var p = 0; p < 6; p++) {
       b.writeln('　　这是第$c章的第${p + 1}段正文，山路很长，海风很轻，行人一步一步走向远方。');
       // 第 1 章第 3 段后放一条单行提示、一个面板和一联诗句，排版小预览能看到分类样式。
@@ -324,6 +326,21 @@ void main() {
           final repairClose = find.byKey(const ValueKey('batch-close'));
           if (repairClose.evaluate().isNotEmpty) {
             await t.tap(repairClose);
+            await settle(t);
+          }
+          await cleanupShot('checks-cause', '检查页 · 成片原因', () async {
+            router.go('/books/$book/checks');
+            await settle(t, max: 300);
+            await t.tap(find.byKey(const ValueKey('checks-tab-chapters')));
+            await settle(t, max: 300);
+          });
+          await cleanupShot('checks-cause-repair', '检查页 · 按原因批量修复', () async {
+            await t.tap(find.byKey(const ValueKey('cause-repair')));
+            await settle(t, max: 300);
+          });
+          final causeClose = find.byKey(const ValueKey('batch-close'));
+          if (causeClose.evaluate().isNotEmpty) {
+            await t.tap(causeClose);
             await settle(t);
           }
           // 检查进度：从检查页到章节问题页签，再到文本清理页和书籍信息页。

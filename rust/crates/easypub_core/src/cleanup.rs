@@ -503,7 +503,19 @@ fn prepare_context_cancellable(
             continue;
         }
         for row in &mut rows {
-            row.eligible = row.in_scope && compiled.scope.includes(row.structural);
+            // 标题里“第一章 绯红”的空格是分隔，不是扫描留下的；范围是“全部”时这条规则
+            // 不碰标题行，只有明确选了“仅标题”才处理。
+            row.eligible = row.in_scope
+                && compiled.scope.includes(row.structural)
+                && !(row.structural
+                    && compiled.scope == crate::cleanup_rules::Scope::All
+                    && matches!(compiled.rule, Rule::OcrHanSpaces))
+                // 这三条会把整行去掉；标题行归章节结构管，不在这里删。
+                && !(row.structural
+                    && matches!(
+                        compiled.rule,
+                        Rule::InlinePromotion | Rule::AuthorNotes | Rule::PagingResidue
+                    ));
         }
         if matches!(compiled.rule, Rule::RemoveDuplicateTitles) {
             for (&line, &previous) in duplicate_targets {
@@ -1002,6 +1014,18 @@ fn prepare_context_cancellable(
                     previous_blank = blank;
                     remove
                 }
+                // 去掉推广语后整行没有内容了，就连这一行一起去掉。
+                Rule::InlinePromotion | Rule::AuthorNotes | Rule::PagingResidue
+                    if !row.text.contains(['\r', '\n']) =>
+                {
+                    let cleaned = compiled.transform(&row.text, &mut matches_left)?;
+                    if cleaned.is_empty() && !row.text.trim().is_empty() {
+                        true
+                    } else {
+                        after = Some(cleaned);
+                        false
+                    }
+                }
                 Rule::TrimTrailingSpaces if !row.text.contains(['\r', '\n']) => {
                     let trimmed = row.text.trim_end_matches([' ', '\t']);
                     if trimmed.len() != row.text.len() {
@@ -1061,6 +1085,11 @@ fn prepare_context_cancellable(
                     Rule::RemoveAdLines | Rule::NoticeLines { .. } => "selected_notice",
                     Rule::RemoveDuplicateTitles => "duplicate_title",
                     Rule::CollapseBlankLines => "duplicate_blank",
+                    Rule::InlinePromotion | Rule::AuthorNotes | Rule::PagingResidue
+                        if remove =>
+                    {
+                        "promotion_line"
+                    }
                     _ => "ordered_rules",
                 }
             };
@@ -2412,6 +2441,62 @@ mod tests {
         value["pipeline"] = json!([{"kind":"literal_replace","find":"正文","replace":"本章完"},{"kind":"remove_ad_lines"}]);
         value["remove_lines"] = json!([5]);
         assert!(prepare(&source, &value.to_string()).is_err());
+    }
+    #[test]
+    fn default_rules_keep_indent_heading_gap_and_field_lines() {
+        let text = |raw: &str, rule: Value| {
+            let source = SourceSnapshot::from_utf8(raw.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+            let request = json!({"kind":"cleanup","pipeline":[configured(rule,true,"all")]});
+            prepare(&source, &request.to_string()).unwrap().text
+        };
+        // 段首的全角空格是缩进，不动；行内的照旧改成半角。
+        assert_eq!(
+            text("第一章 甲\n　　正文　Ａ１\n", json!({"kind":"normalize_width"})),
+            "第一章 甲\n　　正文 A1\n"
+        );
+        // 标题里章号和题目之间的空格保留；正文里汉字间的空格照旧去掉。
+        assert_eq!(
+            text("第一章 绯红\n　　正 文\n", json!({"kind":"ocr_han_spaces"})),
+            "第一章 绯红\n　　正文\n"
+        );
+        // 开头的“书名：”“作者：”各自成行；普通的句中换行照旧接上。
+        let wraps = json!({"kind":"join_hard_wraps","mode":"chinese","min_chars":12});
+        assert_eq!(
+            text("书名：一本名字足够长的小说的书名\n作者：某某\n", wraps.clone()),
+            "书名：一本名字足够长的小说的书名\n作者：某某\n"
+        );
+        assert_eq!(
+            text("这一行的字数足够多而且停在句子的中间\n下一行接着写完。\n", wraps),
+            "这一行的字数足够多而且停在句子的中间下一行接着写完。\n"
+        );
+    }
+    #[test]
+    fn promotion_rules_cut_the_pitch_drop_empty_lines_and_leave_headings_to_structure() {
+        let raw = "第一章 入山（求月票）\n　　他姓林。(未完待续。手机用户请到某站阅读。)\n　　（本章未完，请翻页）\n　　ps：求推荐票~\n第二章 门后\n　　正文。\n";
+        let text = |rules: Value| {
+            let source = SourceSnapshot::from_utf8(raw.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+            let request = json!({"kind":"cleanup","pipeline":rules});
+            prepare(&source, &request.to_string()).unwrap()
+        };
+        let all = text(json!([
+            configured(json!({"kind":"inline_promotion"}), true, "all"),
+            configured(json!({"kind":"paging_residue"}), true, "all"),
+            configured(json!({"kind":"author_notes"}), true, "all"),
+            configured(json!({"kind":"heading_tail"}), true, "headings"),
+        ]));
+        // 推广语只去掉那一段；整行都是残留的，连行一起去掉；标题只去尾巴。
+        assert_eq!(
+            all.text,
+            "第一章 入山\n　　他姓林。\n第二章 门后\n　　正文。\n"
+        );
+        assert_eq!(all.changes.len(), 4);
+        assert!(all.changes.iter().filter(|c| c.after.is_none()).all(|c| c.reason == "promotion_line"));
+        // 标题行不归这三条管：“（求月票）”留给“标题尾巴”。
+        let body_only = text(json!([
+            configured(json!({"kind":"inline_promotion"}), true, "all"),
+            configured(json!({"kind":"author_notes"}), true, "all"),
+        ]));
+        assert!(body_only.text.starts_with("第一章 入山（求月票）\n"));
     }
     #[test]
     fn regex_captures_width_punctuation_and_encoding_roundtrip() {

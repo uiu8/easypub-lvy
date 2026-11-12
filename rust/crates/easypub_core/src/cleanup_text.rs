@@ -59,7 +59,20 @@ pub(crate) fn joinable(left: &str, right: &str, min_chars: u32, mode: &JoinMode)
         && !crate::recognition::is_default_heading(right)
         && !crate::cleanup::candidate(left)
         && !crate::cleanup::candidate(right)
+        && !field_line(left)
+        && !field_line(right)
         && mode.can_join(left, right, min_chars)
+}
+/// “书名：……”“作者：……”这类开头几个字后跟冒号的信息行，各自成行，不和上下行接起来。
+/// 带引号的是对白（他说：“……”），不算。
+fn field_line(line: &str) -> bool {
+    let line = line.trim();
+    !line.contains(['“', '”', '"'])
+        && line
+            .chars()
+            .take(7)
+            .skip(1)
+            .any(|c| matches!(c, '：' | ':' | '='))
 }
 pub(crate) fn join_inside(text: &str, min_chars: u32, mode: &JoinMode) -> String {
     let parts = lines(text, false);

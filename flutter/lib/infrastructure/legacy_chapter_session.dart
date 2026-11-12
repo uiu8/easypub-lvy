@@ -161,8 +161,42 @@ class LegacyChapterSession
       unfilteredTotal: diagnostic['review_unfiltered_total'] as int?,
       categoryFilter: category,
       severityFilter: severity,
+      causes: [
+        for (final c
+            in (diagnostic['review_causes'] as List? ?? const []).cast<Map>())
+          if ((c['total'] as int? ?? 0) > 0) _cause(c),
+      ],
+      plainCategoryCounts: Map<String, int>.from(
+        diagnostic['review_plain_categories'] ?? {},
+      ),
     );
   }
+
+  static ChapterIssueCause _cause(Map c) => ChapterIssueCause(
+    kind: c['kind'] as String,
+    count: c['count'] as int,
+    total: c['total'] as int,
+    open: c['open'] as int? ?? 0,
+    near: c['near'] as int? ?? 0,
+    runs: c['runs'] as int? ?? 0,
+    linked: Map<String, int>.from(c['linked'] as Map? ?? const {}),
+    category: c['category'] as String?,
+    samples: [
+      for (final v in (c['samples'] as List? ?? const []).cast<Map>())
+        ChapterIssueCauseSample(
+          title: v['title'] as String? ?? '',
+          heading: v['heading'] as String?,
+          beforeTitle: v['before_title'] as String?,
+          afterTitle: v['after_title'] as String?,
+          lines: (v['source_lines'] as List? ?? const []).cast<int>(),
+          differingLines: v['differing_lines'] as int?,
+          subtype: v['subtype'] as String?,
+          number: v['number'] as int?,
+          expected: v['expected'] as int?,
+          unit: v['unit'] as String?,
+        ),
+    ],
+  );
 
   static ChapterIssue _effectiveIssue(Map v) => ChapterIssue(
     v['id'] as String,
@@ -182,6 +216,7 @@ class LegacyChapterSession
     nodeOffset: v['node_offset'] as int?,
     hasSuggestion: v['has_suggestion'] == true,
     reportOffset: v['report_offset'] as int?,
+    cause: v['cause'] as String?,
     anchors: [
       for (final a in (v['anchors'] as List? ?? const []).cast<Map>())
         ChapterIssueAnchor(
@@ -1398,6 +1433,8 @@ class _EffectiveIssues extends ChapterIssuePage {
     super.filteredCategoryCounts,
     super.reviewed,
     super.unfilteredTotal,
+    super.causes,
+    super.plainCategoryCounts,
   }) : super(effective: true);
   final LegacyChapterSession owner;
   final ChapterPage structure;

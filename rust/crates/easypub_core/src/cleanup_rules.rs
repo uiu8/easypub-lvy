@@ -38,6 +38,14 @@ pub enum Rule {
     RemoveInvisible,
     OcrHanSpaces,
     OcrEllipsis,
+    /// 正文后面的推广语：只去掉推广的那一段，正文留下。
+    InlinePromotion,
+    /// 标题末尾括号里的求票、更新、字数说明。
+    HeadingTail,
+    /// 章末整行的作者留言、求票、更新预告。
+    AuthorNotes,
+    /// 分页留下的残行和“(第2/2页)”。
+    PagingResidue,
     ChineseVariant {
         direction: ChineseVariantDirection,
         dictionary_version: String,
@@ -428,6 +436,10 @@ impl Compiled {
             )).collect()),
             Rule::OcrHanSpaces => Ok(crate::cleanup_ocr::remove_han_spaces(input)),
             Rule::OcrEllipsis => Ok(crate::cleanup_ocr::normalize_ellipsis(input)),
+            Rule::InlinePromotion => Ok(crate::cleanup_promo::strip_inline(input)),
+            Rule::HeadingTail => Ok(crate::cleanup_promo::strip_heading_tail(input)),
+            Rule::AuthorNotes => Ok(crate::cleanup_promo::strip_author_note(input)),
+            Rule::PagingResidue => Ok(crate::cleanup_promo::strip_paging(input)),
             Rule::ChineseVariant { direction, .. } => {
                 // Bound a single physical line before entering the dictionary engine.
                 if input.len() > 65536 {
@@ -443,10 +455,15 @@ impl Compiled {
                 Ok(output)
             }
             Rule::TrimTrailingSpaces => Ok(input.trim_end_matches([' ', '\t']).to_owned()),
+            // 行首的空白是段落缩进，原样保留；只改行内的全角空格、字母和数字。
             Rule::NormalizeWidth => Ok(input
                 .chars()
-                .map(|c| match c {
-                    '\u{3000}' => ' ',
+                .scan(true, |leading, c| {
+                    *leading &= matches!(c, ' ' | '\t' | '\u{3000}');
+                    Some((*leading, c))
+                })
+                .map(|(leading, c)| match c {
+                    '\u{3000}' if !leading => ' ',
                     '\u{ff10}'..='\u{ff19}' | '\u{ff21}'..='\u{ff3a}' | '\u{ff41}'..='\u{ff5a}' => {
                         char::from_u32(c as u32 - 0xfee0).unwrap()
                     }

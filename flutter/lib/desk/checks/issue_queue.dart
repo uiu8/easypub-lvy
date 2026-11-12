@@ -2,11 +2,14 @@
 // 条目显示级别色点、标题、类型与行号；已有结论的条目变淡并标出结论，待核对为默认不另标。
 // 按“要做的事”分组：Rust 已按 认全 → 去重 → 归位 排序，分组位置由各类别计数推出；
 // 组头可折叠，折叠只影响显示，不改变分页读取。
+// 成片的原因排在最前：一个原因一行，默认收起；点这一行在右边看说明和一次处理的办法，
+// 点行尾的箭头展开它名下的问题。
 import 'package:flutter/material.dart';
 
 import '../../application/chapter_service.dart';
 import '../tokens.dart';
 import '../widgets.dart';
+import 'cause_copy.dart';
 
 Tone issueTone(String severity) => switch (severity) {
   'error' => Tone.pen,
@@ -21,8 +24,14 @@ class IssueResultList extends StatefulWidget {
     required this.read,
     required this.onSelect,
     this.selectedId,
+    this.selectedCause,
+    this.onCause,
     this.enabled = true,
   });
+
+  /// 当前在右边打开的原因（[ChapterIssueCause.kind]）。
+  final String? selectedCause;
+  final void Function(ChapterIssueCause cause)? onCause;
   final ChapterIssuePage initial;
   final Future<ChapterIssuePage> Function(int offset) read;
   final void Function(ChapterIssuePage page, ChapterIssue issue) onSelect;
@@ -33,27 +42,44 @@ class IssueResultList extends StatefulWidget {
 }
 
 /// 一组连续的问题：[start] 为该组第一项在结果中的序号。
+/// [cause] 不为空时这一组是一个成片的原因，[group] 从 100 起编。
 class _Segment {
-  const _Segment(this.group, this.start, this.count);
+  const _Segment(this.group, this.start, this.count, [this.cause]);
   final int group, start, count;
+  final ChapterIssueCause? cause;
 }
 
 class _IssueResultListState extends State<IssueResultList> {
   final pages = <int, ChapterIssuePage>{};
   final pending = <int>{}, failed = <int>{};
   final scroll = ScrollController();
-  final collapsed = <int>{};
   late final List<_Segment> segments = _segments(widget.initial);
 
+  /// 原因默认收起。
+  late final collapsed = <int>{
+    for (final s in segments)
+      if (s.cause != null) s.group,
+  };
+
   /// 由当前筛选结果的类别计数推出分组；与总数对不上时不分组（按原列表显示）。
+  /// 有成片的原因时，它们名下的问题排在最前，各占一组；其余问题按类别计数分组。
   static List<_Segment> _segments(ChapterIssuePage page) {
     final counts = List.filled(chapterIssueGroups.length, 0);
-    for (final e in page.filteredCategoryCounts.entries) {
+    final causes = page.causes;
+    final plain = causes.isEmpty
+        ? page.filteredCategoryCounts
+        : page.plainCategoryCounts;
+    for (final e in plain.entries) {
       counts[chapterIssueGroupOf(e.key)] += e.value;
     }
-    if (counts.fold(0, (a, b) => a + b) != page.total) return const [];
+    final caused = causes.fold(0, (a, c) => a + c.total);
+    if (counts.fold(0, (a, b) => a + b) + caused != page.total) return const [];
     final result = <_Segment>[];
     var start = 0;
+    for (var i = 0; i < causes.length; i++) {
+      result.add(_Segment(100 + i, start, causes[i].total, causes[i]));
+      start += causes[i].total;
+    }
     for (var g = 0; g < counts.length; g++) {
       if (counts[g] == 0) continue;
       result.add(_Segment(g, start, counts[g]));
@@ -81,6 +107,8 @@ class _IssueResultListState extends State<IssueResultList> {
   double get extent => 58 * MediaQuery.textScalerOf(context).scale(1);
   double get headerExtent => 34 * MediaQuery.textScalerOf(context).scale(1);
 
+  double headerOf(_Segment s) => s.cause == null ? headerExtent : extent + 4;
+
   int get flatCount => segments.isEmpty
       ? widget.initial.total
       : segments.fold(
@@ -106,7 +134,7 @@ class _IssueResultListState extends State<IssueResultList> {
     if (segments.isEmpty) return index * extent;
     var pixels = 0.0;
     for (final s in segments) {
-      pixels += headerExtent;
+      pixels += headerOf(s);
       if (index < s.start + s.count) {
         return collapsed.contains(s.group)
             ? pixels
@@ -119,8 +147,21 @@ class _IssueResultListState extends State<IssueResultList> {
 
   Widget header(Desk d, int group) {
     final s = segments.firstWhere((s) => s.group == group);
-    final (name, detail) = chapterIssueGroups[group];
     final open = !collapsed.contains(group);
+    final cause = s.cause;
+    if (cause != null) {
+      return _CauseRow(
+        key: ValueKey('check-cause-${cause.kind}'),
+        cause: cause,
+        open: open,
+        selected: widget.selectedCause == cause.kind,
+        onTap: widget.enabled ? () => widget.onCause?.call(cause) : null,
+        onToggle: () => setState(() {
+          if (!collapsed.remove(group)) collapsed.add(group);
+        }),
+      );
+    }
+    final (name, detail) = chapterIssueGroups[group];
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 2),
       child: DeskGroupBanner(
@@ -172,7 +213,11 @@ class _IssueResultListState extends State<IssueResultList> {
           itemCount: flatCount,
           itemExtentBuilder: (flat, _) {
             if (flat >= flatCount) return null;
-            return entryAt(flat).$2 == null ? headerExtent : extent;
+            final (group, entry) = entryAt(flat);
+            if (entry != null) return extent;
+            return group == null
+                ? headerExtent
+                : headerOf(segments.firstWhere((s) => s.group == group));
           },
           itemBuilder: (_, flat) {
             final (group, entry) = entryAt(flat);
@@ -214,6 +259,104 @@ class _IssueResultListState extends State<IssueResultList> {
   void dispose() {
     scroll.dispose();
     super.dispose();
+  }
+}
+
+/// 一个成片的原因：标题、一句提示、数量；行尾箭头展开名下的问题。
+class _CauseRow extends StatelessWidget {
+  const _CauseRow({
+    super.key,
+    required this.cause,
+    required this.open,
+    required this.selected,
+    required this.onTap,
+    required this.onToggle,
+  });
+  final ChapterIssueCause cause;
+  final bool open, selected;
+  final VoidCallback? onTap;
+  final VoidCallback onToggle;
+  @override
+  Widget build(BuildContext context) {
+    final d = context.desk;
+    final (tone, soft) = d.tone(Tone.warn);
+    final done = cause.open == 0;
+    return Padding(
+      padding: const EdgeInsets.only(top: 3, bottom: 1),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: selected ? d.surface : soft.withValues(alpha: .45),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: selected ? d.shadow1 : null,
+          ),
+          child: Opacity(
+            opacity: done ? .62 : 1,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 7, 2, 7),
+              child: Row(
+                children: [
+                  DeskStripe(done ? d.line : tone, height: 36),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                causeTitle(cause),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: ui(12.5, w: 650, c: d.ink),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            DeskPill(
+                              Text(
+                                causeCount(cause),
+                                style: ui(10.5, w: 600, c: d.ink2),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          done
+                              ? '${cause.total} 条都已有结论'
+                              : '${cause.total} 条问题 · ${causeHint(cause)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: ui(11.5, c: d.ink2),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: open
+                        ? '收起这 ${cause.total} 条'
+                        : '展开这 ${cause.total} 条',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onToggle,
+                    icon: Icon(
+                      open
+                          ? Icons.expand_more_rounded
+                          : Icons.chevron_right_rounded,
+                      size: 18,
+                      color: d.ink2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

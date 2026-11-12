@@ -73,6 +73,11 @@ pub(crate) fn fallback(kind: &str) -> Option<Value> {
         "chinese_variant" => Some(
             json!({"kind":kind,"direction":"t2s","dictionary_version":cleanup_rules::DICTIONARY_VERSION}),
         ),
+        // 网文下载残留四条没有可调的内容，直接按默认加入；“标题尾巴”只管标题。
+        "heading_tail" => Some(
+            json!({"kind":"configured","enabled":true,"scope":"headings","rule":{"kind":kind}}),
+        ),
+        "inline_promotion" | "author_notes" | "paging_residue" => Some(json!({"kind":kind})),
         _ => None,
     }
 }

@@ -12,9 +12,9 @@ fn safe_pair(book: &EffectiveBook, previous: &Node, node: &Node) -> bool {
         && previous.depth == node.depth
         && previous.parent_id == node.parent_id
         && previous.include_toc == node.include_toc
-        && previous.title == node.title
+        && crate::recognition::same_title(&previous.title, &node.title)
         && previous.end == node.start
-        && book.text[previous.body_start..node.start].trim().is_empty()
+        && crate::recognition::trivial_gap(&book.text[previous.body_start..node.start])
 }
 
 pub fn target<'a>(book: &'a EffectiveBook, entry_id: &str) -> Result<&'a Node, ApiError> {
@@ -89,6 +89,51 @@ pub fn candidates_for(book: &EffectiveBook, focus: Option<&str>) -> Value {
                 "after":format!("排除本章第{}—{}行；保留第{}行开始的完整副本",occurrence.start_line,occurrence.end_line,kept.start_line),
                 "truncated":book.text[n.start..n.end].chars().count()>2000,"recommended":n.title.trim()==group.title.trim(),
                 "actions":[{"kind":"exclude_duplicate_chapter","entry_id":n.entry_id,"kept_id":kept.entry_id}]}));
+        }
+    }
+    // 近似重复：两个方向都给方案。排除后一份的是默认方案；排除前一份的标成备选，
+    // 只有用户明确选“保留另一份”时才用。
+    for pair in crate::duplicate_blocks::find_near(&view).expect("bounded effective headings") {
+        let node = |id: &str| book.tree.nodes.iter().find(|n| n.entry_id == id);
+        let (Some(first), Some(second)) = (node(&pair.first.entry_id), node(&pair.second.entry_id))
+        else {
+            continue;
+        };
+        let leaf = |n: &Node| {
+            n.role == Role::Chapter
+                && !book
+                    .tree
+                    .nodes
+                    .iter()
+                    .any(|child| child.parent_id.as_deref() == Some(n.entry_id.as_str()))
+        };
+        if !leaf(first) || !leaf(second) {
+            continue;
+        }
+        // 截断的一份只能排除短的；两份完整的才有“保留另一份”的备选。
+        let directions = if pair.drop_first {
+            vec![(first, second, &pair.first, false)]
+        } else if pair.partial {
+            vec![(second, first, &pair.second, false)]
+        } else {
+            vec![
+                (second, first, &pair.second, false),
+                (first, second, &pair.first, true),
+            ]
+        };
+        for (drop, keep, drop_span, alternate) in directions {
+            let id = format!("duplicate-content:{}", drop.entry_id);
+            if items.iter().any(|item| item["finding_id"] == id.as_str()) {
+                continue;
+            }
+            items.push(json!({"finding_id":id,"entry_id":drop.entry_id,
+                "title":format!("保留“{}”，排除“{}”及正文",keep.title,drop.title),
+                "line":drop.source_line,"kept_line":keep.source_line,
+                "before":book.text[drop.start..drop.end].chars().take(2000).collect::<String>(),
+                "after":format!("排除本章第{}—{}行；保留第{}行开始的那一份",drop_span.start_line,drop_span.end_line,keep.source_line),
+                "truncated":book.text[drop.start..drop.end].chars().count()>2000,
+                "recommended":false,"alternate":alternate,
+                "actions":[{"kind":"exclude_duplicate_chapter","entry_id":drop.entry_id,"kept_id":keep.entry_id}]}));
         }
     }
     let diagnostic: Value = serde_json::from_str(
@@ -183,7 +228,28 @@ pub fn candidates_for(book: &EffectiveBook, focus: Option<&str>) -> Value {
                 "actions":[{"kind":"rename","entry_id":n.entry_id,"title":format!("第{}",n.title)}]}));
         }
     }
-    if let Some(id) = focus {
+    // 备选方案（近似重复里“保留另一份”）只在指名要时给，平时不出现。
+    let alternates = focus == Some("cause:twin-alt:");
+    items.retain(|p| (p["alternate"] == true) == alternates);
+    // 按成片的原因取：和检查报告里的原因一一对应。
+    let cause = focus
+        .and_then(|id| id.strip_prefix("cause:"))
+        .map(|k| k.trim_end_matches(':'));
+    if let Some(kind) = cause {
+        items.retain(|p| {
+            let id = p["finding_id"].as_str().unwrap_or("");
+            match kind {
+                "twin" | "twin-alt" => id.starts_with("duplicate-content:"),
+                "unrecognized" => id.starts_with("unrecognized-heading:"),
+                "echo" => id.starts_with("duplicate-title:"),
+                "prose" => id.starts_with("prose-heading:"),
+                "no-prefix" => id.starts_with("missing-heading-prefix:"),
+                "misnumbered" => p["misnumbered"] == true,
+                _ => false,
+            }
+        });
+    }
+    if let Some(id) = focus.filter(|_| cause.is_none()) {
         items.retain(|p| {
             let ids = std::iter::once(&p["finding_id"])
                 .chain(p["also_for"].as_array().into_iter().flatten());
@@ -193,7 +259,8 @@ pub fn candidates_for(book: &EffectiveBook, focus: Option<&str>) -> Value {
         });
     }
     let total = items.len();
-    items.truncate(if focus == Some("unrecognized-heading:") {
+    // 按类别整批取（成片的原因一次处理）时放宽到 1000 条；全书或单条照旧 100 条。
+    items.truncate(if focus.is_some_and(|id| id.ends_with(':')) {
         1000
     } else {
         100
@@ -364,7 +431,7 @@ fn misnumbered_proposals(
         items.push(json!({"finding_id":first,"also_for":rest,"entry_id":node.entry_id,
             "title":format!("把章号改成第{}{}（前一章“{}”，后一章“{}”）",m.expected,m.unit,m.previous.title,m.next.title),
             "line":node.source_line,"kept_line":node.source_line,"before":node.title,"after":title,
-            "truncated":false,"recommended":m.duplicated,
+            "truncated":false,"recommended":m.duplicated,"misnumbered":true,
             "actions":[{"kind":"rename","entry_id":node.entry_id,"title":title}]}));
     }
 }
@@ -404,6 +471,72 @@ mod tests {
         source::{RULE_ID, SourceSnapshot},
         structure::Structure,
     };
+
+    #[test]
+    fn a_cause_is_repaired_in_one_pass_with_the_same_result_as_step_by_step() {
+        let body = |tag: &str| {
+            (0..8)
+                .map(|i| format!("　　{tag}的第{i}段正文，写得足够长才算有分量的一行。\n"))
+                .collect::<String>()
+        };
+        // 四章各存了两遍：后一份换了编号，其中一份多一行推广语。
+        let mut text = String::new();
+        for (n, tag) in ["甲", "乙", "丙", "丁"].into_iter().enumerate() {
+            text.push_str(&format!("第{}章 {tag}篇\n{}\n", 501 + n, body(tag)));
+            text.push_str(&format!("第{}章 {tag}篇\n{}", 20 + n, body(tag)));
+            if n == 1 {
+                text.push_str("　　请搜索本站，更新最快的小说站点就是这里！\n");
+            }
+            text.push('\n');
+        }
+        let source =
+            SourceSnapshot::from_utf8(text.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+        let book = compose(&source, &Structure::new(&source), None).unwrap();
+        // 平时不给备选；按原因取时只给默认方向，指名要备选时只给备选。
+        assert_eq!(candidates_for(&book, None)["total"], 4);
+        let proposals = candidates_for(&book, Some("cause:twin:"));
+        assert_eq!(proposals["total"], 4);
+        assert_eq!(candidates_for(&book, Some("cause:twin-alt:"))["total"], 4);
+        let request = |proposals: &Value| Request {
+            base_id: effective_edit::base_id(&book),
+            actions: proposals["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|v| serde_json::from_value::<Vec<Action>>(v["actions"].clone()).unwrap())
+                .collect(),
+        };
+        for focus in ["cause:twin:", "cause:twin-alt:"] {
+            let request = request(&candidates_for(&book, Some(focus)));
+            effective_edit::MERGED_RUNS.with(|runs| runs.set(0));
+            let (merged, evidence) = effective_edit::apply(book.clone(), &request).unwrap();
+            assert_eq!(effective_edit::MERGED_RUNS.with(|runs| runs.get()), 1);
+            assert_eq!(evidence.len(), 4);
+            let (stepwise, _) = effective_edit::apply_stepwise(book.clone(), &request).unwrap();
+            assert_eq!(merged.text, stepwise.text);
+            assert_eq!(
+                serde_json::to_value(&merged.tree.nodes).unwrap(),
+                serde_json::to_value(&stepwise.tree.nodes).unwrap()
+            );
+            assert_eq!(
+                merged.source_to_output_lines,
+                stepwise.source_to_output_lines
+            );
+            // 留下的是指定的那一套编号，重复的全没了。
+            let kept = if focus.ends_with("alt:") {
+                "第20章 甲篇"
+            } else {
+                "第501章 甲篇"
+            };
+            assert_eq!(merged.tree.nodes.len(), 4);
+            assert_eq!(merged.tree.nodes[0].title, kept);
+            assert_eq!(candidates_for(&merged, Some("cause:twin:"))["total"], 0);
+        }
+        // 同一章排除两次不是能合并的情形：退回逐个应用，由它报错。
+        let mut twice = request(&proposals);
+        twice.actions.push(twice.actions[0].clone());
+        assert!(effective_edit::apply(book.clone(), &twice).is_err());
+    }
 
     #[test]
     fn numeric_run_is_found_even_with_an_unnumbered_bonus_chapter() {

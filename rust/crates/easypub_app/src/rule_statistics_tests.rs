@@ -31,7 +31,7 @@ fn catalog_covers_handoff_and_statistics_match_engines_without_mutation() {
     for (prefix, expected) in [
         ("chapter.recognize.", 12),
         ("check.", 12),
-        ("cleanup.", 21),
+        ("cleanup.", 25),
         ("layout.scene.", 27),
         ("layout.manual_block.", 6),
         ("layout.manual_note.", 2),

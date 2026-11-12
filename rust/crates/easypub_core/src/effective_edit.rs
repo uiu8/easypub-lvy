@@ -226,6 +226,20 @@ fn replay_range(
 ) -> Result<EffectiveBook, ApiError> {
     let actions = &request.actions;
     while index < to {
+        let run = manual_run_end(actions, index).min(to);
+        if run > index + 1
+            && let Some((next, stages)) = merged_manual(&book, &actions[index..run])
+        {
+            #[cfg(test)]
+            MERGED_RUNS.with(|runs| runs.set(runs.get() + 1));
+            let lines = stable_lines(&book, &next);
+            book = adopt_identity(&mut book, next, &lines)?;
+            for (action, stage) in actions[index..run].iter().zip(stages) {
+                evidence.push(step_evidence(action, stage));
+            }
+            index = run;
+            continue;
+        }
         let end = crate::effective_batch::run_end(actions, index).min(to);
         if end > index + 1
             && let Some(merged) = crate::effective_batch::apply(&book, &actions[index..end])
@@ -244,6 +258,138 @@ fn replay_range(
         index += 1;
     }
     Ok(book)
+}
+
+/// 连续的“排除重复章节”或连续的“改标题”能一次算完的最后位置（不含）。
+/// 一次最多 500 个，和手工批量的上限一致。
+fn manual_run_end(actions: &[Action], start: usize) -> usize {
+    let same = |a: &Action| {
+        matches!(
+            (&actions[start], a),
+            (
+                Action::ExcludeDuplicateChapter { .. },
+                Action::ExcludeDuplicateChapter { .. }
+            ) | (Action::Rename { .. }, Action::Rename { .. })
+        )
+    };
+    let mut end = start + 1;
+    while end < actions.len() && end - start < 500 && same(&actions[end]) {
+        end += 1;
+    }
+    end
+}
+
+/// 一批互不相干的“排除重复章节”或“改标题”一次算完。
+///
+/// 逐个来时每个动作都要重算整本书，三百多章的整段重复要几十秒。这些动作各改各的章，
+/// 位置都按这一批之前的书稿算，一次投影就得到同样的书稿、结构和行映射（见对照测试）。
+/// 逐条证据不同：整批的证据挂在第一个动作上，其余只标明并入了这一批。
+/// 有任何一步不是最简单的情形（同一章出现两次、要保留的那份已经被排除）就返回 `None`，
+/// 交给逐步重放，报错也由它给出。
+fn merged_manual(book: &EffectiveBook, actions: &[Action]) -> Option<(EffectiveBook, Vec<Value>)> {
+    let source = SourceSnapshot::from_text(book.text.clone(), RULE_ID).ok()?;
+    let mut structure = Structure::new(&source);
+    structure.overrides = book
+        .tree
+        .nodes
+        .iter()
+        .map(|n| Override {
+            source_line: n.source_line,
+            role: n.role.clone(),
+            depth: n.depth,
+            include_toc: n.include_toc,
+        })
+        .collect();
+    let known = book
+        .tree
+        .nodes
+        .iter()
+        .map(|n| n.source_line)
+        .collect::<BTreeSet<_>>();
+    for n in Structure::new(&source).tree(&source).ok()?.nodes {
+        if !known.contains(&n.source_line) {
+            structure.overrides.push(Override {
+                source_line: n.source_line,
+                role: Role::Body,
+                depth: 0,
+                include_toc: false,
+            });
+        }
+    }
+    let nodes: BTreeMap<&str, &crate::structure::Node> = book
+        .tree
+        .nodes
+        .iter()
+        .map(|n| (n.entry_id.as_str(), n))
+        .collect();
+    if nodes.len() != book.tree.nodes.len() {
+        return None;
+    }
+    let mut touched = BTreeSet::new();
+    let mut selected = Vec::with_capacity(actions.len());
+    let mut renamed = Vec::new();
+    for action in actions {
+        match action {
+            Action::ExcludeDuplicateChapter { entry_id, kept_id } => {
+                let (node, kept) = (nodes.get(entry_id.as_str())?, nodes.get(kept_id.as_str())?);
+                if !touched.insert(entry_id.as_str())
+                    || touched.contains(kept_id.as_str())
+                    || kept.entry_id == node.entry_id
+                    || kept.role != Role::Chapter
+                    || node.role != Role::Chapter
+                    || book.text[node.body_start..node.end].trim().is_empty()
+                    || (book.text[kept.start..kept.end] != book.text[node.start..node.end]
+                        && !crate::duplicate_blocks::similar(
+                            &book.text[kept.body_start..kept.end],
+                            &book.text[node.body_start..node.end],
+                        ))
+                {
+                    return None;
+                }
+                let last = source
+                    .decoded_line_ranges()
+                    .partition_point(|(start, _)| *start < node.end)
+                    as u32;
+                selected.push(
+                    json!({"kind":"exclude_lines","source_line":node.source_line,"end_line":last}),
+                );
+            }
+            Action::Rename { entry_id, title } => {
+                let node = nodes.get(entry_id.as_str())?;
+                if !touched.insert(entry_id.as_str()) {
+                    return None;
+                }
+                selected.push(
+                    json!({"kind":"rename_title","source_line":node.source_line,"title":title}),
+                );
+                renamed.push(node.source_line);
+            }
+            _ => return None,
+        }
+    }
+    let plan = manual_edit::prepare_with_structure(
+        &source,
+        &json!({"kind":"manual_batch","actions":selected}).to_string(),
+        Some(&structure),
+    )
+    .ok()?;
+    let projection = plan.projection(&source).ok()?;
+    let mut next = compose_projection(&source, &structure, projection).ok()?;
+    next.tree.recognition_rules = book.tree.recognition_rules.clone();
+    next.tree.recognition_decisions = book.tree.recognition_decisions.clone();
+    if book.tree.recognition_rules.is_some() {
+        let original = original_lines(book);
+        for line in renamed {
+            if let Some(&line) = original.get(&line) {
+                next.tree.recognition_decisions.insert(line, true);
+            }
+        }
+    }
+    let mut whole = serde_json::from_slice::<Value>(&plan.evidence(&source)).ok()?;
+    whole["merged_actions"] = json!(actions.len());
+    let mut stages = vec![whole];
+    stages.resize(actions.len(), json!({"merged_into_previous":true}));
+    Some((next, stages))
 }
 
 fn step_evidence(action: &Action, stage: Value) -> Value {
@@ -652,7 +798,11 @@ fn apply_step(
                         || kept.role != Role::Chapter
                         || node.role != Role::Chapter
                         || book.text[node.body_start..node.end].trim().is_empty()
-                        || book.text[kept.start..kept.end] != book.text[node.start..node.end]
+                        || (book.text[kept.start..kept.end] != book.text[node.start..node.end]
+                            && !crate::duplicate_blocks::similar(
+                                &book.text[kept.body_start..kept.end],
+                                &book.text[node.body_start..node.end],
+                            ))
                     {
                         return Err(invalid());
                     }

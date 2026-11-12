@@ -8,8 +8,17 @@ import '../tokens.dart';
 
 /// 一条内置规则：[rule] 是加入时的默认设置（rule 部分）。
 class BuiltinCleanupRule {
-  const BuiltinCleanupRule(this.id, this.label, this.detail, this.rule);
+  const BuiltinCleanupRule(
+    this.id,
+    this.label,
+    this.detail,
+    this.rule, {
+    this.scope = 'all',
+  });
   final String id, label, detail;
+
+  /// 加入时的作用范围；“标题尾巴”只管标题。
+  final String scope;
   final Map<String, dynamic> rule;
   String get kind => rule['kind'] as String;
 
@@ -28,7 +37,7 @@ class BuiltinCleanupRule {
     'kind': 'configured',
     'enabled': true,
     'name': label,
-    'scope': 'all',
+    'scope': scope,
     'rule': Map<String, dynamic>.of(rule),
   };
 }
@@ -52,9 +61,26 @@ const builtinCleanupGroups = <(String, List<BuiltinCleanupRule>)>[
     ],
   ),
   (
+    '网文下载残留',
+    [
+      BuiltinCleanupRule('promo', '行内推广语', '正文后面的“未完待续”“请搜索”等，只删那一段', {
+        'kind': 'inline_promotion',
+      }),
+      BuiltinCleanupRule('tail', '标题尾巴', '标题末尾括号里的求票、加更、字数说明', {
+        'kind': 'heading_tail',
+      }, scope: 'headings'),
+      BuiltinCleanupRule('authornotes', '章末留言与求票', '整行的 ps、求票、更新预告、“未完待续”', {
+        'kind': 'author_notes',
+      }),
+      BuiltinCleanupRule('paging', '分页残留', '“本章未完，请翻页”“(第2/2页)”“本章完”', {
+        'kind': 'paging_residue',
+      }),
+    ],
+  ),
+  (
     '标点与字符',
     [
-      BuiltinCleanupRule('width', '全角字母与数字', '全角 ＡＢＣ１２３ 改为半角', {
+      BuiltinCleanupRule('width', '全角字母与数字', '全角 ＡＢＣ１２３ 改为半角；段首缩进不动', {
         'kind': 'normalize_width',
       }),
       BuiltinCleanupRule('compat', '兼容标点', '统一形近、兼容区的标点', {

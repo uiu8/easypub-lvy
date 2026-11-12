@@ -194,7 +194,7 @@ pub fn catalog() -> Value {
         (
             "normalize_width",
             "全角字母与数字",
-            "将全角字母、数字和空格转为半角。",
+            "将全角字母、数字和行内的全角空格转为半角；段首缩进保留。",
             false,
         ),
         (
@@ -255,6 +255,30 @@ pub fn catalog() -> Value {
             "repeated_headers",
             "重复页眉与页码",
             "列出页眉和页码候选，需逐项确认。",
+            false,
+        ),
+        (
+            "inline_promotion",
+            "行内推广语",
+            "去掉正文后面的推广语，只删推广的那一段。",
+            false,
+        ),
+        (
+            "heading_tail",
+            "标题尾巴",
+            "去掉标题末尾括号里的求票、加更、字数说明。",
+            false,
+        ),
+        (
+            "author_notes",
+            "章末留言与求票",
+            "去掉整行的作者留言、求票和更新预告。",
+            false,
+        ),
+        (
+            "paging_residue",
+            "分页残留",
+            "去掉分页留下的残行和页码标记。",
             false,
         ),
         (

@@ -123,7 +123,7 @@ fn same_heading(previous: &Node, node: &Node) -> bool {
         && previous.depth == node.depth
         && previous.parent_id == node.parent_id
         && previous.include_toc == node.include_toc
-        && previous.title == node.title
+        && crate::recognition::same_title(&previous.title, &node.title)
 }
 
 /// 已删除的标题行（原坐标，起点、字节数、行号）。
@@ -164,7 +164,7 @@ fn remove_duplicate_headings(book: &EffectiveBook, actions: &[Action]) -> Option
     let mut blank: Vec<bool> = chain
         .nodes
         .iter()
-        .map(|n| book.text[n.body_start..n.end].trim().is_empty())
+        .map(|n| crate::recognition::trivial_gap(&book.text[n.body_start..n.end]))
         .collect();
     let mut removed = Removed(Vec::with_capacity(actions.len()));
     let mut stages = Vec::with_capacity(actions.len());

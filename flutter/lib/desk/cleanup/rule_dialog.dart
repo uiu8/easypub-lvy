@@ -207,9 +207,18 @@ class _CleanupRuleDialogState extends State<CleanupRuleDialog> {
     'chapter_numbers',
     'chinese_punctuation',
     'notice_lines',
+    'inline_promotion',
+    'heading_tail',
+    'author_notes',
+    'paging_residue',
   ];
   List<String> get scopes => ['remove_ad_lines', 'notice_lines'].contains(kind)
       ? ['all']
+      : kind == 'heading_tail'
+      ? ['headings', 'all']
+      // 这三条会去掉整行，标题行归章节结构管，所以没有“仅标题”。
+      : ['inline_promotion', 'author_notes', 'paging_residue'].contains(kind)
+      ? ['all', 'body']
       : kind == 'remove_duplicate_titles'
       ? ['all', 'headings']
       : ['join_hard_wraps', 'multiline_regex_replace'].contains(kind)

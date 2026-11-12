@@ -75,8 +75,10 @@ void main() {
       ),
     );
     await settle();
-    expect(find.byKey(const ValueKey('batch-repair')), findsOneWidget);
-    await t.tap(find.byKey(const ValueKey('batch-repair')));
+    // 30 处漏识别归成一个原因，打开时先看到它；一次处理的按钮开的是同一个批量修复弹窗。
+    expect(find.text('有标题没被认成章节'), findsWidgets);
+    expect(find.byKey(const ValueKey('cause-repair')), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('cause-repair')));
     await settle();
     expect(find.byType(BatchRepairDialog), findsOneWidget);
     expect(find.text('批量修复：漏识别的标题'), findsOneWidget);

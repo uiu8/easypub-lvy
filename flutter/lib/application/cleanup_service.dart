@@ -22,6 +22,10 @@ const cleanupLabels = <String, String>{
   'chapter_numbers': '章节编号样式',
   'chinese_punctuation': '中文标点',
   'notice_lines': '广告匹配与保留条件',
+  'inline_promotion': '行内推广语',
+  'heading_tail': '标题尾巴',
+  'author_notes': '章末留言与求票',
+  'paging_residue': '分页残留',
 };
 
 Map<String, dynamic> cleanupBase(Map<String, dynamic> step) =>

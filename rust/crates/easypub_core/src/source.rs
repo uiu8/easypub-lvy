@@ -441,16 +441,21 @@ impl SourceSnapshot {
                 .sum::<usize>()
     }
 
+    /// 后一个标题是不是紧跟着把前一个又写了一遍（中间没有实际内容）。
+    fn echoes(&self, a: &ChapterSummary, b: &ChapterSummary) -> bool {
+        crate::recognition::same_title(&a.title, &b.title)
+            && self.lines[a.source_line as usize..b.source_line as usize - 1]
+                .iter()
+                .all(|&(start, end)| crate::recognition::trivial_gap(&self.text[start..end]))
+    }
+
     fn duplicate_title_lines(&self) -> BTreeSet<u32> {
         self.chapters
             .windows(2)
             .filter_map(|pair| {
                 let a = &pair[0];
                 let b = &pair[1];
-                (a.title == b.title
-                    && self.lines[a.source_line as usize..b.source_line as usize - 1]
-                        .iter()
-                        .all(|&(start, end)| self.text[start..end].trim().is_empty())
+                (self.echoes(a, b)
                     // 用户在识别规则中允许重复的标题不报。
                     && !self
                         .rules
@@ -482,7 +487,8 @@ impl SourceSnapshot {
         let duplicate = self.duplicate_title_lines().len() as u32;
         let repeated = crate::duplicate_blocks::find(self)
             .map(|g| g.iter().map(|g| g.occurrences.len() - 1).sum::<usize>())
-            .unwrap_or(0);
+            .unwrap_or(0)
+            + crate::duplicate_blocks::find_near(self).map_or(0, |pairs| pairs.len());
         if repeated > 0 {
             findings.push(serde_json::json!({"id":"duplicate-content","title":"整章内容完全重复（需选择保留）","severity":"warning","count":repeated}));
         }
@@ -497,7 +503,8 @@ impl SourceSnapshot {
                             || self.lines[a.source_line as usize..b.source_line as usize - 1]
                                 .iter()
                                 .any(|&(start, end)| !self.text[start..end].trim().is_empty()))
-                        && !crate::chapter_rules::ordered_parts(&a.title, &b.title)))
+                        && !crate::chapter_rules::ordered_parts(&a.title, &b.title)
+                        && !self.echoes(a, b)))
                     && self.check_enabled(
                         "number-reset",
                         Some(if new == old {
@@ -565,6 +572,13 @@ impl SourceSnapshot {
     pub fn prose_headings(&self) -> Vec<&ChapterSummary> {
         let dominant =
             crate::recognition::dominant_marker(self.chapters.iter().map(|c| c.title.as_str()));
+        let flush = self.headings_flush_left();
+        // 紧跟着重复上一个标题的行归“重复标题”（整行去掉），不算正文句子。
+        let echoes = if flush {
+            self.duplicate_title_lines()
+        } else {
+            BTreeSet::new()
+        };
         self.chapters
             .iter()
             .filter(|c| {
@@ -573,11 +587,29 @@ impl SourceSnapshot {
                         .rules
                         .as_ref()
                         .is_some_and(|rules| rules.explicitly_matches(&c.title))
-                    && crate::recognition::is_prose_heading(&c.title, dominant)
+                    && (crate::recognition::is_prose_heading(&c.title, dominant)
+                        || flush
+                            && self.indented(c)
+                            && !echoes.contains(&c.source_line)
+                            && crate::recognition::reads_like_prose(&c.title))
                     || self.diagnostic_decisions.get(&c.source_line) != Some(&true)
                         && self.is_non_heading(&c.title)
             })
             .collect()
+    }
+
+    /// 这一行在原文里是不是缩进的（行首有空白）。
+    fn indented(&self, chapter: &ChapterSummary) -> bool {
+        self.lines
+            .get(chapter.source_line as usize - 1)
+            .is_some_and(|&(start, end)| self.text[start..end].starts_with(char::is_whitespace))
+    }
+
+    /// 这本书的标题是不是都顶格：至少 20 个标题、九成以上行首没有空白。
+    /// 正文都缩进、标题都顶格的书里，缩进的“第几章……”多半是一句话，不是标题。
+    fn headings_flush_left(&self) -> bool {
+        let indented = self.chapters.iter().filter(|c| self.indented(c)).count();
+        self.chapters.len() >= 20 && indented * 10 <= self.chapters.len()
     }
 
     /// 非标题词库命中；没有识别规则时为 false。
@@ -1068,6 +1100,34 @@ impl SourceSnapshot {
                         "evidence":"已逐字比较标题和整章正文，内容相同。请对照后选择保留；不会默认删除后面的章节。"}));
                 }
             }
+            for pair in crate::duplicate_blocks::find_near(self)? {
+                let (drop, keep) = if pair.drop_first {
+                    (&pair.first, &pair.second)
+                } else {
+                    (&pair.second, &pair.first)
+                };
+                let id = format!("duplicate-content:{}", drop.entry_id);
+                if actions.iter().any(|a| a["id"] == id.as_str()) {
+                    continue;
+                }
+                actions.push(serde_json::json!({"id":id,"finding_id":"duplicate-content",
+                    "subtype":if pair.partial {"partial"} else {"near"},
+                    "title":if pair.partial {
+                        format!("一章只是另一章的一部分：{} / {}",pair.first_title,pair.second_title)
+                    } else {
+                        format!("两章正文几乎相同：{} / {}",pair.first_title,pair.second_title)
+                    },
+                    "entry_id":drop.entry_id,"kept_entry_id":keep.entry_id,"drop_line":drop.start_line,
+                    "source_lines":[pair.first.start_line,pair.second.start_line],
+                    "before_title":pair.first_title,"after_title":pair.second_title,
+                    "differing_lines":pair.differing_lines,"auto_applicable":false,"requires_confirmation":true,
+                    "evidence":if pair.partial {
+                        format!("第 {} 行开始的这一章，正文的行几乎都在第 {} 行开始的那一章里，只是短了一截。多半是同一章存了两遍、其中一份没下全。保留完整的那一份。",drop.start_line,keep.start_line)
+                    } else {
+                        format!("两章正文逐行比较，{}。多半是同一章存了两遍、其中一份带推广语或换了编号。请对照后选择保留哪一份。",
+                            if pair.differing_lines == 0 {"正文各行都相同，只有标题不同".to_owned()} else {format!("只有 {} 行不同",pair.differing_lines)})
+                    }}));
+            }
         }
         if selected.iter().any(|id| id == "prose-heading") {
             for chapter in self.prose_headings() {
@@ -1099,7 +1159,8 @@ impl SourceSnapshot {
                                         .any(|&(start, end)| {
                                             !self.text[start..end].trim().is_empty()
                                         }))
-                                && !crate::chapter_rules::ordered_parts(&a.title, &b.title))
+                                && !crate::chapter_rules::ordered_parts(&a.title, &b.title)
+                                && !self.echoes(a, b))
                     })
             {
                 let unit = self.chapter_number(&chapter.title).unwrap().1;
@@ -1184,7 +1245,7 @@ impl SourceSnapshot {
                     "requires_confirmation": true,
                     "source_lines": [chapter.source_line],
                     "entry_id": chapter.entry_id,
-                    "evidence": format!("与上一条标题完全相同：{}", title),
+                    "evidence": format!("与上一条标题重复：{}", title),
                 }));
             }
         }

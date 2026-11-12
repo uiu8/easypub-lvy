@@ -291,7 +291,11 @@ class ChapterIssue {
     this.bodyOffset = 0,
     this.focusLine,
     this.reportOffset,
+    this.cause,
   });
+
+  /// 归到哪个成片的原因（[ChapterIssueCause.kind]）；单独的问题为 null。
+  final String? cause;
 
   /// 在全部问题里的位置，不受筛选影响；进度条用它和列表对上。
   final int? reportOffset;
@@ -376,8 +380,16 @@ class ChapterIssuePage {
     this.filteredCategoryCounts = const {},
     this.reviewed,
     this.unfilteredTotal,
+    this.causes = const [],
+    this.plainCategoryCounts = const {},
   });
   final Map<String, int> categoryCounts, severityCounts;
+
+  /// 成片出现的原因，按报告里的先后；它们名下的问题排在结果最前面。有筛选时为空。
+  final List<ChapterIssueCause> causes;
+
+  /// 不属于任何原因的问题，各类别的数量。
+  final Map<String, int> plainCategoryCounts;
 
   /// 当前筛选结果中各类别的数量；结果按 [chapterIssueGroupOf] 分组排序。
   final Map<String, int> filteredCategoryCounts;
@@ -388,6 +400,66 @@ class ChapterIssuePage {
   final List<ChapterIssue> items;
   final int total, offset;
   final bool effective;
+}
+
+/// 原因名下的一个例子。
+class ChapterIssueCauseSample {
+  const ChapterIssueCauseSample({
+    required this.title,
+    this.heading,
+    this.beforeTitle,
+    this.afterTitle,
+    this.lines = const [],
+    this.differingLines,
+    this.subtype,
+    this.number,
+    this.expected,
+    this.unit,
+  });
+  final String title;
+
+  /// 问题所在标题行的原文。
+  final String? heading;
+  final String? beforeTitle, afterTitle, subtype, unit;
+  final List<int> lines;
+  final int? differingLines, number, expected;
+}
+
+/// 成片出现的原因：同一件事在书里重复了很多次，合成一条来说明和处理。
+/// [kind]：twin 同一章存了两遍；misnumbered 章号写错；echo 正文开头重复标题；
+/// prose 正文句子当了标题；no-prefix 标题没带“第”。
+class ChapterIssueCause {
+  const ChapterIssueCause({
+    required this.kind,
+    required this.count,
+    required this.total,
+    required this.open,
+    this.near = 0,
+    this.runs = 0,
+    this.linked = const {},
+    this.category,
+    this.samples = const [],
+  });
+  final String kind;
+
+  /// 这件事发生了几次（几章、几处）。
+  final int count;
+
+  /// 名下的问题条数与其中还没下结论的条数；含它带出来的跳号、回退。
+  final int total, open;
+
+  /// twin：不是逐字相同的章数；连成几段。
+  final int near, runs;
+
+  /// 带出来的别类问题：类别 → 条数。
+  final Map<String, int> linked;
+
+  /// 只对应一个问题类别时给出，用来整类下结论。
+  final String? category;
+  final List<ChapterIssueCauseSample> samples;
+
+  /// 向会话取这一原因的修复方案时用的标识。
+  String get focus => 'cause:$kind:';
 }
 
 /// 问题分组（与 Rust `review::issue_group` 一致）：认全 → 去重 → 归位。

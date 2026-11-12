@@ -499,6 +499,78 @@ fn is_heading_separator(ch: char) -> bool {
     ch.is_whitespace() || matches!(ch, ':' | '：' | '、' | '（' | '(' | '【' | '[')
 }
 
+/// 读起来是一句话而不是标题：整行包在括号里，或以句号、问号、叹号、省略号、后引号结尾，
+/// 或章号后面是带逗号的长句。只在“这本书的标题都顶格、这一行却缩进”时才用它判断。
+pub fn reads_like_prose(title: &str) -> bool {
+    let text = title.trim();
+    let Some(last) = text.chars().last() else {
+        return false;
+    };
+    let bracketed =
+        text.starts_with(['（', '(', '【', '[']) && matches!(last, '）' | ')' | '】' | ']');
+    let sentence_end = matches!(
+        last,
+        '。' | '！' | '!' | '？' | '?' | '…' | '”' | '’' | '；'
+    );
+    let long_clause = text.contains(['，', ',']) && text.chars().count() > 20;
+    bracketed || sentence_end || long_clause
+}
+
+/// 标题去掉全部空白后的文字。
+fn compact_title(title: &str) -> String {
+    title.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+/// 去掉标题末尾的一个括号段：“第五十三章喜庆（上架求票）”→“第五十三章喜庆”。没有就原样返回。
+fn without_tail(title: &str) -> &str {
+    let Some(close) = title.chars().last() else {
+        return title;
+    };
+    let open = match close {
+        '）' => '（',
+        ')' => '(',
+        '】' => '【',
+        ']' => '[',
+        _ => return title,
+    };
+    match title.rfind(open) {
+        Some(index) if index > 0 => &title[..index],
+        _ => title,
+    }
+}
+
+/// 后一个标题是不是把前一个又写了一遍：网文常在正文第一行重复标题，空格和括号里的
+/// 求票、更新说明常被省掉，有时只剩“第二章”。两个都要有章号且相同。
+pub fn same_title(first: &str, second: &str) -> bool {
+    if first == second {
+        return true;
+    }
+    let (Some(a), Some(b)) = (
+        crate::source::numbered_heading(first),
+        crate::source::numbered_heading(second),
+    ) else {
+        return false;
+    };
+    if a != b {
+        return false;
+    }
+    let (first, second) = (compact_title(first), compact_title(second));
+    let bare = without_tail(&first);
+    if second == first || second == bare {
+        return true;
+    }
+    // 只重复了编号：“第二章 碧蓝如腰（上）”后跟“第二章”。
+    second.ends_with(b.1)
+        && second.chars().count() <= 12
+        && bare.starts_with(second.as_str())
+        && bare.len() > second.len()
+}
+
+/// 两个标题之间没有实际内容：只有空白和零星标点（下载留下的“，”这类）。
+pub fn trivial_gap(text: &str) -> bool {
+    !text.chars().any(|c| c.is_alphanumeric())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

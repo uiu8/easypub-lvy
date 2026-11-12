@@ -51,6 +51,7 @@ mod cleanup_duplicates;
 mod cleanup_notice;
 mod cleanup_numbers;
 mod cleanup_ocr;
+mod cleanup_promo;
 mod cleanup_punctuation;
 pub mod cleanup_rules;
 mod cleanup_text;

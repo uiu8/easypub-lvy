@@ -22,9 +22,13 @@ class BatchRepairDialog extends StatefulWidget {
     required this.session,
     this.page,
     this.category,
+    this.focus,
     this.label = '',
     this.markNormal,
   });
+
+  /// 按成片的原因取方案（[ChapterIssueCause.focus]）；给了它就不再按 [category] 取。
+  final String? focus;
   final ChapterSession session;
 
   /// 读取方案用的结构；不给时弹窗自己读。
@@ -65,16 +69,24 @@ class _BatchRepairDialogState extends State<BatchRepairDialog> {
       final prefix = '$category:';
       final session = widget.session;
       final page = widget.page ?? await session.read(0);
-      final result = category != null && session is TargetedChapterRepairSession
+      final focus = widget.focus;
+      final result =
+          (focus != null || category != null) &&
+              session is TargetedChapterRepairSession
           ? await (session as TargetedChapterRepairSession).repairsForIssue(
               page,
-              prefix,
+              focus ?? prefix,
             )
           : await session.repairs(page);
       if (!mounted) return;
       final list =
           result.changes
-              .where((c) => category == null || c.id.startsWith(prefix))
+              .where(
+                (c) =>
+                    focus != null ||
+                    category == null ||
+                    c.id.startsWith(prefix),
+              )
               .toList()
             ..sort((a, b) => a.line.compareTo(b.line));
       setState(() {
@@ -86,7 +98,9 @@ class _BatchRepairDialogState extends State<BatchRepairDialog> {
           ..clear()
           ..addAll(
             list
-                .where((c) => category != null || c.recommended)
+                .where(
+                  (c) => focus != null || category != null || c.recommended,
+                )
                 .map((c) => c.id),
           );
       });
@@ -198,7 +212,7 @@ class _BatchRepairDialogState extends State<BatchRepairDialog> {
     final total = options?.total ?? 0;
     final capped = total > changes.length;
     final reviewing = plan != null;
-    final whole = widget.category == null;
+    final whole = widget.category == null && widget.focus == null;
     final canCopy = widget.session is ChapterCopySession;
     // 全书修复时，其余问题没有自动方案，要到“问题”里逐条看。
     final manual = whole ? (options?.report.total ?? 0) - changes.length : 0;

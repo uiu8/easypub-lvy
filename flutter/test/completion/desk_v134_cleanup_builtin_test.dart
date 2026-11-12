@@ -76,20 +76,31 @@ void main() {
         )
         .map((w) => w.data ?? '')
         .join('|');
+    // 清单比一屏长：简繁两条在下面，要滚过去才看得到。
+    Future<void> scrollList(double dy) async {
+      await t.drag(
+        find.byKey(const ValueKey('cleanup-builtin-rules')),
+        Offset(0, dy),
+      );
+      await t.pump();
+    }
+
     // 试算完：行尾空白 6 处，繁体转简体有改动。
-    await settle(
-      () =>
-          rowText('trim').contains('6 处') &&
-          rowText('s2t').isNotEmpty &&
-          !rowText('s2t').contains('计算中'),
-    );
+    await settle(() => rowText('trim').contains('6 处'));
     expect(rowText('trim'), contains('6 处'));
+    // 网文下载残留的四条排在“常用”后面。
+    for (final id in ['promo', 'tail', 'authornotes', 'paging']) {
+      expect(row(id), findsOneWidget);
+    }
+    await scrollList(-600);
+    await settle(
+      () => rowText('s2t').isNotEmpty && !rowText('s2t').contains('计算中'),
+    );
     expect(rowText('t2s'), contains('处'));
     expect(rowText('s2t'), isNot(contains('计算中')));
     Switch toggle(String id) => t.widget<Switch>(
       find.descendant(of: row(id), matching: find.byType(Switch)),
     );
-    expect(toggle('trim').value, true);
     expect(toggle('t2s').value, false);
 
     await t.tap(row('t2s'));
@@ -99,6 +110,8 @@ void main() {
     await settle();
     expect(toggle('s2t').value, true);
     expect(toggle('t2s').value, false);
+    await scrollList(600);
+    expect(toggle('trim').value, true);
     await t.tap(row('trim'));
     await settle();
     expect(toggle('trim').value, false);
