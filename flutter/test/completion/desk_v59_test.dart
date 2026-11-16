@@ -70,7 +70,16 @@ void main() {
         () => states.add(service.state.value.phase.name),
       );
       final catalog = await service.catalog();
-      expect(catalog, hasLength(113));
+      expect(catalog, hasLength(117));
+      expect(
+        catalog.map((r) => r.id),
+        containsAll([
+          'cleanup.inline_promotion',
+          'cleanup.heading_tail',
+          'cleanup.author_notes',
+          'cleanup.paging_residue',
+        ]),
+      );
       expect(catalog.map((r) => r.id).toSet(), hasLength(catalog.length));
       expect(
         catalog.singleWhere((r) => r.id == 'layout.manual_note').category,
