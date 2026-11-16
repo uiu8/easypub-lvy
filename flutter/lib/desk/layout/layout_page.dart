@@ -860,6 +860,42 @@ class _LayoutPageState extends State<LayoutPage> {
       // 校准点是书内字号 110% 时的正文字号；根字号按此还原，书内 % 字号再在其上缩放。
       'rootPx': lengths.modern ? lengths.baseFont : m.fontPx / (1.1 * scale),
       'unitsVersion': lengths.modern ? 1 : 0,
+      'unitConversions': {
+        for (final key in [
+          'font_size',
+          'line_height',
+          'paragraph_indent',
+          'paragraph_spacing',
+          'margin_top',
+          'margin_bottom',
+          'margin_left',
+          'margin_right',
+        ])
+          key: {
+            for (final unit in [
+              if (key == 'line_height') 'number',
+              '%',
+              'em',
+              'px',
+              'pt',
+            ])
+              unit: lengths.convert(
+                key,
+                (draft[key] as num?)?.toDouble() ?? 0,
+                lengths.unit(
+                  key,
+                  key == 'line_height'
+                      ? 'number'
+                      : key.startsWith('paragraph_')
+                      ? 'em'
+                      : key == 'font_size'
+                      ? '%'
+                      : 'px',
+                ),
+                unit,
+              ),
+          },
+      },
       'linePixels': m.fontPx * m.lineRatio,
       'bookMargins': {
         'left': lengths.margin('left'),

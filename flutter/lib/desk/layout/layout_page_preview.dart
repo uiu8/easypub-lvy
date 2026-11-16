@@ -341,6 +341,8 @@ extension _LayoutPreviewSection on _LayoutPageState {
       for (final e in draft.entries) {
         final value = e.value;
         switch (e.key) {
+          case 'layout_units_version':
+            if (value is num) layoutUnitsVersion = value.toInt();
           case 'text_alignment':
             if (value is String) alignment = value;
           case 'writing_mode':

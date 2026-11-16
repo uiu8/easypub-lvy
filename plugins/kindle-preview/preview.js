@@ -5,8 +5,8 @@
 //   POST api/apply    {values} → 写回本书
 'use strict';
 
-const CONTEXT_KEYS = ['layout_units_version','font_size_unit','line_height_unit','paragraph_indent_unit','paragraph_spacing_unit','paragraph_indent','margin_top','margin_right','margin_bottom','margin_left','margin_top_unit','margin_right_unit','margin_bottom_unit','margin_left_unit'];
-const BOOK_KEYS = ['writing_mode', 'vertical_digits', 'font_size', 'line_height',
+const CONTEXT_KEYS = ['layout_units_version'];
+const BOOK_KEYS = ['font_size_unit', 'line_height_unit', 'paragraph_spacing_unit', 'paragraph_indent', 'paragraph_indent_unit', 'margin_top', 'margin_top_unit', 'margin_bottom', 'margin_bottom_unit', 'margin_left', 'margin_left_unit', 'margin_right', 'margin_right_unit', 'writing_mode', 'vertical_digits', 'font_size', 'line_height',
   'fullwidth_indent', 'paragraph_spacing', 'text_alignment', 'heading_style', 'scene_break_style', 'first_paragraph_style', 'chapter_head_scope', 'chapter_head_width', 'system_block_style', 'verse_block_style', 'note_style',
   // 生僻字注音；章节样式包的开关与卷页边框（只在本书用了样式包时出现）。
   'rare_char_ruby', 'rare_char_scope', 'chapter_style_on', 'chapter_style_volume_frame',
@@ -16,7 +16,7 @@ const BOOK_KEYS = ['writing_mode', 'vertical_digits', 'font_size', 'line_height'
   'chat_block_style', 'letter_block_style', 'inset_font',
   // 场景识别（诏书、论坛楼层与自定义规则）。
   'inset_detect'];
-const NUMBER_KEYS = { font_size: 'float', line_height: 'float', fullwidth_indent: 'int', paragraph_spacing: 'float' };
+const NUMBER_KEYS = { font_size: 'float', line_height: 'float', fullwidth_indent: 'int', paragraph_spacing: 'float', paragraph_indent: 'float', margin_top: 'float', margin_bottom: 'float', margin_left: 'float', margin_right: 'float' };
 const FONTS = {
   publisher: '',
   song: '"SimSun", "NSimSun", "Songti SC", serif',
@@ -103,7 +103,7 @@ function pick(values) {
 }
 
 function dirtyKeys() {
-  return BOOK_KEYS.filter((key) => String(S.draft[key]) !== String(S.saved[key]));
+  return [...BOOK_KEYS, ...CONTEXT_KEYS].filter((key) => String(S.draft[key]) !== String(S.saved[key]));
 }
 
 // ---------------------------------------------------------------- 机身
@@ -924,6 +924,23 @@ function setDraft(key, value) {
   scheduleRender();
 }
 
+async function changeUnit(el) {
+  const key = el.dataset.key.slice(0, -5), target = el.value;
+  const before = JSON.stringify([S.draft, S.device.id, S.reader]);
+  el.disabled = true;
+  try {
+    const metrics = await api('metrics', {
+      device: S.device.id, ...S.reader, serif: !['hei', 'yuan'].includes(S.reader.font), values: S.draft,
+    });
+    if (before !== JSON.stringify([S.draft, S.device.id, S.reader])) return;
+    S.draft[key] = Number(metrics.unitConversions[key][target].toFixed(4));
+    S.draft[el.dataset.key] = target;
+    S.draft.layout_units_version = 1;
+    scheduleRender();
+  } catch (_) { status('单位换算失败，请重试。', true); }
+  finally { el.disabled = false; syncControls(); }
+}
+
 function setupControls() {
   for (const el of document.querySelectorAll('.seg[data-key]')) {
     if (el.dataset.key === 'vertical_digits') el.id = 'aside-digits';
@@ -949,7 +966,10 @@ function setupControls() {
     input.addEventListener('blur', syncControls);
   }
   for (const el of document.querySelectorAll('select[data-key]')) {
-    el.addEventListener('change', () => setDraft(el.dataset.key, el.value));
+    el.addEventListener('change', () => {
+      if (el.dataset.key.endsWith('_unit')) changeUnit(el);
+      else setDraft(el.dataset.key, el.value);
+    });
   }
   const level = async (delta) => {
     S.reader.level = Math.max(1, Math.min(14, S.reader.level + delta));
@@ -1031,6 +1051,7 @@ function setupControls() {
   $('apply').addEventListener('click', async () => {
     const values = {};
     for (const key of dirtyKeys()) values[key] = S.draft[key];
+    if (Object.keys(values).length) values.layout_units_version = S.draft.layout_units_version || 0;
     $('apply').disabled = true;
     status('正在写回…');
     const r = await api('apply', { values });
@@ -1138,9 +1159,6 @@ async function start() {
   S.title = state.title || '';
   document.title = '真机预览 · ' + S.title;
   $('book-title').textContent = '真机预览 · ' + S.title;
-  $('font-unit').textContent = state.values.font_size_unit || state.font_size_unit || '';
-  $('line-unit').textContent = state.values.line_height_unit === 'number' || !state.values.line_height_unit ? '倍' : state.values.line_height_unit;
-  $('paragraph-unit').textContent = state.values.paragraph_spacing_unit || 'em';
   // 章首图的范围与宽度只在本书设了章首图时显示（图片本身在排版页选择）。
   $('chapter-head').hidden = !state.chapter_head;
   showStyle(state);

@@ -216,6 +216,43 @@ void main() {
       // 组件只读 nav 中 epub:type="toc" 的目录；附页在其中以整个文件链接。
       final nav = await get(url.resolve('${base}nav.xhtml'));
       expect(nav, contains('href="$matter"'));
+      // 单位切换复用排版页换算，并将数值、单位和解释版本一起写回。
+      final metrics = await post('metrics', {
+        'device': 'kpw5',
+        'level': 8,
+        'values': {
+          ...stateJson['values'] as Map,
+          'layout_units_version': 1,
+          'font_size': 16,
+          'font_size_unit': 'px',
+        },
+      });
+      expect(
+        metrics['unitConversions']['font_size']['pt'],
+        closeTo(12, 0.0001),
+      );
+      final changed = {
+        'layout_units_version': 1,
+        'font_size': 12,
+        'font_size_unit': 'pt',
+        'line_height': 150,
+        'line_height_unit': '%',
+        'paragraph_spacing': 6,
+        'paragraph_spacing_unit': 'pt',
+        'paragraph_indent': 2,
+        'paragraph_indent_unit': 'em',
+        'margin_left': 3,
+        'margin_left_unit': '%',
+      };
+      final applied = await post('apply', {'values': changed});
+      expect(applied['ok'], true, reason: '${applied['message']}');
+      final after = jsonDecode(await get(url.resolve('api/state'))) as Map;
+      for (final e in changed.entries) {
+        expect(after['values'][e.key], e.value, reason: e.key);
+        expect(state.production.settings(id)[e.key], e.value, reason: e.key);
+      }
+      final rendered = await post('render', {'values': changed});
+      expect(rendered['ok'], true, reason: '${rendered['message']}');
     });
     expect(t.takeException(), isNull);
   });
