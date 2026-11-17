@@ -3,6 +3,7 @@ param(
     [string]$PythonPath = 'D:/software/Malzahar精简版_20260829/runtime/python.exe',
     [string]$KindlingPath,
     [string]$BokaiPath,
+    [string]$CalibrePath,
     # 8 measured fastest on the 32-thread dev machine (11m26s -> 3m31s); 12 was
     # no faster because the longest single file bounds the run. Pass 1 to rerun
     # files one at a time when chasing a suspected cross-file interaction.
@@ -12,7 +13,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $names = @('LOCALAPPDATA','EASYPUB_TEST_DLL','EASYPUB_TEST_PYTHON',
-    'EASYPUB_TEST_KINDLING','EASYPUB_TEST_BOKAI','EASYPUB_MATRIX_ROOT')
+    'EASYPUB_TEST_KINDLING','EASYPUB_TEST_BOKAI','EASYPUB_TEST_CALIBRE','EASYPUB_MATRIX_ROOT')
 $previous = @{}
 foreach ($name in $names) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
 $run = Join-Path $root ('artifacts/completion-regression-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
@@ -22,7 +23,12 @@ try {
     . (Join-Path $PSScriptRoot 'project_env.ps1')
     if (-not $KindlingPath) { $KindlingPath = Join-Path $root 'third_party/kindling/target/release/kindling-cli.exe' }
     if (-not $BokaiPath) { $BokaiPath = Join-Path $root 'artifacts/engines/bokai.exe' }
-    foreach ($path in @($PythonPath, $KindlingPath, $BokaiPath)) {
+    if (-not $CalibrePath) { $CalibrePath = $env:EASYPUB_TEST_CALIBRE }
+    if (-not $CalibrePath) {
+        $CalibrePath = (Get-Command ebook-convert -ErrorAction SilentlyContinue).Source
+    }
+    if (-not $CalibrePath) { throw 'Calibre ebook-convert is required for format roundtrip tests; pass -CalibrePath.' }
+    foreach ($path in @($PythonPath, $KindlingPath, $BokaiPath, $CalibrePath)) {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing test dependency: $path" }
     }
     & cargo build --locked -p easypub_bridge --release *> (Join-Path $run 'build.log')
@@ -39,6 +45,7 @@ try {
     $env:EASYPUB_TEST_PYTHON = (Resolve-Path -LiteralPath $PythonPath).Path
     $env:EASYPUB_TEST_KINDLING = (Resolve-Path -LiteralPath $KindlingPath).Path
     $env:EASYPUB_TEST_BOKAI = (Resolve-Path -LiteralPath $BokaiPath).Path
+    $env:EASYPUB_TEST_CALIBRE = (Resolve-Path -LiteralPath $CalibrePath).Path
     $env:LOCALAPPDATA = Join-Path $run 'localappdata'
     $env:EASYPUB_MATRIX_ROOT = Join-Path $run 'matrix'
     New-Item -ItemType Directory -Path $env:LOCALAPPDATA,$env:EASYPUB_MATRIX_ROOT | Out-Null

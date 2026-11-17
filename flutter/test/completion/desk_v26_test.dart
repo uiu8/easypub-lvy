@@ -127,6 +127,44 @@ void main() {
     }
   });
 
+  test('恢复备份切换监听目录和递归设置，新子目录文件自动入库', () async {
+    final (state, library, root) = await _fixture();
+    try {
+      final oldFolder = '$root/旧目录';
+      final newFolder = '$root/恢复目录';
+      Directory(oldFolder).createSync();
+      Directory('$newFolder/子目录').createSync(recursive: true);
+      await library.savePatch({
+        'auto_import_folders': [newFolder],
+        'import_recursive': true,
+      });
+      await library.syncAutoImport();
+      final backup = await library.createBackup('$root/backups');
+      expect(backup, isNotNull);
+      await library.savePatch({
+        'auto_import_folders': [oldFolder],
+        'import_recursive': false,
+      });
+      await library.syncAutoImport();
+      expect(await library.restoreBackup(backup!), true);
+      await library.syncAutoImport();
+      expect(library.autoImportFolders.value, [newFolder]);
+      expect(state.globalConfiguration['import_recursive'], true);
+      _book(oldFolder, '不应入库');
+      _book('$newFolder/子目录', '恢复后新书');
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (!library.books.value.any((b) => b.title == '恢复后新书') &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      expect(library.books.value.any((b) => b.title == '恢复后新书'), true);
+      expect(library.books.value.any((b) => b.title == '不应入库'), false);
+    } finally {
+      library.dispose();
+      state.dispose();
+    }
+  });
+
   testWidgets('收藏文件夹行的自动入库开关（FOLD-080）', (t) async {
     t.view.physicalSize = const Size(1400, 900);
     t.view.devicePixelRatio = 1;

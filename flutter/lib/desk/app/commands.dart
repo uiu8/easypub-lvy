@@ -2,6 +2,33 @@ part of 'rewrite_app.dart';
 
 /// 命令面板，自 rewrite_app.dart 拆出。
 extension _CommandPalette on _RewriteAppState {
+  Future<bool> importWithFeedback(
+    BuildContext context,
+    List<String> paths,
+  ) async {
+    try {
+      final outcomes = await widget.library.importFiles(paths);
+      if (!mounted || !context.mounted) return false;
+      final failed = outcomes
+          .where((item) => !item.succeeded && !item.skipped)
+          .toList();
+      if (failed.isNotEmpty) {
+        await showDialog<void>(
+          context: context,
+          builder: (_) => ImportFailuresDialog(failed),
+        );
+      }
+      return outcomes.any((item) => item.succeeded);
+    } catch (error) {
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(deskErrorText(error, '导入失败，请检查文件后重试。'))),
+        );
+      }
+      return false;
+    }
+  }
+
   /// 命令面板：页面跳转与既有入口；不包含任何直接修改书稿的应用动作。
   /// 最上方“最近使用”与“当前书”组，输入书名可以切换到那本书。
   Future<void> openCommandPalette([BuildContext? from]) async {
@@ -292,8 +319,8 @@ extension _CommandPalette on _RewriteAppState {
           icon: Icons.file_open_outlined,
           run: () async {
             final paths = await widget.picker.chooseBooks();
-            if (paths.isEmpty || !mounted) return;
-            await widget.library.importFiles(paths);
+            if (paths.isEmpty || !mounted || !context.mounted) return;
+            await importWithFeedback(context, paths);
           },
         ),
         DeskCommand(

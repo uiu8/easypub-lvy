@@ -51,18 +51,19 @@ pub(crate) fn translate(
             return Err("替换引用了匹配前后文、整行或最后捕获组，需单独迁移，未转换");
         }
         if let Some(tail) = rest.strip_prefix('{')
-            && let Some(end) = tail.find('}') {
-                let token = &tail[..end];
-                if let Some(index) = resolve(token) {
-                    output.push_str(&format!("${{{index}}}"));
-                } else {
-                    output.push_str("$${");
-                    output.push_str(token);
-                    output.push('}');
-                }
-                rest = &tail[end + 1..];
-                continue;
+            && let Some(end) = tail.find('}')
+        {
+            let token = &tail[..end];
+            if let Some(index) = resolve(token) {
+                output.push_str(&format!("${{{index}}}"));
+            } else {
+                output.push_str("$${");
+                output.push_str(token);
+                output.push('}');
             }
+            rest = &tail[end + 1..];
+            continue;
+        }
         let end = rest.bytes().take_while(|c| c.is_ascii_digit()).count();
         if end > 0 {
             let token = &rest[..end];

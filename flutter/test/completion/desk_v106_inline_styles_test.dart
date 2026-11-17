@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:easypub_desktop/src/rust/frb_generated.dart';
+import 'package:easypub_desktop/application/inline_style_service.dart';
 import 'package:easypub_desktop/desk/chapters/chapter_view_state.dart';
 import 'package:easypub_desktop/desk/chapters/chapter_workspace.dart';
 import 'package:easypub_desktop/desk/chapters/inline_style_marks.dart';
+import 'package:easypub_desktop/desk/chapters/layout_view.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
@@ -65,6 +67,28 @@ void main() {
       original = source.readAsBytesSync();
       expect((await library.importFiles([source.path])).single.succeeded, true);
       id = state.currentId;
+      final layout = ChapterLayoutView(
+        rules: library,
+        library: library,
+        bookId: id,
+      );
+      try {
+        for (final alignment in {
+          'left': TextAlign.left,
+          'right': TextAlign.right,
+          'center': TextAlign.center,
+          'justify': TextAlign.justify,
+          'start': TextAlign.start,
+        }.entries) {
+          expect(
+            await layout.applySettings({'text_alignment': alignment.key}),
+            isNull,
+          );
+          expect(layout.column().style.align, alignment.value);
+        }
+      } finally {
+        layout.dispose();
+      }
     });
     addTearDown(() {
       library.dispose();
@@ -216,6 +240,16 @@ void main() {
       '确认后关闭对话框',
     );
     expect(styles().single['style'], 'wavy');
+    final linkDraft = await t.runAsync(() async {
+      final session = library.openInlineStyles(id);
+      final view = (await session.list()).items.single;
+      session.dispose();
+      return InlineStyleDraft(
+        view.anchor,
+        'link',
+        href: 'https://example.com/a',
+      );
+    });
 
     // 再打开这一行：已有样式列在下面，改为下划线后删除，都先预览。
     await t.tap(body('己庚辛壬癸。'));
@@ -261,6 +295,48 @@ void main() {
       ),
     );
     await settle();
+    await t.runAsync(() async {
+      final session = library.openInlineStyles(id);
+      await session.confirm(
+        await session.previewAdd(await session.list(), linkDraft!),
+      );
+      session.dispose();
+    });
+    await until(() => counts().contains('文字样式 1'), '手工链接刷新');
+    if (!shown(const ValueKey('inline-style-open'))) {
+      await t.tap(body('己庚辛壬癸。'));
+      await t.pump();
+    }
+    await t.tap(find.byKey(const ValueKey('inline-style-open')));
+    await settle();
+    final linkId = styles().single['id'] as String;
+    var oldUrl = 'https://example.com/a';
+    for (final url in ['https://example.com/b', 'https://example.com/c']) {
+      await until(
+        () => shown(ValueKey(('inline-link-edit', linkId))),
+        '链接编辑入口',
+      );
+      await t.tap(find.byKey(ValueKey(('inline-link-edit', linkId))));
+      await settle();
+      await t.enterText(find.byKey(const ValueKey('inline-link-field')), url);
+      await t.tap(find.byKey(const ValueKey('inline-link-confirm')));
+      await until(
+        () => shown(const ValueKey('inline-style-preview-body')),
+        '网址修改预览',
+      );
+      expect(find.text('网址：$oldUrl → $url'), findsOneWidget);
+      expect(
+        t
+            .widget<DeskButton>(
+              find.byKey(const ValueKey('inline-style-confirm')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await t.tap(find.byKey(const ValueKey('inline-style-confirm')));
+      await until(() => styles().single['href'] == url, '网址修改写入');
+      oldUrl = url;
+    }
     expect(t.takeException(), isNull);
     await t.pumpWidget(const SizedBox());
   });

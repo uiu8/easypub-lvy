@@ -134,6 +134,8 @@ fn runtime(id: &str) -> Result<Arc<SourceRt>, String> {
     let rt = SourceRt::new(source);
     *rt.services.data_dir.lock().unwrap() = Some(st.data.clone());
     *rt.login_info.lock().unwrap() = crate::login_store::load(&st.data, rt.source.id())?;
+    *rt.login_headers.lock().unwrap() =
+        crate::login_store::load(&st.data, &format!("login-headers:{}", rt.source.id()))?;
     st.runtimes.insert(id.to_owned(), rt.clone());
     drop(st);
     // 有登录的书源：把 WebView 里保存的登录状态（Cookie）带回来。
@@ -168,6 +170,16 @@ fn handle(method: &str, params: &Value) -> Result<Value, String> {
             .filter(|rt| rt.source.id() == source.id())
             .map(|rt| rt.login_info.lock().unwrap())
             .collect();
+        let mut headers: Vec<_> = st
+            .runtimes
+            .values()
+            .filter(|rt| rt.source.id() == source.id())
+            .map(|rt| rt.login_headers.lock().unwrap())
+            .collect();
+        crate::login_store::clear(&st.data, &format!("login-headers:{}", source.id()))?;
+        for header in &mut headers {
+            **header = None;
+        }
         crate::login_store::clear(&st.data, source.id())?;
         for info in &mut infos {
             **info = None;

@@ -246,7 +246,7 @@ Future<String> importEpubResources({
   keepMarks: keepMarks,
 );
 
-/// 选编码窗口的数据：每种编码解不解得开、前 30 行（G-114）。
+/// 选编码窗口的数据：每种编码解不解得开、前 30 行。
 Future<String> probeTextEncoding({required String path}) =>
     RustLib.instance.api.crateApiProbeTextEncoding(path: path);
 
@@ -346,7 +346,7 @@ Future<String> layoutPresetFileText({required String requestJson}) =>
 Future<String> inspectLegacySettingsText({required String path}) =>
     RustLib.instance.api.crateApiInspectLegacySettingsText(path: path);
 
-/// V104 存储位置与受控迁移接口。
+/// 存储位置与受控迁移接口。
 Future<String> storageText({required String requestJson}) =>
     RustLib.instance.api.crateApiStorageText(requestJson: requestJson);
 
@@ -386,11 +386,11 @@ Future<FontReport> inspectFont({
   sample: sample,
 );
 
-/// 把文件移到 Windows 回收站（V134）：返回实际移走的路径，不存在的跳过。
+/// 把文件移到 Windows 回收站：返回实际移走的路径，不存在的跳过。
 Future<List<String>> recycleFiles({required List<String> paths}) =>
     RustLib.instance.api.crateApiRecycleFiles(paths: paths);
 
-/// 把无 DRM 的 AZW3 / MOBI 转成新的 EPUB（V131），之后按 EPUB 导入。
+/// 把无 DRM 的 AZW3 / MOBI 转成新的 EPUB，之后按 EPUB 导入。
 Future<void> importKindleEpub({
   required String sourcePath,
   required String outputPath,
@@ -819,12 +819,23 @@ class OutlineNode {
 /// 原文的一行（行号从 1 起）。
 class SourceLine {
   final int lineNumber;
+  final int utf8Column;
+  final bool continues;
   final String text;
 
-  const SourceLine({required this.lineNumber, required this.text});
+  const SourceLine({
+    required this.lineNumber,
+    required this.utf8Column,
+    required this.continues,
+    required this.text,
+  });
 
   @override
-  int get hashCode => lineNumber.hashCode ^ text.hashCode;
+  int get hashCode =>
+      lineNumber.hashCode ^
+      utf8Column.hashCode ^
+      continues.hashCode ^
+      text.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -832,6 +843,8 @@ class SourceLine {
       other is SourceLine &&
           runtimeType == other.runtimeType &&
           lineNumber == other.lineNumber &&
+          utf8Column == other.utf8Column &&
+          continues == other.continues &&
           text == other.text;
 }
 
@@ -841,10 +854,18 @@ class SourceLines {
   /// 下一页从哪一行（0 起）开始；没有了为空。
   final int? nextLineIndex;
 
-  const SourceLines({required this.lines, this.nextLineIndex});
+  /// 与 next_line_index 成对使用，长行续读时不能重置为 0。
+  final int? nextUtf8Column;
+
+  const SourceLines({
+    required this.lines,
+    this.nextLineIndex,
+    this.nextUtf8Column,
+  });
 
   @override
-  int get hashCode => lines.hashCode ^ nextLineIndex.hashCode;
+  int get hashCode =>
+      lines.hashCode ^ nextLineIndex.hashCode ^ nextUtf8Column.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -852,5 +873,6 @@ class SourceLines {
       other is SourceLines &&
           runtimeType == other.runtimeType &&
           lines == other.lines &&
-          nextLineIndex == other.nextLineIndex;
+          nextLineIndex == other.nextLineIndex &&
+          nextUtf8Column == other.nextUtf8Column;
 }

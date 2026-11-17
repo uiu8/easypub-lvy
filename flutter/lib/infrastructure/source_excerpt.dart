@@ -14,5 +14,16 @@ Future<String> sourceExcerpt({
     utf8Column: 0,
     limit: limit,
   );
-  return page.lines.map((line) => '${line.lineNumber}: ${line.text}\n').join();
+  final text = StringBuffer();
+  for (final line in page.lines) {
+    text.write('${line.lineNumber}: ${line.text}');
+    if (line.continues) text.write('〔本行过长，后续未展示〕');
+    text.writeln();
+  }
+  if (page.nextLineIndex != null &&
+      page.nextLineIndex! < lineIndex + limit &&
+      !page.lines.any((line) => line.continues)) {
+    text.writeln('〔摘录达到显示上限，后续未展示〕');
+  }
+  return text.toString();
 }

@@ -94,7 +94,7 @@ String _cleanAuthor(String value) {
 String _stem(String fileName) {
   final name = fileName.replaceAll('\\', '/').split('/').last;
   var stem = name.replaceFirst(
-    RegExp(r'\.(txt|epub)$', caseSensitive: false),
+    RegExp(r'\.(txt|epub|azw3|mobi|azw)$', caseSensitive: false),
     '',
   );
   while (true) {

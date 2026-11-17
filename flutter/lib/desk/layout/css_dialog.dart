@@ -313,6 +313,11 @@ class _CssDialogState extends State<CssDialog> {
                   )
                 : dependencyTable(preview!),
           ),
+          const DeskText(
+            'CSS 依赖支持 PNG、JPEG、WebP 图片及通过授权检查的 TTF、OTF、WOFF 字体。'
+            '这里暂不支持 SVG 和 WOFF2；插图入口的 SVG 转换、浏览器预览的 WOFF2 显示是另外的功能。',
+            size: 12,
+          ),
           if (message.isNotEmpty) DeskText(message, size: 12),
         ],
       ),

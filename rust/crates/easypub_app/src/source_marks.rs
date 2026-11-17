@@ -73,6 +73,53 @@ impl Selection {
     pub fn inspect(&self) -> Result<(), ApiError> {
         load(self).map(|_| ())
     }
+
+    /// The repaired text becomes a new source: translate both references and note
+    /// definitions, keeping IDs so removed marks/tables remain removed.
+    pub(crate) fn rebase(
+        &self,
+        book: &EffectiveBook,
+        path: &Path,
+    ) -> Result<(Self, Vec<u8>), ApiError> {
+        let original = load(self)?;
+        let mut data = original.as_ref().clone();
+        data.marks.retain_mut(|mark| {
+            let Some(&line) = book.source_to_output_lines.get(&mark.line) else {
+                return false;
+            };
+            if let MarkKind::Note { target } = &mut mark.kind {
+                let Some(&mapped) = book.source_to_output_lines.get(target) else {
+                    return false;
+                };
+                *target = mapped;
+            }
+            mark.line = line;
+            true
+        });
+        data.tables.retain_mut(|table| {
+            if let Some(&line) = book.source_to_output_lines.get(&table.line) {
+                table.line = line;
+                true
+            } else {
+                false
+            }
+        });
+        let ids: HashSet<&str> = data
+            .marks
+            .iter()
+            .map(|m| m.id.as_str())
+            .chain(data.tables.iter().map(|t| t.id.as_str()))
+            .collect();
+        let bytes = serde_json::to_vec(&data).map_err(|_| error("source_marks_invalid"))?;
+        let mut selection = self.clone();
+        selection.path = path.to_string_lossy().into_owned();
+        selection.sha256 = digest(&bytes);
+        selection.marks = data.marks.len() as u32;
+        selection.tables = data.tables.len() as u32;
+        selection.removed.retain(|id| ids.contains(id.as_str()));
+        selection.validate()?;
+        Ok((selection, bytes))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

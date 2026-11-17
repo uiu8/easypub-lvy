@@ -668,3 +668,11 @@ abstract interface class ImageEstimateSource {
 abstract interface class OriginalNavigationSource {
   Future<Map<String, dynamic>> originalNavigation();
 }
+
+abstract interface class NavigationFilterSource {
+  Future<int> previewNavigationFilter(
+    String filter,
+    bool regex,
+    List<String> titles,
+  );
+}

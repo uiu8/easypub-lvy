@@ -24,6 +24,12 @@ import 'package:easypub_desktop/application/library_service.dart';
 
 class _NoPicker extends Fake implements BookFilePicker {}
 
+class _ImportPicker extends Fake implements BookFilePicker {
+  List<String> paths = [];
+  @override
+  Future<List<String>> chooseBooks() async => paths;
+}
+
 class _Desktop extends Fake
     implements ConversionDesktop, OutputDirectoryDesktop {
   _Desktop(this.directory);
@@ -111,6 +117,72 @@ void main() {
     home: Scaffold(body: child),
   );
 
+  testWidgets('命令面板和空工具页显示导入失败，部分成功可继续选书', (t) async {
+    size(t, const Size(1500, 1000));
+    final (_, library, root) = await open(t, 'repair88-import-feedback-', {});
+    final picker = _ImportPicker();
+    final missing = '${root.path}/missing.txt';
+    final valid = '${root.path}/valid.txt';
+    await t.runAsync(() => File(valid).writeAsString('第一章 正文\n测试正文。\n'));
+    const channel = MethodChannel('window_manager');
+    t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async => call.method == 'isMaximized' ? false : null,
+    );
+    addTearDown(
+      () => t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    await t.pumpWidget(
+      RewriteApp(
+        library: library,
+        picker: picker,
+        initialLocation: '/tools/chapters',
+        conversionDesktop: _Desktop(root.path),
+      ),
+    );
+    await until(t, () => find.text('导入书稿').evaluate().isNotEmpty);
+    picker.paths = [missing];
+    await t.tap(find.text('导入书稿'));
+    final failures = find.byKey(const ValueKey('library-import-failures'));
+    await until(t, () => failures.evaluate().isNotEmpty);
+    expect(find.text('missing.txt'), findsOneWidget);
+    await t.tap(find.text('知道了'));
+    await t.pumpAndSettle();
+    expect(find.text('选择一本书，开始使用这个工具'), findsOneWidget);
+    expect(library.books.value, isEmpty);
+    expect(find.byKey(const ValueKey('book-picker-search')), findsNothing);
+
+    // 同一失败文件经命令面板导入也应展示失败清单。
+    await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await t.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const ValueKey('desk-command-query')), '导入书稿');
+    await t.pump();
+    await t.tap(find.text('导入书稿…'));
+    await until(t, () => failures.evaluate().isNotEmpty);
+    await t.tap(find.text('知道了'));
+    await t.pumpAndSettle();
+
+    picker.paths = [missing, valid];
+    await t.tap(find.text('导入书稿'));
+    await until(t, () => failures.evaluate().isNotEmpty);
+    expect(library.books.value, hasLength(1));
+    await t.tap(find.text('知道了'));
+    await t.pumpAndSettle();
+    expect(find.byKey(const ValueKey('book-picker-search')), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('book-picker-row-${library.books.value.single.id}')),
+      findsOneWidget,
+    );
+    expect(find.text('选择一本书，开始使用这个工具'), findsOneWidget);
+    expect(t.takeException(), isNull);
+    await t.pumpWidget(const SizedBox());
+  });
+
   group('两章正文对照默认两章（CH-247）', () {
     const nodes = [
       ChapterNode('a', '第1章 甲', 'chapter', 0, 1, true),
@@ -122,6 +194,20 @@ void main() {
     test('编号相同、标题不同的两章也能配对', () {
       expect(chapterNumber('第四百五十六章 别急'), (456, '章'));
       expect(chapterNumber('第２回 甲'), (2, '回'));
+      expect(chapterNumber('第二〇二四章 甲'), (2024, '章'));
+      expect(chapterNumber('第二零二四章 乙'), (2024, '章'));
+      expect(chapterNumber('第2〇2四回 丙'), (2024, '回'));
+      expect(
+        defaultComparePair(
+          const [
+            ChapterNode('x', '第二〇二四章 甲', 'chapter', 0, 1, true),
+            ChapterNode('y', '第9章 乙', 'chapter', 0, 3, true),
+            ChapterNode('z', '第2024章 丙', 'chapter', 0, 5, true),
+          ],
+          [1],
+        ),
+        (0, 2),
+      );
       expect(chapterNumber('序章'), isNull);
       expect(defaultComparePair(nodes, [5]), (2, 3));
       // 问题位置落在章内正文：按所在章处理。
@@ -222,6 +308,13 @@ void main() {
     await t.runAsync(() async {
       info = await rules.builtinDescription();
       base = await rules.builtin();
+      await rules.savePresets([
+        {
+          'name': '常用：第X话 / 第X集',
+          'rules': {...base, 'chapter_pattern': r'^甲(?<number>\d+)$'},
+        },
+        {'name': '常用：第X话 / 第X集（自定义）', 'rules': base},
+      ]);
       final reference = info['chapter']['reference_regex'] as String;
       Future<Map?> sample(Map<String, Object?> overrides, String line) async =>
           (await rules.sample({...base, ...overrides}, line))['match'] as Map?;
@@ -313,6 +406,46 @@ void main() {
       t.widget<DeskButton>(find.widgetWithText(DeskButton, '删除')).onPressed,
       isNull,
     );
+    // 旧数据与内置重名时仍可载入原规则，并避开已有自定义名称。
+    await t.tap(find.text('常用：第X话 / 第X集').last);
+    await t.pumpAndSettle();
+    await t.tap(find.text('常用：第X话 / 第X集（自定义 2）').last);
+    await t.pump();
+    await idle(t);
+    expect(
+      t
+          .widget<TextField>(
+            find.byKey(const ValueKey('rules-chapter_pattern')),
+          )
+          .controller!
+          .text,
+      r'^甲(?<number>\d+)$',
+    );
+    final nameField = find.byWidgetPredicate(
+      (w) => w is TextField && w.decoration?.hintText == '预设名称',
+    );
+    await t.enterText(nameField, '常用：第X话 / 第X集');
+    await t.tap(find.widgetWithText(DeskButton, '保存预设'));
+    await t.pump();
+    await idle(t);
+    expect(find.textContaining('此名称属于内置预设'), findsOneWidget);
+    await t.enterText(nameField, '迁移后的规则');
+    await t.tap(find.widgetWithText(DeskButton, '重命名'));
+    await t.pump();
+    await idle(t);
+    await t.runAsync(() async {
+      final presets = (await rules.load())['presets'] as List;
+      expect(
+        presets.map((p) => p['name']),
+        containsAll(['迁移后的规则', '常用：第X话 / 第X集（自定义）']),
+      );
+      expect(
+        presets.singleWhere(
+          (p) => p['name'] == '迁移后的规则',
+        )['rules']['chapter_pattern'],
+        r'^甲(?<number>\d+)$',
+      );
+    });
     expect(t.takeException(), isNull);
   });
 

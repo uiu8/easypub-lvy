@@ -58,7 +58,13 @@ class _CoverEditorPageState extends State<CoverEditorPage> {
   late Map<String, dynamic>? crop = restored == null
       ? widget.crop
       : (restored!['crop'] as Map?)?.cast<String, dynamic>();
-  late Map<String, dynamic>? design = widget.design;
+  late Map<String, dynamic>? design = restored == null
+      ? widget.design
+      : restored!.containsKey('design')
+      ? (restored!['design'] as Map?)?.cast<String, dynamic>()
+      : path == widget.path
+      ? widget.design
+      : null;
   int imageVersion = 0;
   void remember() {
     if (widget.draftKey == null) return;
@@ -67,6 +73,7 @@ class _CoverEditorPageState extends State<CoverEditorPage> {
       'path': path,
       'fit': fit,
       'crop': crop,
+      'design': design,
       'text': textDraft,
     });
   }

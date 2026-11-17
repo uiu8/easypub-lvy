@@ -243,16 +243,21 @@ void main() {
       CleanupCheckItem(266, 'collapse_blank_lines', '', null),
       CleanupCheckItem(475, 'collapse_blank_lines', '', null),
       CleanupCheckItem(12, 'trim_trailing_spaces', '他说。  ', '他说。'),
-      CleanupCheckItem(30, 'remove_ad_lines', '本章完，求月票', null, candidate: true),
+      CleanupCheckItem(12, 'remove_ad_lines', '本章完，求月票', null, candidate: true),
     ];
     final located = <int>[];
     await t.pumpWidget(
       app(
         SingleChildScrollView(
-          child: CleanupFindingsView(items: items, onLocate: located.add),
+          child: CleanupFindingsView(
+            items: items,
+            selectedLine: 12,
+            onLocate: located.add,
+          ),
         ),
       ),
     );
+    expect(t.takeException(), isNull);
     expect(find.text('合并连续空行'), findsWidgets);
     expect(find.text('行尾空白'), findsWidgets);
     expect(find.text('广告候选'), findsWidgets);
@@ -285,9 +290,10 @@ void main() {
       266,
       475,
       12,
-      30,
+      12,
     ]);
     expect(report.domains.single.cleanup.last.candidate, true);
+    expect(t.takeException(), isNull);
   });
 
   testWidgets('非标题词库：从核对加入后打开识别规则面板，识别器排除命中行（CH-253–255）', (t) async {

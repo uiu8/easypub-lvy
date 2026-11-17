@@ -313,11 +313,10 @@ fn redact_content(text: &str, budget: &mut usize) -> String {
         return v.to_string();
     }
     // 保留选择器所需标签；脚本正文无法可靠分离时拒绝录制，改用注明手写的夹具。
-    if regex::Regex::new(r"(?is)<script\b").unwrap().is_match(text) {
-        let scripts = regex::Regex::new(r"(?is)<script\b[^>]*>.*?</script\s*>").unwrap();
-        let cleaned = scripts.replace_all(text, "");
-        return redact_content(&cleaned, budget);
-    }
+    // 未闭合脚本从起始标签一直丢弃到结尾，不递归处理同一输入。
+    let scripts = regex::Regex::new(r"(?is)<script\b[^>]*(?:>.*?(?:</script\s*>|\z)|\z)").unwrap();
+    let cleaned = scripts.replace_all(text, "");
+    let text = cleaned.as_ref();
     let tags = regex::Regex::new(r"(?s)<[^>]*>|[^<]+").unwrap();
     let mut navigation = false;
     tags.find_iter(text)
@@ -540,6 +539,24 @@ thread_local! {static MUTATION:std::cell::Cell<u8>=const {std::cell::Cell::new(0
 pub(crate) fn broken(kind: u8) -> bool {
     MUTATION.with(|m| m.get() == kind)
 }
+#[test]
+fn repair88_recording_unclosed_scripts_terminate_and_keep_navigation() {
+    for input in [
+        "<a href='/next'>下一页</a><script>secret()",
+        "<a href='/next'>下一页</a><SCRIPT src='unfinished",
+        "<a href='/next'>下一页</a><script>secret()</script><script>tail",
+    ] {
+        assert_eq!(
+            redact_content(input, &mut 100),
+            "<a href='/next'>下一页</a>"
+        );
+    }
+    assert_eq!(
+        redact_content("<p>正文</p><script>x()</script><p>后文</p>", &mut 100),
+        "<p>正文</p><p>后文</p>"
+    );
+}
+
 #[test]
 fn three_selector_mutations_are_detected() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus");

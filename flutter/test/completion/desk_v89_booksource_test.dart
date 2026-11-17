@@ -17,6 +17,7 @@ class V89Api extends v88.V88Api {
     }
   }
   final presets = <Map<String, dynamic>>[];
+  bool failProfile = false;
   @override
   Future<dynamic> call(
     String method, [
@@ -77,6 +78,12 @@ class V89Api extends v88.V88Api {
           'header': '{}',
         };
       case 'sources.crawlProfile.set':
+        if (failProfile) {
+          requests.add((method, params));
+          throw const FormatException('测试参数保存失败');
+        }
+        requests.add((method, params));
+        return null;
       case 'sources.rate':
         requests.add((method, params));
         return null;
@@ -272,46 +279,54 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await pump(tester);
   });
-  testWidgets('V89 参数建议需应用再保存，评分跟随保存', (tester) async {
-    final temp = Directory.systemTemp.createTempSync('v89-profile-');
-    addTearDown(() => temp.deleteSync(recursive: true));
-    final api = V89Api();
-    await v88.open(tester, api, temp);
-    await tester.tap(find.text('书源 1/2'));
-    await pump(tester);
-    await tester.tap(find.text('甲源'));
-    await pump(tester);
-    // R1c 起宽窗口下点书源在右侧检查面板里看，详情从面板里打开。
-    await tester.tap(
-      find.byKey(const ValueKey('booksource-inspector-detail-https://a')),
-    );
-    await pump(tester);
-    await tester.tap(find.byKey(const ValueKey('booksource-profile')));
-    await pump(tester);
-    expect(
-      api.requests.where((r) => r.$1 == 'sources.crawlProfile.set'),
-      isEmpty,
-    );
-    await tester.tap(find.text('应用导入建议'));
-    await pump(tester);
-    await tester.tap(find.byKey(const ValueKey('booksource-rating')));
-    await pump(tester);
-    await tester.tap(find.text('评分 2').last);
-    await pump(tester);
-    await tester.tap(find.byKey(const ValueKey('booksource-profile-save')));
-    await pump(tester);
-    final p = api.requests
-        .firstWhere((r) => r.$1 == 'sources.crawlProfile.set')
-        .$2;
-    expect(p['profile']['concurrency'], 5);
-    expect(p['profile']['minInterval'], 200);
-    expect(
-      api.requests.firstWhere((r) => r.$1 == 'sources.rate').$2['rating'],
-      2,
-    );
-    await tester.pumpWidget(const SizedBox());
-    await pump(tester);
-  });
+  for (final fails in [false, true]) {
+    testWidgets('V89 参数建议需应用再保存，评分跟随保存，故障=$fails', (tester) async {
+      final temp = Directory.systemTemp.createTempSync('v89-profile-');
+      addTearDown(() => temp.deleteSync(recursive: true));
+      final api = V89Api()..failProfile = fails;
+      await v88.open(tester, api, temp);
+      await tester.tap(find.text('书源 1/2'));
+      await pump(tester);
+      await tester.tap(find.text('甲源'));
+      await pump(tester);
+      // R1c 起宽窗口下点书源在右侧检查面板里看，详情从面板里打开。
+      await tester.tap(
+        find.byKey(const ValueKey('booksource-inspector-detail-https://a')),
+      );
+      await pump(tester);
+      await tester.tap(find.byKey(const ValueKey('booksource-profile')));
+      await pump(tester);
+      expect(
+        api.requests.where((r) => r.$1 == 'sources.crawlProfile.set'),
+        isEmpty,
+      );
+      await tester.tap(find.text('应用导入建议'));
+      await pump(tester);
+      await tester.tap(find.byKey(const ValueKey('booksource-rating')));
+      await pump(tester);
+      await tester.tap(find.text('评分 2').last);
+      await pump(tester);
+      await tester.tap(find.byKey(const ValueKey('booksource-profile-save')));
+      await pump(tester);
+      final p = api.requests
+          .firstWhere((r) => r.$1 == 'sources.crawlProfile.set')
+          .$2;
+      expect(p['profile']['concurrency'], 5);
+      expect(p['profile']['minInterval'], 200);
+      if (fails) {
+        expect(api.requests.where((r) => r.$1 == 'sources.rate'), isEmpty);
+        expect(find.textContaining('测试参数保存失败'), findsWidgets);
+        expect(find.text('书源参数与评分已保存。'), findsNothing);
+      } else {
+        expect(
+          api.requests.firstWhere((r) => r.$1 == 'sources.rate').$2['rating'],
+          2,
+        );
+      }
+      await tester.pumpWidget(const SizedBox());
+      await pump(tester);
+    });
+  }
   testWidgets('V89 优先搜索参数、目录补全、章数与不全标记', (tester) async {
     final temp = Directory.systemTemp.createTempSync('v89-sort-');
     addTearDown(() => temp.deleteSync(recursive: true));

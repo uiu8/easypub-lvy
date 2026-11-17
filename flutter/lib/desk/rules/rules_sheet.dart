@@ -252,7 +252,11 @@ class _RulesSheetState extends State<_RulesSheet> {
   String? appliedFingerprint;
 
   String fingerprintOf(Map<String, dynamic> values) {
-    final keys = fields.keys.toList()..sort();
+    final keys = {
+      ...fields.keys,
+      for (final entry in values.entries)
+        if (entry.value is bool) entry.key,
+    }.toList()..sort();
     final normalized = {
       for (final k in keys)
         // 例外留空时不计入，已有规则的标识不变。
@@ -265,8 +269,10 @@ class _RulesSheetState extends State<_RulesSheet> {
         .substring(0, 6);
   }
 
-  String editingFingerprint() =>
-      fingerprintOf({for (final e in fields.entries) e.key: e.value.text});
+  String editingFingerprint() => fingerprintOf({
+    ...?rules,
+    for (final e in fields.entries) e.key: e.value.text,
+  });
 
   @override
   void initState() {
@@ -278,6 +284,22 @@ class _RulesSheetState extends State<_RulesSheet> {
       presets = (data['presets'] as List)
           .map((v) => Map<String, dynamic>.from(v as Map))
           .toList();
+      // 旧数据可能与内置名称冲突，保留规则并赋予可管理的用户名称。
+      final usedNames = {
+        ...commonRulePresets.keys,
+        for (final p in presets) p['name'],
+      };
+      for (final preset in presets) {
+        final name = preset['name'] as String;
+        if (!commonRulePresets.containsKey(name)) continue;
+        var renamed = '$name（自定义）';
+        var suffix = 2;
+        while (usedNames.contains(renamed)) {
+          renamed = '$name（自定义 ${suffix++}）';
+        }
+        preset['name'] = renamed;
+        usedNames.add(renamed);
+      }
       appliedFingerprint = fingerprintOf(
         Map<String, dynamic>.from(data['rules'] as Map),
       );
@@ -435,6 +457,9 @@ class _RulesSheetState extends State<_RulesSheet> {
   Future<void> savePreset({bool rename = false}) async {
     final name = presetName.text.trim();
     if (name.isEmpty) throw const FormatException('请填写预设名称。');
+    if (commonRulePresets.containsKey(name)) {
+      throw const FormatException('此名称属于内置预设，请使用另一名称。');
+    }
     final next = [for (final item in presets) Map<String, dynamic>.from(item)];
     final existing = next.indexWhere((p) => p['name'] == name);
     if (rename) {

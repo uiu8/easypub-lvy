@@ -416,85 +416,86 @@ fn cleanup(report: &mut Report, value: &Value, prefix: &str) -> Result<(), ApiEr
             Some(2) => Some("headings"),
             _ => None,
         };
-        if known && ordering_known && rule["Multiline"].is_boolean()
+        if known
+            && ordering_known
+            && rule["Multiline"].is_boolean()
             && let (Some(scope), Some(enabled), Some(find), Some(replace)) = (
                 scope,
                 rule["Enabled"].as_bool(),
                 rule["Pattern"].as_str(),
                 rule["Replacement"].as_str(),
-            ) {
-                if find.is_empty() {
-                    entry.reason = "旧规则匹配内容为空，未转换为可匹配空串的正则";
-                    report.items.push(entry);
-                    continue;
-                }
-                let multiline = rule["Multiline"] == true;
-                let inner = if !multiline && rule["IsRegex"] == false && rule["IgnoreCase"] == false
-                {
-                    Some(json!({"kind":"literal_replace","find":find,"replace":replace}))
-                } else if rule["IsRegex"].is_boolean() {
-                    if let Some(ignore_case) = rule["IgnoreCase"].as_bool() {
-                        let translated = if rule["IsRegex"] == true {
-                            crate::legacy_regex::translate(find, replace, ignore_case)
-                        } else {
-                            let pattern = regex::escape(find);
-                            Ok((
-                                if ignore_case {
-                                    format!("(?i:{pattern})")
-                                } else {
-                                    pattern
-                                },
-                                replace.replace('$', "$$"),
-                            ))
-                        };
-                        match translated {
-                            Ok((pattern, replace)) => {
-                                // Legacy multiline regex used both m and s. Keep source line
-                                // endings and explicit scope, instead of its global LF rewrite.
-                                let pattern = if multiline {
-                                    format!("(?ms:{pattern})")
-                                } else {
-                                    pattern
-                                };
-                                let replace = if multiline {
-                                    replace.replace('\\', "\\\\")
-                                } else {
-                                    replace
-                                };
-                                Some(
-                                    json!({"kind":if multiline {"multiline_regex_replace"} else {"regex_replace"},"pattern":pattern,"replace":replace}),
-                                )
-                            }
-                            Err(reason) => {
-                                entry.reason = reason;
-                                None
-                            }
-                        }
+            )
+        {
+            if find.is_empty() {
+                entry.reason = "旧规则匹配内容为空，未转换为可匹配空串的正则";
+                report.items.push(entry);
+                continue;
+            }
+            let multiline = rule["Multiline"] == true;
+            let inner = if !multiline && rule["IsRegex"] == false && rule["IgnoreCase"] == false {
+                Some(json!({"kind":"literal_replace","find":find,"replace":replace}))
+            } else if rule["IsRegex"].is_boolean() {
+                if let Some(ignore_case) = rule["IgnoreCase"].as_bool() {
+                    let translated = if rule["IsRegex"] == true {
+                        crate::legacy_regex::translate(find, replace, ignore_case)
                     } else {
-                        None
+                        let pattern = regex::escape(find);
+                        Ok((
+                            if ignore_case {
+                                format!("(?i:{pattern})")
+                            } else {
+                                pattern
+                            },
+                            replace.replace('$', "$$"),
+                        ))
+                    };
+                    match translated {
+                        Ok((pattern, replace)) => {
+                            // Legacy multiline regex used both m and s. Keep source line
+                            // endings and explicit scope, instead of its global LF rewrite.
+                            let pattern = if multiline {
+                                format!("(?ms:{pattern})")
+                            } else {
+                                pattern
+                            };
+                            let replace = if multiline {
+                                replace.replace('\\', "\\\\")
+                            } else {
+                                replace
+                            };
+                            Some(
+                                json!({"kind":if multiline {"multiline_regex_replace"} else {"regex_replace"},"pattern":pattern,"replace":replace}),
+                            )
+                        }
+                        Err(reason) => {
+                            entry.reason = reason;
+                            None
+                        }
                     }
                 } else {
                     None
-                };
-                let Some(inner) = inner else {
-                    report.items.push(entry);
-                    continue;
-                };
-                let candidate =
-                    json!({"kind":"configured", "enabled":enabled, "scope":scope, "rule":inner});
-                if let Ok(rule) =
-                    serde_json::from_value::<easypub_core::cleanup_rules::Rule>(candidate)
-                    && easypub_core::cleanup_rules::validate_pipeline(std::slice::from_ref(&rule))
-                        .is_ok()
-                    {
-                        converted.push((obj["Order"].as_i64().unwrap(), rule));
-                        entry.status = "cleanup_ready";
-                        entry.reason = "逐行替换候选；保留顺序、范围与启停，捕获引用已转换；应用前须核对新识别与 Unicode 匹配结果";
-                        if multiline {
-                            entry.reason = "跨行候选：保留明确范围和原稿换行，不继承旧忽略范围及全篇转 LF 的行为；正则启用跨行锚点及点号跨行，替换引用/反斜杠已转换，须核对预览";
-                        }
-                    }
+                }
+            } else {
+                None
+            };
+            let Some(inner) = inner else {
+                report.items.push(entry);
+                continue;
+            };
+            let candidate =
+                json!({"kind":"configured", "enabled":enabled, "scope":scope, "rule":inner});
+            if let Ok(rule) = serde_json::from_value::<easypub_core::cleanup_rules::Rule>(candidate)
+                && easypub_core::cleanup_rules::validate_pipeline(std::slice::from_ref(&rule))
+                    .is_ok()
+            {
+                converted.push((obj["Order"].as_i64().unwrap(), rule));
+                entry.status = "cleanup_ready";
+                entry.reason = "逐行替换候选；保留顺序、范围与启停，捕获引用已转换；应用前须核对新识别与 Unicode 匹配结果";
+                if multiline {
+                    entry.reason = "跨行候选：保留明确范围和原稿换行，不继承旧忽略范围及全篇转 LF 的行为；正则启用跨行锚点及点号跨行，替换引用/反斜杠已转换，须核对预览";
+                }
             }
+        }
         report.items.push(entry);
     }
     if has_overrides && (!overrides_valid || converted.len() != rules.len()) {
@@ -512,10 +513,10 @@ fn cleanup(report: &mut Report, value: &Value, prefix: &str) -> Result<(), ApiEr
             .items
             .iter_mut()
             .find(|i| i.source == format!("{prefix}/BuiltinOverrides"))
-        {
-            entry.status = "cleanup_ready";
-            entry.reason = "覆盖与普通自定义规则按唯一 Order 联合排序；父开关关闭则子规则停用，关闭的默认算法不恢复";
-        }
+    {
+        entry.status = "cleanup_ready";
+        entry.reason = "覆盖与普通自定义规则按唯一 Order 联合排序；父开关关闭则子规则停用，关闭的默认算法不恢复";
+    }
     converted.sort_by_key(|(order, _)| *order);
     builtin_pipeline.extend(converted.into_iter().map(|(_, rule)| rule));
     if builtin_pipeline.len() > 32 {

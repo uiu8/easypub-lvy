@@ -331,6 +331,78 @@ fn tampered_downloads_and_packages_are_rejected_without_staging() {
 }
 
 #[test]
+fn repair88_cancel_interrupts_stalled_headers_and_body() {
+    for body_started in [false, true] {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}/", listener.local_addr().unwrap());
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                    break;
+                }
+            }
+            if body_started {
+                stream
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n\r\nx")
+                    .unwrap();
+                stream.flush().unwrap();
+            }
+            ready_tx.send(()).unwrap();
+            let _ = release_rx.recv_timeout(Duration::from_secs(10));
+        });
+        let dir = installed(67);
+        let worker_dir = dir.clone();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let worker_cancel = cancel.clone();
+        let received = Arc::new(AtomicU64::new(0));
+        let worker_received = received.clone();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let result = download(
+                &worker_dir,
+                &manifest(68, b"x"),
+                &base,
+                &worker_received,
+                &worker_cancel,
+                &|_| {},
+            );
+            done_tx.send(result).unwrap();
+        });
+        ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        if body_started {
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while received.load(Ordering::Relaxed) == 0 {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "body never reached client"
+                );
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        }
+        cancel.store(true, Ordering::Relaxed);
+        let result = done_rx.recv_timeout(Duration::from_secs(3));
+        let _ = release_tx.send(());
+        server.join().unwrap();
+        worker.join().unwrap();
+        assert_eq!(
+            result
+                .expect("cancel must finish while server is stalled")
+                .unwrap_err()
+                .next_action,
+            "update_cancelled"
+        );
+        assert!(!dir.join(WORK_DIR).join("download").exists());
+    }
+}
+#[test]
 fn download_can_be_cancelled_and_launch_requires_a_ready_package() {
     let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     // 伪随机内容：压缩不掉，慢速发送时来得及取消。
@@ -372,6 +444,10 @@ fn plugin_zip(exe: &[u8], listed_sha: &str) -> Vec<u8> {
     let info = json!({"id":"booksource","name":"书源下载","version":"0.2.0",
         "executable":"easypub_plugin_booksource.exe","sha256":listed_sha,
         "permissions":["network"],"protocol":1});
+    plugin_zip_with_info(exe, info)
+}
+
+fn plugin_zip_with_info(exe: &[u8], info: serde_json::Value) -> Vec<u8> {
     let mut buf = std::io::Cursor::new(Vec::new());
     {
         let mut zip = zip::ZipWriter::new(&mut buf);
@@ -462,6 +538,34 @@ fn plugin_update_downloads_signed_plugin_and_rejects_tampering() {
         "update_package_invalid"
     );
     assert!(!target.exists());
+
+    // ZIP 校验和及签名均有效，也必须核对包内声明，不能只校验程序字节。
+    for (field, value) in [
+        ("version", json!("9.9.9")),
+        ("permissions", json!(["network", "filesystem"])),
+        ("id", json!("other")),
+        ("sha256", json!("0".repeat(64))),
+    ] {
+        let mut info = json!({"id":"booksource","name":"书源下载","version":"0.2.0",
+            "executable":"easypub_plugin_booksource.exe","sha256":sha,
+            "permissions":["network"],"protocol":1});
+        info[field] = value;
+        let base = plugin_source(8, &sha, plugin_zip_with_info(&exe, info));
+        call(req("plugin_check", &dir, &base)).unwrap();
+        let target = temp("plugin-declaration").join("staged");
+        let mut download = req("plugin_download", &dir, &base);
+        download["id"] = json!("booksource");
+        download["target"] = json!(target.to_string_lossy());
+        assert_eq!(
+            call(download).unwrap_err().next_action,
+            "update_package_invalid",
+            "{field}"
+        );
+        assert!(
+            !target.exists(),
+            "invalid {field} leaves no staging directory"
+        );
+    }
 
     // 不带测试公钥：签名不被信任。
     let mut untrusted = req("plugin_check", &dir, &base);

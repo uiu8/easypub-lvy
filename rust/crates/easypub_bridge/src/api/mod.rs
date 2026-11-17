@@ -164,6 +164,8 @@ pub fn import_job_status_watch(
 /// 原文的一行（行号从 1 起）。
 pub struct SourceLine {
     pub line_number: u32,
+    pub utf8_column: u32,
+    pub continues: bool,
     pub text: String,
 }
 
@@ -171,6 +173,8 @@ pub struct SourceLines {
     pub lines: Vec<SourceLine>,
     /// 下一页从哪一行（0 起）开始；没有了为空。
     pub next_line_index: Option<u32>,
+    /// 与 next_line_index 成对使用，长行续读时不能重置为 0。
+    pub next_utf8_column: Option<u32>,
 }
 
 /// 读原文若干行（有类型，桥接第 2 批）。
@@ -196,10 +200,13 @@ pub fn read_source_lines(
             .into_iter()
             .map(|item| SourceLine {
                 line_number: item.line_number,
+                utf8_column: item.utf8_column,
+                continues: item.continues,
                 text: item.text,
             })
             .collect(),
-        next_line_index: page.next_cursor.map(|c| c.line_index),
+        next_line_index: page.next_cursor.as_ref().map(|c| c.line_index),
+        next_utf8_column: page.next_cursor.map(|c| c.utf8_column),
     })
 }
 
@@ -469,7 +476,8 @@ pub fn kindling_job_watch(
         std::thread::Builder::new()
             .name(format!("kindling-watch-{id}"))
             .spawn(move || {
-                let outcome = jobs.watch(id, |snapshot| sink.add(kindling_status(snapshot)).is_ok());
+                let outcome =
+                    jobs.watch(id, |snapshot| sink.add(kindling_status(snapshot)).is_ok());
                 if let Err(e) = outcome {
                     let _ = sink.add_error(e);
                 }

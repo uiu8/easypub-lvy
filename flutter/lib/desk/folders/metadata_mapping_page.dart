@@ -123,7 +123,7 @@ class _MetadataMappingPageState extends State<MetadataMappingPage>
 
   @override
   void dispose() {
-    widget.navigation.check = null;
+    if (widget.navigation.check == confirmExit) widget.navigation.check = null;
     folder.dispose();
     for (final value in values.values) {
       value.dispose();

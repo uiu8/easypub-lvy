@@ -102,8 +102,18 @@ pub fn request(service: &ImportService, raw: &str) -> Result<String, ApiError> {
             let (after, summary) = rebuild(before, &rules, preserve_decisions)?;
             let checks_after = counts(&after)?;
             let check_changes = [
-                ("duplicate-title", "连续重复标题", checks_before.0, checks_after.0),
-                ("number-gap", "章节编号跳跃", checks_before.1, checks_after.1),
+                (
+                    "duplicate-title",
+                    "连续重复标题",
+                    checks_before.0,
+                    checks_after.0,
+                ),
+                (
+                    "number-gap",
+                    "章节编号跳跃",
+                    checks_before.1,
+                    checks_after.1,
+                ),
             ]
             .into_iter()
             .filter(|(_, _, a, b)| a != b)

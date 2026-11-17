@@ -89,6 +89,17 @@ void main() {
           t.widget<Text>(find.byKey(const ValueKey('rules-fingerprint'))).data!;
       expect(footer(), startsWith('已应用规则 #'));
       expect(footer(), isNot(contains('编辑中')));
+      final initialFingerprint = footer();
+      final numeric = find.byKey(const ValueKey('rules-numeric'));
+      await t.ensureVisible(numeric);
+      await t.tap(numeric);
+      await t.pump();
+      expect(footer(), contains('编辑中 #'));
+      expect(footer(), isNot(initialFingerprint));
+      await t.tap(numeric);
+      await t.pump();
+      expect(footer(), initialFingerprint);
+      await t.ensureVisible(field);
       const expression = r'^第(?<number>\d+)话\s*(?<title>.+)$';
       await t.enterText(field, expression);
       await t.pump();

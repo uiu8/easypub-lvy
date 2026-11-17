@@ -48,9 +48,10 @@ pub fn collect(css: &str, base: &str) -> Snapshot {
     let mut snapshot = Snapshot::default();
     let rewritten = snapshot.visit_css(css, base, 0);
     if snapshot.report.issues.is_empty()
-        && let Some(css) = rewritten {
-            snapshot.report.root_id = snapshot.emit(css.into_bytes(), "css");
-        }
+        && let Some(css) = rewritten
+    {
+        snapshot.report.root_id = snapshot.emit(css.into_bytes(), "css");
+    }
     snapshot.report.rewritten =
         snapshot.report.issues.is_empty() && snapshot.report.root_id.is_some();
     if !snapshot.report.rewritten {

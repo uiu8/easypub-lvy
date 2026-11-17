@@ -147,7 +147,9 @@ class DeskInfoBar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(text, style: ui(12, c: fg, h: 1.45)),
+            child: selectable
+                ? SelectableText(text, style: ui(12, c: fg, h: 1.45))
+                : Text(text, style: ui(12, c: fg, h: 1.45)),
           ),
           if (action != null) ...[const SizedBox(width: 8), action!],
         ],

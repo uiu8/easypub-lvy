@@ -56,24 +56,6 @@ extension _LayoutNavigation on _LayoutPageState {
   }) {
     final startKey = original ? 'original_start' : 'start_chapter';
     final filter = navigationOptions['toc_filter'] as String;
-    RegExp? regex;
-    String? error;
-    if (navigationOptions['filter_regex'] == true && filter.isNotEmpty) {
-      try {
-        regex = RegExp(filter);
-      } catch (_) {
-        error = '正则表达式不完整';
-      }
-    }
-    final removed = filter.isEmpty
-        ? 0
-        : nodes
-              .where(
-                (n) =>
-                    regex?.hasMatch(n['title'] as String) ??
-                    (n['title'] as String).contains(filter),
-              )
-              .length;
     return group(original ? '原书目录' : '目录与起始位置', [
       optionText(
         '目录标题',
@@ -93,8 +75,15 @@ extension _LayoutNavigation on _LayoutPageState {
         filter,
         (v) => changeNavigation('toc_filter', v),
         key: ValueKey(('toc-filter', widget.bookId, optionsRevision)),
-        error: error,
-        note: error == null ? '移除 $removed 条目录项，正文保留' : null,
+        note: '正则使用转换引擎的规则，不支持环视和反向引用。',
+      ),
+      _NavigationFilterStatus(
+        source: session is NavigationFilterSource
+            ? session as NavigationFilterSource
+            : null,
+        filter: filter,
+        regex: navigationOptions['filter_regex'] == true,
+        titles: [for (final node in nodes) node['title'] as String],
       ),
       optionSwitch(
         '使用正则表达式',
@@ -143,5 +132,85 @@ extension _LayoutNavigation on _LayoutPageState {
           searchable: true,
         ),
     ]);
+  }
+}
+
+class _NavigationFilterStatus extends StatefulWidget {
+  const _NavigationFilterStatus({
+    required this.source,
+    required this.filter,
+    required this.regex,
+    required this.titles,
+  });
+  final NavigationFilterSource? source;
+  final String filter;
+  final bool regex;
+  final List<String> titles;
+  @override
+  State<_NavigationFilterStatus> createState() =>
+      _NavigationFilterStatusState();
+}
+
+class _NavigationFilterStatusState extends State<_NavigationFilterStatus> {
+  Future<int>? result;
+  String signature = '';
+  Timer? debounce;
+  int generation = 0;
+  @override
+  void initState() {
+    super.initState();
+    refresh();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NavigationFilterStatus oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.source != widget.source) signature = '';
+    refresh();
+  }
+
+  void refresh() {
+    final next = jsonEncode([widget.filter, widget.regex, widget.titles]);
+    if (next == signature) return;
+    signature = next;
+    debounce?.cancel();
+    final ticket = ++generation;
+    result = null;
+    if (widget.source == null) return;
+    debounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted || ticket != generation) return;
+      final pending = widget.source!.previewNavigationFilter(
+        widget.filter,
+        widget.regex,
+        widget.titles,
+      );
+      setState(() {
+        result = pending;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    debounce?.cancel();
+    generation++;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.source == null) return const Text('过滤结果将在转换时计算。');
+    if (result == null) return const Text('正在核对过滤规则…');
+    return FutureBuilder<int>(
+      key: ValueKey(signature),
+      future: result,
+      builder: (_, snapshot) => Text(
+        snapshot.hasError
+            ? '过滤规则未通过转换引擎检查，请修改后重试。'
+            : snapshot.hasData
+            ? '移除 ${snapshot.data} 条目录项，正文保留'
+            : '正在核对过滤规则…',
+      ),
+    );
   }
 }

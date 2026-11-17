@@ -132,6 +132,27 @@ void main() {
     String path() => router().routeInformationProvider.value.uri.path;
     expect(find.byKey(const ValueKey('book-tabs')), findsNothing);
 
+    // 只改跟随系统开关也必须重建应用，不能依赖同时改主题或应用比例。
+    t.platformDispatcher.textScaleFactorTestValue = 1.2;
+    addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
+    await settle();
+    double textScale() =>
+        MediaQuery.textScalerOf(t.element(find.byType(Scaffold).first))
+            .scale(1);
+    expect(textScale(), closeTo(1.2, .001));
+    for (final follow in [false, true]) {
+      expect(
+        await t.runAsync(
+          () => library.savePatch({'ui_follow_system_scale': follow}),
+        ),
+        isTrue,
+      );
+      await settle();
+      expect(textScale(), closeTo(follow ? 1.2 : 1, .001));
+    }
+    t.platformDispatcher.clearTextScaleFactorTestValue();
+    await settle();
+
     router().go('/books/${Uri.encodeComponent(b)}/information');
     await settle();
     expect(find.byKey(const ValueKey('book-tabs')), findsNothing);

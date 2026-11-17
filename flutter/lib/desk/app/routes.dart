@@ -46,9 +46,14 @@ extension _Routes on _RewriteAppState {
                             '导入书稿',
                             onPressed: () async {
                               final paths = await widget.picker.chooseBooks();
-                              if (paths.isEmpty || !mounted) return;
-                              await widget.library.importFiles(paths);
-                              if (context.mounted) await chooseBook(context);
+                              if (paths.isEmpty || !mounted || !context.mounted) return;
+                              final imported = await importWithFeedback(
+                                context,
+                                paths,
+                              );
+                              if (imported && context.mounted) {
+                                await chooseBook(context);
+                              }
                             },
                           ),
                         ],

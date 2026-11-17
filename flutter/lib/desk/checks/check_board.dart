@@ -86,6 +86,7 @@ class CheckBoard extends ChangeNotifier {
   ChapterPage? _structure;
   Int32List _queue = Int32List(0);
   String? _queueGuard;
+  int _pageGeneration = 0;
   final _pages = <int, ChapterIssuePage>{};
   final _loading = <int, Future<ChapterIssuePage?>>{};
 
@@ -220,6 +221,8 @@ class CheckBoard extends ChangeNotifier {
     _structure = null;
     _queue = Int32List(0);
     _queueGuard = null;
+    _pageGeneration++;
+    _loading.clear();
     _pages.clear();
     _spots = null;
     _spotsGuard = null;
@@ -386,6 +389,8 @@ class CheckBoard extends ChangeNotifier {
       _structure = tree;
       _queue = queue;
       _queueGuard = guard;
+      _pageGeneration++;
+      _loading.clear();
       _pages.clear();
     } catch (_) {
       // 书稿刚变：等这次更新结束再读。
@@ -752,27 +757,36 @@ class CheckBoard extends ChangeNotifier {
     return local >= 0 && local < page.items.length ? page.items[local] : null;
   }
 
-  Future<ChapterIssuePage?> _readPage(int start) =>
-      _loading[start] ??= () async {
-        try {
-          final chapters = _chapters;
-          var tree = _structure;
-          if (chapters == null) return null;
-          tree ??= await chapters.read(0);
-          final page = await chapters.issues(tree, start, effective: true);
-          _pages.remove(start);
-          _pages[start] = page;
-          while (_pages.length > _keptPages) {
-            _pages.remove(_pages.keys.first);
-          }
-          if (!_disposed) notifyListeners();
-          return page;
-        } catch (_) {
-          return null;
-        } finally {
-          _loading.remove(start);
+  Future<ChapterIssuePage?> _readPage(int start) {
+    final pending = _loading[start];
+    if (pending != null) return pending;
+    final epoch = _pageGeneration;
+    final chapters = _chapters;
+    if (chapters == null || _disposed) return Future.value(null);
+    final structure = _structure;
+    late final Future<ChapterIssuePage?> request;
+    request = () async {
+      try {
+        final tree = structure ?? await chapters.read(0);
+        if (_disposed || epoch != _pageGeneration) return null;
+        final page = await chapters.issues(tree, start, effective: true);
+        if (_disposed || epoch != _pageGeneration) return null;
+        _pages.remove(start);
+        _pages[start] = page;
+        while (_pages.length > _keptPages) {
+          _pages.remove(_pages.keys.first);
         }
-      }();
+        notifyListeners();
+        return page;
+      } catch (_) {
+        return null;
+      }
+    }();
+    _loading[start] = request;
+    return request.whenComplete(() {
+      if (identical(_loading[start], request)) _loading.remove(start);
+    });
+  }
 
   /// 第 [index] 处文本问题在清理页的行号。
   int? pageLineAt(int index) {
@@ -864,7 +878,9 @@ class CheckBoard extends ChangeNotifier {
   }
 
   Future<void> _confirmIssue(int index) async {
+    final epoch = _pageGeneration;
     final issue = await issueAt(index);
+    if (_disposed || epoch != _pageGeneration) return;
     final offset = index < _queue.length ? _queue[index] : -1;
     final page = _pages[offset ~/ 50 * 50];
     final chapters = _chapters;
@@ -875,8 +891,10 @@ class CheckBoard extends ChangeNotifier {
         issue.id,
         'confirmed_normal',
       );
+      if (_disposed || epoch != _pageGeneration) return;
       _pages[next.offset] = next;
     } on FormatException {
+      if (_disposed || epoch != _pageGeneration) return;
       await issuesChanged();
       return;
     }

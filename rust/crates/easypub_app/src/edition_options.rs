@@ -49,15 +49,19 @@ impl NavigationOptions {
             && self.toc_filter.len() <= 2000
             && (!self.filter_regex || regex::Regex::new(&self.toc_filter).is_ok())
     }
-    pub fn excludes(&self, title: &str) -> bool {
-        if self.toc_filter.is_empty() {
-            return false;
-        }
-        if self.filter_regex {
-            regex::Regex::new(&self.toc_filter).is_ok_and(|r| r.is_match(title))
+    pub fn filter(&self) -> Result<impl Fn(&str) -> bool + '_, regex::Error> {
+        let regex = if self.filter_regex && !self.toc_filter.is_empty() {
+            Some(regex::Regex::new(&self.toc_filter)?)
         } else {
-            title.contains(&self.toc_filter)
-        }
+            None
+        };
+        Ok(move |title: &str| {
+            !self.toc_filter.is_empty()
+                && match &regex {
+                    Some(regex) => regex.is_match(title),
+                    None => title.contains(&self.toc_filter),
+                }
+        })
     }
 }
 

@@ -224,7 +224,9 @@ fn write_profile<W: Write + Seek>(
         );
     }
     // 每章一个文件：三千章的长篇加上插图也在上限之内。
-    if files.len() > 16384 || files.values().map(|b| b.len()).sum::<usize>() > 384 * 1024 * 1024 {
+    if files.len() > crate::output_package::MAX_CONTENT_RESOURCES
+        || files.values().map(|b| b.len()).sum::<usize>() > 384 * 1024 * 1024
+    {
         return Err(invalid());
     }
     let now = time::OffsetDateTime::now_utc();

@@ -130,6 +130,9 @@ class ChapterLayoutView extends ChangeNotifier {
       align: switch (align) {
         'center' => TextAlign.center,
         'right' => TextAlign.right,
+        'left' => TextAlign.left,
+        'start' => TextAlign.start,
+        'justify' => TextAlign.justify,
         // 真机正文两端对齐（实测）。
         _ => metrics.justify ? TextAlign.justify : TextAlign.start,
       },

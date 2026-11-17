@@ -266,11 +266,15 @@ impl Configuration {
         if self
             .output_format
             .as_deref()
-            .is_some_and(|format| !matches!(format, "EPUB" | "AZW3" | "MOBI" | "KFX"))
+            .is_some_and(|format| !matches!(format, "EPUB" | "AZW3" | "MOBI" | "KFX" | "TXT"))
         {
             return Err(error(ErrorCode::InvalidRule, "check_output_format"));
         }
-        if self.kindle_content_type.as_deref().is_some_and(|v| !matches!(v, "EBOK" | "PDOC")) {
+        if self
+            .kindle_content_type
+            .as_deref()
+            .is_some_and(|v| !matches!(v, "EBOK" | "PDOC"))
+        {
             return Err(error(ErrorCode::InvalidRule, "check_kindle_content_type"));
         }
         if self
@@ -492,7 +496,7 @@ fn store_blob(objects: &Path, bytes: &[u8]) -> Result<String, ApiError> {
             file.write_all(bytes).map_err(io)?;
             file.sync_all().map_err(io)?;
             drop(file);
-            match fs::hard_link(&temporary, &destination) {
+            match crate::file_publish::move_new(&temporary, &destination) {
                 Ok(()) => Ok(()),
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                     batch_bytes(&destination, &digest).map(|_| ())
@@ -611,7 +615,7 @@ fn load_locked(directory: &Path) -> Result<Snapshot, ApiError> {
     // to maintain history never makes a valid current configuration unreadable.
     if revisions.iter().filter(|r| **r > base).count() >= COMPACT_GENERATIONS {
         let path = directory.join(format!("checkpoint-{revision:020}-{}.json", hash(&bytes)));
-        if fs::hard_link(directory.join(filename(revision)), &path).is_ok()
+        if publish_checkpoint(directory, &path, &bytes).is_ok()
             || read(&path).is_ok_and(|existing| existing == bytes)
         {
             base = revision;
@@ -632,6 +636,26 @@ fn load_locked(directory: &Path) -> Result<Snapshot, ApiError> {
         configuration: record.configuration,
     })
 }
+fn publish_checkpoint(directory: &Path, target: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let stage = directory.join(format!(
+        ".checkpoint-{}-{}.tmp",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&stage)?;
+    let result = (|| {
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        crate::file_publish::move_new(&stage, target)
+    })();
+    let _ = fs::remove_file(stage);
+    result
+}
+
 pub fn save(
     directory: &Path,
     expected: Option<&str>,
@@ -676,13 +700,15 @@ pub fn save(
         file.write_all(&bytes).map_err(io)?;
         file.sync_all().map_err(io)?;
         drop(file);
-        fs::hard_link(&stage, directory.join(filename(revision))).map_err(|e| {
-            if e.kind() == std::io::ErrorKind::AlreadyExists {
-                error(ErrorCode::StaleRevision, "reload_settings_before_saving")
-            } else {
-                io(e)
-            }
-        })?;
+        crate::file_publish::move_new(&stage, &directory.join(filename(revision))).map_err(
+            |e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    error(ErrorCode::StaleRevision, "reload_settings_before_saving")
+                } else {
+                    io(e)
+                }
+            },
+        )?;
         Ok(Snapshot {
             retired_check_fields: configuration.retired_check_fields(),
             revision,
@@ -1058,8 +1084,14 @@ mod tests {
             Some(r"D:\书稿\待制作")
         );
         assert_eq!(loaded.configuration.output_format.as_deref(), Some("AZW3"));
-        assert_eq!(loaded.configuration.kindle_content_type.as_deref(), Some("PDOC"));
-        assert_eq!(loaded.configuration.kindle_content_type_explained, Some(true));
+        assert_eq!(
+            loaded.configuration.kindle_content_type.as_deref(),
+            Some("PDOC")
+        );
+        assert_eq!(
+            loaded.configuration.kindle_content_type_explained,
+            Some(true)
+        );
         assert_eq!(
             loaded.configuration.output_directory.as_deref(),
             Some(r"D:\书稿\成品")

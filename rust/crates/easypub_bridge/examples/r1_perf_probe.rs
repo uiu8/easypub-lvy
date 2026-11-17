@@ -88,8 +88,7 @@ fn run_case(path: &Path, target: usize) -> String {
     );
     format!(
         "{{\"target_bytes\":{target},\"actual_bytes\":{actual},\"import_ms\":{import_ms:.3},\"source_id\":\"{source_id}\",\"lines\":{},\"chapters\":{},\"page_count\":{page_count},\"page_ms\":{page_ms:.3},\"chapter_page_ms\":{chapter_ms:.3},\"max_bridge_response_bytes\":{max_response},\"chapter_response_bytes\":{chapter_response_bytes}}}",
-        book.lines,
-        book.chapters,
+        book.lines, book.chapters,
     )
 }
 

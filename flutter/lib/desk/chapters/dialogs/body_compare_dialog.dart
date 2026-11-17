@@ -45,6 +45,16 @@ class ChapterBodyCompareDialog extends StatefulWidget {
   final arabic = int.tryParse(raw);
   if (arabic != null) return (arabic, m.group(2)!);
   const digits = {
+    '0': 0,
+    '1': 1,
+    '2': 2,
+    '3': 3,
+    '4': 4,
+    '5': 5,
+    '6': 6,
+    '7': 7,
+    '8': 8,
+    '9': 9,
     '零': 0,
     '〇': 0,
     '一': 1,
@@ -59,6 +69,12 @@ class ChapterBodyCompareDialog extends StatefulWidget {
     '九': 9,
   };
   const units = {'十': 10, '百': 100, '千': 1000, '万': 10000};
+  if (raw.split('').every(digits.containsKey)) {
+    final number = raw
+        .split('')
+        .fold<int>(0, (value, ch) => value * 10 + digits[ch]!);
+    return (number, m.group(2)!);
+  }
   var total = 0, section = 0, digit = 0;
   for (final ch in raw.split('')) {
     if (digits.containsKey(ch)) {

@@ -417,10 +417,34 @@ fn run_task(task: Task, cancel: Arc<AtomicBool>) {
         crate::control::current().check()?;
         {
             let mut st = state();
+            // 换源可能改变输出名与章节缓存；与调度器在同一把锁内转移占用。
+            let mut params = st
+                .queue
+                .iter()
+                .find(|t| t.id == task)
+                .ok_or("下载任务已移除")?
+                .params
+                .clone();
+            params["sourceId"] = json!(id);
+            params["toc"] = json!(toc);
+            params["book"] = json!(book);
+            params["update"] = json!(false);
+            let needed = resources(&params);
+            let occupied: Vec<_> = st
+                .queue
+                .iter()
+                .filter(|t| t.id != task && st.tasks.contains_key(&t.id))
+                .flat_map(|t| resources(&t.params))
+                .collect();
+            if needed
+                .iter()
+                .any(|p| occupied.contains(p) || st.maintenance_paths.contains(p))
+            {
+                return Err("换源后的输出或缓存正在使用，请稍后重试".into());
+            }
             if let Some(t) = st.queue.iter_mut().find(|t| t.id == task) {
-                t.params["toc"] = json!(toc);
-                t.params["book"] = json!(book);
-                t.params["update"] = json!(false);
+                t.params = params;
+                t.source_name = rt.source.book_source_name.trim().to_owned();
             }
         }
         persist(true)?;

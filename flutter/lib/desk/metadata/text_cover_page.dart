@@ -120,7 +120,12 @@ class _TextCoverPageState extends State<TextCoverPage> {
       final codec = await dart_ui.instantiateImageCodec(
         await readLocalFileBytes(path),
       );
-      final image = (await codec.getNextFrame()).image;
+      late final dart_ui.Image image;
+      try {
+        image = (await codec.getNextFrame()).image;
+      } finally {
+        codec.dispose();
+      }
       if (!mounted) {
         image.dispose();
         return;

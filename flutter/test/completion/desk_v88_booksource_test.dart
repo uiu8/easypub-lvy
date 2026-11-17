@@ -131,6 +131,40 @@ Future<void> open(WidgetTester tester, V88Api api, Directory temp) async {
 }
 
 void main() {
+  testWidgets('失败下载即使计数已满也不能显示完成或缺章', (tester) async {
+    final temp = Directory.systemTemp.createTempSync('queue-failure-label-');
+    final api = V88Api();
+    await open(tester, api, temp);
+    for (final done in [0, 5, 10]) {
+      api.events_.add({
+        'event': 'queue.changed',
+        'queue': {
+          'tasks': [
+            {
+              'id': 'failed-task',
+              'title': '失败样书',
+              'sourceName': '甲源',
+              'status': 'failed',
+              'error': '测试最终写入失败',
+              'progress': {'done': done, 'total': 10},
+            },
+          ],
+        },
+      });
+      await tester.pump(const Duration(milliseconds: 300));
+      if (done == 0) {
+        await tester.tap(find.text('下载 0'));
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      expect(find.text('失败'), findsWidgets);
+      expect(find.textContaining('测试最终写入失败'), findsWidgets);
+      expect(find.text('完成'), findsNothing);
+      expect(find.text('有未取到的章节'), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(milliseconds: 300));
+  });
   testWidgets('小说搜索突发结果合并、停止排空尾批并保留已选书', (tester) async {
     final temp = Directory.systemTemp.createTempSync('novel-search-');
     addTearDown(() => temp.deleteSync(recursive: true));

@@ -64,7 +64,9 @@ pub(crate) fn split(documents: &mut Documents, target: usize) -> Result<(), ApiE
         let mut unit_end = 0;
         let mut has_source = false;
         for child in section.children().filter(|n| n.is_element()) {
-            let source = child.descendants().any(|n| n.attribute("data-source") == Some("true"));
+            let source = child
+                .descendants()
+                .any(|n| n.attribute("data-source") == Some("true"));
             if source && has_source {
                 units.push(unit_start.take().ok_or_else(invalid)?..unit_end);
                 has_source = false;
@@ -122,9 +124,10 @@ pub(crate) fn split(documents: &mut Documents, target: usize) -> Result<(), ApiE
         let parsed = roxmltree::Document::parse(&content).map_err(|_| invalid())?;
         for n in parsed.descendants() {
             if let Some(id) = n.attribute("id")
-                && targets.insert(id.to_string(), name.clone()).is_some() {
-                    return Err(invalid());
-                }
+                && targets.insert(id.to_string(), name.clone()).is_some()
+            {
+                return Err(invalid());
+            }
         }
         pages.insert(name, content);
     }
@@ -143,10 +146,11 @@ pub(crate) fn split(documents: &mut Documents, target: usize) -> Result<(), ApiE
         for node in doc.descendants() {
             for attr in node.attributes() {
                 if attr.name() == "href"
-                    && let Some(id) = attr.value().strip_prefix("body.xhtml#") {
-                        let name = targets.get(id).ok_or_else(invalid)?;
-                        edits.push((attr.range_value(), format!("{name}#{id}")));
-                    }
+                    && let Some(id) = attr.value().strip_prefix("body.xhtml#")
+                {
+                    let name = targets.get(id).ok_or_else(invalid)?;
+                    edits.push((attr.range_value(), format!("{name}#{id}")));
+                }
             }
         }
         let mut result = String::with_capacity(content.len());

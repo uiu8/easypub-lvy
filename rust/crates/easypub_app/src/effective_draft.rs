@@ -2167,6 +2167,27 @@ mod tests {
         let folder = request["checkpoint"]["directory"].as_str().unwrap();
         assert!(folder.starts_with("easypub-edit-assets-") && !folder.contains(['/', '\\']));
         assert!(dir.join(folder).is_dir());
+        #[cfg(windows)]
+        {
+            let entries = || {
+                std::fs::read_dir(&dir)
+                    .unwrap()
+                    .map(|entry| entry.unwrap().file_name())
+                    .collect::<std::collections::BTreeSet<_>>()
+            };
+            let before = entries();
+            // Publication fails after the checkpoint has been copied. Neither
+            // the original checkpoint nor the earlier saved project is owned
+            // by the failed transaction's cleanup guard.
+            let failed = dir.join(format!("{}.easypub.json", "x".repeat(256)));
+            assert!(
+                crate::project::save(&service, failed.to_str().unwrap(), &project.to_string())
+                    .is_err()
+            );
+            assert_eq!(entries(), before);
+            assert!(dir.join("checkpoints").is_dir());
+            assert!(dir.join(folder).is_dir());
+        }
         std::fs::remove_dir_all(dir.join("checkpoints")).unwrap();
 
         let reopened = crate::sessions::ImportService::new().unwrap();

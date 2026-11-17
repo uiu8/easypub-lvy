@@ -212,7 +212,8 @@ fn decode_href(href: &str) -> String {
     while i < bytes.len() {
         if bytes[i] == b'%'
             && i + 2 < bytes.len()
-            && let Ok(v) = u8::from_str_radix(&href[i + 1..i + 3], 16)
+            && let Ok(hex) = std::str::from_utf8(&bytes[i + 1..i + 3])
+            && let Ok(v) = u8::from_str_radix(hex, 16)
         {
             out.push(v);
             i += 3;
@@ -222,6 +223,172 @@ fn decode_href(href: &str) -> String {
         i += 1;
     }
     String::from_utf8_lossy(&out).into_owned()
+}
+
+fn renamed_reference(
+    value: &str,
+    base: &reqwest::Url,
+    renames: &[(String, String, String)],
+) -> String {
+    let Ok(url) = base.join(value) else {
+        return value.into();
+    };
+    if url.origin() != base.origin() || url.host_str() != Some("epub.invalid") {
+        return value.into();
+    }
+    let path = decode_href(url.path().trim_start_matches('/'));
+    let Some((_, old, new)) = renames.iter().find(|(_, old, _)| *old == path) else {
+        return value.into();
+    };
+    // 转换后的名字只在旧路径后追加后缀，保留原引用的相对路径、转义和片段。
+    let suffix = &new[old.len()..];
+    let end = value.find(['?', '#']).unwrap_or(value.len());
+    format!("{}{suffix}{}", &value[..end], &value[end..])
+}
+
+fn rewrite_image_css(
+    css: &str,
+    base: &reqwest::Url,
+    renames: &[(String, String, String)],
+) -> Result<String, ApiError> {
+    let refs = crate::css_references::inspect(css);
+    let replacements: Vec<_> = refs
+        .references
+        .iter()
+        .map(|r| renamed_reference(r, base, renames))
+        .collect();
+    if replacements == refs.references {
+        return Ok(css.into());
+    }
+    crate::css_references::rewrite(css, &refs, &replacements)
+        .ok_or_else(|| invalid("choose_valid_epub_css"))
+}
+
+fn rewrite_srcset(
+    value: &str,
+    base: &reqwest::Url,
+    renames: &[(String, String, String)],
+) -> String {
+    let bytes = value.as_bytes();
+    let mut at = 0;
+    let mut edits = Vec::new();
+    while at < bytes.len() {
+        while at < bytes.len() && (bytes[at].is_ascii_whitespace() || bytes[at] == b',') {
+            at += 1;
+        }
+        let start = at;
+        while at < bytes.len() && !bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        let mut end = at;
+        while end > start && bytes[end - 1] == b',' {
+            end -= 1;
+        }
+        if start == end {
+            continue;
+        }
+        let next = renamed_reference(&value[start..end], base, renames);
+        if next != value[start..end] {
+            edits.push((start..end, next));
+        }
+        if end < at {
+            continue;
+        }
+        // 描述符中的括号不作为候选分隔；data: URL 内部的逗号已在 URL 阶段保留。
+        let mut depth = 0usize;
+        while at < bytes.len() {
+            let c = bytes[at];
+            at += 1;
+            match c {
+                b'(' => depth += 1,
+                b')' => depth = depth.saturating_sub(1),
+                b',' if depth == 0 => break,
+                _ => (),
+            }
+        }
+    }
+    let mut out = value.to_owned();
+    for (range, replacement) in edits.into_iter().rev() {
+        out.replace_range(range, &replacement);
+    }
+    out
+}
+
+fn rewrite_image_references(
+    text: &str,
+    name: &str,
+    renames: &[(String, String, String)],
+) -> Result<String, ApiError> {
+    let mut base = reqwest::Url::parse("https://epub.invalid/").unwrap();
+    base.set_path(name);
+    if name.to_ascii_lowercase().ends_with(".css") {
+        return rewrite_image_css(text, &base, renames);
+    }
+    let normalized = crate::epub_xml::named_entities(text);
+    let doc = crate::epub_xml::parse(&normalized)
+        .map_err(|_| invalid("choose_well_formed_epub_xhtml"))?;
+    if let Some(href) = doc
+        .descendants()
+        .find(|n| n.is_element() && n.tag_name().name() == "base")
+        .and_then(|n| n.attribute("href"))
+    {
+        base = base
+            .join(href)
+            .map_err(|_| invalid("choose_valid_epub_package"))?;
+    }
+    let mut edits = Vec::new();
+    for node in doc.descendants().filter(|n| n.is_element()) {
+        let mut local_base = base.clone();
+        let ancestors: Vec<_> = node.ancestors().filter(|n| n.is_element()).collect();
+        for ancestor in ancestors.iter().rev() {
+            if let Some(value) =
+                ancestor.attribute(("http://www.w3.org/XML/1998/namespace", "base"))
+            {
+                local_base = local_base
+                    .join(value)
+                    .map_err(|_| invalid("choose_valid_epub_package"))?;
+            }
+        }
+        for attr in node.attributes() {
+            let next = match attr.name() {
+                "href" | "src" | "poster" | "data" => {
+                    renamed_reference(attr.value(), &local_base, renames)
+                }
+                "srcset" | "imagesrcset" => rewrite_srcset(attr.value(), &local_base, renames),
+                "style" => rewrite_image_css(attr.value(), &local_base, renames)?,
+                _ => continue,
+            };
+            if next != attr.value() {
+                let range = attr.range();
+                let spelling = normalized[range.clone()].split('=').next().unwrap().trim();
+                edits.push((range, format!("{spelling}=\"{}\"", escaped(&next))));
+            }
+        }
+        if node.tag_name().name() == "style" {
+            for child in node.children().filter(|n| n.is_text()) {
+                let css = child.text().unwrap_or("");
+                let next = rewrite_image_css(css, &local_base, renames)?;
+                if next != css {
+                    let range = child.range();
+                    let replacement = if normalized[range.clone()].starts_with("<![CDATA[") {
+                        format!("<![CDATA[{next}]]>")
+                    } else {
+                        escaped(&next)
+                    };
+                    edits.push((range, replacement));
+                }
+            }
+        }
+    }
+    if edits.is_empty() {
+        return Ok(text.into());
+    }
+    let mut out = normalized.into_owned();
+    edits.sort_by_key(|(range, _)| std::cmp::Reverse(range.start));
+    for (range, replacement) in edits {
+        out.replace_range(range, &replacement);
+    }
+    Ok(out)
 }
 
 pub(crate) fn join(base: &str, href: &str) -> Option<String> {
@@ -704,7 +871,7 @@ pub fn rebuild(original: &[u8], overrides: &Overrides) -> Result<(Vec<u8>, Repor
             .find(|n| n.tag_name().name() == "meta" && n.attribute("name") == Some("cover"))
             .and_then(|n| n.attribute("content").map(str::to_owned))
     });
-    let mut renames: Vec<(String, String, String)> = Vec::new(); // (id, 旧文件名, 新文件名)
+    let mut renames: Vec<(String, String, String)> = Vec::new(); // (id, 旧 ZIP 路径, 新 ZIP 路径)
     for item in &items {
         // 关掉自动转换时图片保留原样。
         if overrides.keep_images {
@@ -830,28 +997,17 @@ pub fn rebuild(original: &[u8], overrides: &Overrides) -> Result<(Vec<u8>, Repor
         if same_format {
             entries[index].1 = bytes;
         } else {
-            let file = zip_path.rsplit('/').next().unwrap_or(&zip_path).to_owned();
-            let new_file = format!("{file}.{ext}");
-            entries[index] = (format!("{zip_path}.{ext}"), bytes);
-            renames.push((item.id.clone(), file, new_file));
+            let mut new_path = format!("{zip_path}.{ext}");
+            let mut serial = 1;
+            while find(&entries, &new_path).is_some() {
+                new_path = format!("{zip_path}.easypub-{serial}.{ext}");
+                serial += 1;
+            }
+            entries[index] = (new_path.clone(), bytes);
+            renames.push((item.id.clone(), zip_path, new_path));
         }
         report.images.push(conversion);
     }
-    // 引用改写：文件名后面紧跟引号、括号、#、? 或空白时才替换，避免误改相似文字。
-    let rewrite = |text: &str| -> Option<String> {
-        let mut out = text.to_owned();
-        let mut changed = false;
-        for (_, old, new) in &renames {
-            for tail in ['"', '\'', ')', '#', '?', ' ', '\n'] {
-                let from = format!("{old}{tail}");
-                if out.contains(&from) {
-                    out = out.replace(&from, &format!("{new}{tail}"));
-                    changed = true;
-                }
-            }
-        }
-        changed.then_some(out)
-    };
     if !renames.is_empty() {
         for (name, bytes) in entries.iter_mut() {
             let lower = name.to_ascii_lowercase();
@@ -862,15 +1018,11 @@ pub fn rebuild(original: &[u8], overrides: &Overrides) -> Result<(Vec<u8>, Repor
             {
                 continue;
             }
-            if let Ok(text) = std::str::from_utf8(bytes)
-                && let Some(next) = rewrite(text)
-            {
-                *bytes = next.into_bytes();
+            if let Ok(text) = std::str::from_utf8(bytes) {
+                *bytes = rewrite_image_references(text, name, &renames)?.into_bytes();
             }
         }
-        if let Some(next) = rewrite(&opf) {
-            opf = next;
-        }
+        opf = rewrite_image_references(&opf, &opf_path, &renames)?;
         // 清单里改名项的媒体类型。
         for (id, _, new) in &renames {
             let media = if new.ends_with(".png") {
@@ -1264,9 +1416,126 @@ pub fn rebuild(original: &[u8], overrides: &Overrides) -> Result<(Vec<u8>, Repor
 }
 
 #[cfg(test)]
+#[test]
+fn repair88_image_reference_rewrite_preserves_text_and_candidate_descriptors() {
+    let renames = vec![(
+        "cover".into(),
+        "OPS/img/a.jpg".into(),
+        "OPS/img/a.jpg.png".into(),
+    )];
+    let xml = r#"<html xmlns="http://www.w3.org/1999/xhtml"><head><base href="../"/><style><![CDATA[p{background:url(img/a.jpg)}]]></style></head><body><p>img/a.jpg</p><img srcset="img/a.jpg 1x, img/b.jpg 2x"/><img src="other/a.jpg"/></body></html>"#;
+    let output = rewrite_image_references(xml, "OPS/text/ch.xhtml", &renames).unwrap();
+    let doc = crate::epub_xml::parse(&output).unwrap();
+    let images = doc
+        .descendants()
+        .filter(|n| n.has_tag_name("img"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        images[0].attribute("srcset"),
+        Some("img/a.jpg.png 1x, img/b.jpg 2x")
+    );
+    assert_eq!(images[1].attribute("src"), Some("other/a.jpg"));
+    assert_eq!(
+        doc.descendants()
+            .find(|n| n.has_tag_name("p"))
+            .unwrap()
+            .text(),
+        Some("img/a.jpg")
+    );
+    assert!(
+        doc.descendants()
+            .find(|n| n.has_tag_name("style"))
+            .unwrap()
+            .text()
+            .unwrap()
+            .contains("img/a.jpg.png")
+    );
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use image::{DynamicImage, ImageBuffer, ImageFormat, Rgb};
+
+    #[test]
+    fn repair88_image_references_resolve_nested_bases_and_preserve_non_urls() {
+        let renames = vec![
+            (
+                "a".into(),
+                "OPS/img/a.jpg".into(),
+                "OPS/img/a.jpg.png".into(),
+            ),
+            (
+                "b".into(),
+                "OPS/other/a.jpg".into(),
+                "OPS/other/a.jpg.jpeg".into(),
+            ),
+        ];
+        let xml = r#"<html xmlns="http://www.w3.org/1999/xhtml"><head><base href="../"/>
+          <link imagesrcset="data:image/png;base64,AAAA 1x, img/a.jpg 2x"/>
+          </head><body xml:base="img/"><p title="a.jpg">a.jpg img/a.jpg</p>
+          <img id="local" src="a.jpg?q=1&amp;x=2#part" style="background:url(a.jpg);content:'a.jpg'"/>
+          <div xml:base="../other/"><img id="other" src="a.jpg"/></div>
+          <img id="encoded" src="%61.jpg"/>
+          <img id="remote" src="https://example.org/OPS/img/a.jpg"/>
+          <img id="untouched" src="../untouched/a.jpg"/>
+          <img id="data" src="data:image/png;base64,AAAA"/>
+          </body></html>"#;
+        let output = rewrite_image_references(xml, "OPS/text/ch.xhtml", &renames).unwrap();
+        let doc = crate::epub_xml::parse(&output).unwrap();
+        for (id, expected) in [
+            ("local", "a.jpg.png?q=1&x=2#part"),
+            ("other", "a.jpg.jpeg"),
+            ("encoded", "%61.jpg.png"),
+            ("remote", "https://example.org/OPS/img/a.jpg"),
+            ("untouched", "../untouched/a.jpg"),
+            ("data", "data:image/png;base64,AAAA"),
+        ] {
+            let node = doc
+                .descendants()
+                .find(|n| n.attribute("id") == Some(id))
+                .unwrap();
+            assert_eq!(node.attribute("src"), Some(expected), "{id}");
+        }
+        let paragraph = doc.descendants().find(|n| n.has_tag_name("p")).unwrap();
+        assert_eq!(paragraph.text(), Some("a.jpg img/a.jpg"));
+        assert_eq!(paragraph.attribute("title"), Some("a.jpg"));
+        let local = doc
+            .descendants()
+            .find(|n| n.attribute("id") == Some("local"))
+            .unwrap();
+        assert!(local.attribute("style").unwrap().contains("a.jpg.png"));
+        assert!(
+            local
+                .attribute("style")
+                .unwrap()
+                .contains("content:'a.jpg'")
+        );
+        let link = doc.descendants().find(|n| n.has_tag_name("link")).unwrap();
+        assert_eq!(
+            link.attribute("imagesrcset"),
+            Some("data:image/png;base64,AAAA 1x, img/a.jpg.png 2x")
+        );
+        let css = "/* ../img/a.jpg */ p{content:'../img/a.jpg';background:url('../img/a.jpg#x')}";
+        let output = rewrite_image_references(css, "OPS/css/book.css", &renames).unwrap();
+        assert!(output.contains("/* ../img/a.jpg */"));
+        assert!(output.contains("content:'../img/a.jpg'"));
+        assert!(output.contains("../img/a.jpg.png#x"));
+    }
+
+    #[test]
+    fn repair88_percent_links_preserve_invalid_sequences_without_panicking() {
+        for (input, expected) in [
+            ("%中.xhtml", "%中.xhtml"),
+            ("%é.xhtml", "%é.xhtml"),
+            ("a%2", "a%2"),
+            ("a%XZ", "a%XZ"),
+            ("%E7%AB%A0.xhtml", "章.xhtml"),
+            ("%2520", "%20"),
+        ] {
+            assert_eq!(decode_href(input), expected);
+        }
+    }
 
     fn encoded(format: ImageFormat, w: u32, h: u32) -> Vec<u8> {
         let mut out = Cursor::new(Vec::new());
@@ -1485,7 +1754,7 @@ mod tests {
         let style = String::from_utf8(get("OEBPS/style.css").unwrap()).unwrap();
         assert_eq!(
             style,
-            "body{background:url(images/plate.webp.jpg)} .plate.webpx{}"
+            "body{background:url(\"images/plate.webp.jpg\")} .plate.webpx{}"
         );
         let opf = String::from_utf8(get("OEBPS/content.opf").unwrap()).unwrap();
         assert!(

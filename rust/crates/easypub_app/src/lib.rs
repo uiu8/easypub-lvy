@@ -28,8 +28,8 @@ pub mod assets;
 
 pub mod publication_resources;
 
-pub mod publication_style;
 pub mod layout_units;
+pub mod publication_style;
 
 pub mod fonts;
 
@@ -61,10 +61,9 @@ pub mod epub;
 pub mod epub_export;
 pub mod epub_import;
 pub(crate) mod epub_marks;
-pub(crate) mod epub_xml;
 pub mod epub_passthrough;
-pub mod original_navigation;
 pub mod epub_restyle;
+pub(crate) mod epub_xml;
 #[cfg(windows)]
 pub mod inline_markup;
 pub mod inset_styles;
@@ -79,6 +78,7 @@ mod kindling_navigation;
 #[cfg(windows)]
 pub mod managed_process;
 pub mod navigation_documents;
+pub mod original_navigation;
 pub mod publication_documents;
 mod publication_notes;
 mod publication_split;
@@ -88,6 +88,7 @@ pub mod source_marks;
 pub mod text_encoding;
 
 pub mod block_styles;
+mod file_publish;
 pub mod layout_preset_file;
 pub mod layout_presets;
 pub mod style_packs;

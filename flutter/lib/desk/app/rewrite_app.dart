@@ -51,6 +51,7 @@ import 'package:go_router/go_router.dart';
 import '../../application/library_service.dart';
 import '../controls/controls.dart';
 import '../library/library_page.dart';
+import '../library/import_failures_dialog.dart';
 import '../library/encoding_dialog.dart';
 import '../library/source_refresh_dialog.dart';
 import '../../application/source_refresh_service.dart';
@@ -169,6 +170,8 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
     if (next.reducedMotion == appearance?.reducedMotion &&
         next.configuration['ui_scale'] ==
             appearance?.configuration['ui_scale'] &&
+        next.configuration['ui_follow_system_scale'] ==
+            appearance?.configuration['ui_follow_system_scale'] &&
         next.configuration['ui_accent'] ==
             appearance?.configuration['ui_accent'] &&
         // 主题与密度：变化时重建主题。
@@ -566,6 +569,8 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
   }
 
   Future<void> chooseLayout(BuildContext context, {Set<String>? books}) async {
+    // 草稿保存会重建托盘；对话框依附稳定的导航器，不依附旧按钮上下文。
+    final navigator = Navigator.of(context, rootNavigator: true);
     final current = widget.library.selection.value.current;
     final targets = books ?? {?current};
     final source = targets.contains(current) ? current : targets.firstOrNull;
@@ -577,10 +582,10 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
       return;
     }
     await workspaceDraftGuard.run(() async {
-      if (!mounted || !context.mounted) return false;
+      if (!mounted || !navigator.mounted) return false;
       if (targets.length > 1) {
         await showDialog<bool>(
-          context: context,
+          context: navigator.context,
           builder: (_) => BookBatchDialog(
             library: widget.library,
             bookId: book.id,
@@ -592,7 +597,7 @@ class _RewriteAppState extends State<RewriteApp> with WidgetsBindingObserver {
         return true;
       }
       final result = await showDialog<String>(
-        context: context,
+        context: navigator.context,
         builder: (_) => QuickLayoutDialog(library: widget.library, book: book),
       );
       if (!mounted || result == null) return false;

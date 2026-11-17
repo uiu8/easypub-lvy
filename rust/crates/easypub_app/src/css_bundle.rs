@@ -39,10 +39,10 @@ pub fn for_settings(settings: &crate::production::Settings) -> Snapshot {
         let result = restore(Path::new(&reference.directory), &reference.manifest_sha256);
         if let Ok(restored) = result
             && restored.manifest.css == settings.additional_css
-                && restored.manifest.base == settings.additional_css_base
-            {
-                return Snapshot::from_restored(restored);
-            }
+            && restored.manifest.base == settings.additional_css_base
+        {
+            return Snapshot::from_restored(restored);
+        }
         let mut failed = Snapshot::default();
         failed
             .report
@@ -174,9 +174,9 @@ pub fn persist(
         write_new(&directory.join("resources").join(id), bytes)?;
     }
     write_new(&directory.join("manifest.stage"), &json)?;
-    fs::hard_link(
-        directory.join("manifest.stage"),
-        directory.join("manifest.json"),
+    crate::file_publish::move_new(
+        &directory.join("manifest.stage"),
+        &directory.join("manifest.json"),
     )
     .map_err(|_| error())?;
     let _ = fs::remove_file(directory.join("manifest.stage"));

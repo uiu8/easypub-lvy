@@ -11,6 +11,7 @@ use std::{
 use zip::ZipArchive;
 
 type Check<T> = Result<T, String>;
+pub(crate) const MAX_CONTENT_RESOURCES: usize = 16_384;
 fn error<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
@@ -108,7 +109,7 @@ pub fn inspect(path: &Path, expected: &str) -> Check<Value> {
         return Err("成品与导出回执不一致".into());
     }
     let mut zip = ZipArchive::new(file).map_err(error)?;
-    if zip.len() > 4096 {
+    if zip.len() > MAX_CONTENT_RESOURCES + 3 {
         return Err("资源数超出检查上限".into());
     }
     let mut names = BTreeSet::new();
@@ -133,6 +134,10 @@ pub fn inspect(path: &Path, expected: &str) -> Check<Value> {
     let package = resolve("", package)?.0;
     let opf = text(&mut zip, &package)?;
     let doc = parse_xml(&opf).map_err(error)?;
+    let epub2 = doc
+        .root_element()
+        .attribute("version")
+        .is_some_and(|version| version.starts_with("2."));
     let metadata = |name| {
         doc.descendants()
             .find(|n| n.has_tag_name(name))
@@ -170,6 +175,22 @@ pub fn inspect(path: &Path, expected: &str) -> Check<Value> {
         return Err("阅读顺序为空".into());
     }
     let mut pages = BTreeSet::from_iter(spine.iter().cloned());
+    if epub2 {
+        let ncx_id = doc
+            .descendants()
+            .find(|n| n.has_tag_name("spine"))
+            .and_then(|n| n.attribute("toc"))
+            .ok_or("EPUB 2 缺少 NCX 引用")?;
+        nav = Some(manifest.get(ncx_id).ok_or("NCX 资源不存在")?.clone());
+        if cover.is_none() {
+            cover = doc
+                .descendants()
+                .find(|n| n.has_tag_name("meta") && n.attribute("name") == Some("cover"))
+                .and_then(|n| n.attribute("content"))
+                .and_then(|id| manifest.get(id))
+                .cloned();
+        }
+    }
     let nav = nav.ok_or("缺少EPUB导航文档")?;
     pages.insert(nav.clone());
     let mut ids = BTreeMap::new();
@@ -191,7 +212,11 @@ pub fn inspect(path: &Path, expected: &str) -> Check<Value> {
             image_resources.insert(resource.clone());
         }
     }
-    let cover_in_spine = cover.as_ref().is_some_and(|path| spine.contains(path));
+    let mut cover_in_spine = doc
+        .descendants()
+        .filter(|n| n.has_tag_name("reference") && n.attribute("type") == Some("cover"))
+        .filter_map(|n| n.attribute("href"))
+        .any(|href| resolve(&package, href).is_ok_and(|(path, _)| spine.contains(&path)));
     for page in &pages {
         let xml = text(&mut zip, page)?;
         text_bytes += xml.len();
@@ -202,7 +227,25 @@ pub fn inspect(path: &Path, expected: &str) -> Check<Value> {
         if spine.contains(page) {
             body_bytes = body_bytes.checked_add(xml.len()).ok_or("正文体积溢出")?;
         }
-        if page == &nav {
+        if page == &nav && epub2 {
+            let toc = doc
+                .descendants()
+                .find(|n| n.has_tag_name("navMap"))
+                .ok_or("NCX 缺少 navMap")?;
+            let targets: Vec<_> = toc
+                .descendants()
+                .filter(|n| n.has_tag_name("content"))
+                .filter_map(|n| n.attribute("src"))
+                .collect();
+            if targets.is_empty() {
+                return Err("目录链接为空".into());
+            }
+            for href in targets {
+                if !spine.contains(&resolve(page, href)?.0) {
+                    return Err("目录目标不在阅读顺序中".into());
+                }
+            }
+        } else if page == &nav {
             let toc = doc
                 .descendants()
                 .find(|n| {
@@ -249,7 +292,11 @@ pub fn inspect(path: &Path, expected: &str) -> Check<Value> {
                 }
             }
             for attr in ["href", "src"] {
-                if let Some(value) = node.attribute(attr) {
+                if let Some(value) = node.attribute(attr).or_else(|| {
+                    (attr == "href")
+                        .then(|| node.attribute(("http://www.w3.org/1999/xlink", "href")))
+                        .flatten()
+                }) {
                     if value.starts_with("https://")
                         || value.starts_with("http://")
                         || value.starts_with("mailto:")
@@ -259,6 +306,12 @@ pub fn inspect(path: &Path, expected: &str) -> Check<Value> {
                     let target = resolve(page, value)?;
                     if attr == "src" && image_resources.contains(&target.0) {
                         image_references += 1;
+                    }
+                    if spine.contains(page)
+                        && cover.as_ref() == Some(&target.0)
+                        && matches!(node.tag_name().name(), "img" | "image")
+                    {
+                        cover_in_spine = true;
                     }
                     reference_bytes += target.0.len() + target.1.len();
                     if links.len() >= 200_000 || reference_bytes > 32 * 1024 * 1024 {
@@ -317,9 +370,6 @@ pub fn inspect(path: &Path, expected: &str) -> Check<Value> {
 mod tests {
     use super::*;
     fn sample(href: &str) -> (std::path::PathBuf, Vec<u8>, String) {
-        use std::io::Write;
-        let cursor = Cursor::new(Vec::new());
-        let mut zip = zip::ZipWriter::new(cursor);
         let entries = [
             ("mimetype", "application/epub+zip".to_string()),
             ("META-INF/container.xml", "<container><rootfiles><rootfile full-path='OPS/book.opf'/></rootfiles></container>".to_string()),
@@ -327,10 +377,17 @@ mod tests {
             ("OPS/body.xhtml", "<html><body><h1 id='chapter'>第一章</h1><p>正文</p></body></html>".to_string()),
             ("OPS/nav.xhtml", format!("<html xmlns:epub='http://www.idpf.org/2007/ops'><body><nav epub:type='toc'><a href='{href}'>第一章</a></nav></body></html>")),
         ];
-        for (name, text) in entries {
+        write_sample(entries.map(|(name, text)| (name, text.into_bytes())))
+    }
+    fn write_sample<'a>(
+        entries: impl IntoIterator<Item = (&'a str, Vec<u8>)>,
+    ) -> (std::path::PathBuf, Vec<u8>, String) {
+        use std::io::Write;
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, bytes) in entries {
             zip.start_file(name, zip::write::SimpleFileOptions::default())
                 .unwrap();
-            zip.write_all(text.as_bytes()).unwrap();
+            zip.write_all(&bytes).unwrap();
         }
         let bytes = zip.finish().unwrap().into_inner();
         let digest = format!("{:x}", Sha256::digest(&bytes));
@@ -352,6 +409,89 @@ mod tests {
             .write_all(&bytes)
             .unwrap();
         (path, bytes, digest)
+    }
+    #[test]
+    fn repair88_epub2_ncx_and_cover_document_are_checked() {
+        let mut png = Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2, 2)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        for (in_spine, guide, svg, target, valid) in [
+            (true, true, false, "body.xhtml#chapter", true),
+            (false, true, false, "body.xhtml#chapter", true),
+            (true, false, true, "body.xhtml#chapter", true),
+            (true, false, false, "body.xhtml#missing", false),
+            (true, false, false, "absent.xhtml", false),
+        ] {
+            let spine_cover = if in_spine {
+                "<itemref idref='cover-page'/>"
+            } else {
+                ""
+            };
+            let guide_xml = if guide {
+                "<guide><reference type='cover' href='cover.xhtml'/></guide>"
+            } else {
+                ""
+            };
+            let opf = format!(
+                "<package version='2.0'><metadata><title>样书</title><meta name='cover' content='cover-image'/></metadata><manifest><item id='body' href='body.xhtml'/><item id='toc' href='toc.ncx'/><item id='cover-page' href='cover.xhtml'/><item id='cover-image' href='cover.png' media-type='image/png'/></manifest><spine toc='toc'>{spine_cover}<itemref idref='body'/></spine>{guide_xml}</package>"
+            );
+            let cover = if svg {
+                "<html><body><svg xmlns:xlink='http://www.w3.org/1999/xlink'><image xlink:href='cover.png'/></svg></body></html>"
+            } else {
+                "<html><body><img src='cover.png'/></body></html>"
+            };
+            let entries = vec![
+                ("mimetype", b"application/epub+zip".to_vec()),
+                ("META-INF/container.xml", b"<container><rootfiles><rootfile full-path='OPS/book.opf'/></rootfiles></container>".to_vec()),
+                ("OPS/book.opf", opf.into_bytes()),
+                ("OPS/toc.ncx", format!("<ncx><navMap><navPoint><content src='{target}'/></navPoint></navMap></ncx>").into_bytes()),
+                ("OPS/body.xhtml", b"<html><body><h1 id='chapter'>Title</h1></body></html>".to_vec()),
+                ("OPS/cover.xhtml", cover.as_bytes().to_vec()),
+                ("OPS/cover.png", png.get_ref().clone()),
+            ];
+            let (path, original, digest) = write_sample(entries);
+            let result = inspect(&path, &digest);
+            assert_eq!(result.is_ok(), valid, "{target}: {result:?}");
+            if valid {
+                let result = result.unwrap();
+                assert_eq!(result["cover_in_spine"], in_spine);
+                assert!(result["cover_png"].is_string());
+            }
+            assert_eq!(std::fs::read(&path).unwrap(), original);
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+    #[test]
+    fn repair88_resource_count_accepts_export_limit_and_rejects_one_more() {
+        let (base, bytes, _) = sample("body.xhtml#chapter");
+        let mut archive = ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let mut entries = Vec::new();
+        for index in 0..archive.len() {
+            let mut file = archive.by_index(index).unwrap();
+            let name = file.name().to_owned();
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes).unwrap();
+            entries.push((name, bytes));
+        }
+        while entries.len() < MAX_CONTENT_RESOURCES + 3 {
+            entries.push((format!("OPS/extra-{}.css", entries.len()), Vec::new()));
+        }
+        for expected in [true, false] {
+            let (path, _, digest) = write_sample(
+                entries
+                    .iter()
+                    .map(|(name, bytes)| (name.as_str(), bytes.clone())),
+            );
+            let result = inspect(&path, &digest);
+            assert_eq!(result.is_ok(), expected, "{result:?}");
+            if !expected {
+                assert!(result.unwrap_err().contains("资源数"));
+            }
+            std::fs::remove_file(path).unwrap();
+            entries.push(("OPS/one-more.css".into(), Vec::new()));
+        }
+        std::fs::remove_file(base).unwrap();
     }
     #[test]
     fn actual_package_links_metadata_and_receipt_are_checked_without_writes() {

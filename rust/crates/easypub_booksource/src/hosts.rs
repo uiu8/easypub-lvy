@@ -78,6 +78,28 @@ pub fn local(url: &str) -> bool {
                     .is_ok_and(|a| a.is_loopback())
         })
 }
+
+#[test]
+fn repair88_huge_retry_after_does_not_overflow_or_poison_host() {
+    use crate::control::{MAX_RETRY_AFTER, retry_after};
+    assert_eq!(retry_after("18446744073709551615"), Some(MAX_RETRY_AFTER));
+    assert_eq!(retry_after(" 12 "), Some(Duration::from_secs(12)));
+    assert_eq!(retry_after("-1"), None);
+    assert_eq!(
+        retry_after("Thu, 01 Jan 1970 00:00:00 GMT"),
+        Some(Duration::ZERO)
+    );
+    for url in [
+        "https://repair88-throttle.invalid",
+        "http://127.0.0.1:19736",
+    ] {
+        let h = host(url, 4);
+        h.limited(Some(Duration::MAX));
+        h.defer(Duration::MAX);
+        let state = h.state.lock().unwrap();
+        assert!(state.cooldown <= Instant::now() + MAX_RETRY_AFTER);
+    }
+}
 pub fn load(directory: &Path) {
     let mut r = registry().lock().unwrap();
     r.file = Some(directory.join("hosts.json"));
@@ -233,9 +255,14 @@ impl Host {
         }
         // 同一波失败不重复延长冷却；服务端 Retry-After 例外。
         if s.cooldown <= now || retry_after.is_some() {
-            s.cooldown = s
-                .cooldown
-                .max(now + retry_after.unwrap_or(Duration::from_secs(30)));
+            s.cooldown = s.cooldown.max(
+                now.checked_add(
+                    retry_after
+                        .unwrap_or(Duration::from_secs(30))
+                        .min(crate::control::MAX_RETRY_AFTER),
+                )
+                .unwrap_or(now),
+            );
         }
         self.changed.notify_all();
     }
@@ -250,7 +277,11 @@ impl Host {
     /// 服务暂不可用时遵守 Retry-After，但不把它记成限流或调低安全并发。
     pub fn defer(&self, delay: Duration) {
         let mut s = self.state.lock().unwrap();
-        s.cooldown = s.cooldown.max(Instant::now() + delay);
+        let now = Instant::now();
+        s.cooldown = s.cooldown.max(
+            now.checked_add(delay.min(crate::control::MAX_RETRY_AFTER))
+                .unwrap_or(now),
+        );
         self.changed.notify_all();
     }
     pub fn network(&self, ms: u64) {

@@ -4,7 +4,7 @@
 //! update：用 `.update\staging` 替换；rollback：用 `.update\backup` 换回上一版。
 //! 任一步失败都撤回，程序目录恢复原样，并照常打开（旧版）程序。
 #![cfg_attr(not(test), windows_subsystem = "windows")]
-use easypub_updater::{APP_EXE, WORK_DIR, read_release, recover, swap};
+use easypub_updater::{APP_EXE, WORK_DIR, finalize_backup, read_release, recover, swap};
 use std::{
     fs,
     io::Write,
@@ -102,6 +102,7 @@ pub fn run(mode: &str, app_dir: &Path) -> Result<String, String> {
         }
         log(&work, "recovered an interrupted replacement");
     }
+    finalize_backup(&work).map_err(|e| e.0.to_owned())?;
     let (source, backup) = (
         work.join(if mode == "update" {
             "staging"
@@ -110,15 +111,12 @@ pub fn run(mode: &str, app_dir: &Path) -> Result<String, String> {
         }),
         work.join("backup-new"),
     );
-    let _ = fs::remove_dir_all(&backup);
     let from = read_release(app_dir);
     let to = read_release(&source);
     swap(app_dir, &source, &backup, &journal).map_err(|e| e.0.to_owned())?;
     // 只保留上一版一份：新备份取代旧备份。
     let _ = fs::remove_dir_all(&source);
-    let old = work.join("backup");
-    let _ = fs::remove_dir_all(&old);
-    if fs::rename(&backup, &old).is_err() {
+    if finalize_backup(&work).is_err() {
         log(
             &work,
             "backup rename failed; previous version kept in backup-new",

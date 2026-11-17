@@ -135,6 +135,7 @@ void main() {
       state.dispose();
     });
     var keep = false;
+    final navigation = LayoutNavigationGuard();
     Widget page(String id) => MaterialApp(
       theme: deskTheme(),
       home: Scaffold(
@@ -142,7 +143,7 @@ void main() {
           key: ValueKey(id),
           library: library,
           bookId: id,
-          navigation: LayoutNavigationGuard(),
+          navigation: navigation,
           pickPresetFile: () async => null,
           pickPresetDestination: () async => null,
           importCss: () async => null,
@@ -213,6 +214,38 @@ void main() {
       'p { line-height: 1.8; }',
     );
 
+    // 实际离开保护：继续编辑和保存失败都留在本页，不丢输入。
+    Future<bool> leaveWith(String action) async {
+      bool? allowed;
+      navigation.canLeave().then((value) => allowed = value);
+      await t.pumpAndSettle();
+      expect(find.text('原书样式还有未保存的输入'), findsOneWidget);
+      await t.tap(find.text(action));
+      await until(t, () => allowed != null);
+      return allowed!;
+    }
+
+    expect(await leaveWith('继续编辑'), false);
+    expect(await leaveWith('保存并离开'), false);
+    expect(
+      t.widget<TextField>(key('layout-original-css')).controller!.text,
+      'p { background: url(a.png); }',
+    );
+    expect(await leaveWith('放弃输入'), true);
+    expect(
+      (state.production.settings(epubId)['original_style'] as Map)['extra_css'],
+      'p { line-height: 1.8; }',
+    );
+    // 放弃只准许导航，不应用输入；测试留在原控件继续验证成功保存分支。
+    await t.enterText(key('layout-original-css'), 'p { line-height: 1.9; }');
+    expect(await leaveWith('保存并离开'), true);
+    expect(
+      (state.production.settings(epubId)['original_style'] as Map)['extra_css'],
+      'p { line-height: 1.9; }',
+    );
+    await t.enterText(key('layout-original-css'), 'p { line-height: 1.8; }');
+    expect(await leaveWith('保存并离开'), true);
+
     // 成品。
     await t.runAsync(() async {
       final dir = Directory('$root/out')..createSync();
@@ -261,6 +294,24 @@ void main() {
               as Map?)?['apply_to_original'] ==
           true,
     );
+    final regexSwitch = find.byKey(const ValueKey('layout-toc-regex'));
+    await t.ensureVisible(regexSwitch);
+    await t.tap(regexSwitch);
+    await t.pump();
+    final filterField = find.byWidgetPredicate(
+      (w) => w is TextFormField && w.key.toString().contains('toc-filter'),
+    );
+    await t.ensureVisible(filterField);
+    await t.enterText(filterField, '[');
+    await until(
+      t,
+      () => find.text('过滤规则未通过转换引擎检查，请修改后重试。').evaluate().isNotEmpty,
+    );
+    await t.enterText(filterField, '临时输入');
+    await t.pump(const Duration(milliseconds: 50));
+    await t.enterText(filterField, '');
+    await until(t, () => find.text('移除 0 条目录项，正文保留').evaluate().isNotEmpty);
+    expect(find.text('过滤规则未通过转换引擎检查，请修改后重试。'), findsNothing);
     expect(t.takeException(), isNull);
     await t.pumpWidget(const SizedBox());
   });
@@ -276,6 +327,18 @@ void main() {
     });
     await library.load();
     await library.savePatch({'check_after_import': false});
+    expect(await library.savePatch({'output_format': 'TXT'}), true);
+    final reopenedState = PrototypeState(
+      settingsDirectory: '${root.path}/settings',
+    );
+    final reopened = LegacyLibraryAdapter(backend: reopenedState);
+    try {
+      await reopened.load();
+      expect(reopenedState.globalConfiguration['output_format'], 'TXT');
+    } finally {
+      reopened.dispose();
+      reopenedState.dispose();
+    }
     final txt = File('${root.path}/sample.txt')
       ..writeAsStringSync('第一章 开始\n第一章正文。\n第二章 后记\n第二章正文。\n');
     await library.importFiles([txt.path]);
@@ -291,6 +354,19 @@ void main() {
     final id = state.currentId;
     final layout = LegacyLayoutSession(state, id);
     final nav = await layout.originalNavigation();
+    const titles = ['第一章 正文', '第二章 后记', '第３章 附录', '后记说明'];
+    expect(await layout.previewNavigationFilter(r'后记$', true, titles), 1);
+    expect(await layout.previewNavigationFilter(r'第\p{N}+章', true, titles), 1);
+    expect(await layout.previewNavigationFilter('后记', false, titles), 2);
+    await expectLater(
+      layout.previewNavigationFilter(r'(?<=章) 后记', true, titles),
+      throwsA(anything),
+    );
+    await expectLater(
+      layout.previewNavigationFilter('[', true, titles),
+      throwsA(anything),
+    );
+    expect(await layout.previewNavigationFilter('', true, titles), 0);
     final selected = (nav['entries'] as List).last as Map;
     await layout.apply(
       await layout.preview({
@@ -298,7 +374,8 @@ void main() {
           'apply_to_original': true,
           'toc_title': '原书章节列表',
           'toc_position': 'back',
-          'toc_filter': '后记',
+          'toc_filter': r'后记$',
+          'filter_regex': true,
           'start': 'specific',
           'original_start': selected['id'],
         },

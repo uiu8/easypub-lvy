@@ -116,6 +116,8 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
       scanning = true;
       cancelScan = false;
       if (!resume) {
+        range.reset();
+        view.type = '';
         listing?.close?.call();
         listing = null;
         selected.clear();
@@ -139,6 +141,7 @@ class _FolderImportDialogState extends State<FolderImportDialog> {
       }
       setState(() {
         listing = result;
+        range.reset();
         selected.addAll(
           result.books
               .where((b) => !b.alreadyImported && !existing.contains(b.path))

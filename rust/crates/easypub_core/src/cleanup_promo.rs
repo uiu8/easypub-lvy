@@ -5,24 +5,19 @@
 //! 每个函数拿一行（不含换行符），返回处理后的这一行；整行都该去掉时返回空串。
 
 /// 括号里出现这些字样，整段括号就是推广语。
-const PROMOTION: [&str; 17] = [
+const PROMOTION: [&str; 12] = [
     "未完待续",
     "请搜索",
     "最快更新",
     "更新最快",
     "更新更快",
-    "本站",
-    "手机用户",
-    "手机阅读",
     "手机同步阅读",
     "无弹窗",
-    "推荐票",
-    "月票",
+    "请投推荐票",
+    "求月票",
     "您的支持",
-    "qidian",
-    "最新章节",
+    "最新章节请",
     "加入书签",
-    "首发",
 ];
 
 /// 从这些字样起到行尾都是推广语（行尾那一段不超过 90 个字时才删）。
@@ -155,30 +150,47 @@ pub(crate) fn strip_inline(line: &str) -> String {
 }
 
 /// 标题末尾括号里是这些内容时，是求票、更新或字数说明，不是标题的一部分。
-const TAIL_WORDS: [&str; 22] = [
-    "求",
-    "票",
-    "更",
-    "盟主",
-    "感谢",
-    "订阅",
-    "打赏",
-    "上架",
+const TAIL_WORDS: [&str; 17] = [
+    "求票",
+    "求月票",
+    "求推荐",
+    "求订阅",
+    "求收藏",
+    "求打赏",
+    "加更",
+    "补更",
+    "补章",
     "保底",
-    "推荐",
-    "收藏",
-    "还债",
-    "加餐",
-    "贺",
+    "首订",
     "万字",
     "大章",
-    "补",
-    "首订",
-    "粉丝",
-    "生日快乐",
-    "新年",
-    "节快乐",
+    "上架",
+    "盟主",
+    "还债",
+    "加餐",
 ];
+
+fn update_count_tag(inner: &str) -> bool {
+    let value = inner.trim().trim_end_matches(['！', '!', '。']);
+    // 更新次数后的盟主祝贺属于更新说明；不能以单个“更”或“贺”字判断。
+    let value = value
+        .split_once("贺")
+        .filter(|(_, recipient)| {
+            matches!(
+                *recipient,
+                "盟主" | "总盟" | "白银盟" | "黄金盟" | "白银总盟" | "黄金总盟"
+            )
+        })
+        .map_or(value, |(count, _)| count);
+    let Some(value) = value.strip_suffix('更') else {
+        return false;
+    };
+    let value = value.strip_prefix('第').unwrap_or(value);
+    !value.is_empty()
+        && value
+            .chars()
+            .all(|c| c.is_ascii_digit() || "零〇一二两三四五六七八九十百".contains(c))
+}
 
 fn word_count_tag(inner: &str) -> bool {
     let inner = inner.trim();
@@ -214,7 +226,7 @@ pub(crate) fn strip_heading_tail(line: &str) -> String {
         // 前面要留得下标题本身。
         if start == 0
             || !substance(&text[..start])
-            || !(has(inner, &TAIL_WORDS) || word_count_tag(inner))
+            || !(has(inner, &TAIL_WORDS) || word_count_tag(inner) || update_count_tag(inner))
         {
             break;
         }
@@ -320,6 +332,21 @@ fn page_mark_end(text: &str, start: usize) -> Option<usize> {
 
 /// 分页残留：“（本章未完，请点击下一页继续阅读）……(第2/2页)”“本章未完，请翻页”
 /// “热门推荐:、、、、”“（本章完）”和下载站插在每页开头的“为您提供……最快更新”。
+fn paging_prompt(text: &str) -> bool {
+    let Some(rest) = text.trim().strip_prefix("本章未完") else {
+        return false;
+    };
+    if !has(rest, &["下一页", "翻页", "继续阅读"]) {
+        return false;
+    }
+    let mut rest = rest.to_owned();
+    for token in ["继续阅读", "下一页", "翻页", "点击", "请"] {
+        rest = rest.replace(token, "");
+    }
+    rest.chars()
+        .all(|c| c.is_whitespace() || "，,。.!！…）)】".contains(c))
+}
+
 pub(crate) fn strip_paging(line: &str) -> String {
     let text = line.trim();
     let count = text.chars().count();
@@ -328,7 +355,7 @@ pub(crate) fn strip_paging(line: &str) -> String {
     }
     let short = count <= 80;
     let bare = text.trim_matches(['（', '(', '【', '）', ')', '】', ' ']);
-    if (short && text.contains("本章未完") && has(text, &["下一页", "翻页", "继续阅读"]))
+    if (short && paging_prompt(bare))
         || bare == "本章完"
         || (text.starts_with("热门推荐") && !substance(&text["热门推荐".len()..]))
         || (short && text.starts_with("为您提供") && has(text, &["最快更新", "最新章节"]))
@@ -340,7 +367,11 @@ pub(crate) fn strip_paging(line: &str) -> String {
     let mut rest = line;
     while let Some(start) = rest.find(['（', '(']) {
         out.push_str(&rest[..start]);
-        match page_mark_end(rest, start) {
+        let prompt_end = group_end(rest, start).filter(|&end| {
+            let inner = &rest[start + rest[start..].chars().next().unwrap().len_utf8()..end];
+            paging_prompt(inner)
+        });
+        match prompt_end.or_else(|| page_mark_end(rest, start)) {
             Some(end) => rest = &rest[end..],
             None => {
                 let open = rest[start..].chars().next().map_or(1, char::len_utf8);
@@ -413,6 +444,11 @@ mod tests {
             ("第五十三章 喜庆（上架求票）（第二更）", "第五十三章 喜庆"),
             ("第一五三章 烧楼（上）", "第一五三章 烧楼（上）"),
             ("第十七章 学院的新生（下）", "第十七章 学院的新生（下）"),
+            ("第十八章 新人（更强的对手）", "第十八章 新人（更强的对手）"),
+            (
+                "第十九章 赴宴（庆贺黄金总盟）",
+                "第十九章 赴宴（庆贺黄金总盟）",
+            ),
             ("（求月票）", "（求月票）"),
         ] {
             assert_eq!(strip_heading_tail(before), after, "{before}");
@@ -443,7 +479,7 @@ mod tests {
     fn paging_leftovers() {
         assert_eq!(
             strip_paging("　　（本章未完，请点击下一页继续阅读）第1章山门夜话(第2/2页)"),
-            ""
+            "　　第1章山门夜话"
         );
         assert_eq!(strip_paging("　　（本章未完，请翻页）"), "");
         assert_eq!(strip_paging("　　（本章完）"), "");

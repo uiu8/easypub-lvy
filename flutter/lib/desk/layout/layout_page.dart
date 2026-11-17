@@ -654,6 +654,35 @@ class _LayoutPageState extends State<LayoutPage> {
   }
 
   Future<bool> canLeave() async {
+    if (session != null && originalInputsChanged) {
+      final action = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => DeskAlert(
+          title: const Text('原书样式还有未保存的输入'),
+          content: const Text('自定义属性、页边距或附加 CSS 尚未保存。'),
+          actions: [
+            DeskButton(
+              '继续编辑',
+              onPressed: () => Navigator.pop(dialogContext, 'stay'),
+            ),
+            DeskButton(
+              '放弃输入',
+              onPressed: () => Navigator.pop(dialogContext, 'discard'),
+            ),
+            DeskButton(
+              '保存并离开',
+              primary: true,
+              onPressed: () => Navigator.pop(dialogContext, 'save'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || action == null || action == 'stay') return false;
+      if (action == 'save') {
+        await _saveOriginalInputs();
+        if (!mounted || originalInputsChanged) return false;
+      }
+    }
     _saveTimer?.cancel();
     if (session != null && identity != baseline) {
       autosave?.writeDraft(draftKey, rawValues);
@@ -925,7 +954,7 @@ class _LayoutPageState extends State<LayoutPage> {
     for (final c in originalMargins.values) {
       c.dispose();
     }
-    widget.navigation.check = null;
+    if (widget.navigation.check == canLeave) widget.navigation.check = null;
     chapterHeadPixels?.dispose();
     disposeBodyImages(bodyImages, chapterHeadOverride);
     unawaited(_kindle?.close());
@@ -1006,7 +1035,9 @@ class _LayoutPageState extends State<LayoutPage> {
         Row(
           children: [
             Text('单位说明', style: ui(11.5, c: d.ink3)),
-            const DeskHelp('边距改单位不换算数值；字号单位切换按 16px 基准换算。'),
+            const DeskHelp(
+              '切换单位按当前预览换算数值；em、% 会随字号或参照尺寸变化。更换机型后，同一数值的显示效果可能不同。',
+            ),
           ],
         ),
       ]),

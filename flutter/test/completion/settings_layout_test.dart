@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -49,7 +50,59 @@ class Favorites implements LibraryService {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class DelayedMigrationSettings extends Settings {
+  Completer<Map<String, dynamic>>? request;
+  @override
+  Future<Map<String, dynamic>> inspectLegacy(String path) =>
+      (request = Completer<Map<String, dynamic>>()).future;
+}
+
 void main() {
+  testWidgets('清除迁移结果后，旧检查的成功和失败都不能重新出现', (t) async {
+    t.view.physicalSize = const Size(1200, 1000);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
+    final settings = DelayedMigrationSettings();
+    addTearDown(settings.dispose);
+    await t.pumpWidget(
+      MaterialApp(
+        theme: deskTheme(),
+        home: Scaffold(body: SettingsPage(settings: settings)),
+      ),
+    );
+    await t.pumpAndSettle();
+    await t.tap(find.text('数据与迁移').first);
+    await t.pumpAndSettle();
+    final path = find.byWidgetPredicate(
+      (w) => w is TextField && w.decoration?.labelText == '旧设置文件路径',
+    );
+    await t.ensureVisible(path);
+    await t.enterText(path, 'D:/isolated/legacy.ini');
+    for (final fails in [false, true]) {
+      await t.ensureVisible(find.text('检查旧设置'));
+      await t.tap(find.text('检查旧设置'));
+      await t.pump();
+      final pending = settings.request!;
+      await t.tap(find.text('清除结果'));
+      await t.pump();
+      if (fails) {
+        pending.completeError(const FormatException('旧请求失败'));
+      } else {
+        pending.complete({
+          'report': {
+            'proposed_layout': {'font_size': 120},
+          },
+        });
+      }
+      await t.pumpAndSettle();
+      expect(find.text('确认迁移可识别字段'), findsNothing);
+      expect(find.textContaining('已读取 1 项排版设置'), findsNothing);
+      expect(find.text('旧设置读取失败，当前设置未改变。'), findsNothing);
+      expect(settings.saves, 0);
+      expect(t.takeException(), isNull);
+    }
+  });
   testWidgets(
     'settings keeps actions reachable and favorites independently scrollable at large text',
     (t) async {

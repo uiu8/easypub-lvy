@@ -8,12 +8,54 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:easypub_desktop/src/rust/frb_generated.dart';
 import 'package:easypub_desktop/application/conversion_service.dart';
+import 'package:easypub_desktop/application/book_information_service.dart';
+import 'package:easypub_desktop/application/layout_service.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
 import 'package:easypub_desktop/infrastructure/legacy_conversion_session.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
+import 'package:easypub_desktop/infrastructure/legacy_layout_session.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/layout/layout_page.dart';
 import 'package:easypub_desktop/desk/metadata/cover_editor_page.dart';
+
+class StyleFailureLibrary extends LegacyLibraryAdapter {
+  StyleFailureLibrary(this.state) : super(backend: state);
+  final PrototypeState state;
+  bool failStyle = true;
+  int rejected = 0;
+  @override
+  LayoutSession openLayout(String bookId) => StyleFailureSession(this, bookId);
+}
+
+class StyleFailureSession extends LegacyLayoutSession {
+  StyleFailureSession(this.library, String bookId)
+    : super(library.state, bookId);
+  final StyleFailureLibrary library;
+  @override
+  Future<Map<String, dynamic>> chapterStyleRequest(
+    Map<String, Object?> request,
+  ) async {
+    if (!library.failStyle) return super.chapterStyleRequest(request);
+    final result = await super.chapterStyleRequest({
+      'action': 'builtin',
+      'id': 'classic',
+    });
+    return {
+      ...result,
+      'blocks': defaultSystemStyles(),
+      'insets': {'chat_block_style': 'script', 'letter_block_style': 'ruled'},
+    };
+  }
+
+  @override
+  Future<void> apply(BookInformationPreview preview) async {
+    if (library.failStyle) {
+      library.rejected++;
+      throw const FormatException('测试：样式包应用失败');
+    }
+    await super.apply(preview);
+  }
+}
 
 /// 读出 zip 内的文本成员与图片个数。
 Future<Map<String, String>> members(String path) async {
@@ -65,14 +107,14 @@ void main() {
     addTearDown(t.view.resetPhysicalSize);
     addTearDown(t.view.resetDevicePixelRatio);
     late PrototypeState state;
-    late LegacyLibraryAdapter library;
+    late StyleFailureLibrary library;
     late String root;
     await t.runAsync(() async {
       root = (await Directory('../artifacts').createTemp('v74-layout-'))
           .absolute
           .path;
       state = PrototypeState(settingsDirectory: '$root/settings');
-      library = LegacyLibraryAdapter(backend: state);
+      library = StyleFailureLibrary(state);
       await library.load();
       await library.savePatch({'check_after_import': false});
       final file = File('$root/样书.txt')
@@ -96,7 +138,7 @@ void main() {
             pickPresetFile: () async => null,
             pickPresetDestination: () async => null,
             importCss: () async => null,
-            pickStylePack: () async => null,
+            pickStylePack: () async => '$root/fault-injection.zip',
             pickStylePackDestination: (_) async => null,
           ),
         ),
@@ -108,6 +150,30 @@ void main() {
     await t.pump();
     final classic = find.byKey(const ValueKey('layout-chapter-style-classic'));
     await until(t, () => classic.evaluate().isNotEmpty);
+    await t.ensureVisible(classic);
+    await t.pump();
+    final savedBefore = jsonEncode(state.production.settings(id));
+    final draftBefore = jsonEncode(library.readDraft('layout:$id'));
+    for (final key in [
+      'layout-chapter-style-classic',
+      'layout-chapter-style-import',
+    ]) {
+      final target = find.byKey(ValueKey(key));
+      await t.ensureVisible(target);
+      await t.pump();
+      final rejected = library.rejected;
+      await t.tap(target);
+      await until(t, () => library.rejected > rejected);
+      await t.pump(const Duration(seconds: 1));
+      expect(find.textContaining('测试：样式包应用失败'), findsOneWidget);
+      expect(jsonEncode(state.production.settings(id)), savedBefore);
+      expect(
+        jsonEncode(library.readDraft('layout:$id')),
+        draftBefore,
+        reason: '章节样式失败不能应用附带块样式及场景样式，也不能生成自动保存草稿',
+      );
+    }
+    library.failStyle = false;
     await t.ensureVisible(classic);
     await t.pump();
     await t.tap(classic);
@@ -373,6 +439,71 @@ void main() {
         'pack-background-v1',
       );
     });
+    final replacementPath = '$root/replacement.png';
+    await t.runAsync(() => File(adopted.path).copy(replacementPath));
+    final revisedDesign = {...adopted.design!, 'author': '草稿作者'};
+    for (final scenario in [
+      (
+        draft: <String, dynamic>{'path': adopted.path, 'design': null},
+        expected: null,
+      ),
+      (
+        draft: <String, dynamic>{'path': adopted.path, 'design': revisedDesign},
+        expected: revisedDesign,
+      ),
+      (
+        draft: <String, dynamic>{'path': adopted.path},
+        expected: adopted.design,
+      ),
+      (draft: <String, dynamic>{'path': replacementPath}, expected: null),
+    ]) {
+      await t.pumpWidget(const SizedBox());
+      library.writeDraft('cover-recovery', {
+        'textMode': false,
+        ...scenario.draft,
+      });
+      result = null;
+      await t.pumpWidget(
+        MaterialApp(
+          theme: deskTheme(),
+          home: Scaffold(
+            body: CoverEditorPage(
+              session: info,
+              title: '雾港来信',
+              author: '林岚',
+              series: '',
+              path: adopted.path,
+              fit: 'contain',
+              crop: null,
+              design: adopted.design,
+              startWithText: false,
+              pickImage: () async => null,
+              onReturn: (value) => result = value,
+              autosave: library,
+              draftKey: 'cover-recovery',
+            ),
+          ),
+        ),
+      );
+      final accept = find.widgetWithText(DeskButton, '采用并返回');
+      await until(
+        t,
+        () =>
+            accept.evaluate().isNotEmpty &&
+            t.widget<DeskButton>(accept).onPressed != null,
+      );
+      // 再保存草稿，显式 null 不能在重开时丢失。
+      await t.tap(find.byKey(const ValueKey('cover-mode-false')));
+      await t.pump();
+      final savedDraft = library.readDraft('cover-recovery')!;
+      expect(savedDraft.containsKey('design'), true);
+      expect(savedDraft['design'], scenario.expected);
+      await t.tap(accept);
+      await until(t, () => result != null);
+      expect(result!.path, scenario.draft['path']);
+      expect(result!.design, scenario.expected);
+    }
+    await t.pumpWidget(const SizedBox());
     expect(t.takeException(), isNull);
   });
 }

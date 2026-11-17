@@ -11,6 +11,32 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+fn collect_css_characters(css: &str, characters: &mut BTreeSet<char>) {
+    fn walk<'i>(
+        parser: &mut cssparser::Parser<'i, '_>,
+        characters: &mut BTreeSet<char>,
+    ) -> Result<(), cssparser::ParseError<'i, ()>> {
+        while let Ok(token) = parser.next_including_whitespace_and_comments() {
+            match token {
+                cssparser::Token::QuotedString(value) | cssparser::Token::Ident(value) => {
+                    characters.extend(value.chars().filter(|c| !c.is_control()));
+                }
+                cssparser::Token::Function(_)
+                | cssparser::Token::ParenthesisBlock
+                | cssparser::Token::SquareBracketBlock
+                | cssparser::Token::CurlyBracketBlock => {
+                    parser.parse_nested_block(|inner| walk(inner, characters))?;
+                }
+                _ => (),
+            }
+        }
+        Ok(())
+    }
+    characters.extend(css.chars().filter(|c| !c.is_control()));
+    let mut input = cssparser::ParserInput::new(css);
+    let _ = walk(&mut cssparser::Parser::new(&mut input), characters);
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
@@ -560,60 +586,10 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         stylesheet =
             crate::publication_style::add_rules(stylesheet, crate::publication_style::TABLE_RULES);
     }
-    let mut fonts = BTreeMap::new();
-    let font = if let Some(selection) = &settings.font_resource {
-        // Deduplicate before invoking the bounded font API: long novels must not
-        // be rejected merely because their repeated body exceeds the sample limit.
-        let characters: String = std::iter::once(book.text.as_str())
-            .chain([
-                settings.title.as_str(),
-                settings.author.as_str(),
-                settings.description.as_str(),
-                settings.translator.as_str(),
-                settings.isbn.as_str(),
-                settings.publication_date.as_str(),
-                settings.publisher.as_str(),
-                settings.category.as_str(),
-                settings.series.as_str(),
-                settings.subjects.as_str(),
-                settings.language.as_str(),
-            ])
-            .chain(
-                source_tables
-                    .iter()
-                    .filter(|t| !t.removed)
-                    .flat_map(|t| t.table.characters()),
-            )
-            .chain(
-                settings
-                    .illustrations
-                    .iter()
-                    .flat_map(|i| [i.caption.as_str(), i.alt.as_str()]),
-            )
-            .flat_map(str::chars)
-            .filter(|c| !c.is_control())
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        let prepared = crate::fonts::prepare_selected(selection, &characters)?;
-        let (extension, media_type) = if prepared.bytes.starts_with(b"OTTO") {
-            ("otf", "font/otf")
-        } else {
-            ("ttf", "font/ttf")
-        };
-        let id = format!("{}.{}", prepared.subset.sha256, extension);
-        stylesheet = crate::publication_style::bind_font(stylesheet, &id)?;
-        fonts.insert(id.clone(), prepared.bytes);
-        Some(FontResource {
-            id,
-            media_type,
-            original: prepared.original,
-            output: prepared.subset,
-            mode: selection.mode,
-        })
-    } else {
-        None
-    };
+    // 先生成最终语义页面，再收集字体字符；新增注释、附页和注音不再漏收。
+    let font_selection = settings.font_resource.clone();
+    let fonts = BTreeMap::new();
+    let font = None;
     let css_snapshot = crate::css_bundle::for_settings(&settings);
     if total + css_snapshot.report.total_bytes > 256 * 1024 * 1024 {
         return Err(invalid("reduce_resource_bytes"));
@@ -734,20 +710,79 @@ pub fn prepare(source: &SourceSnapshot, request: Request) -> Result<Prepared, Ap
         output_options: settings.output_options.clone(),
         navigation_options: settings.navigation_options.clone(),
     };
-    let mut hash = Sha256::new();
-    hash.update(b"publication-resources-v1");
-    hash.update(serde_json::to_vec(&manifest).map_err(|_| invalid("review_resources"))?);
-    hash.update(serde_json::to_vec(&book.tree).map_err(|_| invalid("review_structure"))?);
-    let id = format!("{:x}", hash.finalize());
-    Ok(Prepared {
+    let mut prepared = Prepared {
         book,
         manifest,
         images,
         fonts,
         css_dependencies: css_snapshot.bytes,
         css_resources: css_snapshot.resources,
-        id,
-    })
+        id: String::new(),
+    };
+    if let Some(selection) = &font_selection {
+        let documents = prepared.documents()?;
+        let mut characters = BTreeSet::new();
+        for page in documents.pages.values() {
+            let doc =
+                crate::epub_xml::parse(page).map_err(|_| invalid("review_final_book_resources"))?;
+            for node in doc.descendants().filter(|n| n.is_text()) {
+                if !node
+                    .ancestors()
+                    .any(|n| n.is_element() && matches!(n.tag_name().name(), "style" | "script"))
+                {
+                    characters.extend(
+                        node.text()
+                            .unwrap_or("")
+                            .chars()
+                            .filter(|c| !c.is_control()),
+                    );
+                }
+            }
+            for node in doc.descendants().filter(|n| n.is_element()) {
+                if node.has_tag_name("style") {
+                    for child in node.children().filter(|n| n.is_text()) {
+                        collect_css_characters(child.text().unwrap_or(""), &mut characters);
+                    }
+                }
+                if let Some(style) = node.attribute("style") {
+                    collect_css_characters(style, &mut characters);
+                }
+            }
+        }
+        // 样式模板中的装饰文字也需字体覆盖；保留少量额外 ASCII 无损。
+        collect_css_characters(&prepared.manifest.stylesheet.css, &mut characters);
+        for css in prepared.css_dependencies.values() {
+            collect_css_characters(
+                std::str::from_utf8(css).map_err(|_| invalid("review_final_book_resources"))?,
+                &mut characters,
+            );
+        }
+        let font =
+            crate::fonts::prepare_selected(selection, &characters.into_iter().collect::<String>())?;
+        let (extension, media_type) = if font.bytes.starts_with(b"OTTO") {
+            ("otf", "font/otf")
+        } else {
+            ("ttf", "font/ttf")
+        };
+        let id = format!("{}.{}", font.subset.sha256, extension);
+        prepared.manifest.stylesheet =
+            crate::publication_style::bind_font(prepared.manifest.stylesheet, &id)?;
+        prepared.manifest.stylesheet_order[0] = prepared.manifest.stylesheet.id.clone();
+        prepared.fonts.insert(id.clone(), font.bytes);
+        prepared.manifest.font = Some(FontResource {
+            id,
+            media_type,
+            original: font.original,
+            output: font.subset,
+            mode: selection.mode,
+        });
+    }
+    let mut hash = Sha256::new();
+    hash.update(b"publication-resources-v1");
+    hash.update(serde_json::to_vec(&prepared.manifest).map_err(|_| invalid("review_resources"))?);
+    hash.update(serde_json::to_vec(&prepared.book.tree).map_err(|_| invalid("review_structure"))?);
+    prepared.id = format!("{:x}", hash.finalize());
+    Ok(prepared)
 }
 
 /// Bounded resource readiness report. Does not retain a prepared export job.
@@ -772,9 +807,60 @@ pub fn preview(
 }
 
 #[cfg(test)]
+#[test]
+fn repair88_font_collection_decodes_css_generated_text() {
+    let mut chars = BTreeSet::new();
+    collect_css_characters(
+        r#"@media screen { p::before { content: "\795e\901a"; } }"#,
+        &mut chars,
+    );
+    assert!(chars.contains(&'神') && chars.contains(&'通'));
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    #[cfg(windows)]
+    fn repair88_subset_keeps_glyph_used_only_by_imported_css() {
+        let root = std::env::temp_dir().join(format!(
+            "font-css-{}-{}",
+            std::process::id(),
+            time::OffsetDateTime::now_utc().unix_timestamp_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        // Reuse the Windows font used by desktop font integration tests.
+        let system_font =
+            std::path::PathBuf::from(std::env::var_os("WINDIR").unwrap()).join("Fonts/arial.ttf");
+        let font_bytes = std::fs::read(system_font).unwrap();
+        let font_path = root.join("fixture.ttf");
+        std::fs::write(&font_path, &font_bytes).unwrap();
+        std::fs::write(root.join("decor.css"), r#"p::before { content: "\3a9"; }"#).unwrap();
+        let source = SourceSnapshot::from_utf8(
+            "第一章 甲\n甲".as_bytes().to_vec(),
+            easypub_core::source::RULE_ID,
+            || false,
+        )
+        .unwrap();
+        let request = serde_json::from_value(json!({"source_id":source.summary().source_id,"revision":1,
+            "settings":{"title":"甲","author":"","description":"","cover_path":null,"cover_fit":"contain",
+            "font_family":"SimSun","font_size":18.0,"line_height":1.8,"include_toc":true,"illustrations":[],
+            "additional_css":"@import 'decor.css';","additional_css_base":root,
+            "supplemental_pages":[{"id":"a".repeat(64),"content":{"kind":"custom","position":"back","title":"附页","body":"Ψ","include_toc":true}}],
+            "manual_notes":[{"id":"b".repeat(64),"reference":{"start":14,"end":17,"from":3,"to":3,"fingerprint":format!("{:x}",Sha256::digest("甲".as_bytes()))},"body":{"kind":"new","text":"Φ"}}],
+            "font_resource":{"path":font_path,"face_index":0,"sha256":format!("{:x}", Sha256::digest(&font_bytes)),"license_confirmed":true}}})).unwrap();
+        let prepared = prepare(&source, request).unwrap();
+        assert!(prepared.manifest.css_dependencies.rewritten);
+        let documents = prepared.documents().unwrap();
+        assert!(documents.pages.values().any(|page| page.contains('Ψ')));
+        assert!(documents.pages.values().any(|page| page.contains('Φ')));
+        let font = prepared.manifest.font.as_ref().unwrap();
+        let report =
+            crate::fonts::inspect_bytes(prepared.font_bytes(&font.id).unwrap(), 0, "ΩΨΦ").unwrap();
+        assert_eq!(report.missing_count, 0);
+        std::fs::remove_dir_all(root).unwrap();
+    }
     fn request(source: &SourceSnapshot, path: &str) -> Request {
         serde_json::from_value(json!({"source_id":source.summary().source_id,"revision":1,
           "settings":{"title":"书名","author":"作者","description":"简介","cover_path":path,

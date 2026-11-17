@@ -547,11 +547,9 @@ fn lock_transaction(dir: &Path) -> Result<File, ApiError> {
     Ok(lock)
 }
 
-// A same-volume hard link publishes only if the destination does not exist.
-// This closes the exists/rename race without overwriting an external file.
+// Publish without overwriting an external file, including on Windows FAT/exFAT.
 fn publish_new(staged: &Path, output: &Path) -> std::io::Result<()> {
-    fs::hard_link(staged, output)?;
-    fs::remove_file(staged)
+    crate::file_publish::move_new(staged, output)
 }
 
 #[cfg(feature = "r1-faults")]

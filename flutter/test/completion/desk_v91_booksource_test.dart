@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'desk_v90_booksource_test.dart' as v90;
 
 /// 导入偏好与书架定时检查保存在插件端；两项并发随调用传给插件。
 class V91Api extends v90.V90Api {
+  Completer<void>? importSaveGate;
   Map<String, dynamic> importOptions = {
     'position': 'bottom',
     'overrideName': true,
@@ -26,6 +28,9 @@ class V91Api extends v90.V90Api {
         return importOptions;
       case 'sources.importOptions.set':
         requests.add((method, params));
+        final gate = importSaveGate;
+        importSaveGate = null;
+        if (gate != null) await gate.future;
         importOptions = Map<String, dynamic>.from(params['options'] as Map);
         return importOptions;
       case 'library.autoCheck.get':
@@ -59,6 +64,44 @@ Future<void> _choose(WidgetTester tester, String key, String option) async {
 }
 
 void main() {
+  for (final fails in [false, true]) {
+    testWidgets('导入偏好等待前次保存再合并，前次失败=$fails', (tester) async {
+      final temp = Directory.systemTemp.createTempSync('import-option-order-');
+      final api = V91Api();
+      await v88.open(tester, api, temp);
+      await tester.tap(find.text('设置'));
+      await v89.pump(tester);
+      final gate = Completer<void>();
+      api.importSaveGate = gate;
+      await _choose(tester, 'booksource-import-position', '最前');
+      final group = find.byKey(const ValueKey('booksource-override-group'));
+      await tester.ensureVisible(group);
+      await tester.tap(group);
+      await v89.pump(tester);
+      List<Map<String, dynamic>> writes() => [
+        for (final r in api.requests)
+          if (r.$1 == 'sources.importOptions.set') r.$2,
+      ];
+      expect(writes(), hasLength(1), reason: '第二次点击不能在第一次未结束时发送旧完整配置');
+      if (fails) {
+        gate.completeError(const FormatException('测试偏好保存失败'));
+      } else {
+        gate.complete();
+      }
+      await v89.pump(tester);
+      expect(writes(), hasLength(2));
+      expect(api.importOptions, {
+        'position': fails ? 'bottom' : 'top',
+        'overrideName': true,
+        'overrideGroup': true,
+      });
+      expect(writes().last['options'], api.importOptions);
+      expect(tester.widget<Switch>(group).value, true);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await v89.pump(tester);
+    });
+  }
   testWidgets('V91 导入偏好、两项并发与书架定时检查', (tester) async {
     final temp = Directory.systemTemp.createTempSync('v91-settings-');
     addTearDown(() => temp.deleteSync(recursive: true));

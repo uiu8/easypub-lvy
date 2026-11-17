@@ -233,18 +233,45 @@ Future<({DateTime at, int deleted, int bytes})?> _lastCleanup(
 Future<CheckCacheCleanupResult> cleanCheckReports(
   Directory directory,
   CheckCachePreview preview,
-  Map<String, String> currentGuards,
-) async {
-  final current = {
-    for (final guard in currentGuards.values) checkReportFileName(guard),
-  };
+  Map<String, String> currentGuards, {
+  Map<String, String> Function()? latestGuards,
+}) async {
+  final dependencies = <String, String>{};
+  bool protected(String name) {
+    final current = {
+      for (final guard in (latestGuards?.call() ?? currentGuards).values)
+        checkReportFileName(guard),
+    };
+    if (current.contains(name)) return true;
+    if (!_spotsName.hasMatch(name)) return false;
+    for (final report in current) {
+      var spots = dependencies[report];
+      if (spots == null) {
+        try {
+          final file = File(paths.join(directory.path, report));
+          if (file.lengthSync() >= 262144) return true;
+          final value = jsonDecode(file.readAsStringSync()) as Map;
+          final guard = (value['guards'] as Map?)?['cleanup'] as String?;
+          if (guard == null) return true;
+          spots = checkSpotsFileName(guard);
+          dependencies[report] = spots;
+        } catch (_) {
+          // Cannot establish the current report's dependencies: retain spots.
+          return true;
+        }
+      }
+      if (spots == name) return true;
+    }
+    return false;
+  }
+
   var deleted = 0, bytes = 0, skipped = 0;
   for (final item in preview.files) {
     final file = File(item.path);
     final name = file.uri.pathSegments.last;
     if (!paths.equals(paths.dirname(item.path), directory.path) ||
         !(_reportName.hasMatch(name) || _spotsName.hasMatch(name)) ||
-        current.contains(name)) {
+        protected(name)) {
       skipped++;
       continue;
     }
@@ -256,7 +283,13 @@ Future<CheckCacheCleanupResult> cleanCheckReports(
         skipped++;
         continue;
       }
-      await file.delete();
+      // Recheck after the asynchronous stat. No event-loop gap between the
+      // current report/dependency check and deletion.
+      if (protected(name)) {
+        skipped++;
+        continue;
+      }
+      file.deleteSync();
       deleted++;
       bytes += item.bytes;
     } on FileSystemException {

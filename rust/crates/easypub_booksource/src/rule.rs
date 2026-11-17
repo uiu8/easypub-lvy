@@ -28,6 +28,7 @@ fn js_purify() -> &'static regex::Regex {
 
 /// 规则执行需要的外部能力：JS 与变量。
 pub trait Host {
+    fn rule_error(&self, _message: &str) {}
     /// 以 `input` 为 `result` 执行 JS，返回结果（数组展开为多项）。
     fn js(&self, code: &str, input: &[Node]) -> Vec<Node>;
     fn var(&self, key: &str) -> String;
@@ -267,10 +268,8 @@ fn is_rule(inner: &str) -> bool {
         .get(..7)
         .unwrap_or(inner.trim_start())
         .to_ascii_lowercase();
-    lower.starts_with("@@")
-        || lower.starts_with("@css:")
-        || lower.starts_with("@xpath:")
-        || lower.starts_with("@json:")
+    // 默认选择器允许前导单 @（如 {{@.intro@text}}），不能送进 JS。
+    lower.starts_with('@')
         || lower.starts_with("$.")
         || lower.starts_with("$[")
         || lower.starts_with("//")
@@ -516,19 +515,26 @@ fn run_seg(host: &dyn Host, rule: &str, input: &Node, list: bool) -> Vec<Node> {
                 return Vec::new();
             };
             let root = &*root;
-            if list {
+            let values = if list {
                 jsonpath::elements(root, body)
-                    .into_iter()
-                    .map(Node::Json)
-                    .collect()
+                    .map(|values| values.into_iter().map(Node::Json).collect())
             } else {
                 jsonpath::strings(root, body)
-                    .into_iter()
-                    .map(Node::Text)
-                    .collect()
+                    .map(|values| values.into_iter().map(Node::Text).collect())
+            };
+            match values {
+                Ok(values) => values,
+                Err(error) => {
+                    host.rule_error(&error);
+                    Vec::new()
+                }
             }
         }
         Mode::XPath => {
+            if !xpath::supported(body) {
+                host.rule_error("XPath 写法或函数不受支持，请修改书源规则");
+                return Vec::new();
+            }
             let Some((doc, start)) = input.element() else {
                 return Vec::new();
             };
@@ -611,6 +617,16 @@ fn json_of(input: &Node) -> Option<Rc<Value>> {
 
 /// 执行整条规则（含 JS 段与 @put）。`list` 决定规则段取列表还是字符串。
 fn run(host: &dyn Host, rule: &str, input: &Node, list: bool, join: bool) -> Vec<Node> {
+    match pattern::checked(|| run_inner(host, rule, input, list, join)) {
+        Ok(values) => values,
+        Err(error) => {
+            host.rule_error(&error);
+            Vec::new()
+        }
+    }
+}
+
+fn run_inner(host: &dyn Host, rule: &str, input: &Node, list: bool, join: bool) -> Vec<Node> {
     let rule = rule.trim();
     if rule.is_empty() {
         return Vec::new();

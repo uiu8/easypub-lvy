@@ -1085,9 +1085,7 @@ fn prepare_context_cancellable(
                     Rule::RemoveAdLines | Rule::NoticeLines { .. } => "selected_notice",
                     Rule::RemoveDuplicateTitles => "duplicate_title",
                     Rule::CollapseBlankLines => "duplicate_blank",
-                    Rule::InlinePromotion | Rule::AuthorNotes | Rule::PagingResidue
-                        if remove =>
-                    {
+                    Rule::InlinePromotion | Rule::AuthorNotes | Rule::PagingResidue if remove => {
                         "promotion_line"
                     }
                     _ => "ordered_rules",
@@ -1320,14 +1318,20 @@ impl Cleanup {
             .enumerate()
             .map(|(row, c)| (c.source_line, c.step_index as i32, row as i32))
             .chain(self.candidates.iter().enumerate().filter_map(|(row, c)| {
-                Some((u32::try_from(c["source_line"].as_u64()?).ok()?, -1, row as i32))
+                Some((
+                    u32::try_from(c["source_line"].as_u64()?).ok()?,
+                    -1,
+                    row as i32,
+                ))
             }))
             .collect::<Vec<_>>();
         rows.sort_by_key(|row| (row.0, row.1 < 0));
         [
             rows.iter().map(|r| r.0 as i32).collect(),
             rows.iter().map(|r| r.1).collect(),
-            rows.iter().map(|r| original(r.0).map_or(-1, |v| v as i32)).collect(),
+            rows.iter()
+                .map(|r| original(r.0).map_or(-1, |v| v as i32))
+                .collect(),
             rows.iter().map(|r| r.2).collect(),
         ]
     }
@@ -2445,13 +2449,17 @@ mod tests {
     #[test]
     fn default_rules_keep_indent_heading_gap_and_field_lines() {
         let text = |raw: &str, rule: Value| {
-            let source = SourceSnapshot::from_utf8(raw.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+            let source =
+                SourceSnapshot::from_utf8(raw.as_bytes().to_vec(), RULE_ID, || false).unwrap();
             let request = json!({"kind":"cleanup","pipeline":[configured(rule,true,"all")]});
             prepare(&source, &request.to_string()).unwrap().text
         };
         // 段首的全角空格是缩进，不动；行内的照旧改成半角。
         assert_eq!(
-            text("第一章 甲\n　　正文　Ａ１\n", json!({"kind":"normalize_width"})),
+            text(
+                "第一章 甲\n　　正文　Ａ１\n",
+                json!({"kind":"normalize_width"})
+            ),
             "第一章 甲\n　　正文 A1\n"
         );
         // 标题里章号和题目之间的空格保留；正文里汉字间的空格照旧去掉。
@@ -2462,11 +2470,17 @@ mod tests {
         // 开头的“书名：”“作者：”各自成行；普通的句中换行照旧接上。
         let wraps = json!({"kind":"join_hard_wraps","mode":"chinese","min_chars":12});
         assert_eq!(
-            text("书名：一本名字足够长的小说的书名\n作者：某某\n", wraps.clone()),
+            text(
+                "书名：一本名字足够长的小说的书名\n作者：某某\n",
+                wraps.clone()
+            ),
             "书名：一本名字足够长的小说的书名\n作者：某某\n"
         );
         assert_eq!(
-            text("这一行的字数足够多而且停在句子的中间\n下一行接着写完。\n", wraps),
+            text(
+                "这一行的字数足够多而且停在句子的中间\n下一行接着写完。\n",
+                wraps
+            ),
             "这一行的字数足够多而且停在句子的中间下一行接着写完。\n"
         );
     }
@@ -2474,7 +2488,8 @@ mod tests {
     fn promotion_rules_cut_the_pitch_drop_empty_lines_and_leave_headings_to_structure() {
         let raw = "第一章 入山（求月票）\n　　他姓林。(未完待续。手机用户请到某站阅读。)\n　　（本章未完，请翻页）\n　　ps：求推荐票~\n第二章 门后\n　　正文。\n";
         let text = |rules: Value| {
-            let source = SourceSnapshot::from_utf8(raw.as_bytes().to_vec(), RULE_ID, || false).unwrap();
+            let source =
+                SourceSnapshot::from_utf8(raw.as_bytes().to_vec(), RULE_ID, || false).unwrap();
             let request = json!({"kind":"cleanup","pipeline":rules});
             prepare(&source, &request.to_string()).unwrap()
         };
@@ -2490,7 +2505,12 @@ mod tests {
             "第一章 入山\n　　他姓林。\n第二章 门后\n　　正文。\n"
         );
         assert_eq!(all.changes.len(), 4);
-        assert!(all.changes.iter().filter(|c| c.after.is_none()).all(|c| c.reason == "promotion_line"));
+        assert!(
+            all.changes
+                .iter()
+                .filter(|c| c.after.is_none())
+                .all(|c| c.reason == "promotion_line")
+        );
         // 标题行不归这三条管：“（求月票）”留给“标题尾巴”。
         let body_only = text(json!([
             configured(json!({"kind":"inline_promotion"}), true, "all"),

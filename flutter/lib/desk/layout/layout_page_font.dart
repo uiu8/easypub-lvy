@@ -197,7 +197,8 @@ extension _LayoutFontSection on _LayoutPageState {
             const DeskHelp(
               '把字体放进书里，只保留书里用到的字（通常几百 KB 到几 MB）。'
               'Kindle 上在“Aa”里选“出版商字体”时显示这个字体，选别的字体时照常按阅读器字体。'
-              '需要你有权在电子书中使用这个字体。原书自带的字体导入时已还原，可以直接选用。'
+              '需要你有权在电子书中使用这个字体。支持 TTF、OTF、TTC；原书字体需通过检查后才能选用。'
+              'WOFF2 目前只能用于浏览器预览，不能在这里嵌入成品；请使用提供方的 TTF 或 OTF 版本。'
               '真机预览里选“出版商字体”可以看到效果。',
               key: ValueKey('layout-help-font'),
             ),

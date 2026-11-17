@@ -142,10 +142,10 @@ fn import_reads_styles_links_notes_and_tables_without_touching_text() {
     assert_eq!(table.rows[2][0].columns, 2);
 
     let (result, book) = resolved(&f.text, &f.selection);
-    // 标题里的粗体、整行粗体都不要。
+    // 标题另行排版，正文整行粗体必须保留。
     assert_eq!(
         styled(&result, &book, Style::Bold),
-        ["粗体", "类粗体", "重复"]
+        ["粗体", "类粗体", "整行粗体不算", "重复"]
     );
     assert_eq!(
         styled(&result, &book, Style::Italic),
@@ -184,7 +184,7 @@ fn marks_survive_edits_elsewhere_and_only_the_edited_ones_stop() {
     let (result, book) = resolved(&changed, &f.selection);
     assert_eq!(
         styled(&result, &book, Style::Bold),
-        ["粗体", "类粗体", "重复"]
+        ["粗体", "类粗体", "整行粗体不算", "重复"]
     );
     // 被改掉的文字那一条停用，其余不受影响。
     let changed = f.text.replacen("下划线", "画线", 1);
@@ -194,6 +194,54 @@ fn marks_survive_edits_elsewhere_and_only_the_edited_ones_stop() {
     // 占位行被改掉就不是表格了。
     let changed = f.text.replacen("〔表格：3 行 2 列〕", "这里原来有张表", 1);
     assert!(resolved(&changed, &f.selection).0.tables.is_empty());
+}
+
+#[test]
+fn repair88_copy_rebases_marks_notes_tables_and_preserves_removed_ids() {
+    let f = fixture();
+    let (_, mut book) = resolved(&f.text, &f.selection);
+    for line in book.source_to_output_lines.values_mut() {
+        *line += 7;
+    }
+    let mut selection = f.selection.clone();
+    selection.removed.push(f.data.marks[0].id.clone());
+    let target = f._dir.path().join("copy-marks.json");
+    let (rebased, bytes) = selection.rebase(&book, &target).unwrap();
+    let data: Data = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rebased.removed, selection.removed);
+    assert_eq!(data.marks.len(), f.data.marks.len());
+    for (original, copy) in f.data.marks.iter().zip(&data.marks) {
+        assert_eq!(copy.id, original.id);
+        assert_eq!(copy.nth, original.nth);
+        assert_eq!(copy.text, original.text);
+        assert_eq!(copy.line, original.line + 7);
+        if let (MarkKind::Note { target: before }, MarkKind::Note { target: after }) =
+            (&original.kind, &copy.kind)
+        {
+            assert_eq!(*after, *before + 7);
+        }
+    }
+    for (original, copy) in f.data.tables.iter().zip(&data.tables) {
+        assert_eq!(copy.id, original.id);
+        assert_eq!(copy.line, original.line + 7);
+    }
+    let note = f
+        .data
+        .marks
+        .iter()
+        .find_map(|mark| match mark.kind {
+            MarkKind::Note { target } => Some((mark.id.clone(), target)),
+            _ => None,
+        })
+        .unwrap();
+    book.source_to_output_lines.remove(&note.1);
+    let (_, bytes) = selection.rebase(&book, &target).unwrap();
+    let data: Data = serde_json::from_slice(&bytes).unwrap();
+    assert!(
+        !data.marks.iter().any(|mark| mark.id == note.0),
+        "删除注释定义后不能留下指向其他行的引用"
+    );
+    assert!(!target.exists(), "rebase 只准备数据，由保存事务负责落盘");
 }
 
 #[test]

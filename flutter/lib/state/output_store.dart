@@ -125,24 +125,37 @@ class OutputStore {
   Future<void> _loadHistory() async {
     if (_directory == null) return;
     try {
-      final result = jsonDecode(
-        await api.kindlingJobText(
-          requestJson: jsonEncode({
-            'op': 'history_load',
-            'directory': _directory,
-          }),
-        ),
-      ) as Map;
-      final restored = (result['records'] as List)
-          .map((r) => OutputTask.fromRecord((r as Map).cast<String, dynamic>()))
-          .toList();
-      _change(() {
-        final existing = tasks.map((t) => t.taskId).toSet();
-        tasks.addAll(restored.where((t) => !existing.contains(t.taskId)));
-        tasks.sort((a, b) => a.startedAt.compareTo(b.startedAt));
-        historyStatus = '已读取输出记录；历史成品尚未重新核验。';
-      });
+      String? after;
+      do {
+        final result = jsonDecode(
+          await api.kindlingJobText(
+            requestJson: jsonEncode({
+              'op': 'history_load',
+              'directory': _directory,
+              if (after != null) 'after': after,
+            }),
+          ),
+        ) as Map;
+        final restored = (result['records'] as List)
+            .map(
+              (r) => OutputTask.fromRecord((r as Map).cast<String, dynamic>()),
+            )
+            .toList();
+        final next = result['next'] as String?;
+        if (next != null &&
+            (after != null && next.compareTo(after) <= 0 || restored.isEmpty)) {
+          throw const FormatException('历史记录分页未前进');
+        }
+        after = next;
+        _change(() {
+          final existing = tasks.map((t) => t.taskId).toSet();
+          tasks.addAll(restored.where((t) => !existing.contains(t.taskId)));
+          tasks.sort((a, b) => a.startedAt.compareTo(b.startedAt));
+          historyStatus = after == null ? '已读取输出记录；历史成品尚未重新核验。' : '正在分批读取输出记录…';
+        });
+      } while (after != null);
     } catch (_) {
+      _historyLoad = null;
       _change(
         () => historyStatus = '输出历史读取失败，已有文件保留；请检查设置目录中的 output-history。',
       );

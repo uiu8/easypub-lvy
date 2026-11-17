@@ -141,88 +141,88 @@ class _IssueEvidenceViewState extends State<IssueEvidenceView> {
   };
 
   @override
-  Widget build(BuildContext context) =>
-      FutureBuilder<List<ChapterIssueContext>>(
-        future: content,
-        builder: (context, snapshot) {
-          final d = context.desk;
-          if (snapshot.hasError) {
-            return Align(
-              alignment: Alignment.topCenter,
-              child: DeskNote(
-                deskErrorText(snapshot.error!, '请重新检查当前稿件后再定位或处理。'),
-                title: '正文读取失败',
-                tone: Tone.pen,
-              ),
-            );
-          }
-          if (!snapshot.hasData ||
-              snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final data = snapshot.data!;
-          if (data.isEmpty) {
-            return Center(
-              child: Text('此项没有可定位的文本。', style: ui(13, c: d.ink3)),
-            );
-          }
-          final paired = data.length > 1 && !widget.original;
-          final choose = data.length > 2;
-          final a = leftIndex.clamp(0, data.length - 1),
-              b = rightIndex.clamp(0, data.length - 1);
-          final gap = widget.issue.category == 'number-gap';
-          final duplicate = widget.issue.category.startsWith('duplicate');
-          // 编号重复的两处是同号的两章，不是前后相邻章节。
-          final twoPlaces =
-              duplicate || widget.issue.subtype == 'repeated-number';
-          if (paired) {
-            return ComparisonWorkspace(
-              key: ValueKey((widget.issue.id, a, b, false)),
-              highlightDifferences: duplicate,
-              left: pane(
-                data,
-                a,
-                gap
-                    ? '前章末尾'
-                    : twoPlaces
-                    ? '第一处'
-                    : '前一个章节',
-                header: choose ? picker(data.length, 0, a) : null,
-              ),
-              right: pane(
-                data,
-                b,
-                gap
-                    ? '后章开头'
-                    : twoPlaces
-                    ? '第二处'
-                    : '后一个章节',
-                header: choose ? picker(data.length, 1, b) : null,
-              ),
-            );
-          }
-          if (widget.original) {
-            return ComparisonWorkspace(
-              key: ValueKey((widget.issue.id, a, true)),
-              versions: true,
-              left: pane(
-                data,
-                a,
-                '导入原稿',
-                original: true,
-                header: choose ? picker(data.length, 0, a) : null,
-              ),
-              right: pane(data, a, '当前草稿'),
-            );
-          }
-          return ComparisonWorkspace(
-            key: ValueKey((widget.issue.id, a, 'single')),
-            left: pane(data, a, '问题所在位置'),
-            right: ComparisonContent(
-              label: '核对要点',
-              rows: [ChapterContextRow(guidance())],
-            ),
-          );
-        },
+  Widget build(
+    BuildContext context,
+  ) => FutureBuilder<List<ChapterIssueContext>>(
+    future: content,
+    builder: (context, snapshot) {
+      final d = context.desk;
+      if (snapshot.hasError) {
+        return Align(
+          alignment: Alignment.topCenter,
+          child: DeskNote(
+            deskErrorText(snapshot.error!, '请重新检查当前稿件后再定位或处理。'),
+            title: '正文读取失败',
+            tone: Tone.pen,
+          ),
+        );
+      }
+      if (!snapshot.hasData ||
+          snapshot.connectionState != ConnectionState.done) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      final data = snapshot.data!;
+      if (data.isEmpty) {
+        return Center(
+          child: Text('此项没有可定位的文本。', style: ui(13, c: d.ink3)),
+        );
+      }
+      final paired = data.length > 1 && !widget.original;
+      final choose = data.length > 2 || (widget.original && data.length > 1);
+      final a = leftIndex.clamp(0, data.length - 1),
+          b = rightIndex.clamp(0, data.length - 1);
+      final gap = widget.issue.category == 'number-gap';
+      final duplicate = widget.issue.category.startsWith('duplicate');
+      // 编号重复的两处是同号的两章，不是前后相邻章节。
+      final twoPlaces = duplicate || widget.issue.subtype == 'repeated-number';
+      if (paired) {
+        return ComparisonWorkspace(
+          key: ValueKey((widget.issue.id, a, b, false)),
+          highlightDifferences: duplicate,
+          left: pane(
+            data,
+            a,
+            gap
+                ? '前章末尾'
+                : twoPlaces
+                ? '第一处'
+                : '前一个章节',
+            header: choose ? picker(data.length, 0, a) : null,
+          ),
+          right: pane(
+            data,
+            b,
+            gap
+                ? '后章开头'
+                : twoPlaces
+                ? '第二处'
+                : '后一个章节',
+            header: choose ? picker(data.length, 1, b) : null,
+          ),
+        );
+      }
+      if (widget.original) {
+        return ComparisonWorkspace(
+          key: ValueKey((widget.issue.id, a, true)),
+          versions: true,
+          left: pane(
+            data,
+            a,
+            '导入原稿',
+            original: true,
+            header: choose ? picker(data.length, 0, a) : null,
+          ),
+          right: pane(data, a, '当前草稿'),
+        );
+      }
+      return ComparisonWorkspace(
+        key: ValueKey((widget.issue.id, a, 'single')),
+        left: pane(data, a, '问题所在位置'),
+        right: ComparisonContent(
+          label: '核对要点',
+          rows: [ChapterContextRow(guidance())],
+        ),
       );
+    },
+  );
 }

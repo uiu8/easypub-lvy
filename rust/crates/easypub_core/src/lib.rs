@@ -1,9 +1,9 @@
 //! Read-only source experiments. No Flutter, I/O, or implicit legacy rules.
+pub mod chapter_rules;
 mod cp936_table;
 pub mod encoding;
 pub mod heading_typos;
 pub mod recognition;
-pub mod chapter_rules;
 pub mod source;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

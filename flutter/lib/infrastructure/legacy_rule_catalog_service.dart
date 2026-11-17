@@ -5,12 +5,34 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:collection/collection.dart';
 
 import '../application/cleanup_rule_resolution.dart';
 import '../application/rule_catalog_service.dart';
 import '../prototype/prototype_state.dart';
 import '../src/rust/api.dart' as api;
+import 'import_profile.dart';
+
+// Inputs are JSON maps with string keys. Direct key lookup avoids hashing each
+// nested history subtree again while preserving order-independent map equality.
+bool _sameToggleInput(Object? a, Object? b) {
+  if (identical(a, b)) return true;
+  if (a is Map && b is Map) {
+    return a.length == b.length &&
+        a.entries.every(
+          (entry) =>
+              b.containsKey(entry.key) &&
+              _sameToggleInput(entry.value, b[entry.key]),
+        );
+  }
+  if (a is List && b is List) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!_sameToggleInput(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  return a == b;
+}
 
 class LegacyRuleCatalogService implements RuleCatalogService {
   LegacyRuleCatalogService(this.backend, this.bookId) {
@@ -96,7 +118,7 @@ class LegacyRuleCatalogService implements RuleCatalogService {
     final result = Map<String, dynamic>.from(
       await _call('preview_toggles', {...input, 'changes': changes}),
     );
-    if (!const DeepCollectionEquality().equals(input, _toggleInput(scope))) {
+    if (!_sameToggleInput(input, _toggleInput(scope))) {
       throw const FormatException('书稿或设置已变化，请重新预览。');
     }
     _plans.clear();
@@ -116,7 +138,10 @@ class LegacyRuleCatalogService implements RuleCatalogService {
     final input = plan['input'] as Map<String, dynamic>;
     final scope = input['scope'] as String;
     void validate() {
-      if (!const DeepCollectionEquality().equals(input, _toggleInput(scope))) {
+      if (!ImportProfile.measure(
+        'rule_toggle_guard',
+        () => _sameToggleInput(input, _toggleInput(scope)),
+      )) {
         throw const FormatException('书稿或设置已变化，请重新预览。');
       }
     }
@@ -230,18 +255,23 @@ class LegacyRuleCatalogService implements RuleCatalogService {
     String action, [
     Map<String, dynamic> fields = const {},
   ]) async {
-    return jsonDecode(
-      await api.productionBatchText(
-        requestJson: jsonEncode({
-          'op': 'rule_catalog',
-          'action': action,
-          ...fields,
-        }),
+    final request = ImportProfile.measure(
+      'rule_toggle_encode',
+      () => jsonEncode({'op': 'rule_catalog', 'action': action, ...fields}),
+    );
+    final response = await ImportProfile.measureAsync(
+      'rule_toggle_native',
+      () => api.productionBatchText(
+        requestJson: request,
         apply: false,
         planId: '',
         confirmed: false,
       ),
-    ) as Map;
+    );
+    return ImportProfile.measure(
+      'rule_toggle_decode',
+      () => jsonDecode(response) as Map,
+    );
   }
 
   bool get _available =>

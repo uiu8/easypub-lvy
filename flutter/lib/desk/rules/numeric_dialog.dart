@@ -70,15 +70,18 @@ class _NumericChaptersDialogState extends State<NumericChaptersDialog> {
   }
 
   /// 本书规则 + 打开纯数字标题（+ 规范为“第X章 标题”）。
-  Map<String, dynamic> rules() => {
-    ...base!,
-    'numeric': true,
-    'normalize_numeric_titles': normalize,
-    'numeric_minimum_body_lines':
-        int.tryParse(minimum.text.trim()) ??
-        base!['numeric_minimum_body_lines'] ??
-        2,
-  };
+  Map<String, dynamic> rules() {
+    final value = int.tryParse(minimum.text.trim());
+    if (value == null || value < 0 || value > 1000) {
+      throw const FormatException('正文行数应为 0 至 1000 的整数。');
+    }
+    return {
+      ...base!,
+      'numeric': true,
+      'normalize_numeric_titles': normalize,
+      'numeric_minimum_body_lines': value,
+    };
+  }
 
   Future<void> run() async {
     final mine = ++ticket;
@@ -231,6 +234,15 @@ class _NumericChaptersDialogState extends State<NumericChaptersDialog> {
                       style: ui(12.5, c: d.ink),
                       textAlign: TextAlign.center,
                       decoration: deskInput(context),
+                      onChanged: (_) => setState(() {
+                        ticket++;
+                        preview = null;
+                        confirmed = false;
+                        final value = int.tryParse(minimum.text.trim());
+                        error = value == null || value < 0 || value > 1000
+                            ? '正文行数应为 0 至 1000 的整数。'
+                            : '';
+                      }),
                       onSubmitted: (_) => run(),
                     ),
                   ),

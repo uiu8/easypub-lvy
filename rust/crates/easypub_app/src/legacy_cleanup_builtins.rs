@@ -146,14 +146,15 @@ pub(crate) fn inspect(obj: &Map<String, Value>, prefix: &str, report: &mut Repor
             })
             .collect();
         if let Ok(converted) = converted
-            && easypub_core::cleanup_rules::validate_pipeline(&converted).is_ok() {
-                pipeline.extend(converted);
-                item.status = "cleanup_ready";
-                item.reason = "转换为当前清理算法候选：标点/OCR/分段/硬换行限正文，页眉仅列候选不自动删除；范围与保护行为须预览";
-                if key == "RemoveSiteNotices" {
-                    item.reason = "广告匹配和优先保留条件整体转换；启发式使用新算法，仅列候选，逐项选择才排除，须预览核对";
-                }
+            && easypub_core::cleanup_rules::validate_pipeline(&converted).is_ok()
+        {
+            pipeline.extend(converted);
+            item.status = "cleanup_ready";
+            item.reason = "转换为当前清理算法候选：标点/OCR/分段/硬换行限正文，页眉仅列候选不自动删除；范围与保护行为须预览";
+            if key == "RemoveSiteNotices" {
+                item.reason = "广告匹配和优先保留条件整体转换；启发式使用新算法，仅列候选，逐项选择才排除，须预览核对";
             }
+        }
         report.items.push(item);
     }
     pipeline

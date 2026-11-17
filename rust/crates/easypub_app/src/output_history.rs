@@ -9,7 +9,7 @@ use std::{
     collections::BTreeMap,
     fs::{self, File, OpenOptions},
     io::{Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -40,10 +40,7 @@ pub fn cover_thumbnail(path: &str, crop: Option<&crate::assets::Crop>) -> Result
 /// Read-only comparison with the immutable export receipt. This does not
 /// certify reader compatibility or publish a staged transaction.
 pub fn verify(directory: &Path, task_id: &str) -> Result<Value, ApiError> {
-    let record = load(directory)?
-        .into_iter()
-        .find(|r| r.task_id == task_id)
-        .ok_or_else(invalid)?;
+    let record = find_record(directory, task_id)?;
     let Some(receipt) = record.receipt.as_ref() else {
         return inspect_interrupted(&record);
     };
@@ -78,10 +75,7 @@ pub fn verify(directory: &Path, task_id: &str) -> Result<Value, ApiError> {
 
 /// Inspect only actual receipt-bound exports; no draft resources are used.
 pub fn inspect_package(directory: &Path, task_id: &str) -> Result<Value, ApiError> {
-    let record = load(directory)?
-        .into_iter()
-        .find(|r| r.task_id == task_id)
-        .ok_or_else(invalid)?;
+    let record = find_record(directory, task_id)?;
     let receipt = record.receipt.as_ref().ok_or_else(invalid)?;
     let path = receipt["output_path"].as_str().ok_or_else(invalid)?;
     let expected = receipt["transaction"]["output_sha256"]
@@ -127,7 +121,7 @@ pub fn inspect_package(directory: &Path, task_id: &str) -> Result<Value, ApiErro
             "byte_length":size, "sha256":expected}),
         );
     }
-    // TXT 输出：纯文字没有容器结构，核对回执哈希并确认是 UTF-8。
+    // TXT has no container: inspect the bytes against the receipt's encoding.
     if extension == "txt" {
         let unchanged = verify(directory, task_id)?;
         if unchanged["status"] != "matches" {
@@ -137,10 +131,43 @@ pub fn inspect_package(directory: &Path, task_id: &str) -> Result<Value, ApiErro
         if size > 512 * 1024 * 1024 {
             return Err(invalid());
         }
-        let valid = std::str::from_utf8(&fs::read(path).map_err(io)?).is_ok();
+        let mut bytes = Vec::new();
+        File::open(path)
+            .map_err(io)?
+            .take(512 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(io)?;
+        if bytes.len() > 512 * 1024 * 1024 {
+            return Err(invalid());
+        }
+        if format!("{:x}", Sha256::digest(&bytes)) != expected {
+            return Ok(serde_json::json!({"status":"changed"}));
+        }
+        let encoding = receipt["text_encoding"].as_str();
+        let valid = match encoding {
+            Some("utf-8") => std::str::from_utf8(&bytes).is_ok(),
+            Some("gbk") => encoding_rs::GBK
+                .decode_without_bom_handling_and_without_replacement(&bytes)
+                .is_some(),
+            Some("big5") => encoding_rs::BIG5
+                .decode_without_bom_handling_and_without_replacement(&bytes)
+                .is_some(),
+            None if std::str::from_utf8(&bytes).is_ok() => true,
+            None => {
+                return Ok(
+                    serde_json::json!({"status":"txt_encoding_unknown", "format":"TXT",
+                "detail":"回执哈希一致；旧回执未记录编码，无法确认文本编码，不代表成品损坏。",
+                "byte_length":bytes.len(), "sha256":expected}),
+                );
+            }
+            _ => return Err(invalid()),
+        };
+        let label = encoding.unwrap_or("utf-8");
         return Ok(
             serde_json::json!({"status":if valid { "txt_checked" } else { "failed" },
-            "format":"TXT", "detail":"回执哈希一致，内容是 UTF-8 文字。",
+            "format":"TXT", "encoding":label,
+            "detail":if valid {format!("回执哈希一致，内容符合 {label} 编码。")}
+                else {format!("回执哈希一致，但内容不符合回执记录的 {label} 编码。")},
             "byte_length":size, "sha256":expected}),
         );
     }
@@ -300,13 +327,10 @@ fn inspect_interrupted(record: &Record) -> Result<Value, ApiError> {
         serde_json::json!({"status": if complete {"published_without_receipt"} else {"staged_verified"}}),
     )
 }
-const MAX_RECORDS: usize = 8192;
+const HISTORY_PAGE_SIZE: usize = 256;
 
 pub fn recovery_preview(directory: &Path, task_id: &str) -> Result<Value, ApiError> {
-    let record = load(directory)?
-        .into_iter()
-        .find(|r| r.task_id == task_id)
-        .ok_or_else(invalid)?;
+    let record = find_record(directory, task_id)?;
     if record.finished_at.is_some() || record.receipt.is_some() {
         return Err(invalid());
     }
@@ -490,35 +514,100 @@ fn read(path: &Path) -> Result<Record, ApiError> {
     }
     Ok(record)
 }
-pub fn load(directory: &Path) -> Result<Vec<Record>, ApiError> {
+fn valid_task_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 80 && id.bytes().all(|c| c.is_ascii_hexdigit() || c == b'-')
+}
+
+// Scan file names without retaining record bodies. Select only the next bounded
+// set of task IDs and the latest observation of each; old files remain untouched.
+fn latest_paths(
+    directory: &Path,
+    after: Option<&str>,
+    only: Option<&str>,
+    limit: usize,
+) -> Result<BTreeMap<String, (u64, PathBuf)>, ApiError> {
     if !directory.is_absolute() {
         return Err(invalid());
     }
     let entries = match fs::read_dir(directory) {
         Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
         Err(e) => return Err(io(e)),
     };
-    let mut latest: BTreeMap<String, Record> = BTreeMap::new();
-    let mut count = 0;
+    let mut latest: BTreeMap<String, (u64, PathBuf)> = BTreeMap::new();
     for entry in entries {
         let path = entry.map_err(io)?.path();
         if path.extension().and_then(|s| s.to_str()) != Some("json") {
             continue;
         }
-        count += 1;
-        if count > MAX_RECORDS {
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or_else(invalid)?;
+        let (id, sequence) = stem.rsplit_once('-').ok_or_else(invalid)?;
+        let seq: u64 = sequence.parse().map_err(|_| invalid())?;
+        if !valid_task_id(id) || sequence.len() != 20 || seq == 0 {
             return Err(invalid());
         }
-        let record = read(&path)?;
-        if latest
-            .get(&record.task_id)
-            .is_none_or(|old| old.sequence < record.sequence)
-        {
-            latest.insert(record.task_id.clone(), record);
+        if after.is_some_and(|cursor| id <= cursor) || only.is_some_and(|wanted| id != wanted) {
+            continue;
+        }
+        if latest.get(id).is_none_or(|(old, _)| *old < seq) {
+            latest.insert(id.to_owned(), (seq, path.clone()));
+            if latest.len() > limit {
+                latest.pop_last();
+            }
         }
     }
-    Ok(latest.into_values().collect())
+    Ok(latest)
+}
+
+fn find_record(directory: &Path, task_id: &str) -> Result<Record, ApiError> {
+    if !valid_task_id(task_id) {
+        return Err(invalid());
+    }
+    let paths = latest_paths(directory, None, Some(task_id), 1)?;
+    read(&paths.get(task_id).ok_or_else(invalid)?.1)
+}
+
+pub fn load_page(directory: &Path, after: Option<&str>) -> Result<Value, ApiError> {
+    if after.is_some_and(|id| !valid_task_id(id)) {
+        return Err(invalid());
+    }
+    let mut paths = latest_paths(directory, after, None, HISTORY_PAGE_SIZE + 1)?;
+    let more = paths.len() > HISTORY_PAGE_SIZE;
+    if more {
+        paths.pop_last();
+    }
+    let next = more.then(|| {
+        paths
+            .last_key_value()
+            .expect("nonempty history page")
+            .0
+            .clone()
+    });
+    let records: Vec<Record> = paths
+        .into_values()
+        .map(|(_, path)| read(&path))
+        .collect::<Result<_, _>>()?;
+    Ok(serde_json::json!({"records":records,"next":next}))
+}
+
+#[cfg(test)]
+fn load(directory: &Path) -> Result<Vec<Record>, ApiError> {
+    let mut records = Vec::new();
+    let mut after = None;
+    loop {
+        let page = load_page(directory, after.as_deref())?;
+        records.extend(
+            serde_json::from_value::<Vec<Record>>(page["records"].clone())
+                .map_err(|_| invalid())?,
+        );
+        after = page["next"].as_str().map(str::to_owned);
+        if after.is_none() {
+            return Ok(records);
+        }
+    }
 }
 /// Only remove receipt-bound transaction artifacts after durable history and
 /// output verification. Never enumerate or clean unrelated output directories.
@@ -699,9 +788,9 @@ pub fn save(directory: &Path, record: &Record) -> Result<(), ApiError> {
     let result = (|| {
         file.write_all(&bytes).map_err(io)?;
         file.sync_all().map_err(io)?;
-        fs::hard_link(&temp, &target).map_err(io)
+        drop(file);
+        crate::file_publish::move_new(&temp, &target).map_err(io)
     })();
-    drop(file);
     let _ = fs::remove_file(&temp);
     result
 }
@@ -942,6 +1031,87 @@ mod tests {
         assert!(save(&dir, &bad_thumbnail).is_err());
         bad_thumbnail.cover_thumbnail = Some("A".repeat(16 * 1024 + 1));
         assert!(save(&dir, &bad_thumbnail).is_err());
+        for (index, encoding) in ["utf-8", "gbk", "big5", "legacy", "invalid"]
+            .iter()
+            .enumerate()
+        {
+            let raw = match *encoding {
+                "utf-8" => "第一章 正文".as_bytes().to_vec(),
+                "gbk" | "legacy" => encoding_rs::GBK.encode("第一章 正文").0.into_owned(),
+                "big5" => encoding_rs::BIG5.encode("第一章 繁體正文").0.into_owned(),
+                _ => vec![0x81],
+            };
+            let output = dir.join(format!("{encoding}.txt"));
+            fs::write(&output, &raw).unwrap();
+            let mut text_record = record.clone();
+            text_record.task_id = format!("abc-{index}");
+            text_record.format = "TXT".into();
+            text_record.phase = "complete".into();
+            text_record.output_path = output.to_string_lossy().into();
+            let mut receipt = serde_json::json!({"output_path":output,"transaction":{"output_sha256":format!("{:x}",Sha256::digest(&raw))}});
+            if *encoding != "legacy" {
+                receipt["text_encoding"] = (if *encoding == "invalid" {
+                    "gbk"
+                } else {
+                    encoding
+                })
+                .into();
+            }
+            text_record.receipt = Some(receipt);
+            save(&dir, &text_record).unwrap();
+            let checked = inspect_package(&dir, &text_record.task_id).unwrap();
+            assert_eq!(
+                checked["status"],
+                match *encoding {
+                    "legacy" => "txt_encoding_unknown",
+                    "invalid" => "failed",
+                    _ => "txt_checked",
+                },
+                "{encoding}: {checked}"
+            );
+            assert_eq!(fs::read(&output).unwrap(), raw);
+            fs::write(&output, b"changed").unwrap();
+            assert_ne!(
+                inspect_package(&dir, &text_record.task_id).unwrap()["status"],
+                "txt_checked"
+            );
+        }
+        // The previous reader rejected the entire directory at 8192 files.
+        // Use ordinary fixture writes here; durability is exercised above by save.
+        let many = dir.join("many");
+        fs::create_dir(&many).unwrap();
+        for index in 0..8193 {
+            let mut item = record.clone();
+            item.task_id = format!("{index:08x}");
+            fs::write(many.join(name(&item)), serde_json::to_vec(&item).unwrap()).unwrap();
+        }
+        let mut latest = record.clone();
+        latest.task_id = "00000000".into();
+        latest.sequence += 1;
+        latest.title = "最新记录".into();
+        save(&many, &latest).unwrap();
+        assert_eq!(find_record(&many, "00000000").unwrap(), latest);
+        let mut cursor: Option<String> = None;
+        let mut seen = std::collections::BTreeSet::new();
+        loop {
+            let page = load_page(&many, cursor.as_deref()).unwrap();
+            let records = page["records"].as_array().unwrap();
+            assert!(records.len() <= HISTORY_PAGE_SIZE);
+            for item in records {
+                assert!(seen.insert(item["task_id"].as_str().unwrap().to_owned()));
+                if item["task_id"] == "00000000" {
+                    assert_eq!(item["title"], "最新记录");
+                }
+            }
+            cursor = page["next"].as_str().map(str::to_owned);
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert_eq!(seen.len(), 8193);
+        assert!(seen.contains("00002000"));
+        assert_eq!(fs::read_dir(&many).unwrap().count(), 8194);
+        assert!(load_page(&many, Some("../invalid")).is_err());
         record.task_id = "../escape".into();
         assert!(save(&dir, &record).is_err());
         fs::write(dir.join("broken.json"), b"{").unwrap();

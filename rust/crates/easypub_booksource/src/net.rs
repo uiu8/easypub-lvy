@@ -17,6 +17,9 @@ pub const DEFAULT_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb
 
 #[derive(Clone, Debug, Default)]
 pub struct Request {
+    /// URLConnection 显式超时；0 表示不单独限制，任务总期限仍生效。
+    pub connect_timeout_ms: Option<u64>,
+    pub read_timeout_ms: Option<u64>,
     /// 健康检查及显式响应接口使用：由调用方解释 HTTP 错误状态，不回显响应正文。
     pub inspect_error_status: bool,
     /// 仅规则引擎保留验证页，让调用方决定是否打开 WebView。
@@ -85,6 +88,7 @@ struct RateState {
 }
 
 pub struct Net {
+    pub cookie_revision: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub fqnovel: bool,
     pub cookies: Mutex<cookie_store::CookieStore>,
     rate: Option<Rate>,
@@ -106,6 +110,7 @@ impl std::fmt::Display for NetError {
 impl Net {
     pub fn new(rate: Option<Rate>, headers: Vec<(String, String)>) -> Self {
         Self {
+            cookie_revision: Default::default(),
             cookies: Mutex::new(cookie_store::CookieStore::new()),
             rate,
             crawl: Default::default(),
@@ -172,6 +177,8 @@ impl Net {
     pub fn remove_cookies(&self, url: &str) {
         let Ok(url) = Url::parse(url) else { return };
         let mut jar = self.cookies.lock().unwrap();
+        self.cookie_revision
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let names: Vec<(String, String, String)> = jar
             .iter_any()
             .filter(|c| c.domain.matches(&url))
@@ -199,6 +206,9 @@ impl Net {
     }
 
     fn fetch_once(&self, req: &Request, follow: bool) -> Result<Response, NetError> {
+        let cookie_revision = self
+            .cookie_revision
+            .load(std::sync::atomic::Ordering::SeqCst);
         static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
         let runtime = RUNTIME.get_or_init(|| {
             tokio::runtime::Builder::new_multi_thread()
@@ -222,6 +232,7 @@ impl Net {
                 mapped.as_ref().unwrap_or(req),
                 if mapped.is_some() { false } else { follow },
                 &context,
+                cookie_revision,
             );
             let mut future = std::pin::pin!(future);
             loop {
@@ -244,6 +255,7 @@ impl Net {
         req: &Request,
         follow: bool,
         context: &Context,
+        cookie_revision: u64,
     ) -> Result<Response, NetError> {
         let network = req
             .network
@@ -266,6 +278,13 @@ impl Net {
         let mut dropped_body = false;
         let mut network_time = Duration::ZERO;
         for _ in 0..10 {
+            if self
+                .cookie_revision
+                .load(std::sync::atomic::Ordering::SeqCst)
+                != cookie_revision
+            {
+                return Err(NetError("登录状态已清理，请重新请求".into()));
+            }
             if !matches!(url.scheme(), "http" | "https") {
                 return Err(NetError("重定向只支持 HTTP / HTTPS".into()));
             }
@@ -273,9 +292,15 @@ impl Net {
                 crate::network_config::route(&network, &context.crawl, req.proxy.as_deref(), &url)
                     .map_err(NetError)?;
             *context.network_route.lock().unwrap() = route.json();
-            let client =
-                crate::network_config::client(context.profile, &network, &route, req.insecure)
-                    .map_err(NetError)?;
+            let client = crate::network_config::client_with_timeouts(
+                context.profile,
+                &network,
+                &route,
+                req.insecure,
+                req.connect_timeout_ms,
+                req.read_timeout_ms,
+            )
+            .map_err(NetError)?;
             let queued = Instant::now();
             if !context.batch_rate_reserved && !crate::hosts::local(url.as_str()) {
                 self.wait_turn(context)?;
@@ -399,6 +424,13 @@ impl Net {
             }
             {
                 let mut jar = self.cookies.lock().unwrap();
+                if self
+                    .cookie_revision
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                    != cookie_revision
+                {
+                    return Err(NetError("登录状态已清理，请重新请求".into()));
+                }
                 for v in resp.headers().get_all("set-cookie") {
                     if let Ok(s) = v.to_str() {
                         let _ = jar.parse(s, &url);

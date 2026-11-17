@@ -89,10 +89,10 @@ fn write(path: &Path, bundle: &Bundle) -> Result<(), ApiError> {
     let result = (|| {
         file.write_all(&bytes).map_err(|_| io())?;
         file.sync_all().map_err(|_| io())?;
-        fs::hard_link(&stage, path).map_err(|_| io())?;
+        drop(file);
+        crate::file_publish::move_new(&stage, path).map_err(|_| io())?;
         Ok(())
     })();
-    drop(file);
     let _ = fs::remove_file(stage);
     result
 }

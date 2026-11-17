@@ -183,10 +183,7 @@ class LegacyLibraryAdapter
         if (!paths.equals(f, folder)) f,
       if (enabled) folder,
     ];
-    final saved = await savePatch({'auto_import_folders': next});
-    _autoFolders.value = _configList('auto_import_folders');
-    if (saved) unawaited(_autoImport.foldersChanged());
-    return saved;
+    return savePatch({'auto_import_folders': next});
   }
 
   @override
@@ -262,7 +259,12 @@ class LegacyLibraryAdapter
     if (directory == null) {
       throw const FormatException('没有设置目录，无法清理检查缓存。');
     }
-    return cleanCheckReports(directory, preview, _currentCheckGuards());
+    return cleanCheckReports(
+      directory,
+      preview,
+      _currentCheckGuards(),
+      latestGuards: _currentCheckGuards,
+    );
   }
 
   @override
@@ -333,6 +335,10 @@ class LegacyLibraryAdapter
       replaceBody: replaceBody,
       replaceImages: replaceImages,
     );
+    if (!_disposed) {
+      _sourceBytes.remove(preview.path);
+      _refresh(bookIds: {preview.bookId});
+    }
     if (!_disposed &&
         result.recoveryPath != null &&
         _backend.globalConfiguration['check_after_import'] != false) {
@@ -889,6 +895,13 @@ class LegacyLibraryAdapter
     final result = await _backend.saveGlobalConfigurationPatch(patch);
     _refreshSettings();
     if (result) await _syncWindowPreference();
+    if (result &&
+        !_disposed &&
+        (patch.containsKey('auto_import_folders') ||
+            patch.containsKey('import_recursive'))) {
+      _autoFolders.value = _configList('auto_import_folders');
+      unawaited(_autoImport.foldersChanged());
+    }
     return result;
   }
 
@@ -1246,6 +1259,8 @@ class LegacyLibraryAdapter
           _summaries[b.id] = _summary(b),
     ];
     final liveIds = next.map((b) => b.id).toSet();
+    final livePaths = next.map((b) => b.path).toSet();
+    _sourceBytes.removeWhere((path, _) => !livePaths.contains(path));
     _summaries.removeWhere((id, _) => !liveIds.contains(id));
     final before = _books.value;
     if (next.length != before.length ||
@@ -1263,6 +1278,7 @@ class LegacyLibraryAdapter
               !mapEquals(a.coverCrop, b.coverCrop) ||
               !mapEquals(a.coverDesign, b.coverDesign) ||
               a.path != b.path ||
+              a.bytes != b.bytes ||
               a.category != b.category ||
               a.series != b.series ||
               a.format != b.format;
@@ -1322,13 +1338,25 @@ class LegacyLibraryAdapter
         }
         final succeeded = await ImportProfile.measureAsync(
           'backend_import',
-          () => _backend.importBookOutcome(path, interactive: interactive),
+          () {
+            _sourceBytes.remove(path);
+            return _backend.importBookOutcome(path, interactive: interactive);
+          },
         );
         ImportProfile.book(_books.value.length);
         if (_disposed) break;
         if (succeeded) {
           knownPaths.add(pathKey);
           _backend.dropUndecoded(path.trim());
+          if (existed) {
+            // 保留原书稿的重新导入不会改变正文版本，但磁盘文件大小可能变了。
+            _refresh(
+              bookIds: {
+                for (final book in _books.value)
+                  if (folderImportPathKey(book.path) == pathKey) book.id,
+              },
+            );
+          }
         }
         results.add(
           ImportOutcome(

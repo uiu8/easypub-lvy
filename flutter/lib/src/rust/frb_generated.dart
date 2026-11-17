@@ -2434,11 +2434,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SourceLine dco_decode_source_line(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return SourceLine(
       lineNumber: dco_decode_u_32(arr[0]),
-      text: dco_decode_String(arr[1]),
+      utf8Column: dco_decode_u_32(arr[1]),
+      continues: dco_decode_bool(arr[2]),
+      text: dco_decode_String(arr[3]),
     );
   }
 
@@ -2446,11 +2448,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SourceLines dco_decode_source_lines(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return SourceLines(
       lines: dco_decode_list_source_line(arr[0]),
       nextLineIndex: dco_decode_opt_box_autoadd_u_32(arr[1]),
+      nextUtf8Column: dco_decode_opt_box_autoadd_u_32(arr[2]),
     );
   }
 
@@ -2893,8 +2896,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SourceLine sse_decode_source_line(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_lineNumber = sse_decode_u_32(deserializer);
+    var var_utf8Column = sse_decode_u_32(deserializer);
+    var var_continues = sse_decode_bool(deserializer);
     var var_text = sse_decode_String(deserializer);
-    return SourceLine(lineNumber: var_lineNumber, text: var_text);
+    return SourceLine(
+      lineNumber: var_lineNumber,
+      utf8Column: var_utf8Column,
+      continues: var_continues,
+      text: var_text,
+    );
   }
 
   @protected
@@ -2902,7 +2912,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_lines = sse_decode_list_source_line(deserializer);
     var var_nextLineIndex = sse_decode_opt_box_autoadd_u_32(deserializer);
-    return SourceLines(lines: var_lines, nextLineIndex: var_nextLineIndex);
+    var var_nextUtf8Column = sse_decode_opt_box_autoadd_u_32(deserializer);
+    return SourceLines(
+      lines: var_lines,
+      nextLineIndex: var_nextLineIndex,
+      nextUtf8Column: var_nextUtf8Column,
+    );
   }
 
   @protected
@@ -3302,6 +3317,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_source_line(SourceLine self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.lineNumber, serializer);
+    sse_encode_u_32(self.utf8Column, serializer);
+    sse_encode_bool(self.continues, serializer);
     sse_encode_String(self.text, serializer);
   }
 
@@ -3310,6 +3327,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_source_line(self.lines, serializer);
     sse_encode_opt_box_autoadd_u_32(self.nextLineIndex, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.nextUtf8Column, serializer);
   }
 
   @protected

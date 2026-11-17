@@ -9,6 +9,41 @@ use std::{
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if args.get(1).is_some_and(|mode| mode == "project") {
+        assert_eq!(args.len(), 3, "usage: r2_backend_perf project FILE");
+        let service = ImportService::new().unwrap();
+        let started = Instant::now();
+        let result = easypub_app::project::open(&service, &args[2]);
+        let books = result.as_ref().ok().map(|value| {
+            serde_json::from_str::<Value>(value).unwrap()["project"]["books"]
+                .as_array()
+                .unwrap()
+                .len()
+        });
+        println!(
+            "{}",
+            json!({"mode":"project", "elapsed_ms":started.elapsed().as_millis(),
+            "books":books, "error":result.as_ref().err().map(|error|format!("{error:?}"))})
+        );
+        return;
+    }
+    if args.get(1).is_some_and(|mode| mode == "kindle") {
+        assert_eq!(
+            args.len(),
+            4,
+            "usage: r2_backend_perf kindle INPUT OUTPUT.epub"
+        );
+        let started = Instant::now();
+        let result = easypub_app::kindle_import::to_epub(&args[2], &args[3]);
+        println!(
+            "{}",
+            json!({"mode":"kindle", "elapsed_ms":started.elapsed().as_millis(),
+            "input_bytes":std::fs::metadata(&args[2]).unwrap().len(), "result":result.as_ref().ok(),
+            "error":result.as_ref().err().map(|error| format!("{error:?}"))})
+        );
+        assert!(result.is_ok(), "Kindle import failed");
+        return;
+    }
     assert_eq!(
         args.len(),
         3,

@@ -8,7 +8,6 @@ use easypub_core::{ApiError, ErrorCode};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    fs,
     path::{Path, PathBuf},
 };
 fn invalid() -> ApiError {
@@ -25,7 +24,11 @@ struct Writer {
     total: usize,
 }
 impl Writer {
-    fn attach(&mut self, settings: &mut Settings) -> Result<(), ApiError> {
+    fn attach(
+        &mut self,
+        settings: &mut Settings,
+        staged: &mut crate::file_publish::StagedDirectories,
+    ) -> Result<(), ApiError> {
         if settings.additional_css.is_empty() {
             settings.additional_css_bundle = None;
             return Ok(());
@@ -72,7 +75,7 @@ impl Writer {
                     .map_err(|_| invalid())?
                     .as_nanos()
             ));
-            fs::create_dir(&root).map_err(|_| invalid())?;
+            staged.create(&root).map_err(|_| invalid())?;
             self.root = Some(root);
         }
         let root = self.root.as_ref().unwrap();
@@ -96,7 +99,11 @@ impl Writer {
         Ok(())
     }
 }
-pub fn attach(project: &mut Project, target: &Path) -> Result<(), ApiError> {
+pub(crate) fn attach(
+    project: &mut Project,
+    target: &Path,
+    staged: &mut crate::file_publish::StagedDirectories,
+) -> Result<(), ApiError> {
     let mut writer = Writer {
         parent: target.parent().ok_or_else(invalid)?.to_path_buf(),
         root: None,
@@ -105,11 +112,11 @@ pub fn attach(project: &mut Project, target: &Path) -> Result<(), ApiError> {
     };
     for book in &mut project.books {
         let mut current = Settings::from(&*book);
-        writer.attach(&mut current)?;
+        writer.attach(&mut current, staged)?;
         book.additional_css_bundle = current.additional_css_bundle;
         if let Some(history) = &mut book.production_history {
             for settings in &mut history.states {
-                writer.attach(settings)?;
+                writer.attach(settings, staged)?;
             }
         }
     }
@@ -119,12 +126,13 @@ pub fn resolve(project: &mut Project, target: &Path) -> Result<(), ApiError> {
     let parent = target.parent().ok_or_else(invalid)?;
     let resolve = |reference: &mut Option<Reference>| {
         if let Some(reference) = reference
-            && !Path::new(&reference.directory).is_absolute() {
-                reference.directory = parent
-                    .join(&reference.directory)
-                    .to_string_lossy()
-                    .into_owned();
-            }
+            && !Path::new(&reference.directory).is_absolute()
+        {
+            reference.directory = parent
+                .join(&reference.directory)
+                .to_string_lossy()
+                .into_owned();
+        }
     };
     for book in &mut project.books {
         resolve(&mut book.additional_css_bundle);

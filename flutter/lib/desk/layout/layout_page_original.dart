@@ -78,13 +78,13 @@ extension _LayoutOriginalSection on _LayoutPageState {
   }
 
   /// 输入框里的内容一起保存。
-  void _saveOriginalInputs() {
+  Map<String, dynamic> get originalInputValues {
     final known = originalStyleGroups.values.expand((v) => v).toSet();
     final custom = [
       for (final p in originalCustom.text.split(RegExp(r'[,，\s]+')))
         if (p.trim().isNotEmpty) p.trim().toLowerCase(),
     ];
-    applyOriginalStyle({
+    return {
       ...originalStyle,
       'filter_css': [
         ..._filters.where(known.contains),
@@ -92,7 +92,26 @@ extension _LayoutOriginalSection on _LayoutPageState {
       ],
       'extra_css': originalCss.text,
       for (final e in originalMargins.entries) e.key: e.value.text.trim(),
-    });
+    };
+  }
+
+  bool get originalInputsChanged {
+    final next = originalInputValues;
+    List<String> filters(Map<String, dynamic> value) =>
+        ((value['filter_css'] as List?) ?? const [])
+            .cast<String>()
+            .toSet()
+            .toList()
+          ..sort();
+    return jsonEncode(filters(next)) != jsonEncode(filters(originalStyle)) ||
+        (next['extra_css'] ?? '') != (originalStyle['extra_css'] ?? '') ||
+        originalMargins.keys.any(
+          (key) => (next[key] ?? '') != (originalStyle[key] ?? ''),
+        );
+  }
+
+  Future<void> _saveOriginalInputs() async {
+    await applyOriginalStyle(originalInputValues);
   }
 
   /// 原书字体的个数和总大小。

@@ -18,6 +18,11 @@ void main() {
   }
 
   test('认得出的写法', () {
+    for (final ext in ['azw3', 'mobi', 'azw', 'AZW3', 'MOBI', 'AZW']) {
+      expect(parse('雾港来信.$ext'), ('雾港来信', ''));
+      expect(parse('《雾港来信》作者：林岚.$ext'), ('雾港来信', '林岚'));
+      expect(parse('雾港来信 - 林岚.$ext'), ('雾港来信', '林岚'));
+    }
     expect(parse('《希灵帝国》（校对版全本）作者：远瞳.txt'), ('希灵帝国', '远瞳'));
     expect(parse('《希灵帝国》作者：远瞳.txt'), ('希灵帝国', '远瞳'));
     expect(parse(r'D:\书\《诡秘之主》作者:爱潜水的乌贼.TXT'), ('诡秘之主', '爱潜水的乌贼'));

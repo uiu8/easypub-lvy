@@ -45,8 +45,7 @@ fn safe_zip_path(value: &str) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join("/"))
 }
 
-pub(crate) fn join_zip(base: &str, href: &str) -> Option<String> {
-    let href = href.split(['#', '?']).next().unwrap_or("");
+pub(crate) fn decode_url_component(href: &str) -> Option<String> {
     let mut decoded = Vec::new();
     let mut bytes = href.as_bytes().iter();
     while let Some(&b) = bytes.next() {
@@ -58,7 +57,12 @@ pub(crate) fn join_zip(base: &str, href: &str) -> Option<String> {
             decoded.push(b);
         }
     }
-    let href = String::from_utf8(decoded).ok()?.replace('\\', "/");
+    String::from_utf8(decoded).ok()
+}
+
+pub(crate) fn join_zip(base: &str, href: &str) -> Option<String> {
+    let href = href.split(['#', '?']).next().unwrap_or("");
+    let href = decode_url_component(href)?.replace('\\', "/");
     if href.starts_with('/') || href.contains(':') || href.contains('\0') {
         return None;
     }
@@ -876,7 +880,7 @@ mod tests {
             ),
             (
                 "body.xhtml",
-                "<body xmlns:epub='http://www.idpf.org/2007/ops'><h1 id='a'>第一章</h1><p>正文的普通数字跳转<a href='#b'>2</a>不是脚注。</p><p>真正的脚注<a epub:type='noteref' href='#note'>1</a>应当被识别。</p><p id='b'>第二处正文内容。</p><aside id='note' epub:type='footnote'>注释正文</aside></body>",
+                "<body xmlns:epub='http://www.idpf.org/2007/ops'><h1 id='a'>第一章</h1><p>正文的普通数字跳转<a href='#b'>2</a>不是脚注。</p><p>真正的脚注<a epub:type='noteref' href='#%E6%B3%A8'>1</a>应当被识别。</p><p id='b'>第二处正文内容。</p><aside id='注' epub:type='footnote'>注释正文</aside></body>",
             ),
         ];
         let mut offset = 0;

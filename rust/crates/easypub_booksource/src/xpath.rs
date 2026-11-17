@@ -161,6 +161,9 @@ enum Axis {
     DescendantOrSelf,
     Parent,
     Ancestor,
+    AncestorOrSelf,
+    Following,
+    Preceding,
     FollowingSibling,
     PrecedingSibling,
     Itself,
@@ -399,9 +402,12 @@ impl Parser {
                     "descendant" => Axis::Descendant,
                     "descendant-or-self" => Axis::DescendantOrSelf,
                     "parent" => Axis::Parent,
-                    "ancestor" | "ancestor-or-self" => Axis::Ancestor,
-                    "following-sibling" | "following" => Axis::FollowingSibling,
-                    "preceding-sibling" | "preceding" => Axis::PrecedingSibling,
+                    "ancestor" => Axis::Ancestor,
+                    "ancestor-or-self" => Axis::AncestorOrSelf,
+                    "following-sibling" => Axis::FollowingSibling,
+                    "following" => Axis::Following,
+                    "preceding-sibling" => Axis::PrecedingSibling,
+                    "preceding" => Axis::Preceding,
                     "self" => Axis::Itself,
                     "attribute" => Axis::Attribute,
                     _ => return None,
@@ -475,7 +481,17 @@ impl Parser {
                         }
                     }
                 }
-                Some(Expr::Call(name, args))
+                let valid = match name.as_str() {
+                    "position" | "last" | "true" | "false" => args.is_empty(),
+                    "count" | "not" => args.len() == 1,
+                    "string" | "number" | "normalize-space" | "string-length" => args.len() <= 1,
+                    "contains" | "starts-with" | "ends-with" | "substring-before"
+                    | "substring-after" => args.len() == 2,
+                    "translate" => args.len() == 3,
+                    "concat" => args.len() >= 2,
+                    _ => false,
+                };
+                valid.then_some(Expr::Call(name, args))
             }
             _ => None,
         }
@@ -575,14 +591,49 @@ fn matches_test(doc: &Document, id: NodeId, test: &Test) -> bool {
 
 fn axis_nodes(doc: &Document, node: &XNode, step: &Step) -> Vec<XNode> {
     let XNode::Node(id) = node else {
-        return match step.axis {
-            Axis::Parent | Axis::Ancestor => match node {
-                XNode::Attr(id, _) => vec![XNode::Node(*id)],
-                _ => vec![],
-            },
-            Axis::Itself => vec![node.clone()],
+        let XNode::Attr(owner, _) = node else {
+            return vec![];
+        };
+        let Some(parent) = node_ref(doc, *owner) else {
+            return vec![];
+        };
+        let mut out = Vec::new();
+        if matches!(
+            step.axis,
+            Axis::Itself | Axis::AncestorOrSelf | Axis::DescendantOrSelf
+        ) && matches!(step.test, Test::Node)
+        {
+            out.push(node.clone());
+        }
+        // 属性位于所属元素之后、子节点之前；自身没有子孙或兄弟。
+        // following 因而包含所属元素的子孙，而 preceding 与所属元素相同。
+        if matches!(step.axis, Axis::Following | Axis::Preceding) {
+            if matches!(step.axis, Axis::Following) {
+                out.extend(
+                    parent
+                        .descendants()
+                        .skip(1)
+                        .filter(|n| matches_test(doc, n.id(), &step.test))
+                        .map(|n| XNode::Node(n.id())),
+                );
+            }
+            out.extend(axis_nodes(doc, &XNode::Node(*owner), step));
+            return out;
+        }
+        let parents = match step.axis {
+            Axis::Parent => vec![parent.id()],
+            Axis::Ancestor | Axis::AncestorOrSelf => std::iter::once(parent.id())
+                .chain(parent.ancestors().map(|n| n.id()))
+                .collect(),
             _ => vec![],
         };
+        out.extend(
+            parents
+                .into_iter()
+                .filter(|id| matches_test(doc, *id, &step.test))
+                .map(XNode::Node),
+        );
+        return out;
     };
     let Some(n) = node_ref(doc, *id) else {
         return vec![];
@@ -607,6 +658,31 @@ fn axis_nodes(doc: &Document, node: &XNode, step: &Step) -> Vec<XNode> {
         Axis::DescendantOrSelf => n.descendants().map(|c| c.id()).collect(),
         Axis::Parent => n.parent().map(|p| p.id()).into_iter().collect(),
         Axis::Ancestor => n.ancestors().map(|p| p.id()).collect(),
+        Axis::AncestorOrSelf => std::iter::once(n.id())
+            .chain(n.ancestors().map(|p| p.id()))
+            .collect(),
+        Axis::Following => {
+            let mut out = Vec::new();
+            for parent in std::iter::once(n).chain(n.ancestors()) {
+                for sibling in parent.next_siblings() {
+                    out.extend(sibling.descendants().map(|node| node.id()));
+                }
+            }
+            out
+        }
+        Axis::Preceding => {
+            let mut out = Vec::new();
+            for parent in std::iter::once(n).chain(n.ancestors()) {
+                for sibling in parent.prev_siblings() {
+                    let subtree = sibling
+                        .descendants()
+                        .map(|node| node.id())
+                        .collect::<Vec<_>>();
+                    out.extend(subtree.into_iter().rev());
+                }
+            }
+            out
+        }
         Axis::FollowingSibling => n.next_siblings().map(|c| c.id()).collect(),
         Axis::PrecedingSibling => n.prev_siblings().map(|c| c.id()).collect(),
         Axis::Itself => vec![*id],
@@ -878,6 +954,10 @@ fn compiled(rule: &str) -> Option<Rc<Expr>> {
         c.insert(rule.to_owned(), expr.clone());
     });
     expr
+}
+
+pub fn supported(rule: &str) -> bool {
+    compiled(rule).is_some()
 }
 
 /// 执行 XPath；写法不支持时返回 None。

@@ -11,6 +11,318 @@ fn engine() -> Engine {
 }
 
 #[test]
+fn repair88_xpath_attribute_axes_keep_document_order() {
+    engine().run(|scope| {
+        scope.set_content(
+            Node::page("<main><i>前</i><div id='x'><b>内</b></div><p>后</p></main>"),
+            None,
+        );
+        for (rule, expected) in [
+            ("@xpath://div/@id/following::*[1]/text()", "内"),
+            ("@xpath://div/@id/following::p/text()", "后"),
+            ("@xpath://div/@id/preceding::*[1]/text()", "前"),
+            ("@xpath://div/@id/descendant-or-self::node()", "x"),
+            ("@xpath://div/@id/parent::div/@id", "x"),
+            ("@xpath://div/@id/following-sibling::*", ""),
+            ("@xpath://div/@id/child::*", ""),
+        ] {
+            assert_eq!(scope.get_string(rule), expected, "{rule}");
+        }
+    });
+}
+
+#[test]
+fn repair88_jsonpath_template_respects_quoted_braces() {
+    let value = json!({"a}b":"甲", "c'{d}":"乙", "tail":"丙"});
+    assert_eq!(
+        crate::jsonpath::strings(&value, r#"/{$['a}b']}/{$['c\'{d}']}/{$.tail}"#).unwrap(),
+        ["/甲/乙/丙"]
+    );
+    assert!(crate::jsonpath::strings(&value, r#"/{$['a}b']"#).is_err());
+    assert!(crate::jsonpath::strings(&value, r#"/{$['a}b]}"#).is_err());
+}
+
+#[test]
+fn repair88_xpath_unsupported_branch_cannot_return_partial_success() {
+    let engine = engine();
+    engine.run(|scope| {
+        scope.set_content(Node::page("<main><p>有效正文</p></main>"), None);
+        for rule in [
+            "@xpath://p/text() | namespace::*",
+            "@xpath://p/text() | unknown-function()",
+            "@xpath://p[contains('x')]/text()",
+        ] {
+            engine.state().script_error = None;
+            assert_eq!(scope.get_string(rule), "", "{rule}");
+            assert!(
+                engine
+                    .state()
+                    .script_error
+                    .as_deref()
+                    .is_some_and(|error| error.contains("XPath")),
+                "{rule}"
+            );
+        }
+        engine.state().script_error = None;
+        assert_eq!(scope.get_string("@xpath://missing/text()"), "");
+        assert!(engine.state().script_error.is_none());
+        assert_eq!(scope.get_string("@xpath://p/text()"), "有效正文");
+    });
+}
+
+#[test]
+fn repair88_jsonpath_limit_is_an_error_not_partial_success() {
+    let exact = serde_json::json!({"rows": vec![0; 50_000]});
+    assert_eq!(
+        crate::jsonpath::select(&exact, "$.rows[*]").unwrap().len(),
+        50_000
+    );
+    let over = serde_json::json!({"groups": [vec![0; 25_001], vec![1; 25_000], vec![2]]});
+    for rule in ["$.groups[*][*]", "$.groups[*][*].missing"] {
+        assert!(
+            crate::jsonpath::select(&over, rule)
+                .unwrap_err()
+                .contains("50000")
+        );
+    }
+    assert!(crate::jsonpath::strings(&over, "{$.groups[*][*]}").is_err());
+    let nested = serde_json::json!([{"children": vec![0; 50_001]}]);
+    for rule in [
+        "$[?(@.children[*])]",
+        "$[?(@.children[*] == 0)]",
+        "$[?(@.children[*] || true)]",
+        "$[?(@.children[*] && true)]",
+    ] {
+        assert!(
+            crate::jsonpath::select(&nested, rule)
+                .unwrap_err()
+                .contains("50000")
+        );
+    }
+}
+
+#[test]
+fn repair88_single_at_selector_template_is_not_javascript() {
+    engine().run(|scope| {
+        scope.set_content(Node::page("<p class='intro'>简介</p>"), None);
+        assert_eq!(scope.get_string("前{{@.intro@text}}后"), "前简介后");
+    });
+}
+
+#[test]
+fn repair88_urlconnection_read_timeout_reaches_network() {
+    let (base, _) = crate::tests::serve(|_| {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        crate::tests::html("late")
+    });
+    engine().run(|scope| {
+        let script = format!(
+            r#"
+          var c=new Packages.java.net.URL('{base}/slow').openConnection();
+          c.setConnectTimeout(1000);c.setReadTimeout(25);
+          c.getResponseCode();
+        "#
+        );
+        let error = scope.eval_js_string(&script, &[]).unwrap_err();
+        assert!(error.contains("超时"), "{error}");
+        let result = scope
+            .eval_js_string(
+                r#"
+          var c=new Packages.java.net.URL('https://example.invalid').openConnection();
+          var rejected=0;for(var v of [-1,1.5,Infinity,2147483648]){
+            try{c.setReadTimeout(v);}catch(e){rejected++;}
+          }
+          c.setReadTimeout(0);c.setConnectTimeout(123);
+          [rejected,c.getReadTimeout(),c.getConnectTimeout()].join('|');
+        "#,
+                &[],
+            )
+            .unwrap();
+        assert_eq!(result, "4|0|123");
+    });
+}
+
+#[test]
+fn repair88_toc_volume_fallback_does_not_hide_other_errors() {
+    let (base, _) =
+        crate::tests::serve(|_| crate::tests::html("<li>卷名</li><a href='/c'>第一章</a>"));
+    for (name, url) in [
+        ("@js:null.name", "href"),
+        ("text", "@js:throw new Error('目录地址解析失败')"),
+    ] {
+        let source: BookSource = serde_json::from_value(json!({
+            "bookSourceUrl":base,
+            "ruleToc":{"chapterList":"li,a","chapterName":name,"chapterUrl":url}
+        }))
+        .unwrap();
+        Engine::new(SourceRt::new(source)).unwrap().run(|scope| {
+            let book = crate::webbook::Book {
+                toc_url: format!("{base}/toc"),
+                ..Default::default()
+            };
+            assert!(scope.toc(&book).is_err(), "非链接类型错误不能当作卷名忽略");
+        });
+    }
+}
+
+#[test]
+fn repair88_jsoup_chained_removal_keeps_identity_and_live_parent() {
+    engine().run(|scope| {
+        let result = scope
+            .eval_js_string(
+                r#"
+          const J = org.jsoup.Jsoup;
+          const d = J.parse('<div><p><b>同</b><i>甲</i></p><p><b>同</b><i>乙</i></p></div>');
+          const p = d.select('p').eq(1).first();
+          d.select('p').eq(0).select('b').remove();
+          const first = d.text();
+          p.children().eq(1).remove();
+          JSON.stringify([first,d.text(),p.text(),d.select('b').size()]);
+        "#,
+                &[],
+            )
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&result).unwrap(),
+            json!(["甲 同乙", "甲 同", "同", 1])
+        );
+    });
+}
+
+#[test]
+fn repair88_jsonpath_rejects_invalid_filters_and_preserves_quoted_operators() {
+    let data = json!({"rows":[{"name":"a||b","n":2},{"name":"x","n":3}],"a,b":[0,1,2,3]});
+    assert_eq!(
+        crate::jsonpath::select(&data, "$['a,b'][::-1]").unwrap(),
+        vec![json!(3), json!(2), json!(1), json!(0)]
+    );
+    assert_eq!(
+        crate::jsonpath::select(&data, "$.rows[?(@.name == 'a||b' && @.n >= 2)].name").unwrap(),
+        vec![json!("a||b")]
+    );
+    for rule in [
+        "$.rows[?(@.n === 2)]",
+        "$.rows[::0]",
+        "$.",
+        "$.rows[?(@.n &&)]",
+    ] {
+        assert!(crate::jsonpath::select(&data, rule).is_err(), "{rule}");
+    }
+    assert!(
+        crate::jsonpath::select(&data, "$.missing")
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn repair88_cookie_sync_preserves_paths_and_rejects_cleared_snapshot() {
+    let net = crate::net::Net::new(None, vec![]);
+    let url = reqwest::Url::parse("https://example.test/books/one").unwrap();
+    {
+        let mut jar = net.cookies.lock().unwrap();
+        jar.parse("sid=old; Path=/books; Secure; HttpOnly", &url)
+            .unwrap();
+        jar.parse("other=keep; Path=/else", &url).unwrap();
+    }
+    let before = crate::browser_cookie::export(&net, url.as_str());
+    crate::browser_cookie::import(&net, url.as_str(), &before, &[]).unwrap();
+    assert!(net.cookie_header(&url).is_empty());
+    assert_eq!(
+        net.cookie_header(&reqwest::Url::parse("https://example.test/else").unwrap()),
+        "other=keep"
+    );
+    net.remove_cookies(url.as_str());
+    assert!(crate::browser_cookie::import(&net, url.as_str(), &before, &before.entries).is_err());
+}
+
+#[test]
+fn repair88_cookie_sync_preserves_concurrent_attribute_updates() {
+    let net = crate::net::Net::new(None, vec![]);
+    let url = reqwest::Url::parse("https://example.test/books/one").unwrap();
+    for update in [
+        "sid=same; Path=/books; Secure",
+        "sid=same; Path=/books; HttpOnly",
+        "sid=same; Path=/books; SameSite=Strict",
+        "sid=same; Path=/books; Max-Age=3600",
+        "sid=same; Path=/books; Domain=example.test",
+    ] {
+        net.cookies
+            .lock()
+            .unwrap()
+            .parse("sid=same; Path=/books", &url)
+            .unwrap();
+        let before = crate::browser_cookie::export(&net, url.as_str());
+        net.cookies.lock().unwrap().parse(update, &url).unwrap();
+        // 旧网页删除或写回旧值，都不能抹掉并发更新的属性。
+        for returned in [&[][..], before.entries.as_slice()] {
+            crate::browser_cookie::import(&net, url.as_str(), &before, returned).unwrap();
+            let current = crate::browser_cookie::export(&net, url.as_str());
+            assert_eq!(current.entries.len(), 1, "{update}");
+            let c = &current.entries[0];
+            assert_eq!(c.secure, update.contains("Secure"));
+            assert_eq!(c.http_only, update.contains("HttpOnly"));
+            assert_eq!(c.same_site == "Strict", update.contains("Strict"));
+            assert_eq!(c.expires.is_some(), update.contains("Max-Age"));
+            assert_eq!(c.domain.starts_with('.'), update.contains("Domain"));
+        }
+    }
+}
+
+#[test]
+fn repair88_cookie_redirect_expiry_and_atomic_retry() {
+    use crate::browser_cookie::{BrowserCookie, export, import};
+    let net = crate::net::Net::new(None, vec![]);
+    let origin = reqwest::Url::parse("https://origin.test/").unwrap();
+    let final_url = reqwest::Url::parse("https://target.test/books/1").unwrap();
+    net.cookies
+        .lock()
+        .unwrap()
+        .parse("origin=keep; Path=/", &origin)
+        .unwrap();
+    let before = export(&net, origin.as_str());
+    let cookie = BrowserCookie {
+        name: "session".into(),
+        value: "fixture".into(),
+        domain: "target.test".into(),
+        path: "/books".into(),
+        secure: true,
+        http_only: true,
+        same_site: "Strict".into(),
+        expires: None,
+    };
+    let mut invalid = cookie.clone();
+    invalid.domain = "invalid domain".into();
+    assert!(
+        import(
+            &net,
+            final_url.as_str(),
+            &before,
+            &[cookie.clone(), invalid]
+        )
+        .is_err()
+    );
+    assert!(net.cookie_header(&final_url).is_empty());
+    import(&net, final_url.as_str(), &before, &[cookie.clone()]).unwrap();
+    assert_eq!(net.cookie_header(&origin), "origin=keep");
+    assert_eq!(net.cookie_header(&final_url), "session=fixture");
+    assert!(
+        net.cookie_header(&reqwest::Url::parse("http://target.test/books/1").unwrap())
+            .is_empty()
+    );
+    assert!(
+        net.cookie_header(&reqwest::Url::parse("https://target.test/other").unwrap())
+            .is_empty()
+    );
+    let before = export(&net, final_url.as_str());
+    let mut expired = cookie;
+    expired.expires = Some(1.0);
+    import(&net, final_url.as_str(), &before, &[expired]).unwrap();
+    assert!(net.cookie_header(&final_url).is_empty());
+    assert_eq!(net.cookie_header(&origin), "origin=keep");
+}
+
+#[test]
 fn semantic_matrix_combinations_indexes_json_and_java_regex() {
     let html = Node::page(
         "<ul><li class='a'>甲</li><li class='b'>乙</li><li class='b'>丙</li><li class='b'>丁</li></ul>",

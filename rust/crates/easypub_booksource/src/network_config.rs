@@ -299,10 +299,22 @@ pub fn client(
     route: &Route,
     insecure: bool,
 ) -> Result<reqwest::Client, String> {
+    client_with_timeouts(profile, c, route, insecure, None, None)
+}
+
+pub(crate) fn client_with_timeouts(
+    profile: Profile,
+    c: &ProxyConfig,
+    route: &Route,
+    insecure: bool,
+    connect_timeout_ms: Option<u64>,
+    read_timeout_ms: Option<u64>,
+) -> Result<reqwest::Client, String> {
+    let connect_timeout_ms = connect_timeout_ms.unwrap_or(c.connect_timeout_ms);
     let key = format!(
-        "{}:{insecure}:{}:{:?}",
+        "{}:{insecure}:{}:{:?}:{read_timeout_ms:?}",
         profile.index(),
-        c.connect_timeout_ms,
+        connect_timeout_ms,
         route.proxy
     );
     let mut cache = clients().lock().unwrap();
@@ -312,12 +324,17 @@ pub fn client(
     let mut builder = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(Duration::from_millis(c.connect_timeout_ms))
         .pool_idle_timeout(Duration::from_secs(60))
         .tcp_keepalive(Duration::from_secs(30))
         .gzip(true)
         .brotli(true)
         .danger_accept_invalid_certs(insecure);
+    if connect_timeout_ms > 0 {
+        builder = builder.connect_timeout(Duration::from_millis(connect_timeout_ms));
+    }
+    if let Some(ms) = read_timeout_ms.filter(|ms| *ms > 0) {
+        builder = builder.read_timeout(Duration::from_millis(ms));
+    }
     if let Some(url) = &route.proxy {
         builder = builder.proxy(reqwest::Proxy::all(url).map_err(|_| "代理地址无效")?);
     }

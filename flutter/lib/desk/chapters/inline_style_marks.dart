@@ -426,7 +426,7 @@ class _InlineStyleDialogState extends State<InlineStyleDialog> {
 
   /// 改链接的网址：改完是一条手工链接。
   Future<void> editLink(InlineStyleView view) async {
-    final field = TextEditingController(text: view.href);
+    var url = view.href ?? '';
     final next = await showDialog<String>(
       context: context,
       builder: (context) => DeskDialog(
@@ -437,19 +437,19 @@ class _InlineStyleDialogState extends State<InlineStyleDialog> {
           DeskButton(
             '预览',
             key: const ValueKey('inline-link-confirm'),
-            onPressed: () => Navigator.pop(context, field.text.trim()),
+            onPressed: () => Navigator.pop(context, url.trim()),
           ),
         ],
-        child: TextField(
+        child: TextFormField(
           key: const ValueKey('inline-link-field'),
-          controller: field,
+          initialValue: url,
+          onChanged: (value) => url = value,
           autofocus: true,
           decoration: const InputDecoration(labelText: '网址'),
         ),
       ),
     );
-    field.dispose();
-    if (next == null || next == view.href) return;
+    if (!mounted || next == null || next == view.href) return;
     await run((session) async {
       final snap = await session.list();
       return session.previewUpdate(
@@ -694,7 +694,9 @@ class _InlineStyleDialogState extends State<InlineStyleDialog> {
     ];
     final changed = [
       for (final v in p.after.items)
-        if (before[v.id] case final old? when old.style != v.style) (old, v),
+        if (before[v.id] case final old?
+            when old.style != v.style || old.href != v.href)
+          (old, v),
     ];
     String where(InlineStyleView v) =>
         v.location == null ? '' : '${widget.at.lineLabel(v.location!.line)} ';
@@ -717,7 +719,10 @@ class _InlineStyleDialogState extends State<InlineStyleDialog> {
                   ).merge(inlineStyleLook(tone == Tone.pen ? [] : [v.style])),
                 ),
               ),
-              if (note != null) Text(note, style: ui(11.5, c: d.ink2)),
+              if (note != null)
+                Flexible(
+                  child: Text(note, style: ui(11.5, c: d.ink2)),
+                ),
             ],
           ),
         );
@@ -762,7 +767,9 @@ class _InlineStyleDialogState extends State<InlineStyleDialog> {
                     inlineStyleLabel(v.style),
                     Tone.info,
                     v,
-                    note: '原为${inlineStyleLabel(old.style)}',
+                    note: old.href != v.href
+                        ? '网址：${old.href ?? ""} → ${v.href ?? ""}'
+                        : '原为${inlineStyleLabel(old.style)}',
                   ),
                 for (final v in removed)
                   row('删除${inlineStyleLabel(v.style)}', Tone.pen, v),
@@ -783,8 +790,8 @@ class _InlineStyleDialogState extends State<InlineStyleDialog> {
   bool get previewChanges {
     final p = preview;
     if (p == null) return false;
-    final before = {for (final v in p.before.items) v.id: v.style};
-    final after = {for (final v in p.after.items) v.id: v.style};
+    final before = {for (final v in p.before.items) v.id: (v.style, v.href)};
+    final after = {for (final v in p.after.items) v.id: (v.style, v.href)};
     return before.length != after.length ||
         after.entries.any((e) => before[e.key] != e.value);
   }

@@ -130,7 +130,8 @@
     },
     getElement: function (rule) { var e = java.getElements(rule); return e.length ? e[0] : null; },
     setContent: function (content, baseUrl) { call('setContent', str(content), baseUrl === undefined ? null : str(baseUrl)); },
-    reGetBook: function () {}, refreshTocUrl: function () {},
+    reGetBook: function () { return call('javaCompat', 'unsupported', 'java.reGetBook'); },
+    refreshTocUrl: function () { return call('javaCompat', 'unsupported', 'java.refreshTocUrl'); },
     // 编码与哈希
     encodeURI: function (s, enc) { return call('encodeURI', str(s), enc ? str(enc) : null); },
     base64Encode: function (s, flags) { return call('base64Encode', bytes(s), flags || 2); },
@@ -223,7 +224,7 @@
     readTxtFile: function (path,charset) { if(arguments.length>2||typeof path!=='string'||(charset!==undefined&&typeof charset!=='string'))throw Error('readTxtFile 参数无效');return call('readTxtFile',path,charset||'UTF-8'); },
     readFile: function () { return call('javaCompat','unsupported','java.readFile'); },
     getBaseUrl: function () { return g.baseUrl; },
-    initUrl: function () {},
+    initUrl: function () { return call('javaCompat', 'unsupported', 'java.initUrl'); },
   };
   // Rhino 写法 java.lang.String(…)、java.net.URLEncoder 等的常用替代。
   java.lang = {
@@ -275,18 +276,26 @@
     return values;
   };
 
-  // org.jsoup 的常用部分：parse → select → text / attr / html / remove，元素以外层 HTML 表示。
+  // org.jsoup：筛选结果共享原文档节点，删除不按 HTML 文本猜测目标。
   var jsoupNodes = new WeakSet();
+  var jsoupRefs = new WeakMap();
+  var makeJsoupDocument = g.__epJsoup;
+  delete g.__epJsoup;
+  function jsoupCall(doc, op, id, arg) {
+    var result = JSON.parse(doc(JSON.stringify([op, id, arg])));
+    if (result.__error) throw new Error(result.__error);
+    return result.v;
+  }
   g.__jsoup_html = function (value) { return jsoupNodes.has(value) ? value.__html : null; };
-  function jsoupElements(list, doc, css) {
-    var els = javaList(list.map(function (h) { return jsoupElement(h); }));
+  function jsoupElements(list) {
+    var els = javaList(list.map(function (h) { return jsoupNodes.has(h) ? h : jsoupElement(h); }));
     function def(o, k, v) { Object.defineProperty(o, k, { value: v, enumerable: false, writable: true }); }
     def(els, 'size', function () { return els.length; });
     def(els, 'isEmpty', function () { return els.length === 0; });
     def(els, 'get', function (i) { return els[i]; });
     def(els, 'first', function () { return els.length ? els[0] : null; });
     def(els, 'last', function () { return els.length ? els[els.length - 1] : null; });
-    def(els, 'eq', function (i) { return jsoupElements(els[i] ? [els[i].__html] : [], doc, null); });
+    def(els, 'eq', function (i) { return jsoupElements(els[i] ? [els[i]] : []); });
     def(els, 'text', function () { return els.map(function (e) { return e.text(); }).filter(function (t) { return t; }).join(' '); });
     def(els, 'eachText', function () { return javaList(els.map(function (e) { return e.text(); })); });
     def(els, 'html', function () { return els.map(function (e) { return e.html(); }).join('\n'); });
@@ -294,33 +303,52 @@
     def(els, 'attr', function (a) { for (var i = 0; i < els.length; i++) { var v = els[i].attr(a); if (v) return v; } return ''; });
     def(els, 'eachAttr', function (a) { return javaList(els.map(function (e) { return e.attr(a); })); });
     def(els, 'hasAttr', function (a) { return els.some(function (e) { return e.hasAttr(a); }); });
-    def(els, 'select', function (c) { var out = []; els.forEach(function (e) { out = out.concat(call('jsoupSelect', e.__html, str(c))); }); return jsoupElements(out, doc, null); });
-    def(els, 'remove', function () { if (doc && css) doc.__html = call('jsoupRemove', doc.__html, css); return els; });
+    def(els, 'select', function (c) {
+      var out = [], seen = new Map();
+      els.forEach(function (e) { e.select(c).forEach(function (child) {
+        var ref = jsoupRefs.get(child), ids = seen.get(ref.doc);
+        if (!ids) { ids = new Set(); seen.set(ref.doc, ids); }
+        if (!ids.has(ref.id)) { ids.add(ref.id); out.push(child); }
+      }); });
+      return jsoupElements(out);
+    });
+    def(els, 'remove', function () { els.forEach(function (e) { e.remove(); }); return els; });
     def(els, 'toArray', function () { return els.slice(); });
     def(els, 'toString', els.outerHtml);
     return els;
   }
-  function jsoupElement(html) {
-    var e = { __html: html };
+  function jsoupElement(html, doc, id) {
+    if (!doc) { doc = makeJsoupDocument(str(html)); id = jsoupCall(doc, 'root'); }
+    var e = {};
+    var ref = { doc: doc, id: id };
+    jsoupRefs.set(e, ref);
+    function value(kind) { return jsoupCall(ref.doc, 'value', ref.id, kind); }
+    Object.defineProperty(e, '__html', {
+      enumerable: true,
+      get: function () { return value('outer'); },
+      set: function (html) { ref.doc = makeJsoupDocument(str(html)); ref.id = jsoupCall(ref.doc, 'root'); }
+    });
     jsoupNodes.add(e);
-    e.text = function () { return call('jsoupValue', e.__html, 'text'); };
-    e.ownText = function () { return call('jsoupValue', e.__html, 'ownText'); };
-    e.html = function () { return call('jsoupValue', e.__html, 'inner'); };
+    e.text = function () { return value('text'); };
+    e.ownText = function () { return value('ownText'); };
+    e.html = function () { return value('inner'); };
     e.outerHtml = function () { return e.__html; };
     e.attr = function (a) {
       a = str(a);
-      if (a.indexOf('abs:') === 0) return call('absolute', call('jsoupValue', e.__html, 'attr:' + a.slice(4)));
-      return call('jsoupValue', e.__html, 'attr:' + a);
+      if (a.indexOf('abs:') === 0) return call('absolute', value('attr:' + a.slice(4)));
+      return value('attr:' + a);
     };
-    e.absUrl = function (a) { return call('absolute', call('jsoupValue', e.__html, 'attr:' + str(a))); };
-    e.hasAttr = function (a) { return call('jsoupValue', e.__html, 'has:' + str(a)) === 'true'; };
-    e.tagName = function () { return call('jsoupValue', e.__html, 'tag'); };
+    e.absUrl = function (a) { return call('absolute', value('attr:' + str(a))); };
+    e.hasAttr = function (a) { return value('has:' + str(a)) === 'true'; };
+    e.tagName = function () { return value('tag'); };
     e.className = function () { return e.attr('class'); };
     e.hasClass = function (c) { return (' ' + e.attr('class') + ' ').indexOf(' ' + c + ' ') >= 0; };
     e.id = function () { return e.attr('id'); };
-    e.select = function (c) { return jsoupElements(call('jsoupSelect', e.__html, str(c)), e, str(c)); };
+    function selected(op, c) { return jsoupElements(jsoupCall(ref.doc, op, ref.id, c).map(function (id) { return jsoupElement(null, ref.doc, id); })); }
+    e.select = function (c) { return selected('select', str(c)); };
     e.selectFirst = function (c) { var r = e.select(c); return r.length ? r[0] : null; };
-    e.children = function () { return jsoupElements(call('jsoupSelect', e.__html, ':scope > *'), e, null); };
+    e.children = function () { return selected('children'); };
+    e.remove = function () { jsoupCall(ref.doc, 'remove', ref.id); return e; };
     e.child = function (i) { return e.children()[i] || null; };
     e.getElementsByTag = function (t) { return e.select(t); };
     e.getElementsByClass = function (c) { return e.select('.' + c); };
@@ -383,12 +411,13 @@
     s.get = function (k) { return call('sourceGet', str(k)); };
     s.getLoginInfo = function () { return call('loginInfo'); };
     s.getLoginInfoMap = function () { var i = call('loginInfo'); try { return i ? JSON.parse(i) : {}; } catch (e) { return {}; } };
-    s.getLoginHeader = function () { return null; };
-    s.getLoginHeaderMap = function () { return {}; };
-    s.putLoginHeader = function () {}; s.removeLoginHeader = function () {};
+    s.getLoginHeader = function () { return call('loginHeadersGet'); };
+    s.getLoginHeaderMap = function () { var value = s.getLoginHeader(); return value ? JSON.parse(value) : {}; };
+    s.putLoginHeader = function (value) { call('loginHeadersPut', typeof value === 'string' ? value : JSON.stringify(value)); };
+    s.removeLoginHeader = function () { call('loginHeadersPut', null); };
     s.getHeaderMap = function () { return call('sourceHeaders'); };
     s.getTag = function () { return data.bookSourceName; };
-    s.login = function () {};
+    s.login = function () { return call('javaCompat', 'unsupported', 'source.login'); };
     return s;
   };
   g.__make_book = function (data) {

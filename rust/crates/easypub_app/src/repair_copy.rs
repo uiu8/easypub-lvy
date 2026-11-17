@@ -98,6 +98,14 @@ pub fn execute(service: &ImportService, value: Value) -> Result<Value, ApiError>
         return Err(invalid());
     }
     let b = &mut r.project.books[0];
+    let marks_path = r.output_path.with_extension("source-marks.json");
+    let marks_bytes = if let Some(selection) = &b.source_marks {
+        let (rebased, bytes) = selection.rebase(&book, &marks_path)?;
+        b.source_marks = Some(rebased);
+        Some(bytes)
+    } else {
+        None
+    };
     for image in &mut b.illustrations {
         if let Some(line) = image.source_line {
             image.source_line = book.source_to_output_lines.get(&line).copied();
@@ -121,7 +129,10 @@ pub fn execute(service: &ImportService, value: Value) -> Result<Value, ApiError>
     r.project.project_folder_rules_enabled = false;
     r.project.validate()?;
     let project_path = r.output_path.with_extension("easypub.json");
-    if r.output_path.exists() || project_path.exists() {
+    if r.output_path.exists()
+        || project_path.exists()
+        || (marks_bytes.is_some() && marks_path.exists())
+    {
         return Err(ApiError::new(
             ErrorCode::OutputConflict,
             "repair_copy",
@@ -141,7 +152,28 @@ pub fn execute(service: &ImportService, value: Value) -> Result<Value, ApiError>
                 "choose_new_output_path",
             )
         })?;
+    let mut marks_created = false;
     let result = (|| {
+        if let Some(bytes) = &marks_bytes {
+            let mut marks = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&marks_path)
+                .map_err(|_| {
+                    ApiError::new(
+                        ErrorCode::OutputConflict,
+                        "repair_copy",
+                        "choose_new_output_path",
+                    )
+                })?;
+            marks_created = true;
+            marks
+                .write_all(bytes)
+                .and_then(|_| marks.sync_all())
+                .map_err(|_| {
+                    ApiError::new(ErrorCode::Io, "repair_copy", "check_path_permissions")
+                })?;
+        }
         file.write_all(&payload)
             .and_then(|_| file.sync_all())
             .map_err(|_| ApiError::new(ErrorCode::Io, "repair_copy", "check_path_permissions"))?;
@@ -162,6 +194,9 @@ pub fn execute(service: &ImportService, value: Value) -> Result<Value, ApiError>
         ),
         Err(error) => {
             let _ = fs::remove_file(&project_path);
+            if marks_created {
+                let _ = fs::remove_file(&marks_path);
+            }
             Err(error)
         }
     }

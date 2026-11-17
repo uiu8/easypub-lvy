@@ -28,10 +28,17 @@ impl Flights {
             }
         };
         if owner {
-            let result = fetch();
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(fetch));
+            let result = match &outcome {
+                Ok(result) => result.clone(),
+                Err(_) => Err("合并请求异常终止，请重试".to_owned()),
+            };
             *flight.result.lock().unwrap() = Some(result.clone());
             flight.ready.notify_all();
             self.0.lock().unwrap().remove(&key);
+            if let Err(payload) = outcome {
+                std::panic::resume_unwind(payload);
+            }
             result
         } else {
             let mut result = flight.result.lock().unwrap();
@@ -48,4 +55,50 @@ impl Flights {
             }
         }
     }
+}
+
+#[cfg(test)]
+#[test]
+fn owner_panic_wakes_waiter_and_allows_retry() {
+    use std::sync::mpsc;
+    let flights = Arc::new(Flights::default());
+    let (started, ready) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let owner_flights = flights.clone();
+    let owner = std::thread::spawn(move || {
+        std::panic::catch_unwind(|| {
+            owner_flights.run("chapter".into(), || {
+                started.send(()).unwrap();
+                released.recv().unwrap();
+                panic!("synthetic owner failure");
+            })
+        })
+    });
+    ready.recv_timeout(Duration::from_secs(5)).unwrap();
+    let (done, result) = mpsc::channel();
+    let waiter_flights = flights.clone();
+    let waiter = std::thread::spawn(move || {
+        done.send(waiter_flights.run("chapter".into(), || panic!("must share owner")))
+            .unwrap();
+    });
+    // 确认真实等待者已取得同一 Flight，避免仅测试 owner 完成后的另一次请求。
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while Arc::strong_count(flights.0.lock().unwrap().get("chapter").unwrap()) < 3 {
+        assert!(std::time::Instant::now() < deadline, "waiter did not join");
+        std::thread::yield_now();
+    }
+    release.send(()).unwrap();
+    assert_eq!(
+        result.recv_timeout(Duration::from_secs(5)).unwrap(),
+        Err("合并请求异常终止，请重试".into())
+    );
+    assert!(owner.join().unwrap().is_err());
+    waiter.join().unwrap();
+    assert!(flights.0.lock().unwrap().is_empty());
+    assert_eq!(
+        flights
+            .run("chapter".into(), || Ok("retry".into()))
+            .unwrap(),
+        "retry"
+    );
 }

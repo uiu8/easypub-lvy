@@ -107,6 +107,7 @@ pub fn chinese_number(text: &str) -> Option<u64> {
     }
     let digit = |c: char| -> Option<u64> {
         Some(match c {
+            '0'..='9' => c.to_digit(10)? as u64,
             '零' | '〇' => 0,
             '一' | '壹' => 1,
             '二' | '两' | '贰' => 2,
@@ -120,6 +121,11 @@ pub fn chinese_number(text: &str) -> Option<u64> {
             _ => return None,
         })
     };
+    if !text.is_empty() && text.chars().all(|c| digit(c).is_some()) {
+        return text
+            .chars()
+            .try_fold(0u64, |n, c| n.checked_mul(10)?.checked_add(digit(c)?));
+    }
     let (mut total, mut section, mut number) = (0u64, 0u64, 0u64);
     let mut any = false;
     for c in text.chars() {
@@ -137,15 +143,21 @@ pub fn chinese_number(text: &str) -> Option<u64> {
         };
         any = true;
         if unit == 10_000 {
-            section = (section + number) * unit;
-            total += section;
+            section = section.checked_add(number)?.checked_mul(unit)?;
+            total = total.checked_add(section)?;
             section = 0;
         } else {
-            section += if number == 0 && unit == 10 { 1 } else { number } * unit;
+            section = section.checked_add(
+                (if number == 0 && unit == 10 { 1 } else { number }).checked_mul(unit)?,
+            )?;
         }
         number = 0;
     }
-    any.then_some(total + section + number)
+    if any {
+        total.checked_add(section)?.checked_add(number)
+    } else {
+        None
+    }
 }
 
 /// Java 风格的时间格式（yyyy MM dd HH mm ss SSS），`offset_hours` 为时区偏移。
@@ -189,6 +201,14 @@ mod tests {
 
     #[test]
     fn text_helpers() {
+        for raw in ["二〇二四", "二零二四", "2〇2四", "贰零贰肆"] {
+            assert_eq!(chinese_number(raw), Some(2024));
+            assert_eq!(to_num_chapter(&format!("第{raw}章 标题")), "第2024章 标题");
+        }
+        let too_large = "九".repeat(30);
+        assert_eq!(chinese_number(&too_large), None);
+        let title = format!("第{too_large}章 标题");
+        assert_eq!(to_num_chapter(&title), title);
         assert_eq!(
             html_to_text("<p>第一段</p><p>　　第二段&nbsp;</p>甲<br>乙<script>x()</script>"),
             "第一段\n第二段\n甲\n乙"

@@ -35,12 +35,38 @@ pub struct SourceRt {
     pub cache: Mutex<HashMap<String, String>>,
     /// 登录界面填写的信息（JSON 文字）；插件宿主使用 DPAPI 持久化。
     pub login_info: Mutex<Option<String>>,
+    pub login_headers: Mutex<Option<String>>,
     pub services: crate::compat_services::Services,
     pub flights: crate::singleflight::Flights,
     pub html_document: Mutex<Option<String>>,
 }
 
 impl SourceRt {
+    pub fn set_login_headers(&self, value: Option<String>) -> Result<(), String> {
+        if let Some(value) = &value {
+            let headers: HashMap<String, String> =
+                serde_json::from_str(value).map_err(|_| "登录请求头必须为字符串键值对象")?;
+            if value.len() > 65536
+                || headers.iter().any(|(k, v)| {
+                    reqwest::header::HeaderName::from_bytes(k.as_bytes()).is_err()
+                        || reqwest::header::HeaderValue::from_str(v).is_err()
+                })
+            {
+                return Err("登录请求头格式无效或超过上限".into());
+            }
+        }
+        let mut current = self.login_headers.lock().unwrap();
+        if let Some(dir) = self.services.data_dir.lock().unwrap().as_ref() {
+            let key = format!("login-headers:{}", self.source.id());
+            match &value {
+                Some(value) => crate::login_store::save(dir, &key, value)?,
+                None => crate::login_store::clear(dir, &key)?,
+            }
+        }
+        *current = value;
+        Ok(())
+    }
+
     pub fn set_login_info(&self, value: String) -> Result<(), String> {
         if value.len() > 65536
             || !serde_json::from_str::<Value>(&value).is_ok_and(|v| v.is_object())
@@ -70,6 +96,7 @@ impl SourceRt {
             variable: Mutex::default(),
             cache: Mutex::default(),
             login_info: Mutex::default(),
+            login_headers: Mutex::default(),
             services: Default::default(),
             flights: Default::default(),
             html_document: Default::default(),
@@ -228,6 +255,7 @@ impl Engine {
             ctx.globals()
                 .set("__ep", native)
                 .map_err(|e| e.to_string())?;
+            crate::jsoup_bridge::install(&ctx).map_err(|e| e.to_string())?;
             sloppy::<()>(&ctx, PRELUDE).map_err(|e| js_error(&ctx, e))?;
             sloppy::<()>(&ctx, include_str!("java_compat.js")).map_err(|e| js_error(&ctx, e))?;
             sloppy::<()>(&ctx, include_str!("rsa_compat.js")).map_err(|e| js_error(&ctx, e))?;
@@ -432,6 +460,13 @@ pub struct UrlSpec {
 }
 
 impl Host for Scope<'_, '_> {
+    fn rule_error(&self, message: &str) {
+        self.inner
+            .st
+            .borrow_mut()
+            .script_error
+            .get_or_insert_with(|| message.to_owned());
+    }
     fn js(&self, code: &str, input: &[Node]) -> Vec<Node> {
         match self.eval_js(code, input) {
             Ok(v) => v,
@@ -725,7 +760,8 @@ impl<'js> Scope<'_, 'js> {
         } else {
             Vec::new()
         };
-        let result = self.eval_js_inner(code, input);
+        let result =
+            crate::pattern::checked(|| self.eval_js_inner(code, input)).and_then(|result| result);
         if !saved.is_empty() {
             self.inner.st.borrow_mut().objects_dirty = true;
             for (name, value) in saved {
@@ -822,6 +858,9 @@ impl<'js> Scope<'_, 'js> {
             .map(|c| c.value().to_owned())
             .collect();
         out.extend(rt.net.headers.iter().map(|(_, v)| v.clone()));
+        if let Some(headers) = rt.login_headers.lock().unwrap().as_deref() {
+            out.extend(parse_headers(headers).into_iter().map(|(_, value)| value));
+        }
         if let Some(info) = rt.login_info.lock().unwrap().as_deref()
             && let Ok(Value::Object(map)) = serde_json::from_str::<Value>(info)
         {
@@ -1008,7 +1047,7 @@ impl<'js> Scope<'_, 'js> {
         let mut url = url.trim().to_owned();
         let mut option_js = None;
         let mut spec = UrlSpec::default();
-        let mut headers: Vec<(String, String)> = self.source_headers();
+        let mut headers: Vec<(String, String)> = self.source_headers()?;
         let mut method = "GET".to_owned();
         let mut body = None;
         let mut charset = None;
@@ -1168,7 +1207,8 @@ impl<'js> Scope<'_, 'js> {
     }
 
     /// 书源请求头（JS 写的在这里执行）。
-    pub fn source_headers(&self) -> Vec<(String, String)> {
+    pub fn source_headers(&self) -> Result<Vec<(String, String)>, String> {
+        let mut headers = Vec::new();
         let header = self.source().header.trim().to_owned();
         if header.starts_with("@js:") || header.to_ascii_lowercase().starts_with("<js>") {
             let code = header
@@ -1180,15 +1220,13 @@ impl<'js> Scope<'_, 'js> {
                         .find("</js>")
                         .map_or(header[4..].to_owned(), |e| header[4..4 + e].to_owned())
                 });
-            return match self.eval_js_string(&code, &[Node::Text(String::new())]) {
-                Ok(text) => parse_headers(&text),
-                Err(e) => {
-                    self.log(format!("请求头 JS 出错：{e}"));
-                    Vec::new()
-                }
-            };
+            let dynamic = parse_headers(&self.eval_js_string(&code, &[Node::Text(String::new())])?);
+            headers.extend(dynamic);
         }
-        Vec::new() // 静态请求头在 Net 里统一加上
+        // 脚本可能刷新登录头，执行之后再读取；显式请求头由调用方最后覆盖。
+        let login = self.inner.rt.login_headers.lock().unwrap().clone();
+        headers.extend(login.as_deref().map(parse_headers).unwrap_or_default());
+        Ok(headers) // 静态请求头在 Net 里统一加上
     }
 
     /// 按网址规则请求，成功后把页面设为当前内容。
@@ -1306,6 +1344,10 @@ impl<'js> Scope<'_, 'js> {
     // ---------- JS 本机操作 ----------
 
     fn op(&self, op: &str, args: &[Value]) -> Result<Value, String> {
+        crate::pattern::checked(|| self.op_inner(op, args))?
+    }
+
+    fn op_inner(&self, op: &str, args: &[Value]) -> Result<Value, String> {
         let st = &self.inner.st;
         if crate::control::current().pure_compute
             && !matches!(
@@ -1482,6 +1524,20 @@ impl<'js> Scope<'_, 'js> {
                 }
                 Value::Array(results)
             }
+            "loginHeadersGet" => self
+                .inner
+                .rt
+                .login_headers
+                .lock()
+                .unwrap()
+                .clone()
+                .map(Value::String)
+                .unwrap_or(Value::Null),
+            "loginHeadersPut" => {
+                let value = args.first().and_then(Value::as_str).map(str::to_owned);
+                self.inner.rt.set_login_headers(value)?;
+                Value::Null
+            }
             "sourcePut" => {
                 self.inner
                     .rt
@@ -1520,7 +1576,7 @@ impl<'js> Scope<'_, 'js> {
                     .headers
                     .iter()
                     .cloned()
-                    .chain(self.source_headers())
+                    .chain(self.source_headers()?)
                 {
                     map.insert(k, Value::String(v));
                 }
@@ -1581,6 +1637,16 @@ impl<'js> Scope<'_, 'js> {
             // 走与 java.ajax 相同的网络通道；跟随重定向，4xx/5xx 交给脚本按响应码读错误流。
             "httpConnect" => {
                 let spec = arg(args, 0);
+                let timeout = |key: &str| -> Result<Option<u64>, String> {
+                    if spec[key].is_null() {
+                        return Ok(None);
+                    }
+                    spec[key]
+                        .as_u64()
+                        .filter(|ms| *ms <= i32::MAX as u64)
+                        .map(Some)
+                        .ok_or_else(|| "连接超时必须是非负整数毫秒".into())
+                };
                 let url = self.absolute(spec["url"].as_str().unwrap_or(""));
                 let parsed = reqwest::Url::parse(&url).map_err(|_| "连接网址无效")?;
                 if !matches!(parsed.scheme(), "http" | "https") {
@@ -1593,7 +1659,7 @@ impl<'js> Scope<'_, 'js> {
                 if !matches!(method.as_str(), "GET" | "POST" | "PUT" | "DELETE" | "HEAD") {
                     return Err("不支持的请求方法".into());
                 }
-                let headers = match &spec["headers"] {
+                let explicit_headers: Vec<(String, String)> = match &spec["headers"] {
                     Value::Object(m) => m
                         .iter()
                         .map(|(k, v)| (k.clone(), crate::jsonpath::value_text(v)))
@@ -1604,18 +1670,25 @@ impl<'js> Scope<'_, 'js> {
                     Value::Null => None,
                     other => Some(bytes_arg(other)),
                 };
-                let response = self
-                    .net()
-                    .fetch(&Request {
-                        url,
-                        method,
-                        body,
-                        headers,
-                        inspect_error_status: true,
-                        max_body: Some(4 << 20),
-                        ..Default::default()
-                    })
-                    .map_err(|e| e.0)?;
+                let mut headers = self.source_headers()?;
+                headers.extend(explicit_headers);
+                let request = Request {
+                    connect_timeout_ms: timeout("connectTimeout")?,
+                    read_timeout_ms: timeout("readTimeout")?,
+                    url,
+                    method,
+                    body,
+                    headers,
+                    inspect_error_status: true,
+                    max_body: Some(4 << 20),
+                    ..Default::default()
+                };
+                let response = if spec["followRedirects"].as_bool().unwrap_or(true) {
+                    self.net().fetch(&request)
+                } else {
+                    self.net().fetch_no_redirect(&request)
+                }
+                .map_err(|e| e.0)?;
                 let gzip = response.body.starts_with(&[0x1f, 0x8b]);
                 let headers: serde_json::Map<String, Value> = response
                     .headers
@@ -1830,7 +1903,7 @@ impl<'js> Scope<'_, 'js> {
                 if !matches!(url.scheme(), "http" | "https") {
                     return Err("只支持 HTTP/HTTPS".into());
                 }
-                self.net().remove_cookies(url.as_str());
+                crate::webview::clear_cookies(&self.inner.rt, url.as_str())?;
                 Value::Null
             }
             "loginUpdate" => {
@@ -1890,7 +1963,7 @@ impl<'js> Scope<'_, 'js> {
                 Value::Null
             }
             "cookieRemove" => {
-                self.net().remove_cookies(&self.absolute(&s(args, 0)));
+                crate::webview::clear_cookies(&self.inner.rt, &self.absolute(&s(args, 0)))?;
                 Value::Null
             }
             "cacheGet" => self
@@ -1951,7 +2024,7 @@ impl<'js> Scope<'_, 'js> {
                         .fetch(&Request {
                             url: url.to_string(),
                             method: "GET".into(),
-                            headers: self.source_headers(),
+                            headers: self.source_headers()?,
                             max_body: Some(1024 * 1024),
                             ..Default::default()
                         })
@@ -2174,7 +2247,7 @@ fn uuid() -> String {
 }
 
 /// org.jsoup 替代：整页按文档解析，元素片段按片段解析，返回起点元素。
-fn jsoup_root(html: &str) -> (scraper::Html, ego_tree::NodeId) {
+pub(crate) fn jsoup_root(html: &str) -> (scraper::Html, ego_tree::NodeId) {
     let lower = html
         .trim_start()
         .get(..20)

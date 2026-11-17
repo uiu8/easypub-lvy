@@ -221,6 +221,43 @@ void main() {
     }
   }
 
+  test('修订副本删行后独立保存原书样式脚注表格并重开', () async {
+    final id = await import('副本样书');
+    final originalMarks = state.production.settings(id)['source_marks']['path'] as String;
+    final inline = library.openInlineStyles(id);
+    final before = await inline.list();
+    final removed = before.items.firstWhere((v) => v.text == '粗体');
+    await inline.confirm(await inline.previewDelete(removed.id));
+    inline.dispose();
+    final chapters = library.openChapters(id);
+    final page = await chapters.read(0, includeBody: true);
+    final chapter = page.nodes.first;
+    final body = await chapters.body(page, chapter.id, 0);
+    final line = body.rows.firstWhere((r) => r.text.contains('开头第一行')).lineOffset;
+    final plan = await chapters.preview(page, ExcludeChapterBodyLines(chapter.id, line, line + 1));
+    final output = '${root.absolute.path}/修订.txt';
+    final copy = await (chapters as ChapterCopySession).exportCopy(plan, output);
+    expect(File(output).readAsStringSync(), isNot(contains('开头第一行')));
+    expect(File(output).readAsStringSync(), contains('粗体二'));
+    final project = jsonDecode(File(copy.projectPath).readAsStringSync()) as Map;
+    final saved = (project['books'] as List).single as Map;
+    expect(saved['source_marks']['removed'], contains(removed.id));
+    final copiedMarks = saved['source_marks']['path'] as String;
+    expect(copiedMarks, isNot(originalMarks));
+    expect(File(copiedMarks).existsSync(), isTrue);
+    // 只删除本测试生成的旧资源，证明副本不依赖原书标记文件。
+    File(originalMarks).deleteSync();
+    expect((await library.openProject(copy.projectPath)).succeeded, isTrue);
+    final reopened = await styles(state.currentId);
+    expect(reopened.invalidCount, 0);
+    expect(reopened.items.any((v) => v.text == '粗体'), isFalse);
+    expect(reopened.items.any((v) => v.text == '粗体二'), isTrue);
+    expect(reopened.tables.single.rows[1][0].text, '甲表格字');
+    final notes = library.openManualNotes(state.currentId);
+    expect((await notes.list()).notes.where((n) => n.marker == '[1]'), hasLength(1));
+    notes.dispose();
+  });
+
   test('导入后样式、脚注、表格都在，改前面的正文也不失效', () async {
     final id = await import('书');
     expect(state.importStatus, contains('1 张表格'));

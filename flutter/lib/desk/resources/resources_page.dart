@@ -720,6 +720,7 @@ class _ResourceEditState extends State<_ResourceEdit> {
     super.initState();
     if (widget.remove) return;
     final restored = widget.workspace?.readDraft(widget.draftKey);
+    layout = restored?['layout'] as String? ?? layout;
     if (restored?['position'] case final Map savedPosition) {
       position = ResourcePositionChoice(
         savedPosition['sourceLine'] as int,
@@ -751,6 +752,7 @@ class _ResourceEditState extends State<_ResourceEdit> {
   }
 
   void saveDraft() => widget.workspace?.writeDraft(widget.draftKey, {
+    'layout': layout,
     for (final entry in fields.entries) entry.key: entry.value.text,
     if (position != null && '${position!.sourceLine}' == line.text)
       'position': {
@@ -956,6 +958,7 @@ class _ResourceEditState extends State<_ResourceEdit> {
                               layout = value;
                               plan = null;
                               error = '';
+                              saveDraft();
                             }),
                     ),
                   ),

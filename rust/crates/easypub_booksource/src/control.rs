@@ -297,14 +297,16 @@ pub struct Timing {
 }
 
 /// HTTP Retry-After 支持秒数和 GMT 日期；值不进入日志或错误。
+pub(crate) const MAX_RETRY_AFTER: Duration = Duration::from_secs(24 * 60 * 60);
+
 pub fn retry_after(value: &str) -> Option<Duration> {
     if let Ok(seconds) = value.trim().parse::<u64>() {
-        return Some(Duration::from_secs(seconds));
+        return Some(Duration::from_secs(seconds).min(MAX_RETRY_AFTER));
     }
     let date =
         time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc2822).ok()?;
     let seconds = (date - time::OffsetDateTime::now_utc())
         .whole_seconds()
         .max(0) as u64;
-    Some(Duration::from_secs(seconds))
+    Some(Duration::from_secs(seconds).min(MAX_RETRY_AFTER))
 }

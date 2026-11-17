@@ -87,20 +87,41 @@ fn client(timeout: Duration) -> Result<reqwest::blocking::Client, ApiError> {
         .timeout(timeout)
         .user_agent("easypub-lvy-updater")
         // GitHub 附件会跳转到 githubusercontent 下载域；只跟随这两个域名和本机回环地址。
-        .redirect(reqwest::redirect::Policy::custom(|attempt| {
-            let ok = attempt.previous().len() < 6
-                && match attempt.url().host_str() {
-                    Some("127.0.0.1") => attempt.url().scheme() == "http",
-                    Some(h) => {
-                        attempt.url().scheme() == "https"
-                            && (h == "github.com" || h.ends_with(".githubusercontent.com"))
-                    }
-                    None => false,
-                };
-            if ok { attempt.follow() } else { attempt.stop() }
-        }))
+        .redirect(update_redirect_policy())
         .build()
         .map_err(|_| error(ErrorCode::Io, "update_network"))
+}
+
+fn update_redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        let ok = attempt.previous().len() < 6
+            && match attempt.url().host_str() {
+                Some("127.0.0.1") => attempt.url().scheme() == "http",
+                Some(h) => {
+                    attempt.url().scheme() == "https"
+                        && (h == "github.com" || h.ends_with(".githubusercontent.com"))
+                }
+                None => false,
+            };
+        if ok { attempt.follow() } else { attempt.stop() }
+    })
+}
+
+async fn cancelable<F: std::future::Future>(
+    future: F,
+    cancel: &AtomicBool,
+) -> Result<F::Output, ApiError> {
+    let mut future = std::pin::pin!(future);
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(error(ErrorCode::Cancelled, "update_cancelled"));
+        }
+        // Preserve the same pending request between ticks; cancellation drops it
+        // instead of waiting for a blocking read or restarting the download.
+        if let Ok(value) = tokio::time::timeout(Duration::from_millis(100), future.as_mut()).await {
+            return Ok(value);
+        }
+    }
 }
 
 fn fetch_small(client: &reqwest::blocking::Client, url: &str) -> Result<Vec<u8>, ApiError> {
@@ -152,7 +173,7 @@ fn status(dir: &Path) -> Value {
         "writable": packaged && writable(dir),
         "current_release": read_release(dir),
         "ready": if w.join("staging").join(APP_EXE).is_file() { ready } else { Value::Null },
-        "backup_release": read_release(&w.join("backup")),
+        "backup_release": read_release(&easypub_updater::backup_path(&w)),
         "last": read_json(&w.join("state.json")),
         "releases_url": RELEASES,
     })
@@ -250,12 +271,9 @@ fn plugin_download(value: &Value) -> Result<Value, ApiError> {
     }
     let result = extract_plugin(&data, id, &target).and_then(|()| {
         let info = read_json(&target.join("plugin.json"));
+        plugin.verify_declaration(&info).map_err(|_| invalid())?;
         let exe = fs::read(target.join(&plugin.executable)).map_err(|_| invalid())?;
-        if info["id"].as_str() != Some(id)
-            || info["executable"].as_str() != Some(plugin.executable.as_str())
-            || info["sha256"].as_str() != Some(plugin.exe_sha256.as_str())
-            || hex(&Sha256::digest(&exe)) != plugin.exe_sha256
-        {
+        if hex(&Sha256::digest(&exe)) != plugin.exe_sha256 {
             return Err(invalid());
         }
         Ok(())
@@ -427,11 +445,20 @@ fn download(
         .map_err(|_| error(ErrorCode::Io, "update_app_dir_not_writable"))?;
     let zip_path = downloads.join(&manifest.package.name);
     let part = downloads.join(format!("{}.part", manifest.package.name));
-    {
-        let c = client(Duration::from_secs(60 * 60))?;
-        let mut response = c
-            .get(package_url(base, manifest))
-            .send()
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|_| error(ErrorCode::Internal, "update_network"))?;
+    let transferred = runtime.block_on(async {
+        let c = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(60 * 60))
+            .user_agent("easypub-lvy-updater")
+            .redirect(update_redirect_policy())
+            .build()
+            .map_err(|_| error(ErrorCode::Io, "update_network"))?;
+        let mut response = cancelable(c.get(package_url(base, manifest)).send(), cancel)
+            .await?
             .map_err(|_| error(ErrorCode::Io, "update_network"))?;
         if !response.status().is_success() {
             return Err(error(ErrorCode::Io, "update_download_failed"));
@@ -439,35 +466,33 @@ fn download(
         let mut file = fs::File::create(&part)
             .map_err(|_| error(ErrorCode::Io, "update_app_dir_not_writable"))?;
         let mut hasher = Sha256::new();
-        let mut buf = vec![0u8; 64 * 1024];
         let mut total = 0u64;
         loop {
-            if cancel.load(Ordering::Relaxed) {
-                drop(file);
-                let _ = fs::remove_dir_all(&downloads);
-                return Err(error(ErrorCode::Cancelled, "update_cancelled"));
-            }
-            let n = response
-                .read(&mut buf)
+            let chunk = cancelable(response.chunk(), cancel)
+                .await?
                 .map_err(|_| error(ErrorCode::Io, "update_download_failed"))?;
-            if n == 0 {
+            let Some(chunk) = chunk else {
                 break;
-            }
-            total += n as u64;
+            };
+            total += chunk.len() as u64;
             if total > manifest.package.bytes {
                 return Err(error(ErrorCode::InvalidRule, "update_checksum_mismatch"));
             }
-            hasher.update(&buf[..n]);
-            file.write_all(&buf[..n])
+            hasher.update(&chunk);
+            file.write_all(&chunk)
                 .map_err(|_| error(ErrorCode::Io, "update_disk_write_failed"))?;
             received.store(total, Ordering::Relaxed);
         }
         file.sync_all()
             .map_err(|_| error(ErrorCode::Io, "update_disk_write_failed"))?;
         if total != manifest.package.bytes || hex(&hasher.finalize()) != manifest.package.sha256 {
-            let _ = fs::remove_dir_all(&downloads);
             return Err(error(ErrorCode::InvalidRule, "update_checksum_mismatch"));
         }
+        Ok(())
+    });
+    if let Err(error) = transferred {
+        let _ = fs::remove_dir_all(&downloads);
+        return Err(error);
     }
     fs::rename(&part, &zip_path).map_err(|_| error(ErrorCode::Io, "update_disk_write_failed"))?;
     phase("extracting");
@@ -672,11 +697,11 @@ fn launch(value: &Value) -> Result<Value, ApiError> {
         Some(m @ ("update" | "rollback")) => m,
         _ => return Err(error(ErrorCode::InvalidRule, "update_mode_invalid")),
     };
-    let source = w.join(if mode == "update" {
-        "staging"
+    let source = if mode == "update" {
+        w.join("staging")
     } else {
-        "backup"
-    });
+        easypub_updater::backup_path(&w)
+    };
     if !source.join(APP_EXE).is_file() {
         return Err(error(
             ErrorCode::NotFound,

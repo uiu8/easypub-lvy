@@ -123,17 +123,22 @@
   function Buffered(reader){const lines=reader.text.split(/\r\n|\r|\n/);if(lines[lines.length-1]==='')lines.pop();this.readLine=()=>lines.length?lines.shift():null;this.close=()=>reader.close();}
   // HttpURLConnection 子集：请求在第一次读响应时经插件网络通道发出；不开放套接字或任意协议。
   function Connection(url){
-    let method='GET',sent=null,out=null;const headers={};
-    const run=()=>{if(!sent)sent=__call('httpConnect',{url,method,headers,body:out?out.data:null});return sent;};
-    const idle=()=>{};
-    this.setRequestMethod=m=>{m=String(m).toUpperCase();if(!['GET','POST','PUT','DELETE','HEAD'].includes(m))throw Error('不支持的请求方法');method=m;};
-    this.setRequestProperty=(k,v)=>{if(sent)throw Error('请求已发送');headers[String(k)]=String(v);};
+    let method='GET',sent=null,out=null,doInput=true,doOutput=false,followRedirects=true,closed=false,connectTimeout=0,readTimeout=0;const headers={};
+    const editable=()=>{if(sent||closed)throw Error('连接已发送或关闭');};
+    const run=()=>{if(closed)throw Error('连接已关闭');if(!sent)sent=__call('httpConnect',{url,method,headers,body:out?out.data:null,followRedirects,connectTimeout,readTimeout});return sent;};
+    this.setRequestMethod=m=>{editable();m=String(m).toUpperCase();if(!['GET','POST','PUT','DELETE','HEAD'].includes(m))throw Error('不支持的请求方法');method=m;};
+    this.setRequestProperty=(k,v)=>{editable();headers[String(k)]=String(v);};
     this.addRequestProperty=this.setRequestProperty;
-    this.setDoOutput=idle;this.setDoInput=idle;this.setConnectTimeout=idle;this.setReadTimeout=idle;
-    this.setUseCaches=idle;this.setInstanceFollowRedirects=idle;this.connect=idle;this.disconnect=idle;
-    this.getOutputStream=()=>{if(sent)throw Error('请求已发送');if(!out)out=new Output();return out;};
+    this.setDoOutput=value=>{editable();doOutput=!!value;};this.setDoInput=value=>{editable();doInput=!!value;};
+    const timeout=value=>{editable();const n=Number(value);if(!Number.isInteger(n)||n<0||n>2147483647)throw Error('超时必须是非负整数毫秒');return n;};
+    this.setConnectTimeout=value=>{connectTimeout=timeout(value);};this.setReadTimeout=value=>{readTimeout=timeout(value);};
+    this.getConnectTimeout=()=>connectTimeout;this.getReadTimeout=()=>readTimeout;
+    this.setUseCaches=value=>{editable();if(value)deny('URLConnection.setUseCaches(true)');};
+    this.setInstanceFollowRedirects=value=>{editable();followRedirects=!!value;};
+    this.connect=()=>deny('URLConnection.connect');this.disconnect=()=>{closed=true;};
+    this.getOutputStream=()=>{editable();if(!doOutput)throw Error('请先启用 setDoOutput');if(method==='GET')method='POST';if(!out)out=new Output();return out;};
     this.getResponseCode=()=>run().code;
-    this.getInputStream=()=>{const r=run();if(r.code>=400)throw Error('HTTP 状态 '+r.code);return new Input(r.body);};
+    this.getInputStream=()=>{if(!doInput)throw Error('连接已禁用输入');const r=run();if(r.code>=400)throw Error('HTTP 状态 '+r.code);return new Input(r.body);};
     this.getErrorStream=()=>{const r=run();return r.code>=400?new Input(r.body):null;};
     this.getHeaderField=n=>{const v=run().headers[String(n).toLowerCase()];return v===undefined?null:v;};
     this.getContentEncoding=()=>this.getHeaderField('content-encoding');

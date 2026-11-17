@@ -248,6 +248,43 @@ fn swap_replaces_package_files_keeps_user_files_and_backs_up_old_version() {
 }
 
 #[test]
+fn repair88_unpublished_backup_is_discoverable_and_incomplete_backup_is_preserved() {
+    let root = temp("backup-publication");
+    let work = root.join("work");
+    let old = work.join("backup");
+    let pending = work.join("backup-new");
+    old_app(&old);
+    new_package(&pending);
+    assert_eq!(backup_path(&work), pending);
+    assert_eq!(read_release(&backup_path(&work)), Some(68));
+    finalize_backup(&work).unwrap();
+    assert_eq!(backup_path(&work), old);
+    assert_eq!(read_release(&old), Some(68));
+    assert!(!pending.exists());
+    finalize_backup(&work).unwrap();
+
+    old_app(&pending);
+    fs::write(work.join("journal.json"), b"{}").unwrap();
+    let before = listing(&pending);
+    assert_eq!(backup_path(&work), old);
+    assert_eq!(
+        finalize_backup(&work),
+        Err(UpdateError("update_backup_recovery_required"))
+    );
+    assert_eq!(listing(&pending), before);
+    assert_eq!(read_release(&old), Some(68));
+    fs::remove_file(work.join("journal.json")).unwrap();
+    finalize_backup(&work).unwrap();
+    assert_eq!(read_release(&old), Some(67));
+
+    fs::create_dir_all(&pending).unwrap();
+    fs::write(pending.join("unknown.txt"), b"keep").unwrap();
+    assert!(finalize_backup(&work).is_err());
+    assert_eq!(fs::read(pending.join("unknown.txt")).unwrap(), b"keep");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn failure_at_any_step_restores_the_old_version_exactly() {
     let probe = temp("probe");
     old_app(&probe.join("app"));

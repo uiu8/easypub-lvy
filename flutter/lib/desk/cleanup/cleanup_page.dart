@@ -292,7 +292,7 @@ class _CleanupPageState extends State<CleanupPage>
   @override
   void dispose() {
     board?.detachCleanup(boardShow);
-    widget.navigation.check = null;
+    if (widget.navigation.check == canLeave) widget.navigation.check = null;
     widget.navigation.checkWorkspace = null;
     session.dispose();
     changeList.dispose();
@@ -975,7 +975,9 @@ class _CleanupPageState extends State<CleanupPage>
 
       final at = next.indexWhere(item.matches);
       if (at >= 0) {
-        set(at, on);
+        for (var k = 0; k < next.length; k++) {
+          if (item.matches(next[k])) set(k, on);
+        }
       } else if (on) {
         final pos = order.indexOf(item);
         var insertAt = next.length;
@@ -987,6 +989,15 @@ class _CleanupPageState extends State<CleanupPage>
           }
         }
         next.insert(insertAt, item.step());
+        draft['step_exclusions'] = [
+          for (final value in (draft['step_exclusions'] as List? ?? []))
+            {
+              ...value as Map,
+              'step_index': (value['step_index'] as int) >= insertAt
+                  ? (value['step_index'] as int) + 1
+                  : value['step_index'],
+            },
+        ];
       }
       if (on && item.kind == 'chinese_variant') {
         for (var k = 0; k < next.length; k++) {

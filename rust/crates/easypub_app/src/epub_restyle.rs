@@ -1,6 +1,7 @@
 //! 保持原格式时改原书样式：去除原书字体、去除指定样式、附加 CSS 和页边距。
 //!
 //! 原 EPUB 不变，只改生成的成品。CSS 按语句扫描，不重新排版，没动到的部分逐字节保留。
+use cssparser::{ParseError, Parser, ParserInput, Token};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -124,6 +125,56 @@ fn without_comments(text: &str) -> String {
     COMMENT.replace_all(text, "").into_owned()
 }
 
+fn consume_component_block<'i>(parser: &mut Parser<'i, '_>) -> Result<(), ParseError<'i, ()>> {
+    while !parser.is_exhausted() {
+        match parser.next()?.clone() {
+            Token::Function(_) | Token::ParenthesisBlock | Token::SquareBracketBlock => {
+                parser.parse_nested_block(consume_component_block)?;
+            }
+            t if t.is_parse_error() => return Err(parser.new_custom_error(())),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// 顶层尺寸与优先级分别解析，calc/min 等函数内部的空格不分割四边值。
+fn margin_components(value: &str) -> Option<(Vec<String>, bool)> {
+    let mut input = ParserInput::new(value);
+    let mut parser = Parser::new(&mut input);
+    let mut parts = Vec::new();
+    let mut important = false;
+    while !parser.is_exhausted() {
+        parser.skip_whitespace();
+        let start = parser.position();
+        match parser.next().ok()?.clone() {
+            Token::Delim('!') => {
+                parser.expect_ident_matching("important").ok()?;
+                parser.expect_exhausted().ok()?;
+                important = true;
+                break;
+            }
+            // 顶层变量可能展开成 1—4 个值，不能把整个 var 当作一个边距。
+            Token::Function(name)
+                if name.eq_ignore_ascii_case("var") || name.eq_ignore_ascii_case("env") =>
+            {
+                return None;
+            }
+            Token::Function(_) => parser.parse_nested_block(consume_component_block).ok()?,
+            Token::Dimension { .. }
+            | Token::Percentage { .. }
+            | Token::Number { .. }
+            | Token::Ident(_) => {}
+            _ => return None,
+        }
+        parts.push(parser.slice_from(start).trim().to_owned());
+        if parts.len() > 4 {
+            return None;
+        }
+    }
+    (!parts.is_empty()).then_some((parts, important))
+}
+
 /// 从块的 `{` 之后走到配对的 `}` 之后。
 fn block_end(bytes: &[u8], mut at: usize) -> usize {
     let mut depth = 1usize;
@@ -217,7 +268,10 @@ impl Filter<'_> {
             return None;
         }
         if property == "margin" && (self.has("margin-top") || self.has("margin-bottom")) {
-            let parts = value.split_whitespace().collect::<Vec<_>>();
+            let Some((values, important)) = margin_components(value) else {
+                return Some(text.to_owned());
+            };
+            let parts = values.iter().map(String::as_str).collect::<Vec<_>>();
             let (top, right, bottom, left) = match parts.as_slice() {
                 [a] => (*a, *a, *a, *a),
                 [a, b] => (*a, *b, *a, *b),
@@ -234,7 +288,12 @@ impl Filter<'_> {
             ]
             .iter()
             .filter(|(name, _)| !self.has(name))
-            .map(|(name, side)| format!("{name}: {side}"))
+            .map(|(name, side)| {
+                format!(
+                    "{name}: {side}{}",
+                    if important { " !important" } else { "" }
+                )
+            })
             .collect::<Vec<_>>();
             return (!sides.is_empty()).then(|| sides.join("; "));
         }
@@ -411,6 +470,36 @@ mod tests {
             filter(&props, &none).sheet("p{margin:1em 2em 3em}", &mut removed),
             "p{margin-right: 2em; margin-left: 2em}"
         );
+    }
+
+    #[test]
+    fn repair88_margin_functions_priority_and_variables_are_preserved() {
+        let props = vec!["margin-top".to_owned(), "margin-bottom".to_owned()];
+        let none = BTreeSet::new();
+        let mut removed = 0;
+        let value = "calc(1em + 2px) min(3em, 20%) 4px max(1em, 5px) !important";
+        assert_eq!(
+            filter(&props, &none).sheet(&format!("p{{margin:{value};color:red}}"), &mut removed),
+            "p{margin-right: min(3em, 20%) !important; margin-left: max(1em, 5px) !important;color:red}"
+        );
+        for value in [
+            "var(--m, 1em 2em)",
+            "env(safe-area-inset-top) 2em",
+            "inherit !important",
+        ] {
+            let css = format!("p{{margin:{value}}}");
+            if value.starts_with("inherit") {
+                assert!(
+                    filter(&props, &none)
+                        .sheet(&css, &mut removed)
+                        .contains("margin-right: inherit !important")
+                );
+            } else {
+                let before = removed;
+                assert_eq!(filter(&props, &none).sheet(&css, &mut removed), css);
+                assert_eq!(removed, before);
+            }
+        }
     }
 
     #[test]

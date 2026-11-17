@@ -12,6 +12,7 @@ import 'package:easypub_desktop/prototype/prototype_state.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/dialogs.dart';
+import 'package:easypub_desktop/desk/widgets.dart';
 import 'package:easypub_desktop/desk/layout/book_batch_dialog.dart';
 import 'package:easypub_desktop/desk/layout/device_preview.dart';
 import 'package:easypub_desktop/desk/layout/layout_page.dart';
@@ -213,6 +214,68 @@ void main() {
     expect(find.text('第一章 开始 · 第 2 段之后'), findsWidgets);
     expect(find.text('原稿第 3 行之后'), findsOneWidget);
     expect(find.textContaining('读屏和图片显示不出时用到'), findsOneWidget);
+    final resource = (await t.runAsync(() async {
+      final session = library.openResources(id);
+      try {
+        return (await session.read()).firstWhere((r) => r.index == 0);
+      } finally {
+        session.dispose();
+      }
+    }))!;
+    final draftKey = 'resource:$id:${resource.path.trim().toLowerCase()}';
+    final layoutKey = find.byKey(const ValueKey('resource-layout'));
+    Finder layoutChoice() => find.descendant(
+      of: layoutKey,
+      matching: find.byType(DeskSegmented<String>),
+    );
+    Future<void> openEditor() async {
+      await t.tap(find.text('替换 / 编辑…'));
+      await t.pumpAndSettle();
+    }
+
+    Future<void> leaveEditor() async {
+      Navigator.of(t.element(layoutKey)).pop();
+      await t.pumpAndSettle();
+    }
+
+    await openEditor();
+    await t.ensureVisible(layoutKey);
+    await t.tap(find.descendant(of: layoutKey, matching: find.text('整页')));
+    await t.pump();
+    expect(library.readDraft(draftKey)?['layout'], 'full_page');
+    await leaveEditor();
+    await openEditor();
+    expect(t.widget<DeskSegmented<String>>(layoutChoice()).value, 'full_page');
+    await leaveEditor();
+    // 老草稿没有版式字段时，沿用资源已保存的版式。
+    final legacy = Map<String, dynamic>.from(library.readDraft(draftKey)!)
+      ..remove('layout');
+    library.writeDraft(draftKey, legacy);
+    await openEditor();
+    expect(
+      t.widget<DeskSegmented<String>>(layoutChoice()).value,
+      resource.layout,
+    );
+    await t.ensureVisible(layoutKey);
+    await t.tap(find.descendant(of: layoutKey, matching: find.text('章首图')));
+    await t.pump();
+    expect(library.readDraft(draftKey)?['layout'], 'chapter_head');
+    await t.tap(find.byKey(const ValueKey('resource-edit-act')));
+    await until(t, () => find.text('确认应用').evaluate().isNotEmpty);
+    await t.tap(find.byKey(const ValueKey('resource-edit-act')));
+    await until(t, () => library.readDraft(draftKey) == null);
+    expect(library.readDraft(draftKey), isNull);
+    await t.runAsync(() async {
+      final session = library.openResources(id);
+      try {
+        expect(
+          (await session.read()).firstWhere((r) => r.index == 0).layout,
+          'chapter_head',
+        );
+      } finally {
+        session.dispose();
+      }
+    });
     expect(t.takeException(), isNull);
     await t.pumpWidget(const SizedBox());
   });

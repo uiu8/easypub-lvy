@@ -180,7 +180,7 @@ pub fn save(directory: &Path, book: &EffectiveBook) -> Result<Reference, ApiErro
         file.write_all(&bytes).map_err(io)?;
         file.sync_all().map_err(io)?;
         drop(file);
-        match fs::hard_link(&stage, &target) {
+        match crate::file_publish::move_new(&stage, &target) {
             Ok(()) => (),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 load(directory, &reference, &book.original_source_id)?;

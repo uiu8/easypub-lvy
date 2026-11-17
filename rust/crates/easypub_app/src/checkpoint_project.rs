@@ -3,7 +3,6 @@ use crate::{edit_checkpoint, project::Project};
 use easypub_core::{ApiError, ErrorCode};
 use std::{
     collections::BTreeSet,
-    fs,
     path::{Component, Path, PathBuf},
 };
 
@@ -17,7 +16,11 @@ fn invalid() -> ApiError {
 
 // Called only after history validation, before publishing the project file.
 // The live workspace is not mutated: this owns the parsed save snapshot.
-pub fn attach(project: &mut Project, target: &Path) -> Result<(), ApiError> {
+pub(crate) fn attach(
+    project: &mut Project,
+    target: &Path,
+    staged: &mut crate::file_publish::StagedDirectories,
+) -> Result<(), ApiError> {
     let parent = target.parent().ok_or_else(invalid)?;
     let mut root: Option<PathBuf> = None;
     let mut copied = BTreeSet::new();
@@ -34,7 +37,7 @@ pub fn attach(project: &mut Project, target: &Path) -> Result<(), ApiError> {
                                 .map_err(|_| invalid())?
                                 .as_nanos()
                         ));
-                        fs::create_dir(&directory).map_err(|_| invalid())?;
+                        staged.create(&directory).map_err(|_| invalid())?;
                         root = Some(directory);
                     }
                     let directory = root.as_ref().unwrap();
@@ -92,10 +95,11 @@ pub fn resolve(project: &mut Project, target: &Path) -> Result<(), ApiError> {
         if let Some(history) = &mut book.effective_history {
             for state in &mut history.history {
                 if let Some(checkpoint) = &mut state.request.checkpoint
-                    && !checkpoint.directory.is_absolute() {
-                        validate_relative(&checkpoint.directory)?;
-                        checkpoint.directory = parent.join(&checkpoint.directory);
-                    }
+                    && !checkpoint.directory.is_absolute()
+                {
+                    validate_relative(&checkpoint.directory)?;
+                    checkpoint.directory = parent.join(&checkpoint.directory);
+                }
             }
         }
     }

@@ -34,6 +34,9 @@ abstract final class ConversionDraftPersistence {
     draft.manualDefaults.addAll(
       (value['manualDefaults'] as List? ?? []).cast<String>(),
     );
+    draft.epubOriginal
+      ..clear()
+      ..addAll((value['epubOriginal'] as Map? ?? {}).cast<String, bool>());
     if (value['defaultValues'] case final Map values) {
       draft.defaultValues = Map<String, Object>.from(values);
     }
@@ -43,7 +46,9 @@ abstract final class ConversionDraftPersistence {
   }
 
   static void save(LibraryService library, ConversionFormDraft draft) {
-    if (library is! WorkspaceAutosaveService || !draft.initialized) return;
+    if (library is! WorkspaceAutosaveService ||
+        (!draft.initialized && draft.epubOriginal.isEmpty))
+      return;
     final workspace = library as WorkspaceAutosaveService;
     workspace.writeDraft(key, {
       'initialized': draft.initialized,
@@ -58,6 +63,7 @@ abstract final class ConversionDraftPersistence {
       'openWhenDone': draft.openWhenDone,
       'selected': draft.selected.toList(),
       'selectionInitialized': draft.selectionInitialized,
+      'epubOriginal': draft.epubOriginal,
       'manualDefaults': draft.manualDefaults.toList(),
       'defaultValues': draft.defaultValues,
     });

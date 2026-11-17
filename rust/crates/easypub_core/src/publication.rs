@@ -50,9 +50,11 @@ const MAX_CLEANUP_CHECK_CACHE_BYTES: usize = 64 * 1024 * 1024;
 
 /// 一列整数打成十六进制以外最省事的形式：小端 i32 的 base64。
 fn packed_column(values: &[i32]) -> String {
-    const TABLE: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let bytes = values.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<_>>();
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let bytes = values
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect::<Vec<_>>();
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
         let a = u32::from(chunk[0]) << 16
@@ -60,8 +62,16 @@ fn packed_column(values: &[i32]) -> String {
             | u32::from(*chunk.get(2).unwrap_or(&0));
         out.push(TABLE[(a >> 18) as usize & 63] as char);
         out.push(TABLE[(a >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 { TABLE[(a >> 6) as usize & 63] as char } else { '=' });
-        out.push(if chunk.len() > 2 { TABLE[a as usize & 63] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            TABLE[(a >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TABLE[a as usize & 63] as char
+        } else {
+            '='
+        });
     }
     out
 }
@@ -87,7 +97,15 @@ impl EffectiveBook {
         selected: Option<Vec<Value>>,
     ) -> Result<Value, ApiError> {
         let view = SourceSnapshot::for_effective_diagnostics(self)?;
-        self.cleanup_check_using(&view, &std::sync::OnceLock::new(), &Default::default(), offset, rules, selected, false)
+        self.cleanup_check_using(
+            &view,
+            &std::sync::OnceLock::new(),
+            &Default::default(),
+            offset,
+            rules,
+            selected,
+            false,
+        )
     }
 
     /// 同 [`Self::cleanup_check_pipeline`]，用会话已有的快照和行号表，不再复制一遍全书。
@@ -129,7 +147,8 @@ impl EffectiveBook {
             );
         }
         // 翻页只换一段文字，不用再把全书清理一遍。
-        let request = json!({"kind":"cleanup", "preview_offset":0, "pipeline":pipeline}).to_string();
+        let request =
+            json!({"kind":"cleanup", "preview_offset":0, "pipeline":pipeline}).to_string();
         let plan = {
             let mut kept = plans.lock().expect("cleanup check plan");
             match kept.as_ref() {
@@ -150,8 +169,7 @@ impl EffectiveBook {
                 let effective = row["source_line"]
                     .as_u64()
                     .and_then(|v| u32::try_from(v).ok());
-                row["original_source_line"] =
-                    json!(effective.and_then(|v| original_lines.get(v)));
+                row["original_source_line"] = json!(effective.and_then(|v| original_lines.get(v)));
             }
         }
         if positions {
@@ -290,7 +308,10 @@ impl EffectiveBook {
             return Some(index);
         }
         let line = u32::try_from(item["source_lines"].get(0)?.as_u64()?).ok()?;
-        self.tree.nodes.partition_point(|n| n.source_line <= line).checked_sub(1)
+        self.tree
+            .nodes
+            .partition_point(|n| n.source_line <= line)
+            .checked_sub(1)
     }
 
     /// Adds structure coordinates, anchors and repair availability to review items.
@@ -305,13 +326,15 @@ impl EffectiveBook {
         for item in items {
             let id = item["entry_id"].as_str().unwrap_or("");
             let node_offset = locations.get(id).map(|i| i / 30 * 30);
-            item["auto_applicable"] = json!(
-                repairs["items"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|p| crate::effective_repair::covers(p, &item["id"]) && p["recommended"] == true)
-            );
+            item["auto_applicable"] =
+                json!(
+                    repairs["items"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|p| crate::effective_repair::covers(p, &item["id"])
+                            && p["recommended"] == true)
+                );
             item["has_suggestion"] = json!(
                 repairs["items"]
                     .as_array()
@@ -406,10 +429,16 @@ impl EffectiveBook {
             }
             if let Some(target) = target {
                 let (start, end) = match target {
-                    None => (0, self.tree.nodes.first().map_or(u32::MAX, |n| n.source_line)),
+                    None => (
+                        0,
+                        self.tree.nodes.first().map_or(u32::MAX, |n| n.source_line),
+                    ),
                     Some(i) => (
                         self.tree.nodes[i].source_line,
-                        self.tree.nodes.get(i + 1).map_or(u32::MAX, |n| n.source_line),
+                        self.tree
+                            .nodes
+                            .get(i + 1)
+                            .map_or(u32::MAX, |n| n.source_line),
                     ),
                 };
                 let touches = item["source_lines"].as_array().is_some_and(|lines| {
@@ -470,13 +499,13 @@ impl EffectiveBook {
                 .nodes
                 .iter()
                 .any(|n| n.entry_id == id && n.role == Role::Volume)
-            {
-                return Err(ApiError::new(
-                    ErrorCode::InvalidCursor,
-                    "publication",
-                    "refresh_effective_tree",
-                ));
-            }
+        {
+            return Err(ApiError::new(
+                ErrorCode::InvalidCursor,
+                "publication",
+                "refresh_effective_tree",
+            ));
+        }
         let matches = |n: &&crate::structure::Node| match volume_id {
             None => n.role == Role::Volume,
             Some(id) => n.parent_id.as_deref() == Some(id),
@@ -499,11 +528,21 @@ impl EffectiveBook {
     }
 
     /// Continue one physical line without changing the ordinary 30-line cursor.
-    pub fn body_line_chunk(&self, entry_id: &str, offset: usize, char_offset: usize) -> Result<Value, ApiError> {
+    pub fn body_line_chunk(
+        &self,
+        entry_id: &str,
+        offset: usize,
+        char_offset: usize,
+    ) -> Result<Value, ApiError> {
         self.body_slice(entry_id, offset, Some(char_offset))
     }
 
-    fn body_slice(&self, entry_id: &str, offset: usize, char_offset: Option<usize>) -> Result<Value, ApiError> {
+    fn body_slice(
+        &self,
+        entry_id: &str,
+        offset: usize,
+        char_offset: Option<usize>,
+    ) -> Result<Value, ApiError> {
         let (body_start, body_end, heading_line) = if entry_id == "$prefix" {
             (0, self.tree.prefix_end, 0)
         } else {
@@ -569,11 +608,18 @@ impl EffectiveBook {
                 };
             }
         }
-        let continued = char_offset.is_some() && rows.first().is_some_and(|row|row["truncated"]==true);
-        let next_offset = if continued {Some(offset)} else {
+        let continued =
+            char_offset.is_some() && rows.first().is_some_and(|row| row["truncated"] == true);
+        let next_offset = if continued {
+            Some(offset)
+        } else {
             (offset.saturating_add(rows.len()) < index).then_some(offset.saturating_add(rows.len()))
         };
-        let next_char_offset = if continued { rows[0]["next_char_offset"].clone() } else {json!(0)};
+        let next_char_offset = if continued {
+            rows[0]["next_char_offset"].clone()
+        } else {
+            json!(0)
+        };
         Ok(json!({"entry_id":entry_id,"offset":offset,"total":index,
             "next_offset":next_offset,"next_char_offset":next_char_offset,
             "has_more":offset.saturating_add(rows.len()) < index,"rows":rows}))
@@ -724,7 +770,8 @@ pub(crate) fn compose_projection_at_volume_depth(
             let mut o = (*o).clone();
             o.source_line = output_line;
             Some(o)
-        } else { old_nodes.get(&a.source_line).map(|n| Override {
+        } else {
+            old_nodes.get(&a.source_line).map(|n| Override {
                 source_line: output_line,
                 role: n.role.clone(),
                 depth: if n.role == Role::Volume {
@@ -735,7 +782,8 @@ pub(crate) fn compose_projection_at_volume_depth(
                     0
                 },
                 include_toc: n.include_toc,
-            }) };
+            })
+        };
         if let Some(o) = item {
             if o.role == Role::Volume {
                 in_volume = true;
@@ -859,12 +907,13 @@ pub fn edit_projection_with_evidence(
         .as_object_mut()
         .ok_or_else(fail)?
         .remove("structure")
-        && !selected.is_null() {
-            let selected: Structure = serde_json::from_value(selected).map_err(|_| fail())?;
-            if &selected != structure {
-                return Err(fail());
-            }
+        && !selected.is_null()
+    {
+        let selected: Structure = serde_json::from_value(selected).map_err(|_| fail())?;
+        if &selected != structure {
+            return Err(fail());
         }
+    }
     let actions = request
         .get_mut("actions")
         .and_then(Value::as_array_mut)
@@ -1467,23 +1516,46 @@ mod tests {
     #[test]
     fn cleanup_positions_cover_every_spot_without_paging() {
         let raw = (0..100).map(|i| format!("第{i}行  \n")).collect::<String>();
-        let source =
-            SourceSnapshot::from_utf8(format!("第一章 甲\n{raw}").into_bytes(), crate::source::RULE_ID, || false)
-                .unwrap();
+        let source = SourceSnapshot::from_utf8(
+            format!("第一章 甲\n{raw}").into_bytes(),
+            crate::source::RULE_ID,
+            || false,
+        )
+        .unwrap();
         let book = compose(&source, &Structure::new(&source), None).unwrap();
         let view = SourceSnapshot::for_effective_diagnostics(&book).unwrap();
         let check = book
-            .cleanup_check_using(&view, &std::sync::OnceLock::new(), &Default::default(), 0, None, None, true)
+            .cleanup_check_using(
+                &view,
+                &std::sync::OnceLock::new(),
+                &Default::default(),
+                0,
+                None,
+                None,
+                true,
+            )
             .unwrap();
         assert_eq!(check["report"]["change_count"], 100);
-        assert_eq!(check["report"]["actions"].as_array().unwrap().len(), 40, "报告仍按页");
+        assert_eq!(
+            check["report"]["actions"].as_array().unwrap().len(),
+            40,
+            "报告仍按页"
+        );
         let lines = check["report"]["positions"]["lines"].as_str().unwrap();
         assert_eq!(lines.len(), 400usize.div_ceil(3) * 4, "100 处一个不少");
         // 翻到第二页不用重新清理，内容接得上。
         let plans = crate::publication::CleanupCheckCache::default();
         let page = |offset| {
-            book.cleanup_check_using(&view, &std::sync::OnceLock::new(), &plans, offset, None, None, false)
-                .unwrap()["report"]["actions"]
+            book.cleanup_check_using(
+                &view,
+                &std::sync::OnceLock::new(),
+                &plans,
+                offset,
+                None,
+                None,
+                false,
+            )
+            .unwrap()["report"]["actions"]
                 .clone()
         };
         assert_eq!(page(0).as_array().unwrap().len(), 40);
@@ -1535,7 +1607,11 @@ mod tests {
         let queue = review.open_queue(&evidence).unwrap();
         assert_eq!(queue.len(), total - 1);
         assert!(!queue.contains(&1), "下过结论的那一条要从队列里消失");
-        assert_eq!(page(&review, 0)["review_items"][1]["id"], id, "报告里的位置不变");
+        assert_eq!(
+            page(&review, 0)["review_items"][1]["id"],
+            id,
+            "报告里的位置不变"
+        );
     }
 
     #[test]
@@ -1713,8 +1789,16 @@ mod tests {
         let repairs = crate::effective_repair::candidates(&book);
         let mut review = Review::default();
         let positions = |review: &Review, entry: Option<&str>| {
-            book.issue_positions_using(&view, &evidence, &repairs, &Default::default(), review, true, entry)
-                .unwrap()
+            book.issue_positions_using(
+                &view,
+                &evidence,
+                &repairs,
+                &Default::default(),
+                review,
+                true,
+                entry,
+            )
+            .unwrap()
         };
 
         let all = positions(&review, None);
@@ -1723,7 +1807,12 @@ mod tests {
         assert_eq!(all["node_count"], 102);
         assert!(all["chapter"].is_null());
         let rows = all["nodes"].as_array().unwrap();
-        assert_eq!(rows.iter().map(|r| r["count"].as_u64().unwrap()).sum::<u64>(), 101);
+        assert_eq!(
+            rows.iter()
+                .map(|r| r["count"].as_u64().unwrap())
+                .sum::<u64>(),
+            101
+        );
         let paged = (0..3)
             .flat_map(|page| {
                 book.check_page(page * 50, None).unwrap()["report"]["diagnostic"]["review_items"]
@@ -1733,13 +1822,34 @@ mod tests {
             })
             .collect::<Vec<_>>();
         assert_eq!(paged.len(), 101);
+        let indexed = review.all_using(&evidence).unwrap();
+        for (index, item) in indexed.iter().enumerate() {
+            assert_eq!(item["review_index"], index);
+            assert_eq!(item["id"], paged[index]["id"]);
+        }
         for row in rows {
             let index = row["index"].as_u64().unwrap() as usize;
             assert_eq!(row["entry_id"], book.tree.nodes[index].entry_id.as_str());
             assert_eq!(
                 row["count"].as_u64().unwrap() as usize,
-                paged.iter().filter(|item| item["entry_id"] == row["entry_id"]).count()
+                paged
+                    .iter()
+                    .filter(|item| item["entry_id"] == row["entry_id"])
+                    .count()
             );
+            let chapter = positions(&review, row["entry_id"].as_str());
+            for item in chapter["chapter"]["items"].as_array().unwrap() {
+                let index = item["review_index"].as_u64().unwrap() as usize;
+                let page = book.check_page(index / 50 * 50, None).unwrap();
+                assert_eq!(
+                    item["id"],
+                    page["report"]["diagnostic"]["review_items"][index % 50]["id"]
+                );
+                assert_eq!(
+                    item["anchors"],
+                    page["report"]["diagnostic"]["review_items"][index % 50]["anchors"]
+                );
+            }
         }
 
         let entry = rows[0]["entry_id"].as_str().unwrap().to_owned();
@@ -1766,17 +1876,38 @@ mod tests {
         assert_eq!(reviewed["total"], 101);
         assert_eq!(reviewed["open"], 100);
         assert_eq!(reviewed["chapter"]["items"][0]["open"], false);
-        assert_eq!(reviewed["chapter"]["items"][0]["review"]["decision"], "ignored");
+        assert_eq!(
+            reviewed["chapter"]["items"][0]["review"]["decision"],
+            "ignored"
+        );
 
         let prefix = positions(&review, Some("$prefix"));
         assert_eq!(prefix["chapter"]["total"], 0);
         assert!(
-            book.issue_positions_using(&view, &evidence, &repairs, &Default::default(), &review, false, Some("missing"))
-                .is_err()
+            book.issue_positions_using(
+                &view,
+                &evidence,
+                &repairs,
+                &Default::default(),
+                &review,
+                false,
+                Some("missing")
+            )
+            .is_err()
         );
-        assert!(book.issue_positions_using(&view, &evidence, &repairs, &Default::default(), &review, false, None)
+        assert!(
+            book.issue_positions_using(
+                &view,
+                &evidence,
+                &repairs,
+                &Default::default(),
+                &review,
+                false,
+                None
+            )
             .unwrap()["nodes"]
-            .is_null());
+                .is_null()
+        );
     }
 
     #[test]
@@ -2246,9 +2377,17 @@ mod tests {
         let mut structure = Structure::new(&source);
         structure.recognition_rules = Some(crate::chapter_rules::RuleSet::default());
         let plain = compose(&source, &structure, None).unwrap();
-        let unchanged = compose_with_cleanup(&source, &structure, None,
-            Some(r#"{"kind":"cleanup","pipeline":[]}"#)).unwrap();
-        assert_eq!(crate::effective_edit::base_id(&plain),crate::effective_edit::base_id(&unchanged));
+        let unchanged = compose_with_cleanup(
+            &source,
+            &structure,
+            None,
+            Some(r#"{"kind":"cleanup","pipeline":[]}"#),
+        )
+        .unwrap();
+        assert_eq!(
+            crate::effective_edit::base_id(&plain),
+            crate::effective_edit::base_id(&unchanged)
+        );
         let book = compose_with_cleanup(&source, &structure, Some(manual), Some(cleanup)).unwrap();
         assert_eq!(book.text, "自定卷名\n第一章 甲\n尾文");
         assert_eq!(book.tree.nodes.len(), 2);

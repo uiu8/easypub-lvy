@@ -127,14 +127,20 @@ extension _BookSourceSettingsView on _BookSourcePageState {
     );
   }
 
-  Future<void> _setImportOption(String key, Object value) async {
-    final next = {...importOptions, key: value};
-    try {
-      final r = await api!.call('sources.importOptions.set', {'options': next});
-      update(() => importOptions = Map<String, dynamic>.from(r as Map));
-    } catch (e) {
-      update(() => sourceMessage = bookSourceErrorText(e));
-    }
+  Future<void> _setImportOption(String key, Object value) {
+    // 等前一项写入并更新本地状态后，再合并这一项，避免完整配置互相覆盖。
+    return importOptionSave = importOptionSave.then((_) async {
+      final next = {...importOptions, key: value};
+      try {
+        final r = await api!.call('sources.importOptions.set', {
+          'options': next,
+        });
+        importOptions = Map<String, dynamic>.from(r as Map);
+        if (mounted) update(() {});
+      } catch (e) {
+        if (mounted) update(() => sourceMessage = bookSourceErrorText(e));
+      }
+    });
   }
 
   Future<void> _setAutoCheck({int? hours, int? concurrency}) async {

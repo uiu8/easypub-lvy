@@ -9,7 +9,7 @@ use std::{
     io::{Read, Write},
     path::Path,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -467,7 +467,7 @@ impl Project {
                             .unwrap_or("")
                             .to_ascii_lowercase()
                             .as_str(),
-                        "txt" | "epub"
+                        "txt" | "epub" | "azw3" | "mobi" | "azw"
                     ))
             {
                 return Err(invalid());
@@ -564,7 +564,7 @@ fn project_path(path: &str) -> Result<&Path, ApiError> {
     Ok(p)
 }
 
-/// Save-as only: a synced stage is published with a non-replacing hard link.
+/// Save-as only: a synced stage is published without replacing existing data.
 /// Existing project/source paths are never opened for writing.
 pub fn save(service: &ImportService, path: &str, payload: &str) -> Result<(), ApiError> {
     let target = project_path(path)?;
@@ -670,8 +670,9 @@ fn save_parsed(
         ));
     }
     validate_sources(service, &project)?;
-    crate::css_project::attach(&mut project, target)?;
-    crate::checkpoint_project::attach(&mut project, target)?;
+    let mut staged_assets = crate::file_publish::StagedDirectories::default();
+    crate::css_project::attach(&mut project, target, &mut staged_assets)?;
+    crate::checkpoint_project::attach(&mut project, target, &mut staged_assets)?;
     project.validate()?;
     crate::checkpoint_project::relativize(&mut project, target)?;
     if recovery {
@@ -695,7 +696,8 @@ fn save_parsed(
     let result = (|| {
         file.write_all(&data).map_err(|_| io())?;
         file.sync_all().map_err(|_| io())?;
-        fs::hard_link(&stage, target).map_err(|e| {
+        drop(file);
+        crate::file_publish::move_new(&stage, target).map_err(|e| {
             if e.kind() == std::io::ErrorKind::AlreadyExists {
                 ApiError::new(
                     ErrorCode::OutputConflict,
@@ -708,9 +710,9 @@ fn save_parsed(
         })?;
         Ok(())
     })();
-    drop(file);
     let _ = fs::remove_file(stage);
     if result.is_ok() {
+        staged_assets.keep();
         // 上面校验时刚算过，改好的书这时都在内存里。写不进去只是下次多算一遍。
         for history in project
             .books
@@ -729,6 +731,14 @@ fn save_parsed(
 
 /// Read/decode/check every source before replacing the active source set.
 pub fn open(service: &ImportService, path: &str) -> Result<String, ApiError> {
+    open_with_budget(service, path, MAX_SESSION_BYTES)
+}
+
+fn open_with_budget(
+    service: &ImportService,
+    path: &str,
+    max_session_bytes: usize,
+) -> Result<String, ApiError> {
     let mut data = Vec::new();
     File::open(project_path(path)?)
         .map_err(|_| io())?
@@ -760,54 +770,89 @@ pub fn open(service: &ImportService, path: &str) -> Result<String, ApiError> {
     project.validate()?;
     let mut sources = BTreeMap::new();
     let mut summaries = Vec::new();
-    let mut resident = 0usize;
-    // 各书互不相关，并行读取与校验；结果与第一个错误仍按书的顺序。
-    let loaded = parallel_books(&project.books, |book| -> Result<SourceSnapshot, ApiError> {
-        let bytes = read_bounded(Path::new(&book.path), &CancellationToken::new(), |_| {})?;
-        let source = SourceSnapshot::from_bytes(
-            bytes,
-            EncodingMode::Auto,
-            easypub_core::source::RULE_ID,
-            || false,
-        )?;
-        let summary = source.summary();
-        if summary.source_id != book.source_id {
-            return Err(ApiError::new(
-                ErrorCode::SourceChanged,
-                "open_project",
-                "reimport_changed_source",
-            ));
-        }
-        crate::production::Settings::from(book).validate(source.summary().line_count)?;
-        if let Some(history) = &book.production_history {
-            history.validate(source.summary().line_count)?;
-        }
-        if let Some(draft) = &book.cleanup_history {
-            draft.validate(&source)?;
-        } else if let Some(cleanup) = &book.cleanup {
-            easypub_core::cleanup::prepare(
-                &source,
-                &serde_json::to_string(cleanup).map_err(|_| invalid())?,
+    let budget_error =
+        || ApiError::new(ErrorCode::TooLarge, "project_budget", "reduce_project_size");
+    let budget = Mutex::new((0usize, BTreeMap::<String, Arc<SourceSnapshot>>::new()));
+    let decoding = Mutex::new(());
+    let cancelled = CancellationToken::new();
+    // Account retained snapshots as workers finish decoding, not after collecting
+    // the entire project. Identical sources share one allocation and budget entry.
+    let loaded = parallel_books(
+        &project.books,
+        |book| -> Result<Arc<SourceSnapshot>, ApiError> {
+            // Keep at most one unaccounted source allocation in flight. History
+            // validation can still run in parallel after the snapshot is charged.
+            let decode_guard = decoding.lock().expect("project decoding gate");
+            if cancelled.is_cancelled() {
+                return Err(budget_error());
+            }
+            let bytes = read_bounded(Path::new(&book.path), &cancelled, |_| {})?;
+            let source = SourceSnapshot::from_bytes(
+                bytes,
+                EncodingMode::Auto,
+                easypub_core::source::RULE_ID,
+                || cancelled.is_cancelled(),
             )?;
-        }
-        if let Some(history) = &book.structure_history {
-            history.validate(&source)?;
-        }
-        if let Some(structure) = &book.structure {
-            structure.tree(&source)?;
-        }
-        if let Some(history) = &book.effective_history {
-            if trusted {
-                history.validate_restored(&source)?;
-            } else {
+            let summary = source.summary();
+            if summary.source_id != book.source_id {
+                return Err(ApiError::new(
+                    ErrorCode::SourceChanged,
+                    "open_project",
+                    "reimport_changed_source",
+                ));
+            }
+            let source = {
+                let mut retained = budget.lock().expect("project source budget");
+                if let Some(existing) = retained.1.get(&summary.source_id) {
+                    drop(source);
+                    existing.clone()
+                } else {
+                    let size = source.resident_bytes();
+                    if size > max_session_bytes.saturating_sub(retained.0) {
+                        cancelled.cancel();
+                        return Err(budget_error());
+                    }
+                    retained.0 += size;
+                    let source = Arc::new(source);
+                    retained.1.insert(summary.source_id, source.clone());
+                    source
+                }
+            };
+            drop(decode_guard);
+            crate::production::Settings::from(book).validate(source.summary().line_count)?;
+            if let Some(history) = &book.production_history {
+                history.validate(source.summary().line_count)?;
+            }
+            if let Some(draft) = &book.cleanup_history {
+                draft.validate(&source)?;
+            } else if let Some(cleanup) = &book.cleanup {
+                easypub_core::cleanup::prepare(
+                    &source,
+                    &serde_json::to_string(cleanup).map_err(|_| invalid())?,
+                )?;
+            }
+            if let Some(history) = &book.structure_history {
                 history.validate(&source)?;
             }
-        }
-        if let Some(draft) = &book.manual_draft {
-            draft.validate_with_structure(&source, book.structure.as_ref())?;
-        }
-        Ok(source)
-    });
+            if let Some(structure) = &book.structure {
+                structure.tree(&source)?;
+            }
+            if let Some(history) = &book.effective_history {
+                if trusted {
+                    history.validate_restored(&source)?;
+                } else {
+                    history.validate(&source)?;
+                }
+            }
+            if let Some(draft) = &book.manual_draft {
+                draft.validate_with_structure(&source, book.structure.as_ref())?;
+            }
+            Ok(source)
+        },
+    );
+    if cancelled.is_cancelled() {
+        return Err(budget_error());
+    }
     for (book, source) in project.books.iter().zip(loaded) {
         let source = source?;
         let summary = source.summary();
@@ -820,15 +865,7 @@ pub fn open(service: &ImportService, path: &str) -> Result<String, ApiError> {
             headings: summary.chapter_count,
         });
         if let std::collections::btree_map::Entry::Vacant(e) = sources.entry(summary.source_id) {
-            resident += source.resident_bytes();
-            if resident > MAX_SESSION_BYTES {
-                return Err(ApiError::new(
-                    ErrorCode::TooLarge,
-                    "project_budget",
-                    "reduce_project_size",
-                ));
-            }
-            e.insert(Arc::new(source));
+            e.insert(source);
         }
     }
     let warm = if trusted {
@@ -1273,6 +1310,96 @@ mod tests {
         assert!(parse(&tampered.to_string()).is_err());
         assert!(text(&reopened, &ai).contains("甲正文😀"));
         assert!(text(&reopened, &bi).contains("乙正文"));
+        assert_eq!(
+            open_with_budget(&reopened, target.to_str().unwrap(), 0)
+                .unwrap_err()
+                .code,
+            ErrorCode::TooLarge
+        );
+        assert!(text(&reopened, &ai).contains("甲正文😀"));
+        assert!(text(&reopened, &bi).contains("乙正文"));
+        // Two separate paths containing identical bytes share the retained
+        // snapshot budget, instead of rejecting a valid project as double-sized.
+        let duplicate_path = dir.join("甲副本.txt");
+        fs::copy(&a, &duplicate_path).unwrap();
+        let mut duplicate_project = project.clone();
+        duplicate_project.books[1] = duplicate_project.books[0].clone();
+        duplicate_project.books[1].path = duplicate_path.to_string_lossy().into();
+        let duplicate_target = dir.join("duplicates.easypub.json");
+        save(
+            &service,
+            duplicate_target.to_str().unwrap(),
+            &serde_json::to_string(&duplicate_project).unwrap(),
+        )
+        .unwrap();
+        let one_source_bytes = service.source(&ai, 1).unwrap().resident_bytes();
+        assert!(
+            open_with_budget(
+                &ImportService::new().unwrap(),
+                duplicate_target.to_str().unwrap(),
+                one_source_bytes
+            )
+            .is_ok()
+        );
+        // Kindle imports keep a UTF-8 working source and the original container
+        // path. Saving/reopening must preserve each accepted container suffix.
+        for extension in ["azw3", "MOBI", "azw"] {
+            let mut kindle = project.clone();
+            let origin = dir.join(format!("原书.{extension}"));
+            kindle.books[0].origin_path = Some(origin.to_string_lossy().into());
+            let destination = dir.join(format!("{extension}.easypub.json"));
+            save(
+                &service,
+                destination.to_str().unwrap(),
+                &serde_json::to_string(&kindle).unwrap(),
+            )
+            .unwrap();
+            let loaded: serde_json::Value = serde_json::from_str(
+                &open(
+                    &ImportService::new().unwrap(),
+                    destination.to_str().unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                loaded["project"]["books"][0]["origin_path"],
+                serde_json::json!(origin)
+            );
+        }
+        #[cfg(windows)]
+        {
+            // A component longer than Windows' limit fails publication after
+            // sidecars have been created. Earlier project's sidecars stay intact.
+            let mut styled = project.clone();
+            styled.books[0].production_history = None;
+            styled.books[0].additional_css = "p { color: red; }".into();
+            let styled_target = dir.join("styled.easypub.json");
+            let styled_payload = serde_json::to_string(&styled).unwrap();
+            save(&service, styled_target.to_str().unwrap(), &styled_payload).unwrap();
+            let entries = || {
+                fs::read_dir(&dir)
+                    .unwrap()
+                    .map(|entry| entry.unwrap().file_name())
+                    .collect::<std::collections::BTreeSet<_>>()
+            };
+            let before = entries();
+            assert!(
+                before
+                    .iter()
+                    .any(|name| name.to_string_lossy().starts_with("easypub-css-assets-"))
+            );
+            let failed_target = dir.join(format!("{}.easypub.json", "x".repeat(256)));
+            assert!(save(&service, failed_target.to_str().unwrap(), &styled_payload).is_err());
+            assert_eq!(entries(), before);
+            assert!(
+                open(
+                    &ImportService::new().unwrap(),
+                    styled_target.to_str().unwrap()
+                )
+                .is_ok()
+            );
+        }
         fs::write(&b, "外部修改").unwrap();
         assert_eq!(
             open(&reopened, target.to_str().unwrap()).unwrap_err().code,

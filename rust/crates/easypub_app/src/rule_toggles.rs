@@ -572,6 +572,12 @@ pub(crate) fn run(service: &ImportService, value: Value) -> Result<String, ApiEr
         states.truncate(cursor + 1);
         // 其他页面也能改变设置，保留当前真实基线用于本次撤销。
         states.push(json!({"before":before_snapshot,"after":after_snapshot}));
+        if states.len() > 51 {
+            let excess = states.len() - 51;
+            let baseline = states[excess]["after"].clone();
+            states.drain(1..=excess);
+            states[0] = baseline;
+        }
         history["cursor"] = json!(states.len() - 1);
         validate_history(&history)?;
     }
@@ -662,18 +668,24 @@ pub(crate) fn validate_history(history: &Value) -> Result<(), ApiError> {
     {
         return Err(invalid("规则历史超过限制，请另存项目"));
     }
+    let mut validated_settings = BTreeSet::new();
     for s in states
         .iter()
         .skip(1)
         .flat_map(|s| [&s["before"], &s["after"]])
     {
         let settings: Settings = decode(&s["settings"])?;
-        settings.validate(u32::MAX)?;
+        let key = serde_json::to_string(&settings).map_err(|_| invalid("规则历史无效"))?;
+        if !validated_settings.contains(&key) {
+            settings.validate(u32::MAX)?;
+            validated_settings.insert(key);
+        }
         if !s["effective_history"].is_null() {
             decode::<crate::effective_draft::History>(&s["effective_history"])?.validate_shape()?;
         }
         if !s["production_history"].is_null() {
-            decode::<crate::production::History>(&s["production_history"])?.validate(u32::MAX)?;
+            decode::<crate::production::History>(&s["production_history"])?
+                .validate_with_settings(u32::MAX, &mut validated_settings)?;
         }
     }
     Ok(())

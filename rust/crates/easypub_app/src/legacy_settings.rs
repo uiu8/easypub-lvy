@@ -38,7 +38,9 @@ pub fn inspect_file(path: &Path) -> Result<FileReport, ApiError> {
         }
         let little = bytes[0] == 0xff;
         let units = bytes[2..]
-            .as_chunks::<2>().0.iter()
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|b| {
                 if little {
                     u16::from_le_bytes([b[0], b[1]])
@@ -240,15 +242,16 @@ pub fn inspect_xml(input: &str) -> Result<Report, ApiError> {
                         item.status = "needs_confirmation";
                         item.reason = "字号百分比无效";
                         if let Ok(v) = raw.parse::<f64>()
-                            && (50.0..=200.0).contains(&v) {
-                                report.proposed_layout.insert("font_size".into(), json!(v));
-                                report
-                                    .proposed_layout
-                                    .insert("font_size_unit".into(), json!("%"));
-                                item.status = "ready";
-                                item.reason = "保留旧版相对字号";
-                                item.target = Some("font_size".into());
-                            }
+                            && (50.0..=200.0).contains(&v)
+                        {
+                            report.proposed_layout.insert("font_size".into(), json!(v));
+                            report
+                                .proposed_layout
+                                .insert("font_size_unit".into(), json!("%"));
+                            item.status = "ready";
+                            item.reason = "保留旧版相对字号";
+                            item.target = Some("font_size".into());
+                        }
                     }
                     "addspace" => {
                         if matches!(raw, "0" | "1") {

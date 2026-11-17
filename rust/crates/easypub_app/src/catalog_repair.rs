@@ -19,9 +19,9 @@ fn title_key(text: &str) -> String {
         && let Some((i, c)) = text
             .char_indices()
             .find(|(_, c)| matches!(c, '章' | '回' | '节'))
-        {
-            return key(&text[i + c.len_utf8()..]);
-        }
+    {
+        return key(&text[i + c.len_utf8()..]);
+    }
     easypub_core::recognition::NumericRule::Builtin
         .matches(text)
         .map(|n| key(&n.title))
@@ -122,9 +122,10 @@ pub fn preview(
         }
         let mut candidates = full.get(&key(text)).cloned().unwrap_or_default();
         if candidates.is_empty()
-            && let Some(corrected) = corrected_titles.get(&line) {
-                candidates = full.get(&key(corrected)).cloned().unwrap_or_default();
-            }
+            && let Some(corrected) = corrected_titles.get(&line)
+        {
+            candidates = full.get(&key(corrected)).cloned().unwrap_or_default();
+        }
         if candidates.is_empty()
             && (node.is_some()
                 || easypub_core::recognition::NumericRule::Builtin
@@ -134,10 +135,12 @@ pub fn preview(
             candidates = titles.get(&title_key(text)).cloned().unwrap_or_default();
         }
         // A manual rename retains its proven original location, not a guessed number.
-        if candidates.is_empty() && node.is_some()
-            && let Some(title) = original.get(&line).and_then(|l| original_titles.get(l)) {
-                candidates = full.get(&key(title)).cloned().unwrap_or_default();
-            }
+        if candidates.is_empty()
+            && node.is_some()
+            && let Some(title) = original.get(&line).and_then(|l| original_titles.get(l))
+        {
+            candidates = full.get(&key(title)).cloned().unwrap_or_default();
+        }
         if candidates.len() > 1 && !current_volume.is_empty() {
             let scoped = candidates
                 .iter()

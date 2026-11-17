@@ -193,7 +193,9 @@ class CleanupBuiltinRules extends StatelessWidget {
   Widget row(BuildContext context, BuiltinCleanupRule item) {
     final d = context.desk;
     final index = rules.indexWhere(item.matches);
-    final on = index >= 0 && rules[index]['enabled'] != false;
+    final on = rules.any(
+      (rule) => item.matches(rule) && rule['enabled'] != false,
+    );
     final count = counts[item.id];
     final countText = count == null
         ? (counting ? '计算中' : '')

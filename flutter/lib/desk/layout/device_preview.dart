@@ -1796,7 +1796,7 @@ class _PagePainter extends CustomPainter {
     final top = y;
     if (piece.runStart) y += look.top + (shadedTitle ? 0 : look.pad);
     final titleTop = y;
-    y += look.titlePad;
+    if (piece.heading) y += look.titlePad;
     final textTop = y;
     y += painter.height;
     var bottom = y;

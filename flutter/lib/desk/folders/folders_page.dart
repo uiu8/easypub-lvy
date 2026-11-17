@@ -40,6 +40,18 @@ class _FoldersPageState extends State<FoldersPage> {
   final range = RangeSelection();
   final view = FolderListView();
   final scroll = ScrollController();
+  FolderListing? observedListing;
+  void scanChanged() {
+    if (!identical(observedListing, model.listing)) {
+      observedListing = model.listing;
+      range.reset();
+    }
+    if (model.scanning && model.listing == null) {
+      range.reset();
+      view.type = '';
+    }
+  }
+
   String? collection;
   BookCollectionService? get collections =>
       widget.library is BookCollectionService
@@ -61,6 +73,7 @@ class _FoldersPageState extends State<FoldersPage> {
   @override
   void initState() {
     super.initState();
+    model.addListener(scanChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       loadFavorites();
@@ -86,6 +99,7 @@ class _FoldersPageState extends State<FoldersPage> {
 
   @override
   void dispose() {
+    model.removeListener(scanChanged);
     model.dispose();
     scroll.dispose();
     super.dispose();

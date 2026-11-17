@@ -360,7 +360,7 @@ extension _BookSourceManagement on _BookSourcePageState {
       };
       profile['minInterval'] ??= 0;
       profile['maxInterval'] ??= 0;
-      await _sourceAction('sources.crawlProfile.set', {
+      final saved = await _sourceAction('sources.crawlProfile.set', {
         'id': source['id'],
         'profile': profile,
         'enabled': enabled,
@@ -368,6 +368,7 @@ extension _BookSourceManagement on _BookSourcePageState {
         'concurrentRate': fields['concurrentRate']!.text,
         'userAgent': fields['userAgent']!.text,
       });
+      if (!saved) return;
       await _sourceAction('sources.rate', {
         'id': source['id'],
         'rating': rating,

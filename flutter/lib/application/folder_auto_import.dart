@@ -111,6 +111,7 @@ class FolderAutoImporter {
   bool _disposed = false;
   Future<AutoImportRun>? _running;
   bool _again = false;
+  bool? _watchedRecursive;
 
   /// 按当前文件夹列表重建监听，并立即同步一次。
   Future<AutoImportRun> start() {
@@ -119,6 +120,14 @@ class FolderAutoImporter {
   }
 
   void _rewatch() {
+    final nested = recursive();
+    if (_watchedRecursive != nested) {
+      for (final subscription in _subscriptions.values) {
+        subscription.cancel();
+      }
+      _subscriptions.clear();
+      _watchedRecursive = nested;
+    }
     final wanted = {for (final f in folders()) _norm(f): f};
     for (final key in _subscriptions.keys.toList()) {
       if (!wanted.containsKey(key)) _subscriptions.remove(key)!.cancel();
@@ -167,6 +176,21 @@ class FolderAutoImporter {
   }
 
   Future<AutoImportRun> _sync() async {
+    try {
+      return await _syncRun();
+    } catch (_) {
+      if (!_disposed) {
+        state.value = state.value.copyWith(message: '自动入库未完成，请重试。');
+      }
+      return const AutoImportRun([], [], {}, deferred: true);
+    } finally {
+      if (!_disposed && state.value.running) {
+        state.value = state.value.copyWith(running: false);
+      }
+    }
+  }
+
+  Future<AutoImportRun> _syncRun() async {
     final list = folders();
     if (list.isEmpty) {
       state.value = state.value.copyWith(missing: const {}, message: '');
@@ -178,7 +202,7 @@ class FolderAutoImporter {
     }
     state.value = state.value.copyWith(running: true, message: '正在检查自动入库文件夹…');
     final skip = {for (final p in ignored()) _norm(p)};
-    final candidates = <String>[];
+    final candidates = <String, String>{};
     final problems = <String>[];
     for (final folder in list) {
       if (_disposed) break;
@@ -193,10 +217,24 @@ class FolderAutoImporter {
           recursive: recursive(),
           cancelled: () => _disposed,
         );
-        for (final book in listing.books) {
-          if (!book.alreadyImported && !skip.contains(_norm(book.path))) {
-            candidates.add(book.path);
+        while (!_disposed) {
+          problems.addAll(listing!.failures);
+          for (final book in listing.books) {
+            if (!book.alreadyImported && !skip.contains(_norm(book.path))) {
+              candidates[_norm(book.path)] = book.path;
+            }
           }
+          if (listing.complete) break;
+          if (listing.failures.isNotEmpty) {
+            problems.add('扫描未完成：$folder ${listing.message}');
+            break;
+          }
+          final resume = listing.resume;
+          if (resume == null) {
+            problems.add('扫描未完成：$folder ${listing.message}');
+            break;
+          }
+          listing = await resume(() => _disposed);
         }
       } catch (_) {
         problems.add('扫描失败：$folder');
@@ -204,15 +242,39 @@ class FolderAutoImporter {
         listing?.close?.call();
       }
     }
-    var imported = <ImportOutcome>[], failed = <ImportOutcome>[];
-    if (candidates.isNotEmpty && !_disposed && !busy()) {
-      final outcomes = await library.importFiles(
-        candidates,
-        skipExisting: true,
-        interactive: false,
-      );
-      imported = outcomes.where((o) => o.succeeded && !o.skipped).toList();
-      failed = outcomes.where((o) => !o.succeeded).toList();
+    final imported = <ImportOutcome>[], failed = <ImportOutcome>[];
+    final pending = candidates.values.toList();
+    var deferred = false;
+    for (var offset = 0; offset < pending.length && !_disposed; offset += 128) {
+      if (busy()) {
+        deferred = true;
+        schedule(retry);
+        problems.add('当前操作完成后继续自动入库');
+        break;
+      }
+      final end = (offset + 128).clamp(0, pending.length);
+      final batch = pending.sublist(offset, end);
+      try {
+        final outcomes = await library.importFiles(
+          batch,
+          skipExisting: true,
+          interactive: false,
+        );
+        imported.addAll(outcomes.where((o) => o.succeeded && !o.skipped));
+        failed.addAll(outcomes.where((o) => !o.succeeded));
+        if (outcomes.length < batch.length) {
+          deferred = true;
+          problems.add('自动导入已停止，剩余书籍尚未处理');
+          break;
+        }
+      } catch (_) {
+        failed.addAll(
+          batch.map((path) => ImportOutcome(path, false, '自动导入失败，请重试。')),
+        );
+        problems.add('自动导入中断，剩余书籍尚未处理');
+        deferred = true;
+        break;
+      }
     }
     if (_disposed) return const AutoImportRun([], [], {}, deferred: true);
     final missing = <String>{
@@ -237,7 +299,7 @@ class FolderAutoImporter {
         ...problems,
       ].join(' · '),
     );
-    return AutoImportRun(imported, failed, missing);
+    return AutoImportRun(imported, failed, missing, deferred: deferred);
   }
 
   void acknowledge() {

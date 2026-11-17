@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:easypub_desktop/desk/controls/controls.dart';
 import 'package:easypub_desktop/desk/metadata/cover_drop.dart';
+import 'package:easypub_desktop/desk/metadata/cover_adjustment_page.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
 import 'package:easypub_desktop/src/rust/frb_generated.dart';
@@ -69,6 +70,10 @@ void main() {
   });
 
   testWidgets('拖入图片：弹窗预先核验这张图，确认后写入封面', (t) async {
+    t.view.physicalSize = const Size(1400, 960);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
     final (lib, tmp) = await library(t);
     late String id;
     final image = '${tmp.path}/拖入.png';
@@ -124,6 +129,43 @@ void main() {
     }
     expect(result, '已设为封面');
     expect(lib.books.value.single.coverPath, isNotEmpty);
+    final originalCover = lib.books.value.single.coverPath;
+    Future<void> settleNative() async {
+      for (var i = 0; i < 50; i++) {
+        await t.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await t.pump(const Duration(milliseconds: 20));
+      }
+    }
+
+    // 同一个拖入入口必须真的进入裁切；取消不写入已有封面。
+    await t.tap(find.text('拖入'));
+    await settleNative();
+    await t.tap(find.text('进入裁切调整'));
+    await settleNative();
+    expect(find.byType(CoverAdjustmentPage), findsOneWidget);
+    await t.tap(find.text('取消'));
+    await settleNative();
+    expect(result, isNull);
+    expect(lib.books.value.single.coverPath, originalCover);
+
+    await t.tap(find.text('拖入'));
+    await settleNative();
+    await t.tap(find.text('进入裁切调整'));
+    await settleNative();
+    await t.tap(find.text('拉伸填满'));
+    t
+        .widget<RangeSlider>(find.byKey(const ValueKey('cover-horizontal')))
+        .onChanged!(const RangeValues(.5, 1));
+    await t.pump();
+    await t.tap(find.text('采用并返回'));
+    await settleNative();
+    expect(result, '已设为封面');
+    final info = lib.openBookInformation(id);
+    expect(info.saved['cover_fit'], 'fill');
+    expect((info.saved['cover_crop'] as Map)['width'], .5);
+    info.dispose();
   });
 
   test('只把常见图片扩展名当作封面图片', () {

@@ -1,6 +1,7 @@
 //! 书源引擎（插件 P1）：按阅读 3.0 书源规则搜索、取书籍信息、目录与正文。
 //!
 //! 规则语法依据阅读的公开说明独立实现（阅读为 GPL-3.0，本项目不抄写其代码）。
+mod browser_cookie;
 pub mod catalogue;
 pub mod chapter_cleanup;
 mod compat_services;
@@ -20,6 +21,7 @@ mod java_compat;
 pub mod jcss;
 pub mod jsonpath;
 pub mod jsoup;
+mod jsoup_bridge;
 mod login_store;
 pub mod net;
 pub mod network_config;
@@ -51,8 +53,8 @@ mod live;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod v132_tests;
+#[cfg(test)]
 mod v89_tests;
 #[cfg(test)]
 mod v90_tests;
-#[cfg(test)]
-mod v132_tests;

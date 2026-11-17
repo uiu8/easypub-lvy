@@ -239,41 +239,38 @@ class _ComparisonWorkspaceState extends State<ComparisonWorkspace> {
             child: Row(
               children: [
                 Expanded(
-                  child:
-                      content.header ??
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(content.label, style: ui(11.5, c: d.ink3)),
-                          if (content.title.isNotEmpty)
-                            Text.rich(
-                              widget.versions
-                                  ? changedTitle(
-                                      d,
-                                      content.title,
-                                      other.title,
-                                      side,
-                                    )
-                                  : TextSpan(text: content.title),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: serif(14, w: 650, c: d.ink, h: 1.45),
-                            ),
-                          if (content.nodes.isNotEmpty)
-                            Tooltip(
-                              message: content.nodes
-                                  .map((n) => n.title)
-                                  .join('\n'),
-                              child: Text(
-                                content.nodes.map((n) => n.title).join(' → '),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: ui(11.5, c: d.ink3),
-                              ),
-                            ),
-                        ],
-                      ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(content.label, style: ui(11.5, c: d.ink3)),
+                      if (content.header != null) content.header!,
+                      if (content.header == null && content.title.isNotEmpty)
+                        Text.rich(
+                          widget.versions
+                              ? changedTitle(
+                                  d,
+                                  content.title,
+                                  other.title,
+                                  side,
+                                )
+                              : TextSpan(text: content.title),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: serif(14, w: 650, c: d.ink, h: 1.45),
+                        ),
+                      if (content.nodes.isNotEmpty)
+                        Tooltip(
+                          message: content.nodes.map((n) => n.title).join('\n'),
+                          child: Text(
+                            content.nodes.map((n) => n.title).join(' → '),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: ui(11.5, c: d.ink3),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
                 if (content.onLocate != null)
                   IconButton(

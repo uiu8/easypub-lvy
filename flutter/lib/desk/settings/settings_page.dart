@@ -2264,7 +2264,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     }
                   } catch (_) {
                     if (mounted) {
-                      setState(() => migrationResult = '旧设置读取失败，当前设置未改变。');
+                      if (request == migrationGeneration &&
+                          migrationPath.text.trim() == requestedPath) {
+                        setState(() => migrationResult = '旧设置读取失败，当前设置未改变。');
+                      }
                     }
                   }
                 },
@@ -2273,6 +2276,7 @@ class _SettingsPageState extends State<SettingsPage> {
           '清除结果',
           quiet: true,
           onPressed: () => setState(() {
+            migrationGeneration++;
             migrationResult = '';
             migrationData = null;
           }),

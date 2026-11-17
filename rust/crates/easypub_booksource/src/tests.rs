@@ -1447,6 +1447,48 @@ fn http_url_connection_subset_uses_plugin_network() {
     assert!(!denied.is_empty());
 }
 
+#[test]
+fn repair88_login_headers_reach_requests_and_explicit_headers_win() {
+    let (base, _) = serve(|request| html(&request.header("x-login")));
+    let rt = SourceRt::new(source::BookSource {
+        book_source_url: base.clone(),
+        header: "@js:source.putLoginHeader({'X-Login':'refreshed'}); JSON.stringify({'X-Login':'dynamic'})".into(),
+        ..Default::default()
+    });
+    let engine = Engine::new(rt.clone()).unwrap();
+    engine.run(|s| {
+        assert_eq!(s.fetch(&base).unwrap().text, "refreshed");
+        assert_eq!(s.fetch(&format!(r#"{base},{{"headers":{{"X-Login":"explicit"}}}}"#)).unwrap().text, "explicit");
+        let script = format!(r#"
+            var c = new java.net.URL('{base}').openConnection();
+            c.setRequestProperty('X-Login', 'java-explicit');
+            new java.io.BufferedReader(new java.io.InputStreamReader(c.getInputStream(), 'UTF-8')).readLine()
+        "#);
+        assert_eq!(s.eval_js_string(&script, &[]).unwrap(), "java-explicit");
+        for code in [
+            "source.login()",
+            "java.reGetBook()",
+            "java.refreshTocUrl()",
+            "java.initUrl()",
+        ] {
+            assert!(s.eval_js(code, &[]).is_err(), "{code}");
+        }
+        for suffix in ["connect()", "setUseCaches(true)"] {
+            assert!(s.eval_js(&format!("new java.net.URL('{base}').openConnection().{suffix}"), &[]).is_err());
+        }
+    });
+    assert!(
+        rt.login_headers
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .contains("refreshed")
+    );
+    let other = SourceRt::new(source::BookSource::default());
+    assert!(other.login_headers.lock().unwrap().is_none());
+}
+
 /// BigInteger(numBits, SecureRandom)：番茄 APP 书源正文的 Diffie-Hellman 用它生成私钥；范围 [0, 2^n)，两次不同。
 #[test]
 fn replace_all_accepts_java_regex_strings() {
@@ -1465,6 +1507,87 @@ fn replace_all_accepts_java_regex_strings() {
         .unwrap();
     // 原文里有这串字面文字时仍按 JS 原意整串替换；Java 才有的 (?i) 写法转不了时原样返回。
     assert_eq!(result, "甲乙|a-b-c|价 [5] 元|共一页|x");
+}
+
+#[test]
+fn repair88_regex_failure_reaches_jsoup_and_rule_callers() {
+    let engine = Engine::new(SourceRt::new(source::BookSource::default())).unwrap();
+    let input = vec![crate::node::Node::Text(format!(
+        "<p>ok</p><p>{}!ab</p>",
+        "a".repeat(40)
+    ))];
+    engine.run(|s| {
+        s.set_content(crate::node::Node::page(&input[0].text()), None);
+        for code in [
+            "org.jsoup.Jsoup.parse(src).select('p:matches(ok|^(a|aa)+(?=ab))').text()",
+            "java.getString('p:matches(ok|^(a|aa)+(?=ab))@text')",
+        ] {
+            let error = s.eval_js_string(code, &input).expect_err(code);
+            assert!(error.contains("高级正则"), "{error}");
+        }
+        assert_eq!(
+            s.eval_js_string("org.jsoup.Jsoup.parse(src).select('p').size()", &input)
+                .unwrap(),
+            "2"
+        );
+    });
+}
+
+#[test]
+fn repair88_jsoup_removal_preserves_shared_node_identity() {
+    let engine = Engine::new(SourceRt::new(source::BookSource::default())).unwrap();
+    engine.run(|s| {
+        let actual = s.eval_js_string(r#"
+            var d = org.jsoup.Jsoup.parse('<main><p>同文</p><p>同文</p><section><b>子项</b></section></main>');
+            var ps = d.select('p'), second = ps.eq(1);
+            ps.eq(0).remove();
+            var counts = [d.select('p').size(), second.text()];
+            second.remove(); second.remove();
+            counts.push(d.select('p').size());
+            var both = d.select('section,b'), child = d.select('b');
+            both.remove();
+            counts.push(d.select('section,b').size(), child.text());
+            counts.join('|')
+        "#, &[]).unwrap();
+        assert_eq!(actual, "1|同文|0|0|子项");
+    });
+}
+
+#[test]
+fn repair88_jsoup_document_lifetime_follows_retained_nodes() {
+    let before = crate::jsoup_bridge::live_documents();
+    let engine = Engine::new(SourceRt::new(source::BookSource::default())).unwrap();
+    engine.run(|s| {
+        s.eval_js_string(r#"
+            globalThis.retainedNode = org.jsoup.Jsoup.parse('<p>保留</p>').select('p');
+            for (var i = 0; i < 100; i++) {
+                org.jsoup.Jsoup.parse('<main>' + '<p>临时正文</p>'.repeat(100) + '</main>').select('p').eq(0).remove();
+            }
+            'done'
+        "#, &[]).unwrap();
+        s.ctx.run_gc();
+        assert_eq!(crate::jsoup_bridge::live_documents(), before + 1);
+        assert_eq!(s.eval_js_string("retainedNode.text()", &[]).unwrap(), "保留");
+        s.eval_js_string("delete globalThis.retainedNode; 'done'", &[]).unwrap();
+        s.ctx.run_gc();
+        assert_eq!(crate::jsoup_bridge::live_documents(), before);
+    });
+    drop(engine);
+    assert_eq!(crate::jsoup_bridge::live_documents(), before);
+}
+
+#[test]
+fn repair88_search_url_regex_failure_is_not_a_normal_empty_result() {
+    let (base, _) = serve(|_| html("<li><a href='/book'>测试书</a></li>"));
+    let path = format!("/{}!ab", "a".repeat(40));
+    let pattern = format!("ok|^{}/(a|aa)+(?=ab)", regex::escape(&base));
+    let input = serde_json::json!({"bookSourceUrl":base,"bookSourceName":"正则边界",
+        "searchUrl":path,"bookUrlPattern":pattern,
+        "ruleSearch":{"bookList":"li","name":"a@text","bookUrl":"a@href"}})
+    .to_string();
+    let engine = engine(&input);
+    let error = engine.run(|scope| scope.search("测试", 1)).unwrap_err();
+    assert!(error.contains("高级正则"), "{error}");
 }
 
 #[test]

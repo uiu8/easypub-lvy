@@ -82,6 +82,13 @@ class _CleanupFindingsViewState extends State<CleanupFindingsView> {
       groups.putIfAbsent(label(item), () => []).add(item);
     }
     final shown = kind == null ? groups.keys.toList() : [kind!];
+    var anchorAssigned = false;
+    Key? anchorFor(CleanupCheckItem item) {
+      if (item.line != widget.selectedLine || anchorAssigned) return null;
+      anchorAssigned = true;
+      return selectedRow;
+    }
+
     Widget chip(String? key, String text, int count) {
       final on = kind == key;
       return InkWell(
@@ -152,7 +159,7 @@ class _CleanupFindingsViewState extends State<CleanupFindingsView> {
               children: [
                 for (final (i, item) in groups[name]!.indexed)
                   KeyedSubtree(
-                    key: item.line == widget.selectedLine ? selectedRow : null,
+                    key: anchorFor(item),
                     child: _FindingRow(
                       key: ValueKey(
                         'cleanup-finding-${item.line}-${item.kind}',

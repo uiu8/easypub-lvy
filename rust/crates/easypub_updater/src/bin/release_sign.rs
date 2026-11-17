@@ -13,7 +13,69 @@ use easypub_updater::{
     verify_manifest, verify_plugin_manifest,
 };
 use ed25519_dalek::{Signer, SigningKey};
-use std::{collections::HashMap, fs, path::Path, process::exit};
+use std::{collections::HashMap, fs, io::Read, path::Path, process::exit};
+
+fn verify_plugin_zip(data: &[u8], package: &PluginPackage, directory_info: &serde_json::Value) {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(data))
+        .unwrap_or_else(|_| fail("invalid plugin zip"));
+    let info_name = format!("{}/plugin.json", package.id);
+    let exe_name = format!("{}/{}", package.id, package.executable);
+    let mut seen = std::collections::BTreeSet::new();
+    let mut info_found = false;
+    let mut exe_found = false;
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .unwrap_or_else(|_| fail("invalid zip entry"));
+        if !seen.insert(entry.name().to_ascii_lowercase())
+            || entry.enclosed_name().is_none()
+            || entry.is_symlink()
+        {
+            fail("duplicate or unsafe plugin zip entry");
+        }
+        if entry.name() == info_name {
+            let mut bytes = Vec::new();
+            (&mut entry)
+                .take(128 * 1024 + 1)
+                .read_to_end(&mut bytes)
+                .unwrap_or_else(|_| fail("cannot read packaged plugin.json"));
+            if bytes.len() > 128 * 1024 {
+                fail("packaged plugin.json too large");
+            }
+            let text = std::str::from_utf8(&bytes)
+                .unwrap_or_else(|_| fail("invalid plugin.json encoding"));
+            let info: serde_json::Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+                .unwrap_or_else(|_| fail("invalid packaged plugin.json"));
+            package.verify_declaration(&info).unwrap_or_else(|_| {
+                fail("packaged plugin declaration differs from signed manifest")
+            });
+            if &info != directory_info {
+                fail("ZIP and --dir plugin.json differ");
+            }
+            info_found = true;
+        } else if entry.name() == exe_name {
+            use sha2::{Digest, Sha256};
+            let mut digest = Sha256::new();
+            let mut buffer = [0u8; 65536];
+            loop {
+                let n = entry
+                    .read(&mut buffer)
+                    .unwrap_or_else(|_| fail("cannot read packaged executable"));
+                if n == 0 {
+                    break;
+                }
+                digest.update(&buffer[..n]);
+            }
+            if hex(&digest.finalize()) != package.exe_sha256 {
+                fail("ZIP and --dir executable differ");
+            }
+            exe_found = true;
+        }
+    }
+    if !info_found || !exe_found {
+        fail("plugin zip missing declaration or executable");
+    }
+}
 
 fn fail(msg: &str) -> ! {
     eprintln!("release_sign: {msg}");
@@ -192,6 +254,7 @@ fn main() {
             manifest
                 .validate()
                 .unwrap_or_else(|e| fail(&format!("plugin manifest invalid: {e}")));
+            verify_plugin_zip(&data, &manifest.plugins[0], &info);
             let bytes = serde_json::to_vec_pretty(&manifest).expect("manifest json");
             let signature = hex(&signing.sign(&bytes).to_bytes());
             verify_plugin_manifest(&bytes, &signature, PUBLIC_KEYS)

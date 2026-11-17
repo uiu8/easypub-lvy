@@ -92,6 +92,9 @@ pub fn call(scope: &Scope<'_, '_>, method: &str, args: Value) -> Result<Value, S
         args
     );
     let out = crate::webview::submit(Job {
+        clear_cookies: false,
+        profile_html: true,
+        source_id: rt.source.id().to_owned(),
         context,
         url: rt.source.base_url().into(),
         method: "GET".into(),
@@ -102,7 +105,7 @@ pub fn call(scope: &Scope<'_, '_>, method: &str, args: Value) -> Result<Value, S
         js: Some(js),
         source_regex: None,
         user_agent: DEFAULT_UA.into(),
-        cookies: Vec::new(),
+        cookies: crate::browser_cookie::export(&rt.net, rt.source.base_url()),
         timeout: Duration::from_secs(30),
         interactive: Interactive::Never,
         prompt: String::new(),
@@ -230,7 +233,7 @@ pub fn bridge(rt: &Arc<SourceRt>, name: &str, args: &[Value]) -> Result<Value, S
             Ok(json!(true))
         }
         "cookie.remove" => {
-            rt.net.remove_cookies(&string(args, 0));
+            crate::webview::clear_cookies(rt, &string(args, 0))?;
             Ok(json!(true))
         }
         "htmlToText" => Ok(json!(crate::text::html_to_text(&string(args, 0)))),
@@ -264,11 +267,11 @@ pub fn bridge(rt: &Arc<SourceRt>, name: &str, args: &[Value]) -> Result<Value, S
             let h = headers(&string(args, 4));
             let mut context = crate::control::current();
             context.crawl = rt.source.meta.crawl.clone();
-            let cookies = reqwest::Url::parse(&url)
-                .ok()
-                .map(|u| rt.net.cookie_header(&u))
-                .unwrap_or_default();
+            let cookies = crate::browser_cookie::export(&rt.net, &url);
             let out = crate::webview::submit(Job {
+                clear_cookies: false,
+                profile_html: false,
+                source_id: rt.source.id().to_owned(),
                 context,
                 url: url.clone(),
                 method: if body.is_empty() {
@@ -290,25 +293,14 @@ pub fn bridge(rt: &Arc<SourceRt>, name: &str, args: &[Value]) -> Result<Value, S
                     .find(|(k, _)| k.eq_ignore_ascii_case("user-agent"))
                     .map(|(_, v)| v.clone())
                     .unwrap_or(DEFAULT_UA.into()),
-                cookies: cookies
-                    .split(';')
-                    .filter_map(|p| p.trim().split_once('='))
-                    .map(|(k, v)| (k.into(), v.into()))
-                    .collect(),
+                cookies: cookies.clone(),
                 timeout: Duration::from_secs(30),
                 interactive: Interactive::Never,
                 prompt: String::new(),
                 cookies_only: false,
                 bridge: None,
             })?;
-            rt.net.set_cookie(
-                &url,
-                &out.cookies
-                    .iter()
-                    .map(|(k, v)| format!("{k}={v}"))
-                    .collect::<Vec<_>>()
-                    .join("; "),
-            );
+            crate::browser_cookie::import(&rt.net, &out.url, &cookies, &out.cookies)?;
             Ok(json!(out.text))
         }
         _ => Err(format!(

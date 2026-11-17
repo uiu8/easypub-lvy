@@ -431,6 +431,60 @@ fn v88_storage_stream_queue_and_legacy_rebuild() {
             "重复标题和章号不猜测对应关系"
         );
     }
+    // 目录阶段换源必须把真实来源写入检查点，恢复不能再次依赖替代列表。
+    let mut primary = book.clone();
+    primary.book_url = format!("{base}/checkpoint-primary");
+    primary.toc_url = "file:///not-a-network-toc".into();
+    let mut alternate = book.clone();
+    alternate.origin = alt_id.clone();
+    alternate.book_url = format!("{base}/checkpoint-alternate");
+    alternate.toc_url = format!("{base}/alt-toc");
+    let task = handle("queue.add", &json!({"sourceId":base,"book":primary,
+        "options":Options { folder: root.join("switch-checkpoint"), retries:0, ..Default::default() },
+        "alternates":[{"sourceId":alt_id,"book":alternate}]})).unwrap();
+    let task_id = task["taskId"].as_str().unwrap();
+    wait_until(|| {
+        let st = state();
+        st.tasks.is_empty()
+            && st
+                .queue
+                .iter()
+                .any(|t| t.id == task_id && t.status == "done")
+    });
+    let path = root.join("tasks.json");
+    let mut checkpoint: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let saved = checkpoint["tasks"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|t| t["id"] == task_id)
+        .unwrap();
+    assert_eq!(saved["params"]["sourceId"], alt_id);
+    assert_eq!(saved["params"]["book"]["bookUrl"], alternate.book_url);
+    let expected_paths = queue::resources(&saved["params"]);
+    assert!(expected_paths.contains(&download::cache_dir(
+        &root.join("switch-checkpoint"),
+        &alternate
+    )));
+    saved["status"] = json!("paused");
+    saved["params"]["alternates"] = json!([]);
+    std::fs::write(&path, serde_json::to_vec(&checkpoint).unwrap()).unwrap();
+    queue::load();
+    handle("queue.resume", &json!({"taskId":task_id})).unwrap();
+    wait_until(|| {
+        let st = state();
+        st.tasks.is_empty()
+            && st
+                .queue
+                .iter()
+                .any(|t| t.id == task_id && t.status == "done")
+    });
+    {
+        let st = state();
+        let resumed = st.queue.iter().find(|t| t.id == task_id).unwrap();
+        assert_eq!(resumed.params["sourceId"], alt_id);
+        assert_eq!(queue::resources(&resumed.params), expected_paths);
+    }
     import_options_keep_user_fields_and_place_new_sources(&base, &root);
     // 检查更新可并发；结果仍按书写回记录。
     let checked = handle("library.check", &json!({"concurrency":2})).unwrap();

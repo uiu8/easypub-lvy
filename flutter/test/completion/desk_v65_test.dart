@@ -8,6 +8,7 @@ import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/infrastructure/legacy_rule_catalog_service.dart';
 import 'package:easypub_desktop/infrastructure/legacy_change_history_service.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
+import 'package:easypub_desktop/infrastructure/import_profile.dart';
 
 void main() {
   test('V65 真实 DLL 混合事务、失败隔离、历史重开与新书默认', () async {
@@ -124,6 +125,70 @@ void main() {
         false,
       );
       next.dispose();
+      // 超过保留上限仍能应用；保存重开后保留最近 50 次撤销/重做。
+      final boundaryClock = Stopwatch()..start();
+      for (var i = 0; i < 55; i++) {
+        final stepClock = Stopwatch()..start();
+        final plan = await service.previewToggles([
+          {'id': 'check.number_gap', 'enabled': i.isEven},
+        ]);
+        final previewMs = stepClock.elapsedMilliseconds;
+        await service.applyToggles(plan['plan_id'] as String);
+        if (i % 5 == 0 || i == 54) {
+          // ignore: avoid_print
+          print(
+            'history boundary applied ${i + 1}/55 in ${boundaryClock.elapsedMilliseconds}ms; preview=${previewMs}ms apply=${stepClock.elapsedMilliseconds - previewMs}ms; history bytes=${jsonEncode(backend.production.drafts[id]!.ruleToggleHistory).length}',
+          );
+          // ignore: avoid_print
+          print(ImportProfile.snapshot());
+        }
+      }
+      final rolling = backend.production.drafts[id]!.ruleToggleHistory!;
+      expect(rolling['cursor'], 50);
+      expect(rolling['states'], hasLength(51));
+      final boundarySaved = '$root/规则历史上限.easypub.json';
+      expect(
+        await backend.saveProjectOutcome(boundarySaved),
+        true,
+        reason: backend.projectStatus,
+      );
+      expect(
+        await backend.openProjectOutcome(boundarySaved),
+        true,
+        reason: backend.projectStatus,
+      );
+      // ignore: avoid_print
+      print(
+        'history boundary reopened in ${boundaryClock.elapsedMilliseconds}ms',
+      );
+      Future<bool> gapEnabled() async =>
+          ((await service.settings())['rules'] as List).cast<Map>().singleWhere(
+                (r) => r['id'] == 'check.number_gap',
+              )['enabled']
+              as bool;
+      expect(await gapEnabled(), true);
+      for (var i = 0; i < 50; i++) {
+        await service.moveHistory(undo: true);
+        expect(await gapEnabled(), i.isOdd);
+      }
+      await expectLater(service.moveHistory(undo: true), throwsFormatException);
+      for (var i = 0; i < 50; i++) {
+        await service.moveHistory(undo: false);
+        expect(await gapEnabled(), i.isOdd);
+      }
+      await expectLater(
+        service.moveHistory(undo: false),
+        throwsFormatException,
+      );
+      await service.moveHistory(undo: true);
+      final branch = await service.previewToggles([
+        {'id': 'layout.system', 'enabled': false},
+      ]);
+      await service.applyToggles(branch['plan_id'] as String);
+      await expectLater(
+        service.moveHistory(undo: false),
+        throwsFormatException,
+      );
       expect(source.readAsBytesSync(), original);
       File('$root/verification.json').writeAsStringSync(
         jsonEncode({'plan': p, 'rules': rows, 'source_unchanged': true}),

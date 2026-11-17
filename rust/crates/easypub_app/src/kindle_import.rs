@@ -9,7 +9,7 @@ use serde_json::json;
 use std::{
     collections::HashMap,
     fs,
-    io::{Cursor, Write},
+    io::{Cursor, Read, Write},
     path::Path,
 };
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
@@ -121,7 +121,7 @@ fn header(records: &Records, start: usize) -> Result<Header, ApiError> {
     let full_name = match (field(0x54), field(0x58)) {
         (Some(off), Some(n)) => r
             .get(off as usize..off as usize + n as usize)
-            .map(|b| String::from_utf8_lossy(b).into_owned())
+            .map(|b| decode(b, field(0x1C).unwrap_or(65001)))
             .unwrap_or_default(),
         _ => String::new(),
     };
@@ -153,15 +153,26 @@ fn header(records: &Records, start: usize) -> Result<Header, ApiError> {
 }
 
 /// PalmDOC（LZ77 变体）解压。
-fn palmdoc(input: &[u8], out: &mut Vec<u8>) {
+fn text_room(out: &[u8], additional: usize) -> Result<(), ApiError> {
+    if additional > MAX_TEXT.saturating_sub(out.len()) {
+        return Err(invalid("reduce_kindle_file_size"));
+    }
+    Ok(())
+}
+
+fn palmdoc(input: &[u8], out: &mut Vec<u8>) -> Result<(), ApiError> {
     let mut i = 0;
     while i < input.len() {
         let c = input[i];
         i += 1;
         match c {
-            0x00 | 0x09..=0x7F => out.push(c),
+            0x00 | 0x09..=0x7F => {
+                text_room(out, 1)?;
+                out.push(c);
+            }
             0x01..=0x08 => {
                 let end = (i + c as usize).min(input.len());
+                text_room(out, end - i)?;
                 out.extend_from_slice(&input[i..end]);
                 i = end;
             }
@@ -174,6 +185,7 @@ fn palmdoc(input: &[u8], out: &mut Vec<u8>) {
                 if distance == 0 || distance > out.len() {
                     continue;
                 }
+                text_room(out, length)?;
                 let from = out.len() - distance;
                 for k in 0..length {
                     let b = out[from + k];
@@ -181,11 +193,13 @@ fn palmdoc(input: &[u8], out: &mut Vec<u8>) {
                 }
             }
             _ => {
+                text_room(out, 2)?;
                 out.push(b' ');
                 out.push(c ^ 0x80);
             }
         }
     }
+    Ok(())
 }
 
 /// HUFF/CDIC 解压（大书用的压缩）。
@@ -224,6 +238,7 @@ impl Huff {
             maxcode.push(((max + 1) << (32 - codelen)).wrapping_sub(1));
         }
         let mut dictionary = Vec::new();
+        let mut dictionary_bytes = 0usize;
         for k in 1..count {
             let cdic = records.get(first + k).ok_or_else(bad)?;
             if cdic.get(0..8) != Some(b"CDIC\x00\x00\x00\x10".as_slice()) {
@@ -235,6 +250,10 @@ impl Huff {
             for j in 0..n {
                 let off = u16_at(cdic, 16 + j * 2).ok_or_else(bad)? as usize;
                 let blen = u16_at(cdic, 16 + off).ok_or_else(bad)? as usize;
+                dictionary_bytes = dictionary_bytes
+                    .checked_add((blen & 0x7FFF) + std::mem::size_of::<Option<(Vec<u8>, bool)>>())
+                    .filter(|&n| n <= MAX_TEXT)
+                    .ok_or_else(|| invalid("reduce_kindle_file_size"))?;
                 let slice = cdic
                     .get(18 + off..18 + off + (blen & 0x7FFF))
                     .ok_or_else(bad)?
@@ -249,10 +268,9 @@ impl Huff {
             dictionary,
         })
     }
-    fn unpack(&mut self, data: &[u8], depth: usize) -> Vec<u8> {
-        let mut out = Vec::new();
+    fn unpack(&mut self, data: &[u8], depth: usize, out: &mut Vec<u8>) -> Result<(), ApiError> {
         if depth > 32 {
-            return out;
+            return Err(invalid("choose_valid_kindle_file"));
         }
         let mut bitsleft = data.len() as i64 * 8;
         let mut padded = data.to_vec();
@@ -284,20 +302,22 @@ impl Huff {
                 break;
             }
             let r = ((maxcode.wrapping_sub(code)) >> (32 - codelen)) as usize;
-            let Some(entry) = self.dictionary.get(r).cloned() else {
-                break;
-            };
-            let Some((slice, done)) = entry else { break };
-            if done {
-                out.extend_from_slice(&slice);
+            let entry = self
+                .dictionary
+                .get_mut(r)
+                .and_then(Option::take)
+                .ok_or_else(|| invalid("choose_valid_kindle_file"))?;
+            let (slice, done) = entry;
+            // 直接写最终输出，递归不创建或缓存膨胀后的中间字典。
+            let result = if done {
+                text_room(out, slice.len()).map(|()| out.extend_from_slice(&slice))
             } else {
-                self.dictionary[r] = None;
-                let expanded = self.unpack(&slice, depth + 1);
-                out.extend_from_slice(&expanded);
-                self.dictionary[r] = Some((expanded, true));
-            }
+                self.unpack(&slice, depth + 1, out)
+            };
+            self.dictionary[r] = Some((slice, done));
+            result?;
         }
-        out
+        Ok(())
     }
 }
 
@@ -328,24 +348,29 @@ fn trim_trailing(mut data: &[u8], flags: u16) -> &[u8] {
 }
 
 fn raw_text(records: &Records, h: &Header) -> Result<Vec<u8>, ApiError> {
+    if h.text_length > MAX_TEXT {
+        return Err(invalid("reduce_kindle_file_size"));
+    }
     let mut huff = match (h.compression, h.huff) {
         (17480, Some((first, count))) => Some(Huff::load(records, first, count)?),
         (17480, None) => return Err(invalid("choose_valid_kindle_file")),
         (1 | 2, _) => None,
         _ => return Err(invalid("kindle_compression_not_supported")),
     };
-    let mut out = Vec::with_capacity(h.text_length);
+    let mut out = Vec::with_capacity(h.text_length.min(1024 * 1024));
     for i in 1..=h.text_records {
         let record = records
             .get(h.start + i)
             .ok_or_else(|| invalid("choose_valid_kindle_file"))?;
         let data = trim_trailing(record, h.extra_flags);
         match (h.compression, huff.as_mut()) {
-            (1, _) => out.extend_from_slice(data),
-            (2, _) => palmdoc(data, &mut out),
+            (1, _) => {
+                text_room(&out, data.len())?;
+                out.extend_from_slice(data);
+            }
+            (2, _) => palmdoc(data, &mut out)?,
             (_, Some(huff)) => {
-                let text = huff.unpack(data, 0);
-                out.extend_from_slice(&text);
+                huff.unpack(data, 0, &mut out)?;
             }
             _ => {}
         }
@@ -827,7 +852,10 @@ fn clean_xhtml(html: &str, image_src: &dyn Fn(&str) -> Option<String>) -> String
 
 fn decode(bytes: &[u8], encoding: u32) -> String {
     if encoding == 1252 {
-        bytes.iter().map(|&b| b as char).collect()
+        encoding_rs::WINDOWS_1252
+            .decode_without_bom_handling(bytes)
+            .0
+            .into_owned()
     } else {
         String::from_utf8_lossy(bytes).into_owned()
     }
@@ -1096,7 +1124,24 @@ pub fn to_epub(source_path: &str, output_path: &str) -> Result<String, ApiError>
     if output.exists() {
         return Err(invalid("choose_new_kindle_import_output"));
     }
-    let data = fs::read(source).map_err(|_| invalid("choose_readable_kindle_file"))?;
+    let file = fs::File::open(source).map_err(|_| invalid("choose_readable_kindle_file"))?;
+    if file
+        .metadata()
+        .map_err(|_| invalid("choose_readable_kindle_file"))?
+        .len()
+        > MAX_BYTES as u64
+    {
+        return Err(ApiError::new(
+            ErrorCode::TooLarge,
+            "kindle_import",
+            "reduce_kindle_file_size",
+        ));
+    }
+    // 文件在读取期间变大也不能绕过容量限制。
+    let mut data = Vec::new();
+    file.take(MAX_BYTES as u64 + 1)
+        .read_to_end(&mut data)
+        .map_err(|_| invalid("choose_readable_kindle_file"))?;
     if data.is_empty() || data.len() > MAX_BYTES {
         return Err(ApiError::new(
             ErrorCode::TooLarge,
@@ -1120,13 +1165,145 @@ mod tests {
     use super::*;
 
     #[test]
+    fn repair88_oversized_kindle_is_rejected_before_reading() {
+        let root = std::env::temp_dir().join(format!(
+            "ep-kindle-limit-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        let source = root.join("large.AZW3");
+        let target = root.join("copy.epub");
+        fs::File::create(&source)
+            .unwrap()
+            .set_len(MAX_BYTES as u64 + 1)
+            .unwrap();
+        let error = to_epub(source.to_str().unwrap(), target.to_str().unwrap()).unwrap_err();
+        assert_eq!(error.code, ErrorCode::TooLarge);
+        assert!(!target.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn repair88_huff_recursion_restores_dictionary_on_failure() {
+        let mut huff = Huff {
+            dict1: vec![(8, true, 0x00ff_ffff); 256],
+            mincode: vec![0; 33],
+            maxcode: vec![0; 33],
+            dictionary: vec![Some((vec![0], false))],
+        };
+        let mut out = Vec::new();
+        assert!(huff.unpack(&[0], 0, &mut out).is_err());
+        assert!(out.is_empty());
+        assert_eq!(huff.dictionary[0], Some((vec![0], false)));
+        huff.dictionary[0] = Some((b"text".to_vec(), true));
+        huff.unpack(&[0, 0], 0, &mut out).unwrap();
+        assert_eq!(out, b"texttext");
+        assert_eq!(huff.dictionary[0], Some((b"text".to_vec(), true)));
+        assert!(huff.unpack(&[0], 33, &mut Vec::new()).is_err());
+    }
+
+    #[test]
+    fn repair88_large_huff_output_and_oversized_declaration() {
+        let phrase = b"test".repeat(1024);
+        let mut huff = Huff {
+            dict1: vec![(8, true, 0x00ff_ffff); 256],
+            mincode: vec![0; 33],
+            maxcode: vec![0; 33],
+            dictionary: vec![Some((phrase.clone(), true))],
+        };
+        let mut out = Vec::new();
+        huff.unpack(&vec![0; 4096], 0, &mut out).unwrap();
+        assert_eq!(out.len(), 16 * 1024 * 1024);
+        assert!(out.chunks_exact(phrase.len()).all(|chunk| chunk == phrase));
+        assert_eq!(huff.dictionary[0].as_ref().unwrap().0.len(), phrase.len());
+
+        let records = Records {
+            data: &[],
+            offsets: vec![],
+        };
+        let h = Header {
+            start: 0,
+            compression: 17480,
+            text_length: MAX_TEXT + 1,
+            text_records: 0,
+            encoding: 65001,
+            version: 8,
+            first_resource: None,
+            huff: Some((0, 1)),
+            extra_flags: 0,
+            fdst: None,
+            skel: None,
+            frag: None,
+            exth: HashMap::new(),
+            full_name: String::new(),
+        };
+        // 超大声明必须在读取/展开 HUFF 字典前拒绝。
+        assert_eq!(
+            raw_text(&records, &h).unwrap_err().next_action,
+            "reduce_kindle_file_size"
+        );
+    }
+
+    #[test]
+    #[ignore = "512 MiB output buffer: run explicitly outside parallel regression"]
+    fn repair88_kindle_output_limit_rejects_before_append() {
+        let mut out = vec![0; MAX_TEXT - 1];
+        palmdoc(b"a", &mut out).unwrap();
+        assert_eq!(out.len(), MAX_TEXT);
+        assert_eq!(out.last(), Some(&b'a'));
+        for encoded in [&b"b"[..], &[0xc0][..], &[1, b'c'][..], &[0x80, 0x08][..]] {
+            assert!(palmdoc(encoded, &mut out).is_err());
+            assert_eq!(out.len(), MAX_TEXT);
+            assert_eq!(out.last(), Some(&b'a'));
+        }
+        let mut huff = Huff {
+            dict1: vec![(8, true, 0x00ff_ffff); 256],
+            mincode: vec![0; 33],
+            maxcode: vec![0; 33],
+            dictionary: vec![Some((b"more".to_vec(), true))],
+        };
+        assert!(huff.unpack(&[0], 0, &mut out).is_err());
+        assert_eq!(out.len(), MAX_TEXT);
+        assert_eq!(huff.dictionary[0], Some((b"more".to_vec(), true)));
+        assert!(text_room(&out, 1).is_err());
+    }
+
+    #[test]
+    fn repair88_cp1252_text_title_and_author_use_declared_encoding() {
+        let encoded = [0x93, b'A', 0x94, b' ', 0x80, 0x97, 0xe9];
+        let expected = "“A” €—é";
+        assert_eq!(decode(&encoded, 1252), expected);
+        assert_eq!(decode("中文".as_bytes(), 65001), "中文");
+        let mut data = vec![0u8; 0x100];
+        data[16..20].copy_from_slice(b"MOBI");
+        data[20..24].copy_from_slice(&0xe0u32.to_be_bytes());
+        data[0x1c..0x20].copy_from_slice(&1252u32.to_be_bytes());
+        data[0x54..0x58].copy_from_slice(&0x100u32.to_be_bytes());
+        data[0x58..0x5c].copy_from_slice(&(encoded.len() as u32).to_be_bytes());
+        data.extend_from_slice(&encoded);
+        let records = Records {
+            data: &data,
+            offsets: vec![0, data.len()],
+        };
+        let mut parsed = header(&records, 0).unwrap();
+        assert_eq!(parsed.full_name, expected);
+        parsed.exth.insert(100, vec![encoded.to_vec()]);
+        assert_eq!(exth_text(&parsed, 100, parsed.encoding), vec![expected]);
+    }
+
+    #[test]
     fn palmdoc_decodes_literals_runs_and_back_references() {
         let mut out = Vec::new();
         // "abc" + 回溯 3 字节复制 3 字节 + 空格加 'x' + 两个原样字节。
         palmdoc(
             &[b'a', b'b', b'c', 0x80, 0x18, 0xF8, 0x02, 0x01, 0x02],
             &mut out,
-        );
+        )
+        .unwrap();
         assert_eq!(out, b"abcabc x\x01\x02");
     }
 

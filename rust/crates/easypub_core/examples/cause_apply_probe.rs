@@ -16,9 +16,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = args
         .map(|a| a.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
-    let source = SourceSnapshot::from_bytes(std::fs::read(path)?, EncodingMode::Auto, RULE_ID, || false)
-        .map_err(|e| format!("{e:?}"))?;
-    let mut book = compose(&source, &Structure::new(&source), None).map_err(|e| format!("{e:?}"))?;
+    let source =
+        SourceSnapshot::from_bytes(std::fs::read(path)?, EncodingMode::Auto, RULE_ID, || false)
+            .map_err(|e| format!("{e:?}"))?;
+    let mut book =
+        compose(&source, &Structure::new(&source), None).map_err(|e| format!("{e:?}"))?;
     let count = |book: &easypub_core::publication::EffectiveBook| -> Result<String, String> {
         let view = SourceSnapshot::for_effective_diagnostics(book).map_err(|e| format!("{e:?}"))?;
         let evidence = ReviewEvidence::new(&view).map_err(|e| format!("{e:?}"))?;
@@ -72,7 +74,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             "  逐个应用 {:?}；书稿相同 {}，结构相同 {}，行映射相同 {}",
                             slow.elapsed(),
                             step.text == next.text,
-                            serde_json::to_value(&step.tree.nodes)? == serde_json::to_value(&next.tree.nodes)?,
+                            serde_json::to_value(&step.tree.nodes)?
+                                == serde_json::to_value(&next.tree.nodes)?,
                             step.source_to_output_lines == next.source_to_output_lines
                         );
                     }
@@ -85,7 +88,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                 }
                 Err(e) => {
-                    println!("{kind} 第 {round} 轮：{n} 项应用失败 {e:?}（{:?}）", started.elapsed());
+                    println!(
+                        "{kind} 第 {round} 轮：{n} 项应用失败 {e:?}（{:?}）",
+                        started.elapsed()
+                    );
                     break;
                 }
             }

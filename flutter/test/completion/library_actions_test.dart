@@ -98,24 +98,31 @@ void main() {
       ),
     ),
   );
-  test(
-    'KFX output opens through the same literal file path contract',
-    () async {
-      final dir = await Directory.systemTemp.createTemp('kfx-open-');
-      final file = File('${dir.path}/中文 成品.kfx')..writeAsStringSync('fixture');
-      final opened = <String>[];
-      final desktop = NativeConversionDesktop(
-        launchDirectory: (path) async => opened.add(path),
-      );
-      await desktop.openOutput(file.path);
-      expect(opened, [file.absolute.path]);
-      await expectLater(
-        desktop.openOutput('${dir.path}/missing.kfx'),
-        throwsFormatException,
-      );
-      expect(opened, hasLength(1));
-    },
-  );
+  test('KFX 与大小写 TXT 成品按原始完整路径打开，不接受不存在的文件', () async {
+    final dir = await Directory.systemTemp.createTemp('kfx-open-');
+    final file = File('${dir.path}/中文 成品.kfx')..writeAsStringSync('fixture');
+    final opened = <String>[];
+    final desktop = NativeConversionDesktop(
+      launchDirectory: (path) async => opened.add(path),
+    );
+    await desktop.openOutput(file.path);
+    expect(opened, [file.absolute.path]);
+    for (final extension in ['txt', 'TXT']) {
+      final text = File('${dir.path}/中文 成品.$extension')
+        ..writeAsStringSync('第一章 正文');
+      await desktop.openOutput(text.path);
+      expect(opened.last, text.absolute.path);
+    }
+    await expectLater(
+      desktop.openOutput('${dir.path}/missing.kfx'),
+      throwsFormatException,
+    );
+    await expectLater(
+      desktop.openOutput('${dir.path}/missing.txt'),
+      throwsFormatException,
+    );
+    expect(opened, hasLength(3));
+  });
   test(
     'reveal source validates original file and forwards literal path',
     () async {

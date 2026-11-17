@@ -127,7 +127,7 @@ class NativeConversionDesktop
     final file = File(path.trim());
     if (!file.isAbsolute ||
         !RegExp(
-          r'\.(epub|azw3|mobi|kfx)$',
+          r'\.(epub|azw3|mobi|kfx|txt)$',
           caseSensitive: false,
         ).hasMatch(file.path) ||
         !await file.exists()) {

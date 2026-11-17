@@ -144,7 +144,8 @@ extension SourceRefreshOperations on PrototypeState {
 
   Future<String> _sourceFingerprint(String path) async {
     final file = File(path);
-    final limit = path.toLowerCase().endsWith('.epub')
+    final limit =
+        ['.epub', '.azw3', '.mobi', '.azw'].any(path.toLowerCase().endsWith)
         ? 256 * 1024 * 1024
         : 128 * 1024 * 1024;
     if (await file.length() > limit) {

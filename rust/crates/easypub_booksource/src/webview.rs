@@ -2,6 +2,7 @@
 //!
 //! 一个专用线程（单线程套间）持有一个隐藏窗口与一个 WebView2，自己泵消息；各下载线程把任务
 //! 排队交给它。书源 Cookie 进出 WebView 时与该书源的 Cookie 罐同步（含 HttpOnly）。
+use crate::browser_cookie::BrowserCookie;
 use crate::{
     engine::Scope,
     net::{DEFAULT_UA, Request, Response},
@@ -18,8 +19,50 @@ pub fn web_url(url: &str) -> bool {
 }
 const TIMEOUT: Duration = Duration::from_secs(30);
 
+pub fn clear_cookies(rt: &crate::engine::SourceRt, url: &str) -> Result<(), String> {
+    if !web_url(url) {
+        return Err(NOT_WEB.into());
+    }
+    rt.net.remove_cookies(url);
+    let result = (|| -> Result<(), String> {
+        for profile_html in [false, true] {
+            let mut context = crate::control::current();
+            context.crawl = rt.source.meta.crawl.clone();
+            submit(Job {
+                clear_cookies: true,
+                profile_html,
+                source_id: rt.source.id().to_owned(),
+                context,
+                url: url.to_owned(),
+                method: "GET".into(),
+                body: None,
+                content_type: None,
+                headers: Vec::new(),
+                html: None,
+                js: None,
+                source_regex: None,
+                user_agent: DEFAULT_UA.into(),
+                cookies: crate::browser_cookie::export(&rt.net, url),
+                timeout: Duration::from_secs(10),
+                interactive: Interactive::Never,
+                prompt: String::new(),
+                cookies_only: true,
+                bridge: None,
+            })?;
+        }
+        Ok(())
+    })();
+    // 清理期间新排队的任务也不能在清理结束后回填旧浏览器状态。
+    rt.net.remove_cookies(url);
+    result
+}
+
 /// 交给 WebView 线程的任务。
 pub struct Job {
+    pub clear_cookies: bool,
+    pub profile_html: bool,
+    /// 与网络 Cookie 罐使用相同的书源身份，不按站点域名合并。
+    pub source_id: String,
     pub context: crate::control::Context,
     pub url: String,
     pub method: String,
@@ -32,7 +75,7 @@ pub struct Job {
     pub js: Option<String>,
     pub source_regex: Option<String>,
     pub user_agent: String,
-    pub cookies: Vec<(String, String)>,
+    pub cookies: crate::browser_cookie::Snapshot,
     pub timeout: Duration,
     pub interactive: Interactive,
     /// 显示窗口时的标题（告诉用户要做什么）。
@@ -55,7 +98,11 @@ pub enum Interactive {
 
 /// WebView 里保存的这个网址的 Cookie（登录后留在 WebView 里的状态）带回书源 Cookie 罐。
 pub fn sync_cookies_from_webview(scope: &Scope<'_, '_>, url: &str) -> Result<usize, String> {
+    let before = crate::browser_cookie::export(scope.net(), url);
     let out = submit(Job {
+        clear_cookies: false,
+        profile_html: false,
+        source_id: scope.source().id().to_owned(),
         context: {
             let mut c = crate::control::current();
             c.crawl = scope.source().meta.crawl.clone();
@@ -70,22 +117,14 @@ pub fn sync_cookies_from_webview(scope: &Scope<'_, '_>, url: &str) -> Result<usi
         js: None,
         source_regex: None,
         user_agent: DEFAULT_UA.into(),
-        cookies: Vec::new(),
+        cookies: before.clone(),
         timeout: Duration::from_secs(10),
         interactive: Interactive::Never,
         prompt: String::new(),
         cookies_only: true,
         bridge: None,
     })?;
-    if !out.cookies.is_empty() {
-        let header = out
-            .cookies
-            .iter()
-            .map(|(k, v)| format!("{k}={v}"))
-            .collect::<Vec<_>>()
-            .join("; ");
-        scope.net().set_cookie(url, &header);
-    }
+    crate::browser_cookie::import(scope.net(), url, &before, &out.cookies)?;
     Ok(out.cookies.len())
 }
 
@@ -157,16 +196,7 @@ pub fn looks_like_challenge(text: &str) -> bool {
 pub struct Output {
     pub text: String,
     pub url: String,
-    pub cookies: Vec<(String, String)>,
-}
-
-fn cookie_pairs(header: &str) -> Vec<(String, String)> {
-    header
-        .split(';')
-        .filter_map(|p| p.trim().split_once('='))
-        .map(|(k, v)| (k.trim().to_owned(), v.trim().to_owned()))
-        .filter(|(k, _)| !k.is_empty())
-        .collect()
+    pub cookies: Vec<BrowserCookie>,
 }
 
 fn execute(
@@ -209,11 +239,12 @@ pub fn execute_with(
         .find(|(k, _)| k.eq_ignore_ascii_case("user-agent"))
         .map(|(_, v)| v.clone())
         .unwrap_or_else(|| DEFAULT_UA.to_owned());
-    let cookies = reqwest::Url::parse(&url)
-        .map(|u| cookie_pairs(&scope.net().cookie_header(&u)))
-        .unwrap_or_default();
+    let cookies = crate::browser_cookie::export(scope.net(), &url);
     scope.log("WebView 请求打开网页");
     let out = submit(Job {
+        clear_cookies: false,
+        profile_html: false,
+        source_id: scope.source().id().to_owned(),
         context: {
             let mut c = crate::control::current();
             c.crawl = scope.source().meta.crawl.clone();
@@ -231,25 +262,14 @@ pub fn execute_with(
         source_regex: request.and_then(|r| r.source_regex.clone()),
         headers: headers.to_vec(),
         user_agent,
-        cookies,
+        cookies: cookies.clone(),
         timeout: TIMEOUT,
         interactive,
         prompt,
         cookies_only: false,
         bridge: None,
     })?;
-    if !out.cookies.is_empty() {
-        let header = out
-            .cookies
-            .iter()
-            .map(|(k, v)| format!("{k}={v}"))
-            .collect::<Vec<_>>()
-            .join("; ");
-        scope.net().set_cookie(&out.url, &header);
-        if out.url != url {
-            scope.net().set_cookie(&url, &header);
-        }
-    }
+    crate::browser_cookie::import(scope.net(), &out.url, &cookies, &out.cookies)?;
     Ok(out)
 }
 
@@ -308,7 +328,14 @@ pub fn supported() -> bool {
 
 #[cfg(not(windows))]
 mod host {
-    pub fn submit(_job: super::Job) -> Result<super::Output, String> {
+    pub fn submit(job: super::Job) -> Result<super::Output, String> {
+        if job.clear_cookies {
+            return Ok(super::Output {
+                text: String::new(),
+                url: job.url,
+                cookies: Vec::new(),
+            });
+        }
         Err(super::UNSUPPORTED.into())
     }
 }
@@ -353,7 +380,32 @@ mod host {
         if job.interactive == super::Interactive::Always && !context.interactive {
             return Err("需要网页验证：当前任务不允许交互".into());
         }
-        let html = job.bridge.is_some();
+        let html = job.profile_html;
+        if job.clear_cookies {
+            if let Some(result) = ACTIVE_COOKIES.with(|active| {
+                let active = active.borrow();
+                active
+                    .as_ref()
+                    .filter(|(source, profile, _)| source == &job.source_id && *profile == html)
+                    .map(|(_, _, manager)| unsafe {
+                        clear_manager(manager, &job.url, Instant::now() + job.timeout)
+                    })
+            }) {
+                result?;
+                return Ok(Output {
+                    text: String::new(),
+                    url: job.url,
+                    cookies: Vec::new(),
+                });
+            }
+            if !std::path::Path::new(&profile_folder(&job.source_id, html)).exists() {
+                return Ok(Output {
+                    text: String::new(),
+                    url: job.url,
+                    cookies: Vec::new(),
+                });
+            }
+        }
         let queues = if html { &HTML_QUEUE } else { &QUEUE };
         let sender = {
             let mut queue = queues.get_or_init(Default::default).lock().unwrap();
@@ -401,15 +453,23 @@ mod host {
                                     continue;
                                 }
                             };
-                            let configuration =
-                                format!("{}:{args}", html || job.context.corpus.is_some());
+                            let configuration = format!(
+                                "{}:{args}:{}",
+                                html || job.context.corpus.is_some(),
+                                job.source_id
+                            );
                             if webview.is_none()
                                 || configuration != active_args
                                 || job.source_regex.is_some()
                             {
                                 drop(webview.take());
-                                match unsafe { create(&args, html || job.context.corpus.is_some()) }
-                                {
+                                match unsafe {
+                                    create(
+                                        &args,
+                                        html || job.context.corpus.is_some(),
+                                        &job.source_id,
+                                    )
+                                } {
                                     Ok(w) => {
                                         webview = Some(w);
                                         active_args = configuration;
@@ -450,6 +510,8 @@ mod host {
     }
 
     thread_local! {
+        static ACTIVE_COOKIES: std::cell::RefCell<Option<(String, bool, ICoreWebView2CookieManager)>> = const { std::cell::RefCell::new(None) };
+        static RESIZE_CONTROLLER: std::cell::RefCell<Option<ICoreWebView2Controller>> = const { std::cell::RefCell::new(None) };
         static WINDOW: std::cell::Cell<isize> = const { std::cell::Cell::new(0) };
         static CLOSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
         static CLOSE_ABORT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -457,6 +519,16 @@ mod host {
 
     extern "system" fn window_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
         unsafe {
+            if msg == WM_SIZE {
+                let controller = RESIZE_CONTROLLER.with(|slot| slot.borrow().clone());
+                if let Some(controller) = controller {
+                    let mut bounds = RECT::default();
+                    if GetClientRect(hwnd, &mut bounds).is_ok() {
+                        let _ = controller.SetBounds(bounds);
+                    }
+                }
+                return LRESULT(0);
+            }
             if msg == WM_CLOSE {
                 // 用户关窗口：只隐藏，WebView 留着下次用。
                 let _ = ShowWindow(hwnd, SW_HIDE);
@@ -504,6 +576,8 @@ mod host {
     struct Controller(ICoreWebView2Controller);
     impl Drop for Controller {
         fn drop(&mut self) {
+            ACTIVE_COOKIES.with(|active| active.borrow_mut().take());
+            RESIZE_CONTROLLER.with(|slot| slot.borrow_mut().take());
             unsafe {
                 let _ = self.0.Close();
                 let _ = DestroyWindow(window());
@@ -514,6 +588,7 @@ mod host {
     unsafe fn create(
         args: &str,
         html: bool,
+        source_id: &str,
     ) -> Result<(Controller, ICoreWebView2, ICoreWebView2Environment), String> {
         let fail = |e: &dyn std::fmt::Debug| {
             format!("WebView2 不可用（可能没有安装 WebView2 运行时）：{e:?}")
@@ -545,14 +620,7 @@ mod host {
             )
             .map_err(|e| fail(&e))?;
             WINDOW.set(hwnd.0 as isize);
-            use sha2::{Digest, Sha256};
-            let hash = hex::encode(Sha256::digest(args.as_bytes()));
-            let folder = HSTRING::from(format!(
-                "{}\\{}-{}",
-                data_folder(),
-                if html { "html" } else { "page" },
-                &hash[..12]
-            ));
+            let folder = HSTRING::from(profile_folder(source_id, html));
             let options = webview2_com::CoreWebView2EnvironmentOptions::default();
             options.set_additional_browser_arguments(args.to_owned());
             let options: ICoreWebView2EnvironmentOptions = options.into();
@@ -682,6 +750,7 @@ mod host {
                     )
                     .map_err(|e| fail(&e))?;
             }
+            RESIZE_CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller.clone()));
             Ok((Controller(controller), webview, env_for_jobs))
         }
     }
@@ -794,15 +863,37 @@ mod host {
         job: &Job,
     ) -> Result<Output, String> {
         job.context.check()?;
+        if !job.clear_cookies {
+            job.cookies.check()?;
+        }
         let mut deadline = Instant::now() + job.timeout;
         unsafe {
+            let cookie_manager = webview
+                .cast::<ICoreWebView2_2>()
+                .and_then(|w| w.CookieManager())
+                .map_err(|_| "浏览器 Cookie 管理器不可用")?;
+            ACTIVE_COOKIES.with(|active| {
+                *active.borrow_mut() = Some((
+                    job.source_id.clone(),
+                    job.profile_html,
+                    cookie_manager.clone(),
+                ))
+            });
+            if job.clear_cookies {
+                clear_manager(&cookie_manager, &job.url, deadline)?;
+                return Ok(Output {
+                    text: String::new(),
+                    url: job.url.clone(),
+                    cookies: Vec::new(),
+                });
+            }
             if job.cookies_only {
                 let cookies = match webview
                     .cast::<ICoreWebView2_2>()
                     .and_then(|w| w.CookieManager())
                 {
-                    Ok(manager) => read_cookies(&manager, &job.url, deadline),
-                    Err(_) => Vec::new(),
+                    Ok(manager) => read_cookies(&manager, &job.url, deadline)?,
+                    Err(_) => return Err("浏览器 Cookie 管理器不可用".into()),
                 };
                 return Ok(Output {
                     text: String::new(),
@@ -811,7 +902,8 @@ mod host {
                 });
             }
             // 注册在导航之前，返回首个匹配的 HTTP(S) 请求 URL，不读取资源正文。
-            let captured = std::rc::Rc::new(std::cell::RefCell::new(None::<String>));
+            let captured =
+                std::rc::Rc::new(std::cell::RefCell::new(None::<Result<String, String>>));
             let _capture = if let Some(regex) = &job.source_regex {
                 let pattern = crate::pattern::compile(regex).ok_or("资源匹配规则正则无效")?;
                 webview
@@ -829,8 +921,12 @@ mod host {
                                 let mut uri = PWSTR::null();
                                 request.Uri(&mut uri)?;
                                 let uri = take_pwstr(uri);
-                                if super::web_url(&uri) && pattern.is_match(&uri) {
-                                    *result.borrow_mut() = Some(uri);
+                                if super::web_url(&uri) {
+                                    match crate::pattern::checked(|| pattern.is_match(&uri)) {
+                                        Ok(true) => *result.borrow_mut() = Some(Ok(uri)),
+                                        Ok(false) => {}
+                                        Err(error) => *result.borrow_mut() = Some(Err(error)),
+                                    }
                                 }
                             }
                             Ok(())
@@ -855,16 +951,38 @@ mod host {
                 .cast::<ICoreWebView2_2>()
                 .and_then(|w| w.CookieManager())
                 .ok();
-            if let (Some(manager), Ok(url)) = (&manager, reqwest::Url::parse(&job.url)) {
-                let domain = url.host_str().unwrap_or("").to_owned();
-                for (name, value) in &job.cookies {
+            if let Some(manager) = &manager {
+                for c in &job.cookies.entries {
                     if let Ok(cookie) = manager.CreateCookie(
-                        &HSTRING::from(name.as_str()),
-                        &HSTRING::from(value.as_str()),
-                        &HSTRING::from(domain.as_str()),
-                        w!("/"),
+                        &HSTRING::from(c.name.as_str()),
+                        &HSTRING::from(c.value.as_str()),
+                        &HSTRING::from(c.domain.as_str()),
+                        &HSTRING::from(c.path.as_str()),
                     ) {
-                        let _ = manager.AddOrUpdateCookie(&cookie);
+                        cookie
+                            .SetIsSecure(c.secure)
+                            .map_err(|_| "Cookie 安全属性同步失败")?;
+                        cookie
+                            .SetIsHttpOnly(c.http_only)
+                            .map_err(|_| "Cookie 安全属性同步失败")?;
+                        let same_site = match c.same_site.as_str() {
+                            "None" => COREWEBVIEW2_COOKIE_SAME_SITE_KIND_NONE,
+                            "Strict" => COREWEBVIEW2_COOKIE_SAME_SITE_KIND_STRICT,
+                            _ => COREWEBVIEW2_COOKIE_SAME_SITE_KIND_LAX,
+                        };
+                        cookie
+                            .SetSameSite(same_site)
+                            .map_err(|_| "Cookie 安全属性同步失败")?;
+                        if let Some(expires) = c.expires {
+                            cookie
+                                .SetExpires(expires)
+                                .map_err(|_| "Cookie 有效期同步失败")?;
+                        }
+                        manager
+                            .AddOrUpdateCookie(&cookie)
+                            .map_err(|_| "浏览器 Cookie 写入失败")?;
+                    } else {
+                        return Err("浏览器 Cookie 创建失败".into());
                     }
                 }
             }
@@ -916,7 +1034,7 @@ mod host {
             let text = loop {
                 job.context.check()?;
                 if let Some(url) = captured.borrow_mut().take() {
-                    break url;
+                    break url?;
                 }
                 if let Some(rt) = &job.bridge {
                     let queue = script(
@@ -1014,8 +1132,8 @@ mod host {
                 job.url.clone()
             };
             let cookies = match manager {
-                Some(manager) => read_cookies(&manager, &url, deadline),
-                None => Vec::new(),
+                Some(manager) => read_cookies(&manager, &url, deadline)?,
+                None => return Err("浏览器 Cookie 管理器不可用".into()),
             };
             Ok(Output { text, url, cookies })
         }
@@ -1038,41 +1156,203 @@ mod host {
         }
     }
 
+    #[test]
+    #[ignore = "requires installed Windows WebView2; run with isolated LOCALAPPDATA"]
+    fn repair88_webview_resize_and_cookie_profiles() {
+        assert!(std::env::var("EASYPUB_WEBVIEW_TEST_ISOLATED").is_ok());
+        let deadline = || Instant::now() + Duration::from_secs(15);
+        unsafe {
+            // Keep browser environments alive: this checks profile isolation,
+            // not Chromium's asynchronous persistence during process shutdown.
+            let mut environments = Vec::new();
+            for (source, html, expected) in [
+                ("fixture-a", false, false),
+                ("fixture-b", false, false),
+                ("fixture-a", true, false),
+                ("fixture-a", false, true),
+            ] {
+                let (controller, view, environment) = create("", html, source).unwrap();
+                for (width, height) in [(800, 600), (1370, 940), (640, 480)] {
+                    MoveWindow(window(), 0, 0, width, height, false).unwrap();
+                    pump();
+                    let mut client = RECT::default();
+                    let mut actual = RECT::default();
+                    GetClientRect(window(), &mut client).unwrap();
+                    controller.0.Bounds(&mut actual).unwrap();
+                    assert_eq!(
+                        (actual.left, actual.top, actual.right, actual.bottom),
+                        (client.left, client.top, client.right, client.bottom)
+                    );
+                }
+                let manager = view
+                    .cast::<ICoreWebView2_2>()
+                    .unwrap()
+                    .CookieManager()
+                    .unwrap();
+                let cookies = read_cookies(&manager, "", deadline()).unwrap();
+                assert_eq!(cookies.iter().any(|c| c.name == "fixture"), expected);
+                if source == "fixture-a" && !html && !expected {
+                    for path in ["/", "/books"] {
+                        let cookie = manager
+                            .CreateCookie(
+                                w!("fixture"),
+                                w!("value"),
+                                w!("example.test"),
+                                &HSTRING::from(path),
+                            )
+                            .unwrap();
+                        cookie.SetExpires(4102444800.0).unwrap();
+                        manager.AddOrUpdateCookie(&cookie).unwrap();
+                    }
+                    assert_eq!(read_cookies(&manager, "", deadline()).unwrap().len(), 2);
+                }
+                if expected {
+                    assert!(
+                        clear_manager(
+                            &manager,
+                            "https://example.test/",
+                            Instant::now() - Duration::from_secs(1)
+                        )
+                        .is_err()
+                    );
+                    clear_manager(&manager, "https://example.test/", deadline()).unwrap();
+                    assert!(read_cookies(&manager, "", deadline()).unwrap().is_empty());
+                }
+                drop(manager);
+                drop(view);
+                drop(controller);
+                assert!(RESIZE_CONTROLLER.with(|slot| slot.borrow().is_none()));
+                environments.push(environment);
+            }
+        }
+    }
+
+    fn profile_folder(source_id: &str, html: bool) -> String {
+        use sha2::{Digest, Sha256};
+        let hash = hex::encode(Sha256::digest(source_id.as_bytes()));
+        format!(
+            "{}\\source-{}-{hash}",
+            data_folder(),
+            if html { "html" } else { "page" }
+        )
+    }
+
+    unsafe fn clear_manager(
+        manager: &ICoreWebView2CookieManager,
+        url: &str,
+        deadline: Instant,
+    ) -> Result<(), String> {
+        let url = reqwest::Url::parse(url).map_err(|_| "Cookie 网址无效")?;
+        let host = url.host_str().ok_or("Cookie 网址无效")?;
+        unsafe {
+            // 空 URI 枚举整个 profile，才能清除同域不同路径的 Cookie。
+            for c in read_cookies(manager, "", deadline)? {
+                let domain = c.domain.trim_start_matches('.');
+                if host.eq_ignore_ascii_case(domain)
+                    || (c.domain.starts_with('.')
+                        && host
+                            .to_ascii_lowercase()
+                            .ends_with(&format!(".{}", domain.to_ascii_lowercase())))
+                {
+                    manager
+                        .DeleteCookiesWithDomainAndPath(
+                            &HSTRING::from(c.name),
+                            &HSTRING::from(c.domain),
+                            &HSTRING::from(c.path),
+                        )
+                        .map_err(|_| "浏览器 Cookie 删除失败")?;
+                }
+            }
+        }
+        // WebView2 schedules deletion asynchronously. Do not report success while
+        // the browser can still return the credentials we were asked to clear.
+        loop {
+            let remaining = unsafe { read_cookies(manager, "", deadline)? };
+            if !remaining.iter().any(|c| {
+                let domain = c.domain.trim_start_matches('.');
+                host.eq_ignore_ascii_case(domain)
+                    || (c.domain.starts_with('.')
+                        && host
+                            .to_ascii_lowercase()
+                            .ends_with(&format!(".{}", domain.to_ascii_lowercase())))
+            }) {
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                return Err("浏览器 Cookie 清理未完成，请重试".into());
+            }
+            sleep_pumping(Duration::from_millis(10));
+        }
+    }
+
     unsafe fn read_cookies(
         manager: &ICoreWebView2CookieManager,
         url: &str,
         deadline: Instant,
-    ) -> Vec<(String, String)> {
+    ) -> Result<Vec<super::BrowserCookie>, String> {
         unsafe {
-            let mut cookies = Vec::new();
-            {
-                let (tx, rx) = mpsc::channel();
-                let handler = GetCookiesCompletedHandler::create(Box::new(move |error, list| {
+            let (tx, rx) = mpsc::channel();
+            let handler = GetCookiesCompletedHandler::create(Box::new(move |error, list| {
+                let result = (|| -> Result<Vec<super::BrowserCookie>, String> {
                     let mut out = Vec::new();
-                    if error.is_ok()
-                        && let Some(list) = list
-                    {
-                        let mut count = 0u32;
-                        let _ = list.Count(&mut count);
-                        for i in 0..count {
-                            if let Ok(cookie) = list.GetValueAtIndex(i) {
-                                let (mut name, mut value) = (PWSTR::null(), PWSTR::null());
-                                if cookie.Name(&mut name).is_ok()
-                                    && cookie.Value(&mut value).is_ok()
-                                {
-                                    out.push((take_pwstr(name), take_pwstr(value)));
-                                }
-                            }
-                        }
+                    if error.is_err() {
+                        return Err("浏览器 Cookie 读取失败".into());
                     }
-                    let _ = tx.send(out);
-                    Ok(())
-                }));
-                if manager.GetCookies(&HSTRING::from(url), &handler).is_ok() {
-                    cookies = wait(&rx, deadline + Duration::from_secs(5)).unwrap_or_default();
-                }
-            }
-            cookies
+                    let list = list.ok_or("浏览器 Cookie 列表不可用")?;
+                    let mut count = 0u32;
+                    list.Count(&mut count)
+                        .map_err(|_| "浏览器 Cookie 数量读取失败")?;
+                    for i in 0..count {
+                        let cookie = list
+                            .GetValueAtIndex(i)
+                            .map_err(|_| "浏览器 Cookie 读取失败")?;
+                        let mut name = PWSTR::null();
+                        let mut value = PWSTR::null();
+                        let mut domain = PWSTR::null();
+                        let mut path = PWSTR::null();
+                        let mut secure = BOOL::default();
+                        let mut http_only = BOOL::default();
+                        let mut session = BOOL::default();
+                        let mut same_site = COREWEBVIEW2_COOKIE_SAME_SITE_KIND_LAX;
+                        let mut expires = 0.0;
+                        let ok = cookie.Name(&mut name).is_ok()
+                            && cookie.Value(&mut value).is_ok()
+                            && cookie.Domain(&mut domain).is_ok()
+                            && cookie.Path(&mut path).is_ok()
+                            && cookie.IsSecure(&mut secure).is_ok()
+                            && cookie.IsHttpOnly(&mut http_only).is_ok()
+                            && cookie.IsSession(&mut session).is_ok()
+                            && cookie.SameSite(&mut same_site).is_ok()
+                            && cookie.Expires(&mut expires).is_ok();
+                        let c = super::BrowserCookie {
+                            name: take_pwstr(name),
+                            value: take_pwstr(value),
+                            domain: take_pwstr(domain),
+                            path: take_pwstr(path),
+                            secure: secure.as_bool(),
+                            http_only: http_only.as_bool(),
+                            same_site: match same_site {
+                                COREWEBVIEW2_COOKIE_SAME_SITE_KIND_NONE => "None",
+                                COREWEBVIEW2_COOKIE_SAME_SITE_KIND_STRICT => "Strict",
+                                _ => "Lax",
+                            }
+                            .into(),
+                            expires: (!session.as_bool()).then_some(expires),
+                        };
+                        if !ok {
+                            return Err("浏览器 Cookie 属性读取失败".into());
+                        }
+                        out.push(c);
+                    }
+                    Ok(out)
+                })();
+                let _ = tx.send(result);
+                Ok(())
+            }));
+            manager
+                .GetCookies(&HSTRING::from(url), &handler)
+                .map_err(|_| "浏览器 Cookie 读取启动失败")?;
+            wait(&rx, deadline + Duration::from_secs(5)).ok_or("浏览器 Cookie 读取超时")?
         }
     }
 }

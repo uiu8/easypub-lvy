@@ -617,7 +617,7 @@ fn asset(store: &Store, path: &Path) -> Result<Value> {
             if digest(&temp, &cancel)? != (bytes, hash.clone()) {
                 return Err("storage_source_changed");
             }
-            match fs::hard_link(&temp, &destination) {
+            match crate::file_publish::move_new(&temp, &destination) {
                 Ok(()) => Ok(()),
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
                 Err(e) => Err(io(e)),

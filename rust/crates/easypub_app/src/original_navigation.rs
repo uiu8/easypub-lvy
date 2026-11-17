@@ -295,11 +295,11 @@ pub fn inspect(path: &str) -> Result<String, ApiError> {
     flatten(&nav.entries, &mut entries);
     Ok(serde_json::json!({"entries":entries,"has_cover":nav.cover.is_some()}).to_string())
 }
-fn filtered(entries: &[Entry], options: &NavigationOptions) -> Vec<Entry> {
+fn filtered(entries: &[Entry], excludes: &impl Fn(&str) -> bool) -> Vec<Entry> {
     let mut out = Vec::new();
     for e in entries {
-        let children = filtered(&e.children, options);
-        if options.excludes(&e.title) {
+        let children = filtered(&e.children, excludes);
+        if excludes(&e.title) {
             out.extend(children)
         } else {
             out.push(Entry {
@@ -430,7 +430,7 @@ pub(crate) fn rewrite(
     if options.start != "toc" {
         valid_target(files, &start)?;
     }
-    let mut entries = filtered(&original.entries, options);
+    let mut entries = filtered(&original.entries, &options.filter().map_err(|_| invalid())?);
     // Navigation must remain usable even when the filter removes every entry.
     if entries.is_empty() {
         entries.push(Entry {

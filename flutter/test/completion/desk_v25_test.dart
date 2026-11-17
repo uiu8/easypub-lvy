@@ -99,7 +99,33 @@ void main() {
     // 内置规则要求数字标题后至少 3 行正文（原为 5），样书每章 3 行，直接找到。
     expect(find.byKey(const ValueKey('numeric-minimum')), findsOneWidget);
     expect(t.widget<Text>(summary).data, '找到 3 个数字标题 · 新增章节 3 · 改写标题 0');
+    await t.tap(find.byKey(const ValueKey('numeric-confirm')));
+    await t.pump();
+    expect(
+      t
+          .widget<DeskButton>(find.byKey(const ValueKey('numeric-apply')))
+          .onPressed,
+      isNotNull,
+    );
     await t.enterText(find.byKey(const ValueKey('numeric-minimum')), '4');
+    await t.pump();
+    expect(
+      t
+          .widget<DeskButton>(find.byKey(const ValueKey('numeric-apply')))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      t
+          .widget<Checkbox>(
+            find.descendant(
+              of: find.byKey(const ValueKey('numeric-confirm')),
+              matching: find.byType(Checkbox),
+            ),
+          )
+          .value,
+      false,
+    );
     await t.tap(find.text('重新预览'));
     await settle();
     expect(t.widget<Text>(summary).data, '没有找到需要识别或改写的数字标题。');
@@ -125,6 +151,23 @@ void main() {
     await t.tap(find.byKey(const ValueKey('numeric-normalize')));
     await settle();
 
+    for (final invalid in ['', '-1', '1001', '1.5']) {
+      await t.enterText(find.byKey(const ValueKey('numeric-minimum')), invalid);
+      await t.pump();
+      expect(find.text('正文行数应为 0 至 1000 的整数。'), findsOneWidget);
+      expect(
+        t
+            .widget<DeskButton>(find.byKey(const ValueKey('numeric-apply')))
+            .onPressed,
+        isNull,
+      );
+      await t.tap(find.text('重新预览'));
+      await settle();
+      expect(find.text('正文行数应为 0 至 1000 的整数。'), findsOneWidget);
+    }
+    await t.enterText(find.byKey(const ValueKey('numeric-minimum')), '3');
+    await t.tap(find.text('重新预览'));
+    await settle();
     await t.tap(find.byKey(const ValueKey('numeric-confirm')));
     await t.pump();
     await t.tap(find.byKey(const ValueKey('numeric-apply')));

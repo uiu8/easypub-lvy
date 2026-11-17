@@ -230,9 +230,11 @@ pub(crate) fn execute_controlled(
                 fault,
                 Some(&evidence),
             )?;
-            Ok(
-                json!({"committed":true,"output_path":output,"byte_length":bytes.len(),"transaction":report,"artifact_reused":reused, "expected_metadata":{"title":prepared.manifest().title,"author":prepared.manifest().author,"language":prepared.manifest().language}}),
-            )
+            let mut receipt = json!({"committed":true,"output_path":output,"byte_length":bytes.len(),"transaction":report,"artifact_reused":reused, "expected_metadata":{"title":prepared.manifest().title,"author":prepared.manifest().author,"language":prepared.manifest().language}});
+            if txt {
+                receipt["text_encoding"] = json!(prepared.manifest().output_options.txt_encoding);
+            }
+            Ok(receipt)
         }
     }
 }

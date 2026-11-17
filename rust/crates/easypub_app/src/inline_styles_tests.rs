@@ -27,6 +27,54 @@ fn anchor(book: &EffectiveBook, line: &str, selected: &str) -> Anchor {
     }
 }
 #[test]
+fn repair88_nested_links_render_one_target_and_keep_other_styles() {
+    let (_, book) = compose("第一章 标题\n甲乙丙丁");
+    let line = "甲乙丙丁";
+    let make = |selected, style, href: Option<&str>| Annotation {
+        id: "a".repeat(64),
+        anchor: anchor(&book, line, selected),
+        style,
+        href: href.map(str::to_owned),
+    };
+    let manual = make("甲乙丙丁", Style::Link, Some("https://manual.example"));
+    let source = make("甲乙丙丁", Style::Link, Some("https://source.example"));
+    let inner = make("乙丙", Style::Link, Some("https://inner.example"));
+    let bold = make("乙丙", Style::Bold, None);
+    let html = render(line, 0, &[&manual, &source, &inner, &bold], None).unwrap();
+    let wrapped = format!("<root>{html}</root>");
+    let doc = roxmltree::Document::parse(&wrapped).unwrap();
+    let links: Vec<_> = doc.descendants().filter(|n| n.has_tag_name("a")).collect();
+    assert_eq!(links.len(), 3);
+    assert_eq!(
+        links
+            .iter()
+            .map(|n| n.attribute("href").unwrap())
+            .collect::<Vec<_>>(),
+        vec![
+            "https://manual.example",
+            "https://inner.example",
+            "https://manual.example"
+        ]
+    );
+    assert!(
+        links
+            .iter()
+            .all(|n| !n.ancestors().skip(1).any(|p| p.has_tag_name("a")))
+    );
+    assert!(
+        links[1]
+            .descendants()
+            .any(|n| n.attribute("class") == Some("inline-bold"))
+    );
+    assert_eq!(
+        doc.descendants()
+            .filter(|n| n.is_text())
+            .filter_map(|n| n.text())
+            .collect::<String>(),
+        line
+    );
+}
+#[test]
 fn composition_unicode_conflicts_invalidation_and_notes() {
     let text = "第一章 开始\r\n　😀甲乙丙丁｜汉《hàn》重点。\r\n";
     let (source, book) = compose(text);

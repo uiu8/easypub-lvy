@@ -287,100 +287,155 @@ impl ImportService {
         } else {
             identity.update(selected_json.as_bytes());
         }
-        let key = composition_key.clone().unwrap_or_else(|| format!("{:x}", identity.finalize()));
-        let cached = self.effective_views.lock().expect("effective cache").iter()
-            .find(|v| v.key == key && v.source.ptr_eq(&Arc::downgrade(&source))).cloned();
-        if composition_key.is_some() && (!settings_json.is_empty() || manual.is_some() || cleanup.is_some() || post_edits.is_some() || rebase_from.is_some() || catalog.is_some()) {
-            return Err(ApiError::new(ErrorCode::InvalidRule,"publication","use_composition_or_edits"));
+        let key = composition_key
+            .clone()
+            .unwrap_or_else(|| format!("{:x}", identity.finalize()));
+        let cached = self
+            .effective_views
+            .lock()
+            .expect("effective cache")
+            .iter()
+            .find(|v| v.key == key && v.source.ptr_eq(&Arc::downgrade(&source)))
+            .cloned();
+        if composition_key.is_some()
+            && (!settings_json.is_empty()
+                || manual.is_some()
+                || cleanup.is_some()
+                || post_edits.is_some()
+                || rebase_from.is_some()
+                || catalog.is_some())
+        {
+            return Err(ApiError::new(
+                ErrorCode::InvalidRule,
+                "publication",
+                "use_composition_or_edits",
+            ));
         }
         if composition_key.is_some() && cached.is_none() {
-            return Err(ApiError::new(ErrorCode::StaleRevision,"publication","refresh_composition"));
+            return Err(ApiError::new(
+                ErrorCode::StaleRevision,
+                "publication",
+                "refresh_composition",
+            ));
         }
-        let view = if let Some(view) = cached { view } else {
-        // 依据标识按“快照 + 配方”缓存（桥接第 2 批），大书每次编辑后不再重新哈希整本书。
-        let identity_key = crate::base_identity::recipe_key(&[
-            b"publication-selection",
-            &source.instance().to_le_bytes(),
-            &serde_json::to_vec(&settings).map_err(|_| {
-                ApiError::new(ErrorCode::Internal, "publication", "retry_composition")
-            })?,
-            recipe["catalog"].to_string().as_bytes(),
-            manual.as_deref().unwrap_or("\u{0}none").as_bytes(),
-            cleanup.as_deref().unwrap_or("\u{0}none").as_bytes(),
-        ]);
-        let (book, editing_base_id) = crate::base_identity::identified(identity_key, || {
-            crate::catalog::compose_selection(
-                &source,
-                &settings,
-                catalog,
-                manual.as_deref(),
-                cleanup.as_deref(),
-            )
-        })?;
-        let (book, rebase) = match (&post_edits, &rebase_from) {
-            (Some(edits), Some(from)) if !edits.is_empty() => {
-                // 检查点只存了结果：需要创建它那一步保存的原始操作才能换算。
-                if edits.checkpoint.is_some() && from.checkpoint_root.is_none() {
-                    return Err(ApiError::new(ErrorCode::InvalidRule, "publication", "rebase_checkpoint"));
-                }
-                let old_catalog = match &recipe["catalog"] {
-                    Value::Null => None,
-                    v => Some(serde_json::from_value(v.clone()).map_err(|_| {
-                        ApiError::new(ErrorCode::InvalidRule, "publication", "review_composition")
-                    })?),
-                };
-                let old_cleanup = from.cleanup.as_ref().map(Value::to_string);
-                let old = crate::catalog::compose_selection(
+        let view = if let Some(view) = cached {
+            view
+        } else {
+            // 依据标识按“快照 + 配方”缓存（桥接第 2 批），大书每次编辑后不再重新哈希整本书。
+            let identity_key = crate::base_identity::recipe_key(&[
+                b"publication-selection",
+                &source.instance().to_le_bytes(),
+                &serde_json::to_vec(&settings).map_err(|_| {
+                    ApiError::new(ErrorCode::Internal, "publication", "retry_composition")
+                })?,
+                recipe["catalog"].to_string().as_bytes(),
+                manual.as_deref().unwrap_or("\u{0}none").as_bytes(),
+                cleanup.as_deref().unwrap_or("\u{0}none").as_bytes(),
+            ]);
+            let (book, editing_base_id) = crate::base_identity::identified(identity_key, || {
+                crate::catalog::compose_selection(
                     &source,
                     &settings,
-                    old_catalog,
+                    catalog,
                     manual.as_deref(),
-                    old_cleanup.as_deref(),
-                )?;
-                if let Some(root) = &from.checkpoint_root {
-                    let moved = crate::effective_draft::rebase_across_checkpoint(old, book, root, edits)
-                        .map_err(|_| ApiError::new(ErrorCode::InvalidRule, "publication", "rebase_checkpoint"))?;
-                    let summary = serde_json::json!({"request": null, "kept": moved.kept,
-                        "skipped": moved.skipped, "total": moved.total, "checkpoint": true});
-                    (moved.book, Some(summary))
-                } else {
-                    let moved = easypub_core::effective_edit::rebase(
-                        old,
-                        book,
-                        &easypub_core::effective_edit::Request {
-                            base_id: edits.base_id.clone(),
-                            actions: edits.actions.clone(),
-                        },
+                    cleanup.as_deref(),
+                )
+            })?;
+            let (book, rebase) = match (&post_edits, &rebase_from) {
+                (Some(edits), Some(from)) if !edits.is_empty() => {
+                    // 检查点只存了结果：需要创建它那一步保存的原始操作才能换算。
+                    if edits.checkpoint.is_some() && from.checkpoint_root.is_none() {
+                        return Err(ApiError::new(
+                            ErrorCode::InvalidRule,
+                            "publication",
+                            "rebase_checkpoint",
+                        ));
+                    }
+                    let old_catalog = match &recipe["catalog"] {
+                        Value::Null => None,
+                        v => Some(serde_json::from_value(v.clone()).map_err(|_| {
+                            ApiError::new(
+                                ErrorCode::InvalidRule,
+                                "publication",
+                                "review_composition",
+                            )
+                        })?),
+                    };
+                    let old_cleanup = from.cleanup.as_ref().map(Value::to_string);
+                    let old = crate::catalog::compose_selection(
+                        &source,
+                        &settings,
+                        old_catalog,
+                        manual.as_deref(),
+                        old_cleanup.as_deref(),
                     )?;
-                    let summary = serde_json::json!({"request": moved.request, "kept": moved.kept,
+                    if let Some(root) = &from.checkpoint_root {
+                        let moved = crate::effective_draft::rebase_across_checkpoint(
+                            old, book, root, edits,
+                        )
+                        .map_err(|_| {
+                            ApiError::new(
+                                ErrorCode::InvalidRule,
+                                "publication",
+                                "rebase_checkpoint",
+                            )
+                        })?;
+                        let summary = serde_json::json!({"request": null, "kept": moved.kept,
+                        "skipped": moved.skipped, "total": moved.total, "checkpoint": true});
+                        (moved.book, Some(summary))
+                    } else {
+                        let moved = easypub_core::effective_edit::rebase(
+                            old,
+                            book,
+                            &easypub_core::effective_edit::Request {
+                                base_id: edits.base_id.clone(),
+                                actions: edits.actions.clone(),
+                            },
+                        )?;
+                        let summary = serde_json::json!({"request": moved.request, "kept": moved.kept,
                         "skipped": moved.skipped, "total": edits.actions.len()});
-                    (moved.book, Some(summary))
+                        (moved.book, Some(summary))
+                    }
                 }
+                (Some(edits), _) => {
+                    let (book, _) =
+                        crate::edit_checkpoint::apply_identified(book, &editing_base_id, edits)?;
+                    (book, None)
+                }
+                (None, _) => (book, None),
+            };
+            let estimated_bytes = book
+                .text
+                .len()
+                .saturating_mul(3)
+                .saturating_add(book.tree.nodes.len().saturating_mul(1024))
+                .saturating_add(book.source_to_output_lines.len().saturating_mul(64));
+            let view = Arc::new(EffectiveView {
+                source: Arc::downgrade(&source),
+                key,
+                book,
+                editing_base_id,
+                estimated_bytes,
+                rebase,
+                diagnostics: OnceLock::new(),
+                evidence: OnceLock::new(),
+                repairs: OnceLock::new(),
+                line_index: OnceLock::new(),
+                cleanup_check: Default::default(),
+            });
+            if estimated_bytes <= MAX_EFFECTIVE_CACHE_BYTES {
+                let mut cache = self.effective_views.lock().expect("effective cache");
+                cache.retain(|v| v.source.strong_count() > 0 && !v.source.ptr_eq(&view.source));
+                while !cache.is_empty()
+                    && (cache.len() >= 2
+                        || cache.iter().map(|v| v.estimated_bytes).sum::<usize>() + estimated_bytes
+                            > MAX_EFFECTIVE_CACHE_BYTES)
+                {
+                    cache.remove(0);
+                }
+                cache.push(view.clone());
             }
-            (Some(edits), _) => {
-                let (book, _) =
-                    crate::edit_checkpoint::apply_identified(book, &editing_base_id, edits)?;
-                (book, None)
-            }
-            (None, _) => (book, None),
-        };
-        let estimated_bytes = book.text.len().saturating_mul(3)
-            .saturating_add(book.tree.nodes.len().saturating_mul(1024))
-            .saturating_add(book.source_to_output_lines.len().saturating_mul(64));
-        let view = Arc::new(EffectiveView { source: Arc::downgrade(&source), key,
-            book, editing_base_id, estimated_bytes, rebase,
-            diagnostics: OnceLock::new(), evidence: OnceLock::new(), repairs: OnceLock::new(),
-            line_index: OnceLock::new(), cleanup_check: Default::default() });
-        if estimated_bytes <= MAX_EFFECTIVE_CACHE_BYTES {
-            let mut cache = self.effective_views.lock().expect("effective cache");
-            cache.retain(|v| v.source.strong_count() > 0 && !v.source.ptr_eq(&view.source));
-            while !cache.is_empty() && (cache.len() >= 2 ||
-                cache.iter().map(|v| v.estimated_bytes).sum::<usize>() + estimated_bytes > MAX_EFFECTIVE_CACHE_BYTES) {
-                cache.remove(0);
-            }
-            cache.push(view.clone());
-        }
-        view
+            view
         };
         let book = &view.book;
         let editing_base_id = &view.editing_base_id;
@@ -410,7 +465,7 @@ impl ImportService {
                 Some(chars) => book.body_line_chunk(id, view.offset, chars),
                 None => book.body_preview(id, view.offset),
             })
-                .transpose()?
+            .transpose()?
         } else {
             None
         };
@@ -519,9 +574,20 @@ impl ImportService {
             .transpose()?;
         let cleanup_check = cleanup_check
             .map(|v| {
-                let diagnostics = view.diagnostics.get_or_init(|| SourceSnapshot::for_effective_diagnostics(book))
-                    .as_ref().map_err(Clone::clone)?;
-                book.cleanup_check_using(diagnostics, &view.line_index, &view.cleanup_check, v.offset, v.rules, v.pipeline, v.positions)
+                let diagnostics = view
+                    .diagnostics
+                    .get_or_init(|| SourceSnapshot::for_effective_diagnostics(book))
+                    .as_ref()
+                    .map_err(Clone::clone)?;
+                book.cleanup_check_using(
+                    diagnostics,
+                    &view.line_index,
+                    &view.cleanup_check,
+                    v.offset,
+                    v.rules,
+                    v.pipeline,
+                    v.positions,
+                )
             })
             .transpose()?;
         let statistics = statistics.then(|| {
@@ -555,10 +621,17 @@ impl ImportService {
             .find(|v| v.key == composition_key && v.source.ptr_eq(&Arc::downgrade(&source)))
             .cloned()
             .ok_or_else(|| {
-                ApiError::new(ErrorCode::StaleRevision, "publication", "refresh_composition")
+                ApiError::new(
+                    ErrorCode::StaleRevision,
+                    "publication",
+                    "refresh_composition",
+                )
             })?;
         let nodes = &view.book.tree.nodes;
-        Ok((nodes.iter().take(30_000).map(&mut visit).collect(), nodes.len()))
+        Ok((
+            nodes.iter().take(30_000).map(&mut visit).collect(),
+            nodes.len(),
+        ))
     }
     pub fn structure_text(
         &self,
@@ -627,7 +700,15 @@ impl ImportService {
             ApiError::new(ErrorCode::Internal, "start_job", "restart_application")
         })?;
         while state.jobs.len() >= 16 {
-            state.jobs.pop_first();
+            let completed = state
+                .jobs
+                .keys()
+                .find(|id| !state.active.contains_key(id))
+                .copied();
+            let Some(completed) = completed else {
+                break;
+            };
+            state.jobs.remove(&completed);
         }
         let token = CancellationToken::new();
         state.active.insert(id, token.clone());
@@ -939,9 +1020,11 @@ impl ImportService {
         // holding the source registry lock or changing commit-time validation.
         let mut cache = self.cleanup_preview.lock().expect("cleanup preview");
         if let Some(c) = cache.as_ref()
-            && c.request == key && c.source.upgrade().is_some_and(|s| Arc::ptr_eq(&s, source)) {
-                return Ok((Arc::clone(&c.plan), offset));
-            }
+            && c.request == key
+            && c.source.upgrade().is_some_and(|s| Arc::ptr_eq(&s, source))
+        {
+            return Ok((Arc::clone(&c.plan), offset));
+        }
         *cache = None;
         let plan = Arc::new(easypub_core::cleanup::prepare(source, &key)?);
         if plan.cache_bytes().saturating_add(key.capacity()) <= MAX_CLEANUP_CACHE_BYTES {
@@ -1394,6 +1477,20 @@ mod tests {
     }
 
     #[test]
+    fn repair88_completed_job_eviction_keeps_running_job_queryable() {
+        let service = ImportService::new().unwrap();
+        let running = service.start_cancellation_probe().unwrap();
+        for _ in 0..24 {
+            let short = service.start_cancellation_probe().unwrap();
+            service.cancel_job(short).unwrap();
+            assert_eq!(terminal(&service, short).phase, JobPhase::Cancelled);
+            assert!(!service.get_job(running).unwrap().terminal());
+        }
+        service.cancel_job(running).unwrap();
+        assert_eq!(terminal(&service, running).phase, JobPhase::Cancelled);
+        assert!(service.state.lock().unwrap().jobs.len() <= 16);
+    }
+    #[test]
     fn cancellation_stops_worker_before_releasing_capacity() {
         // 后来最多 MAX_ACTIVE_JOBS 个任务同时进行；名额满时，要等某个任务真正停下才腾出来。
         let service = ImportService::new().unwrap();
@@ -1609,32 +1706,82 @@ mod tests {
         assert_eq!(focused["body_preview"]["entry_id"], preferred);
         assert_eq!(focused["body_preview"]["rows"][0]["text"], "正文3");
         assert_eq!(query(90, None)["body_preview"], serde_json::Value::Null);
-        let handle_query = serde_json::json!({"kind":"publication", "composition_key":first["composition_key"],
-            "response_scope":"context", "effective_check":{"offset":0,"line":5,"original_line":5}}).to_string();
-        let cached: Value = serde_json::from_str(&service.effective_structure_text(
-            source.source_id.clone(), source.revision, String::new(), handle_query.clone(), 0,
-        ).unwrap()).unwrap();
+        let handle_query =
+            serde_json::json!({"kind":"publication", "composition_key":first["composition_key"],
+            "response_scope":"context", "effective_check":{"offset":0,"line":5,"original_line":5}})
+            .to_string();
+        let cached: Value = serde_json::from_str(
+            &service
+                .effective_structure_text(
+                    source.source_id.clone(),
+                    source.revision,
+                    String::new(),
+                    handle_query.clone(),
+                    0,
+                )
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(cached["nodes"].as_array().unwrap().len(), 0);
         assert_eq!(cached["effective_check"]["context_original_line"], 5);
-        assert!(!cached["effective_check"]["original_excerpt"][0]["anchor"].as_str().unwrap().is_empty());
+        assert!(
+            !cached["effective_check"]["original_excerpt"][0]["anchor"]
+                .as_str()
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(service.effective_views.lock().unwrap().len(), 1);
-        let positions_query = |positions: Value| serde_json::json!({"kind":"publication",
+        let positions_query = |positions: Value| {
+            serde_json::json!({"kind":"publication",
             "composition_key":first["composition_key"], "response_scope":"context",
-            "effective_check":{"offset":0,"positions":positions}}).to_string();
-        let positions: Value = serde_json::from_str(&service.effective_structure_text(
-            source.source_id.clone(), source.revision, String::new(),
-            positions_query(serde_json::json!({"summary":true,"entry_id":preferred})), 0,
-        ).unwrap()).unwrap();
+            "effective_check":{"offset":0,"positions":positions}})
+            .to_string()
+        };
+        let positions: Value = serde_json::from_str(
+            &service
+                .effective_structure_text(
+                    source.source_id.clone(),
+                    source.revision,
+                    String::new(),
+                    positions_query(serde_json::json!({"summary":true,"entry_id":preferred})),
+                    0,
+                )
+                .unwrap(),
+        )
+        .unwrap();
         let positions = &positions["effective_check"]["positions"];
-        assert_eq!(positions["total"], cached["effective_check"]["report"]["diagnostic"]["review_total"]);
+        assert_eq!(
+            positions["total"],
+            cached["effective_check"]["report"]["diagnostic"]["review_total"]
+        );
         assert!(positions["nodes"].is_array());
         assert_eq!(positions["chapter"]["entry_id"], preferred);
         assert_eq!(service.effective_views.lock().unwrap().len(), 1);
-        assert!(service.effective_structure_text(source.source_id.clone(), source.revision,
-            String::new(), positions_query(serde_json::json!({"entry_id":"missing"})), 0).is_err());
+        assert!(
+            service
+                .effective_structure_text(
+                    source.source_id.clone(),
+                    source.revision,
+                    String::new(),
+                    positions_query(serde_json::json!({"entry_id":"missing"})),
+                    0
+                )
+                .is_err()
+        );
         service.effective_views.lock().unwrap().clear();
-        assert_eq!(service.effective_structure_text(source.source_id.clone(), source.revision,
-            String::new(), handle_query, 0).unwrap_err().next_action, "refresh_composition");
+        assert_eq!(
+            service
+                .effective_structure_text(
+                    source.source_id.clone(),
+                    source.revision,
+                    String::new(),
+                    handle_query,
+                    0
+                )
+                .unwrap_err()
+                .next_action,
+            "refresh_composition"
+        );
         assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
         std::fs::remove_file(path).unwrap();
     }

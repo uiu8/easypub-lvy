@@ -85,14 +85,21 @@ class _CoverImageDialogState extends State<CoverImageDialog> {
         ? null
         : widget.autosave?.readDraft(widget.draftKey!);
     if (saved != null) {
+      final ticket = ++generation;
+      busy = true;
       fit = saved['fit'] as String? ?? fit;
       widget.session
           .inspectImage(saved['path'] as String)
           .then((value) {
-            if (mounted) setState(() => evidence = value);
+            if (mounted && ticket == generation)
+              setState(() => evidence = value);
           })
           .catchError((Object _) {
-            if (mounted) setState(() => error = '上次选择的图片不可用，请重新选择。');
+            if (mounted && ticket == generation)
+              setState(() => error = '上次选择的图片不可用，请重新选择。');
+          })
+          .whenComplete(() {
+            if (mounted && ticket == generation) setState(() => busy = false);
           });
     }
   }

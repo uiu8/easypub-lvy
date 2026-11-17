@@ -318,7 +318,7 @@ extension _BookSourceSources on _BookSourcePageState {
       ) ==
       true;
 
-  Future<void> _sourceAction(
+  Future<bool> _sourceAction(
     String method,
     Map<String, dynamic> params, {
     String? message,
@@ -332,8 +332,10 @@ extension _BookSourceSources on _BookSourcePageState {
             message ??
             '操作完成${result is Map && result['changed'] != null ? '，处理 ${result['changed']} 个书源' : ''}。';
       });
+      return true;
     } catch (e) {
       update(() => sourceMessage = bookSourceErrorText(e));
+      return false;
     }
   }
 

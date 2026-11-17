@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:easypub_desktop/application/chapter_service.dart';
 import 'package:easypub_desktop/application/conversion_service.dart';
 import 'package:easypub_desktop/prototype/prototype_state.dart';
+import 'package:easypub_desktop/prototype/txt_import.dart';
 import 'package:easypub_desktop/prototype/output_task.dart';
 import 'package:easypub_desktop/infrastructure/legacy_library_adapter.dart';
 import 'package:easypub_desktop/src/rust/frb_generated.dart';
@@ -21,6 +22,85 @@ void main() {
     ),
   );
 
+  test('刷新入口按格式接受容量边界，超限不进入转换器并恢复状态', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'repair88-refresh-size-',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final working = File('${root.path}/working.txt');
+    await working.writeAsString('第一章 测试\n正文。\n');
+    final source = await readBook(working.path, () => false);
+    for (final extension in ['epub', 'azw3', 'mobi', 'azw', 'txt']) {
+      final input = File('${root.path}/boundary.$extension');
+      await input.writeAsString('fixture');
+      var refreshing = false;
+      var converterCalls = 0;
+      final state = PrototypeState(
+        settingsDirectory: '${root.path}/settings-$extension',
+        importer: (path, cancelled) async {
+          if (refreshing) {
+            converterCalls++;
+            throw const FormatException('fixture converter reached');
+          }
+          return ImportedTxt(
+            path: source.path,
+            sourceId: source.sourceId,
+            revision: source.revision,
+            encoding: source.encoding,
+            lines: source.lines,
+            headings: source.headings,
+            originPath: input.path,
+          );
+        },
+      );
+      final library = LegacyLibraryAdapter(backend: state);
+      try {
+        await library.load();
+        await library.savePatch({'check_after_import': false});
+        expect(
+          (await library.importFiles([input.path])).single.succeeded,
+          true,
+        );
+        final id = state.currentId;
+        refreshing = true;
+        final limit = (extension == 'txt' ? 128 : 256) * 1024 * 1024;
+        final file = await input.open(mode: FileMode.write);
+        await file.truncate(limit);
+        await file.close();
+        await expectLater(
+          library.previewSourceRefresh(id),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              'fixture converter reached',
+            ),
+          ),
+        );
+        expect(converterCalls, 1, reason: extension);
+        final larger = await input.open(mode: FileMode.append);
+        await larger.writeByte(0);
+        await larger.close();
+        await expectLater(
+          library.previewSourceRefresh(id),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              '来源文件超出导入大小限制。',
+            ),
+          ),
+        );
+        expect(converterCalls, 1, reason: extension);
+        expect(state.importing, false);
+      } finally {
+        library.dispose();
+        state.dispose();
+        await input.delete();
+      }
+    }
+  });
+
   test('body refresh preserves manual cover and makes old illustration anchors explicit while queued work blocks replacement', () async {
     final (state, library, root) = await fixture();
     addTearDown(() {
@@ -28,6 +108,9 @@ void main() {
       state.dispose();
     });
     final id = state.currentId, path = state.current.path;
+    int? bookBytes() => library.books.value.firstWhere((b) => b.id == id).bytes;
+    final originalBytes = File(path).lengthSync();
+    expect(bookBytes(), originalBytes);
     final image = '$root/manual.png';
     final made = await Process.run(
       Platform.environment['EASYPUB_TEST_PYTHON']!,
@@ -84,6 +167,8 @@ void main() {
       fields: {},
       replaceBody: true,
     );
+    expect(bookBytes(), File(path).lengthSync());
+    expect(bookBytes(), isNot(originalBytes));
     expect(state.production.settings(id)['cover_path'], image);
     expect(
       state.production.settings(id)['metadata_origins']['cover_path']['source'],
@@ -111,6 +196,9 @@ void main() {
     });
     final id = state.currentId, path = state.current.path;
     final info = library.openBookInformation(id);
+    int? bookBytes() => library.books.value.firstWhere((b) => b.id == id).bytes;
+    final originalBytes = File(path).lengthSync();
+    expect(bookBytes(), originalBytes);
     await info.apply(
       await info.preview({
         'title': '手工书名',
@@ -137,6 +225,8 @@ void main() {
     expect(reimport.succeeded, true);
     expect(reimport.skipped, true);
     expect(reimport.message, contains('刷新来源'));
+    expect(bookBytes(), File(path).lengthSync());
+    expect(bookBytes(), isNot(originalBytes));
     expect(state.current.source!.sourceId, oldSource);
     expect(state.manuscript.effectiveHistories[id], oldHistory);
     var preview = await library.previewSourceRefresh(id);
@@ -231,6 +321,10 @@ void main() {
       '第一章 旧编辑',
     );
     expect(File(path).readAsStringSync(), changed);
+    library.removeBooks({id});
+    await File(path).writeAsString('$changed追加一段较长的新正文，验证移除后的大小缓存。\n');
+    expect((await library.importFiles([path])).single.succeeded, true);
+    expect(library.books.value.single.bytes, File(path).lengthSync());
   });
 
   test(

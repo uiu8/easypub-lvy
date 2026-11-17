@@ -65,6 +65,26 @@ class Issues extends Fake
   );
 }
 
+class DelayedRepairIssues extends Issues {
+  final previews = <Completer<ChapterRepairPlan>>[];
+  final changes = [
+    for (final id in ['A', 'B'])
+      ChapterRepairChange(id, '', '方案$id', 1, 1, '旧标题', '新标题$id', false),
+  ];
+  @override
+  Future<ChapterRepairOptions> repairs(ChapterPage page) async =>
+      ChapterRepairOptions(changes, 2, await issues(page, 0));
+  @override
+  Future<ChapterRepairPlan> previewRepairs(
+    ChapterRepairOptions options,
+    Set<String> selectedIds,
+  ) {
+    final pending = Completer<ChapterRepairPlan>();
+    previews.add(pending);
+    return pending.future;
+  }
+}
+
 class ContextIssues extends Issues implements ChapterIssueContextSession {
   @override
   Future<ChapterIssueContext> issueContext(
@@ -118,12 +138,62 @@ class PairedIssues extends ContextIssues {
       ),
     ],
     originalRows: [
-      const ChapterContextRow('导入原文的对应段落', line: 120, originalLine: 120),
+      ChapterContextRow(
+        anchor == 0 ? '导入原文的对应段落' : '第二处导入原文',
+        line: anchor == 0 ? 120 : 140,
+        originalLine: anchor == 0 ? 120 : 140,
+      ),
     ],
   );
 }
 
 void main() {
+  testWidgets('同一问题方案 A-B-A 的旧成功失败与收尾不得覆盖新方案', (t) async {
+    t.view.physicalSize = const Size(1200, 800);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
+    final session = DelayedRepairIssues()..total = 1;
+    await t.pumpWidget(
+      MaterialApp(
+        theme: deskTheme(),
+        home: Scaffold(
+          body: CheckIssueBrowser(
+            session: session,
+            enabled: true,
+            onChapter: (_) {},
+          ),
+        ),
+      ),
+    );
+    await t.pumpAndSettle();
+    final dynamic state = t.state(find.byType(CheckIssueBrowser));
+    final futures = <Future<void>>[];
+    for (final id in ['A', 'B', 'A']) {
+      futures.add(state.previewIssue(selectedChange: id) as Future<void>);
+      await t.pump();
+    }
+    expect(session.previews, hasLength(3));
+    session.previews[0].completeError(StateError('old failure'));
+    await t.pump();
+    expect(state.previewBusy, isTrue, reason: '旧收尾不能结束新请求的等待');
+    expect(state.previewError, isEmpty);
+    final latest = ChapterRepairPlan(const ChapterEditPreview(), [
+      session.changes[0],
+    ]);
+    session.previews[2].complete(latest);
+    await t.pumpAndSettle();
+    session.previews[1].complete(
+      ChapterRepairPlan(const ChapterEditPreview(), [session.changes[1]]),
+    );
+    await Future.wait(futures);
+    await t.pumpAndSettle();
+    expect(identical(state.repairPlan, latest), isTrue);
+    expect(state.changeId, 'A');
+    expect(state.previewError, isEmpty);
+    expect(state.previewBusy, isFalse);
+    expect(t.takeException(), isNull);
+  });
   testWidgets(
     'number gap shows the two evidence bodies side by side and traces one location',
     (t) async {
@@ -156,6 +226,15 @@ void main() {
       expect(find.text('导入原文的对应段落'), findsOneWidget);
       expect(find.text('前章末尾的证据正文'), findsOneWidget);
       expect(find.text('后章开头的证据正文'), findsNothing);
+      await t.tap(find.text('第 1 处 · 第12章'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('第 2 处 · 第14章').last);
+      await t.pumpAndSettle();
+      expect(find.text('第二处导入原文'), findsOneWidget);
+      expect(find.text('后章开头的证据正文'), findsOneWidget);
+      expect(find.text('前章末尾的证据正文'), findsNothing);
+      expect(find.text('导入原稿'), findsOneWidget);
+      expect(find.text('当前草稿'), findsOneWidget);
       expect(t.takeException(), isNull);
     },
   );

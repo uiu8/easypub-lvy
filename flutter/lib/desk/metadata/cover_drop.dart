@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/library_service.dart';
 import '../errors.dart';
+import 'cover_adjustment_page.dart';
 import 'cover_image_dialog.dart';
 
 /// 能作为封面的图片扩展名（与“选择封面图片”接受的格式相同）。
@@ -39,11 +40,31 @@ Future<String?> adoptCoverImage(
       ),
     );
     if (choice == null) return null;
+    var fit = choice.fit;
+    Map<String, dynamic>? crop;
+    if (choice.adjust) {
+      if (!context.mounted) return null;
+      final adjustment = await showDialog<CoverAdjustment>(
+        context: context,
+        builder: (dialogContext) => Dialog.fullscreen(
+          child: CoverAdjustmentPage(
+            session: session,
+            path: choice.evidence.path,
+            initialCrop: null,
+            initialFit: choice.fit,
+            onReturn: (value) => Navigator.of(dialogContext).pop(value),
+          ),
+        ),
+      );
+      if (adjustment == null) return null;
+      fit = adjustment.fit;
+      crop = adjustment.crop;
+    }
     await session.apply(
       await session.preview({
         'cover_path': choice.evidence.path,
-        'cover_fit': choice.fit,
-        'cover_crop': null,
+        'cover_fit': fit,
+        'cover_crop': crop,
         'cover_design': null,
       }),
     );

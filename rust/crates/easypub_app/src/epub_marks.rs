@@ -8,7 +8,13 @@ use roxmltree::Node;
 use std::collections::{HashMap, HashSet};
 
 /// 一条样式规则的效果：加上还是取消某种样式。
-type Effects = Vec<(Style, bool)>;
+#[derive(Clone, Copy)]
+enum Effect {
+    Set(bool),
+    Inherit,
+    Revert,
+}
+type Effects = Vec<(Style, Effect, bool)>;
 
 /// 未标注语义的旧目录：去掉标题后，至少两条内部链接且占正文文字八成。
 /// 有明确脚注语义的页面不做这个推断。
@@ -50,25 +56,62 @@ pub(crate) fn link_directory(root: Node<'_, '_>) -> bool {
     links.len() >= 2 && total > 0 && linked * 5 >= total * 4
 }
 
+fn declaration_parts(body: &str) -> Vec<&str> {
+    let mut input = cssparser::ParserInput::new(body);
+    let mut parser = cssparser::Parser::new(&mut input);
+    let mut start = 0usize;
+    let mut parts = Vec::new();
+    loop {
+        match parser.next_including_whitespace_and_comments() {
+            Ok(cssparser::Token::Semicolon) => {
+                let end = parser.position().byte_index();
+                parts.push(&body[start..end - 1]);
+                start = end;
+            }
+            Ok(_) => (),
+            Err(_) => break,
+        }
+    }
+    parts.push(&body[start..]);
+    parts
+}
+
 fn declarations(body: &str) -> Effects {
     let mut effects = Vec::new();
-    for declaration in body.split(';') {
+    for declaration in declaration_parts(body) {
         let Some((name, value)) = declaration.split_once(':') else {
             continue;
         };
         let name = name.trim().to_ascii_lowercase();
-        let value = value.replace("!important", "").trim().to_ascii_lowercase();
+        let value = value.trim().to_ascii_lowercase();
+        let (value, important) = match value.rsplit_once('!') {
+            Some((value, flag)) if flag.trim() == "important" => (value.trim(), true),
+            _ => (value.as_str(), false),
+        };
+        let mut declarations = Vec::new();
+        let keyword = matches!(value, "inherit" | "unset" | "initial" | "revert");
         match name.as_str() {
-            "font-weight" => effects.push((
-                Style::Bold,
-                value.contains("bold") || value.parse::<u32>().is_ok_and(|w| w >= 600),
-            )),
-            "font-style" => effects.push((
-                Style::Italic,
-                value.contains("italic") || value.contains("oblique"),
-            )),
+            "font-weight"
+                if keyword
+                    || matches!(value, "normal" | "bold" | "bolder" | "lighter")
+                    || value
+                        .parse::<f32>()
+                        .is_ok_and(|v| (1.0..=1000.0).contains(&v)) =>
+            {
+                declarations.push((
+                    Style::Bold,
+                    matches!(value, "bold" | "bolder")
+                        || value.parse::<f32>().is_ok_and(|w| w >= 600.0),
+                ))
+            }
+            "font-style" if keyword || matches!(value, "normal" | "italic" | "oblique") => {
+                declarations.push((
+                    Style::Italic,
+                    value.contains("italic") || value.contains("oblique"),
+                ))
+            }
             "text-decoration" | "text-decoration-line" => {
-                effects.push((Style::Underline, value.contains("underline")));
+                declarations.push((Style::Underline, value.contains("underline")));
             }
             "text-emphasis"
             | "text-emphasis-style"
@@ -76,14 +119,25 @@ fn declarations(body: &str) -> Effects {
             | "-webkit-text-emphasis-style"
             | "-epub-text-emphasis"
             | "-epub-text-emphasis-style" => {
-                effects.push((Style::EmDot, value != "none"));
+                declarations.push((Style::EmDot, value != "none"));
             }
             "vertical-align" => {
-                effects.push((Style::Sup, value == "super"));
-                effects.push((Style::Sub, value == "sub"));
+                declarations.push((Style::Sup, value == "super"));
+                declarations.push((Style::Sub, value == "sub"));
             }
             _ => {}
         }
+        effects.extend(declarations.into_iter().map(|(style, on)| {
+            let inherited = matches!(style, Style::Bold | Style::Italic | Style::EmDot);
+            let effect = match value {
+                "inherit" => Effect::Inherit,
+                "unset" if inherited => Effect::Inherit,
+                "initial" | "unset" => Effect::Set(false),
+                "revert" => Effect::Revert,
+                _ => Effect::Set(on),
+            };
+            (style, effect, important)
+        }));
     }
     effects
 }
@@ -113,7 +167,7 @@ fn simple_selector(value: &str) -> bool {
 
 /// 只收“标签”“.类”“标签.类”，@media 之类的整块跳过，后写的规则排在后面。
 #[derive(Clone, Default)]
-pub(crate) struct Rules(HashMap<String, Effects>);
+pub(crate) struct Rules(Vec<(String, Effects)>);
 impl Rules {
     pub(crate) fn add(&mut self, css: &str) {
         let css = strip_comments(css);
@@ -140,9 +194,9 @@ impl Rules {
                 let effects = declarations(&rest[open + 1..close]);
                 if !effects.is_empty() {
                     for selector in selectors.split(',') {
-                        let selector = selector.trim().to_ascii_lowercase();
+                        let selector = selector.trim().to_owned();
                         if simple_selector(&selector) {
-                            self.0.entry(selector).or_default().extend(effects.clone());
+                            self.0.push((selector, effects.clone()));
                         }
                     }
                 }
@@ -150,47 +204,66 @@ impl Rules {
             rest = &rest[close + 1..];
         }
     }
-    fn styles(&self, node: Node<'_, '_>) -> Vec<Style> {
+    fn effects(&self, node: Node<'_, '_>, inherited: &[Style]) -> Vec<(Style, bool)> {
         let tag = node.tag_name().name().to_ascii_lowercase();
-        let mut styles: Vec<Style> = match tag.as_str() {
-            "b" | "strong" => vec![Style::Bold],
-            "i" | "em" | "cite" | "dfn" | "var" => vec![Style::Italic],
-            "u" | "ins" => vec![Style::Underline],
-            "sup" => vec![Style::Sup],
-            "sub" => vec![Style::Sub],
-            _ => Vec::new(),
+        let semantic = match tag.as_str() {
+            "b" | "strong" => Some(Style::Bold),
+            "i" | "em" | "cite" | "dfn" | "var" => Some(Style::Italic),
+            "u" | "ins" => Some(Style::Underline),
+            "sup" => Some(Style::Sup),
+            "sub" => Some(Style::Sub),
+            _ => None,
         };
-        let mut apply = |effects: &Effects| {
-            for &(style, on) in effects {
-                styles.retain(|s| *s != style);
-                if on {
-                    styles.push(style);
-                }
-            }
-        };
-        if let Some(effects) = self.0.get(&tag) {
-            apply(effects);
-        }
-        let classes: Vec<String> = node
+        let classes: Vec<_> = node
             .attribute("class")
             .unwrap_or("")
             .split_whitespace()
-            .map(str::to_ascii_lowercase)
             .collect();
-        for class in &classes {
-            if let Some(effects) = self.0.get(&format!(".{class}")) {
-                apply(effects);
+        let mut candidates = Vec::new();
+        for (order, (selector, effects)) in self.0.iter().enumerate() {
+            let (sel_tag, class) = selector.split_once('.').unwrap_or((selector, ""));
+            if (!sel_tag.is_empty() && !sel_tag.eq_ignore_ascii_case(&tag))
+                || (!class.is_empty() && !classes.contains(&class))
+            {
+                continue;
+            }
+            let specificity =
+                usize::from(!sel_tag.is_empty()) + 10 * usize::from(!class.is_empty());
+            for &(style, on, important) in effects {
+                candidates.push(((important, specificity, order), style, on));
             }
         }
-        for class in &classes {
-            if let Some(effects) = self.0.get(&format!("{tag}.{class}")) {
-                apply(effects);
+        if let Some(inline) = node.attribute("style") {
+            for (style, on, important) in declarations(inline) {
+                candidates.push(((important, 100, self.0.len()), style, on));
             }
         }
-        if let Some(style) = node.attribute("style") {
-            apply(&declarations(style));
+        candidates.sort_by_key(|(priority, _, _)| *priority);
+        let mut result = semantic
+            .into_iter()
+            .map(|style| (style, true))
+            .collect::<Vec<_>>();
+        for (_, style, effect) in candidates {
+            let on = match effect {
+                Effect::Set(on) => on,
+                Effect::Inherit => inherited.contains(&style),
+                Effect::Revert => {
+                    semantic == Some(style)
+                        || (matches!(style, Style::Bold | Style::Italic | Style::EmDot)
+                            && inherited.contains(&style))
+                }
+            };
+            result.retain(|(s, _)| *s != style);
+            result.push((style, on));
         }
-        styles
+        result
+    }
+    #[cfg(test)]
+    fn styles(&self, node: Node<'_, '_>) -> Vec<Style> {
+        self.effects(node, &[])
+            .into_iter()
+            .filter_map(|(style, on)| on.then_some(style))
+            .collect()
     }
 }
 
@@ -225,6 +298,7 @@ pub(crate) struct Collector {
     pub(crate) navigation: bool,
     rules: Rules,
     active: Vec<(Open, usize)>,
+    frames: Vec<Vec<Open>>,
     spans: Vec<(Open, usize, usize)>,
     heading: usize,
     pending: Vec<String>,
@@ -239,6 +313,7 @@ impl Collector {
             navigation: false,
             rules,
             active: Vec::new(),
+            frames: Vec::new(),
             spans: Vec::new(),
             heading: 0,
             pending: Vec::new(),
@@ -270,12 +345,30 @@ impl Collector {
                 self.targets.push(id.to_owned());
             }
         }
-        let mut kinds: Vec<Open> = self
-            .rules
-            .styles(node)
-            .into_iter()
-            .map(Open::Style)
-            .collect();
+        let previous = self
+            .active
+            .iter()
+            .map(|(kind, _)| kind.clone())
+            .collect::<Vec<_>>();
+        let mut kinds = previous.clone();
+        let inherited = previous
+            .iter()
+            .filter_map(|kind| match kind {
+                Open::Style(style) => Some(*style),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        for (style, on) in self.rules.effects(node, &inherited) {
+            // 父元素画出的下划线贯穿子元素，子元素的 none 不能将它擦除。
+            if style == Style::Underline && inherited.contains(&style) {
+                continue;
+            }
+            kinds.retain(|kind| *kind != Open::Style(style));
+            if on {
+                kinds.push(Open::Style(style));
+            }
+        }
+        self.frames.push(previous);
         if node.has_tag_name("a")
             && let Some(href) = node
                 .attribute("href")
@@ -302,22 +395,28 @@ impl Collector {
                 });
             }
         }
-        let mut opened = 0;
-        for kind in kinds {
-            if !self.active.iter().any(|(k, _)| *k == kind) {
-                self.active.push((kind, at));
-                opened += 1;
-            }
-        }
-        opened
+        self.transition(kinds, at);
+        self.frames.len()
     }
-    pub(crate) fn close(&mut self, opened: usize, at: usize) {
-        for _ in 0..opened {
-            if let Some((kind, start)) = self.active.pop()
-                && start < at
-            {
+    fn transition(&mut self, kinds: Vec<Open>, at: usize) {
+        let mut next = Vec::new();
+        for (kind, start) in self.active.drain(..) {
+            if kinds.contains(&kind) {
+                next.push((kind, start));
+            } else if start < at {
                 self.spans.push((kind, start, at));
             }
+        }
+        for kind in kinds {
+            if !next.iter().any(|(k, _)| *k == kind) {
+                next.push((kind, at));
+            }
+        }
+        self.active = next;
+    }
+    pub(crate) fn close(&mut self, _opened: usize, at: usize) {
+        if let Some(previous) = self.frames.pop() {
+            self.transition(previous, at);
         }
     }
     /// 一行结束：把文字里的位置换算到归一后的行，跨行的样式在下一行接着算。
@@ -341,9 +440,6 @@ impl Collector {
             let Some((from, to)) = normalized_range(&words, start, end) else {
                 continue;
             };
-            if matches!(kind, Open::Style(Style::Bold)) && from == 0 && to == line.len() {
-                continue;
-            }
             let text = line[from..to].to_owned();
             let nth = line[..from].match_indices(&text).count() as u32;
             self.runs.push(Run {
@@ -515,7 +611,10 @@ impl Gather {
                     let base = jump.document.rsplit_once('/').map_or("", |v| v.0);
                     crate::epub_import::join_zip(base, file)?
                 };
-                Some((document, fragment.to_owned()))
+                Some((
+                    document,
+                    crate::epub_import::decode_url_component(fragment)?,
+                ))
             });
             let line = target.as_ref().and_then(|key| self.ids.get(key)).copied();
             let is_note = jump.noteref
@@ -579,8 +678,74 @@ pub(crate) fn page_rules(xml: &str, path: &str, sheets: &HashMap<String, String>
 }
 
 #[cfg(test)]
+#[test]
+fn repair88_css_inheritance_and_invalid_values_do_not_clear_parent_styles() {
+    let doc = roxmltree::Document::parse(r#"<r><b style="font-weight:inherit"/><span style="font-weight:unset"/><b style="font-weight:initial"/><b style="font-weight:revert"/><span style="font-weight:potato"/></r>"#).unwrap();
+    let rules = Rules::default();
+    let effects = doc
+        .root_element()
+        .children()
+        .map(|node| rules.effects(node, &[Style::Bold]))
+        .collect::<Vec<_>>();
+    assert_eq!(effects[0], vec![(Style::Bold, true)]);
+    assert_eq!(effects[1], vec![(Style::Bold, true)]);
+    assert_eq!(effects[2], vec![(Style::Bold, false)]);
+    assert_eq!(effects[3], vec![(Style::Bold, true)]);
+    assert!(effects[4].is_empty());
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repair88_nested_styles_keep_continuous_runs_and_restore_parent() {
+        fn walk(node: Node<'_, '_>, c: &mut Collector, text: &mut String) {
+            if node.is_text() {
+                text.push_str(node.text().unwrap());
+                return;
+            }
+            let frame = c.open(node, text.len());
+            for child in node.children() {
+                walk(child, c, text);
+            }
+            c.close(frame, text.len());
+        }
+        let doc = roxmltree::Document::parse(r#"<p style="font-weight:bold;text-decoration:underline">甲<span>乙</span><span style="font-weight:normal;text-decoration:none">丙</span>丁</p>"#).unwrap();
+        let mut c = Collector::new(Rules::default());
+        let mut text = String::new();
+        walk(doc.root_element(), &mut c, &mut text);
+        c.flush(&text, Some((0, &text)));
+        let runs = |style| {
+            c.runs
+                .iter()
+                .filter(|r| r.kind == Open::Style(style))
+                .map(|r| r.text.as_str())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(text, "甲乙丙丁");
+        assert_eq!(runs(Style::Bold), ["甲乙", "丁"]);
+        assert_eq!(runs(Style::Underline), ["甲乙丙丁"]);
+        assert!(c.frames.is_empty());
+        assert!(c.active.is_empty());
+    }
+
+    #[test]
+    fn repair88_css_cascade_preserves_priority_case_and_token_boundaries() {
+        let mut rules = Rules::default();
+        rules.add("#x {font-weight:normal} .Case {font-weight:bold!important} .case {font-style:italic} .later {font-weight:bold} .later {font-weight:normal}");
+        let doc = roxmltree::Document::parse(r#"<r><span id="x" class="Case" style="font-weight:normal"/><span class="Case" style="font-weight:normal!important"/><span class="later"/><span style="content:';font-weight:normal;';font-weight:bold; font-style:italic"/></r>"#).unwrap();
+        let styles = doc
+            .root_element()
+            .children()
+            .map(|n| rules.styles(n))
+            .collect::<Vec<_>>();
+        assert_eq!(styles[0], vec![Style::Bold]);
+        assert!(styles[1].is_empty());
+        assert!(styles[2].is_empty());
+        assert!(styles[3].contains(&Style::Bold));
+        assert!(styles[3].contains(&Style::Italic));
+    }
 
     #[test]
     fn rules_read_simple_selectors_only() {

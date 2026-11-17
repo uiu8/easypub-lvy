@@ -19,6 +19,8 @@ class FakeUpdates implements AppUpdateService {
   int current = 67, latest = 68;
   int? backup;
   bool ready = false;
+  bool failReadyStatus = false;
+  int statusReads = 0;
   final calls = <String>[];
   int _polls = 0;
   String phaseAfterPolls = 'completed';
@@ -32,14 +34,18 @@ class FakeUpdates implements AppUpdateService {
   };
 
   @override
-  Future<UpdateStatus> status() async => UpdateStatus.fromJson({
-    'packaged': packaged,
-    'writable': writable,
-    'current_release': current,
-    'ready': ready ? release : null,
-    'backup_release': backup,
-    'releases_url': 'https://github.com/uiu8/easypub-lvy/releases',
-  });
+  Future<UpdateStatus> status() async {
+    statusReads++;
+    if (ready && failReadyStatus) throw const FormatException('模拟读取更新状态失败');
+    return UpdateStatus.fromJson({
+      'packaged': packaged,
+      'writable': writable,
+      'current_release': current,
+      'ready': ready ? release : null,
+      'backup_release': backup,
+      'releases_url': 'https://github.com/uiu8/easypub-lvy/releases',
+    });
+  }
 
   @override
   Future<UpdateCheck> check() async {
@@ -286,6 +292,36 @@ void main() {
     );
     expect(c.phase, UpdatePhase.ready);
   });
+
+  for (final packageRemains in [true, false]) {
+    test('下载后状态失败可恢复，更新包保留=$packageRemains', () async {
+      final c = controller();
+      addTearDown(c.dispose);
+      await c.check();
+      fake.failReadyStatus = true;
+      await c.download();
+      expect(c.phase, UpdatePhase.failed);
+      expect(c.error, contains('读取更新状态失败'));
+      expect(fake.statusReads, 1);
+      await c.retry();
+      expect(c.phase, UpdatePhase.failed);
+      expect(fake.statusReads, 2);
+      expect(fake.calls.where((s) => s.startsWith('download')), hasLength(1));
+      fake.failReadyStatus = false;
+      fake.ready = packageRemains;
+      await c.retry();
+      expect(fake.calls.where((s) => s.startsWith('download')), hasLength(1));
+      if (!packageRemains) {
+        expect(c.phase, UpdatePhase.failed);
+        expect(c.error, contains('更新包尚未就绪'));
+        await c.retry();
+        expect(fake.calls.where((s) => s.startsWith('download')), hasLength(2));
+      }
+      expect(c.phase, UpdatePhase.ready);
+      expect(c.error, isEmpty);
+      expect(fake.calls.where((s) => s == 'check'), hasLength(1));
+    });
+  }
 
   testWidgets('下载中可以取消，回到“有新版本”', (t) async {
     final c = controller();

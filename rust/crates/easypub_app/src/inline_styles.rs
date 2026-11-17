@@ -236,9 +236,23 @@ pub(crate) fn render(
     let mut html = String::new();
     for pair in cuts.windows(2) {
         let (from, to) = (pair[0], pair[1]);
-        let active: Vec<_> = styles
+        let mut active: Vec<_> = styles
             .iter()
             .filter(|a| a.anchor.from <= from && to <= a.anchor.to)
+            .collect();
+        // 每个文字区间只能有一个链接；较小范围的目标覆盖外层链接。
+        // 同范围保留调用方顺序中的第一项，其他非链接样式仍正常嵌套。
+        let link = active
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.href.is_some())
+            .min_by_key(|(i, a)| (a.anchor.to - a.anchor.from, *i))
+            .map(|(i, _)| i);
+        active = active
+            .into_iter()
+            .enumerate()
+            .filter(|(i, a)| a.href.is_none() || Some(*i) == link)
+            .map(|(_, a)| a)
             .collect();
         for a in &active {
             match &a.href {

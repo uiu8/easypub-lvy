@@ -77,6 +77,7 @@ class AppUpdateController extends ChangeNotifier {
 
   /// 失败发生在下载阶段（重试时直接重新下载，不必再检查）。
   bool _downloadFailed = false;
+  bool _statusFailedAfterDownload = false;
 
   bool get autoCheck => readConfig()['update_check_on_start'] != false;
   int? get skippedRelease => readConfig()['update_skipped_release'] as int?;
@@ -173,6 +174,7 @@ class AppUpdateController extends ChangeNotifier {
         phase = UpdatePhase.downloading;
         error = '';
         _downloadFailed = false;
+        _statusFailedAfterDownload = false;
       });
       while (!_disposed) {
         await Future<void>.delayed(pollInterval);
@@ -180,7 +182,7 @@ class AppUpdateController extends ChangeNotifier {
         _set(() => progress = next);
         if (next.active) continue;
         if (next.phase == 'completed') {
-          await refresh();
+          await _readDownloadedStatus();
         } else if (next.phase == 'cancelled') {
           _set(() => phase = UpdatePhase.available);
         } else {
@@ -202,12 +204,39 @@ class AppUpdateController extends ChangeNotifier {
   }
 
   Future<void> retry() async {
-    if (_downloadFailed && latest != null) {
+    if (_statusFailedAfterDownload) {
+      await _readDownloadedStatus();
+    } else if (_downloadFailed && latest != null) {
       _set(() => phase = UpdatePhase.available);
       await download();
     } else {
       _set(() => phase = UpdatePhase.idle);
       await check();
+    }
+  }
+
+  Future<void> _readDownloadedStatus() async {
+    try {
+      final next = await service.status();
+      _set(() {
+        status = next;
+        _statusFailedAfterDownload = false;
+        if (next.ready case final ready?) {
+          latest = ready;
+          phase = UpdatePhase.ready;
+          error = '';
+        } else {
+          phase = UpdatePhase.failed;
+          _downloadFailed = true;
+          error = '下载已结束，但更新包尚未就绪，请重试下载。';
+        }
+      });
+    } catch (e) {
+      _set(() {
+        phase = UpdatePhase.failed;
+        _statusFailedAfterDownload = true;
+        error = deskErrorText(e, '更新包已下载，读取状态失败。点击重试重新读取。');
+      });
     }
   }
 

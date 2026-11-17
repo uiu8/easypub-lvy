@@ -29,7 +29,7 @@
 
 use crate::api::*;
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -2311,9 +2311,13 @@ impl SseDecode for crate::api::SourceLine {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_lineNumber = <u32>::sse_decode(deserializer);
+        let mut var_utf8Column = <u32>::sse_decode(deserializer);
+        let mut var_continues = <bool>::sse_decode(deserializer);
         let mut var_text = <String>::sse_decode(deserializer);
         return crate::api::SourceLine {
             line_number: var_lineNumber,
+            utf8_column: var_utf8Column,
+            continues: var_continues,
             text: var_text,
         };
     }
@@ -2324,9 +2328,11 @@ impl SseDecode for crate::api::SourceLines {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_lines = <Vec<crate::api::SourceLine>>::sse_decode(deserializer);
         let mut var_nextLineIndex = <Option<u32>>::sse_decode(deserializer);
+        let mut var_nextUtf8Column = <Option<u32>>::sse_decode(deserializer);
         return crate::api::SourceLines {
             lines: var_lines,
             next_line_index: var_nextLineIndex,
+            next_utf8_column: var_nextUtf8Column,
         };
     }
 }
@@ -2713,6 +2719,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::SourceLine {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.line_number.into_into_dart().into_dart(),
+            self.utf8_column.into_into_dart().into_dart(),
+            self.continues.into_into_dart().into_dart(),
             self.text.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -2730,6 +2738,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::SourceLines {
         [
             self.lines.into_into_dart().into_dart(),
             self.next_line_index.into_into_dart().into_dart(),
+            self.next_utf8_column.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3057,6 +3066,8 @@ impl SseEncode for crate::api::SourceLine {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.line_number, serializer);
+        <u32>::sse_encode(self.utf8_column, serializer);
+        <bool>::sse_encode(self.continues, serializer);
         <String>::sse_encode(self.text, serializer);
     }
 }
@@ -3066,6 +3077,7 @@ impl SseEncode for crate::api::SourceLines {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<crate::api::SourceLine>>::sse_encode(self.lines, serializer);
         <Option<u32>>::sse_encode(self.next_line_index, serializer);
+        <Option<u32>>::sse_encode(self.next_utf8_column, serializer);
     }
 }
 
@@ -3110,7 +3122,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -3149,7 +3161,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

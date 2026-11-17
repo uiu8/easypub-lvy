@@ -799,6 +799,15 @@ pub struct History {
 }
 impl History {
     pub fn validate(&self, lines: u32) -> Result<(), ApiError> {
+        self.validate_with_settings(lines, &mut BTreeSet::new())
+    }
+
+    /// Reuse validation only within a caller's single, fixed-line-count request.
+    pub(crate) fn validate_with_settings(
+        &self,
+        lines: u32,
+        validated: &mut BTreeSet<String>,
+    ) -> Result<(), ApiError> {
         if self.source_id.len() != 64
             || !self
                 .source_id
@@ -814,7 +823,11 @@ impl History {
             return Err(invalid());
         }
         for state in &self.states {
-            state.validate(lines)?;
+            let key = serde_json::to_string(state).map_err(|_| invalid())?;
+            if !validated.contains(&key) {
+                state.validate(lines)?;
+                validated.insert(key);
+            }
         }
         Ok(())
     }
@@ -1492,6 +1505,22 @@ pub fn run(
         return Err(invalid());
     }
     let value: Value = serde_json::from_str(&request_json).map_err(|_| invalid())?;
+    if value["op"] == "navigation_filter" && !apply {
+        let options: crate::edition_options::NavigationOptions =
+            serde_json::from_value(value["options"].clone()).map_err(|_| invalid())?;
+        if !options.valid() {
+            return Err(invalid());
+        }
+        let titles = value["titles"].as_array().ok_or_else(invalid)?;
+        let excludes = options.filter().map_err(|_| invalid())?;
+        let mut removed = 0usize;
+        for title in titles {
+            if excludes(title.as_str().ok_or_else(invalid)?) {
+                removed += 1;
+            }
+        }
+        return Ok(serde_json::json!({"removed": removed}).to_string());
+    }
     if value["op"] == "original_navigation" && !apply {
         return crate::original_navigation::inspect(value["path"].as_str().ok_or_else(invalid)?);
     }
@@ -2139,5 +2168,32 @@ mod tests {
         }
         assert_eq!(r.targets[0].history.states.len(), 51);
         assert_eq!(r.targets[0].history.cursor, 50);
+    }
+
+    #[test]
+    fn repair88_history_validation_reuses_identical_settings_but_rejects_changes() {
+        let r = request(json!({"title":{"op":"keep"}}));
+        let mut history = r.targets[0].history.clone();
+        history.states = vec![history.states[0].clone(); 51];
+        history.cursor = 50;
+        let mut validated = BTreeSet::new();
+        history
+            .validate_with_settings(u32::MAX, &mut validated)
+            .unwrap();
+        assert_eq!(validated.len(), 1);
+        history.states[50].cover_path = Some("relative.png".into());
+        assert!(
+            history
+                .validate_with_settings(u32::MAX, &mut validated)
+                .is_err()
+        );
+        assert_eq!(validated.len(), 1);
+        history.states[50] = history.states[0].clone();
+        history.cursor = 51;
+        assert!(
+            history
+                .validate_with_settings(u32::MAX, &mut validated)
+                .is_err()
+        );
     }
 }

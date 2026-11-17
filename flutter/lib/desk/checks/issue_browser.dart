@@ -86,7 +86,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
   String? category, severity;
   Map<String, int> categories = {}, severities = {};
   bool busy = false, locating = false, effective = true, detailOpen = false;
-  int generation = 0, selectionGeneration = 0;
+  int generation = 0, selectionGeneration = 0, previewGeneration = 0;
   String comparison = 'evidence';
   bool listOpen = true, previewBusy = false, editedHere = false;
   bool comparisonReady = false;
@@ -475,6 +475,7 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
     final issue = selected, tree = structure;
     if (issue == null || tree == null) return;
     final ticket = selectionGeneration;
+    final request = ++previewGeneration;
     setState(() {
       comparison = 'preview';
       previewBusy = true;
@@ -490,7 +491,9 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
               ? await (widget.session as TargetedChapterRepairSession)
                     .repairsForIssue(tree, issue.id)
               : await widget.session.repairs(tree));
-      if (!mounted || ticket != selectionGeneration) return;
+      if (!mounted ||
+          (ticket != selectionGeneration || request != previewGeneration))
+        return;
       final candidates = options.changes
           .where(
             (c) =>
@@ -507,14 +510,18 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
         return;
       }
       final plan = await widget.session.previewRepairs(options, {change.id});
-      if (!mounted || ticket != selectionGeneration) return;
+      if (!mounted ||
+          (ticket != selectionGeneration || request != previewGeneration))
+        return;
       setState(() {
         repairOptions = options;
         repairPlan = plan;
         changeId = change.id;
       });
     } catch (e) {
-      if (mounted && ticket == selectionGeneration) {
+      if (mounted &&
+          ticket == selectionGeneration &&
+          request == previewGeneration) {
         setState(
           () => previewError = deskErrorText(
             e,
@@ -523,7 +530,9 @@ class _CheckIssueBrowserState extends State<CheckIssueBrowser> {
         );
       }
     } finally {
-      if (mounted && ticket == selectionGeneration) {
+      if (mounted &&
+          ticket == selectionGeneration &&
+          request == previewGeneration) {
         setState(() => previewBusy = false);
       }
     }

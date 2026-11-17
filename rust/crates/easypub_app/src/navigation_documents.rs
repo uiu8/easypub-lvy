@@ -39,7 +39,10 @@ fn page(title: &str, body: &str) -> Result<String, ApiError> {
     ))
 }
 pub(crate) fn supplement(item: &crate::supplemental_pages::Page) -> Result<String, ApiError> {
-    page(item.content.label(), &crate::supplemental_pages::body(item)?)
+    page(
+        item.content.label(),
+        &crate::supplemental_pages::body(item)?,
+    )
 }
 fn link(target: &str, label: &str) -> Result<String, ApiError> {
     Ok(format!(
@@ -83,7 +86,8 @@ fn prepare_inner(
     }
     for entry in &navigation.entries {
         if let Some(document) = &entry.document
-            && targets.insert(&entry.entry_id, document.clone()).is_some() {
+            && targets.insert(&entry.entry_id, document.clone()).is_some()
+        {
             return Err(invalid());
         }
     }

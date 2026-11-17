@@ -820,14 +820,25 @@ function openDoc(file, where) {
 
 // ---------------------------------------------------------------- 生成与参数
 
+let metricsSequence = 0;
 async function refreshMetrics() {
+  const sequence = ++metricsSequence;
   const d = S.device;
-  S.metrics = await api('metrics', {
+  let metrics;
+  try {
+    metrics = await api('metrics', {
     device: d.id, level: S.reader.level, margin: S.reader.margin, spacing: S.reader.spacing,
     // 出版商字体在真机上多半落到自带宋体（书里写的雅黑等 Kindle 没有），按衬线算。
     serif: !['hei', 'yuan'].includes(S.reader.font), values: S.draft,
   });
+  } catch (error) {
+    if (sequence !== metricsSequence) return false;
+    throw error;
+  }
+  if (sequence !== metricsSequence) return false;
+  S.metrics = metrics;
   $('level').textContent = S.reader.level;
+  return true;
 }
 
 async function rerender(entry) {
@@ -853,7 +864,7 @@ function scheduleRender() {
   clearTimeout(S.timer);
   S.timer = setTimeout(async () => {
     try {
-      await refreshMetrics();
+      if (!await refreshMetrics()) return;
       await rerender();
     } catch (_) { /* 连接断开时已提示 */ }
   }, 450);
@@ -950,7 +961,7 @@ function setupControls() {
     buildSeg(el, async (value) => {
       S.reader[el.dataset.reader] = value;
       syncControls();
-      await refreshMetrics();
+      if (!await refreshMetrics()) return;
       layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
     });
   }
@@ -973,7 +984,7 @@ function setupControls() {
   }
   const level = async (delta) => {
     S.reader.level = Math.max(1, Math.min(14, S.reader.level + delta));
-    await refreshMetrics();
+    if (!await refreshMetrics()) return;
     layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
   };
   $('level-down').addEventListener('click', () => level(-1));
@@ -1039,7 +1050,7 @@ function setupControls() {
   $('device').addEventListener('change', async () => {
     S.device = S.devices.find((d) => d.id === $('device').value);
     drawDevice();
-    await refreshMetrics();
+    if (!await refreshMetrics()) return;
     layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
   });
   $('chapter').addEventListener('change', () => {
@@ -1142,7 +1153,7 @@ async function chooseFont(value) {
   syncControls();
   // 选择记在本机，下次打开预览沿用（只影响预览）。
   api('font-select', { font: S.reader.font }).catch(() => {});
-  await refreshMetrics();
+  if (!await refreshMetrics()) return;
   layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
 }
 
@@ -1174,7 +1185,7 @@ async function start() {
   setupControls();
   syncControls();
   drawDevice();
-  await refreshMetrics();
+  if (!await refreshMetrics()) return;
   await rerender(state.entry);
 }
 

@@ -80,6 +80,77 @@ void main() {
     onChecks: () {},
   );
 
+  testWidgets('插入内置规则保留逐步例外，重复规则总开关处理全部步骤', (t) async {
+    size(t, const Size(1500, 1000));
+    final library = await open(t, sample);
+    final key = 'cleanup:${library.books.value.single.id}';
+    library.writeDraft(key, {
+      'rules': jsonEncode({
+        'kind': 'cleanup',
+        'pipeline': [
+          for (final enabled in [false, true])
+            {
+              'kind': 'configured',
+              'enabled': enabled,
+              'scope': 'all',
+              'rule': {'kind': 'collapse_blank_lines'},
+            },
+        ],
+        'step_exclusions': [
+          {'step_index': 1, 'source_line': 3},
+        ],
+      }),
+    });
+    Map current() =>
+        jsonDecode(library.readDraft(key)!['rules'] as String) as Map;
+    final blank = find.byKey(const ValueKey('cleanup-builtin-blank'));
+    bool enabled() => t
+        .widget<Switch>(
+          find.descendant(of: blank, matching: find.byType(Switch)),
+        )
+        .value;
+    await t.pumpWidget(app(page(library)));
+    await until(
+      t,
+      () =>
+          t
+              .widget<Switch>(
+                find.descendant(of: blank, matching: find.byType(Switch)),
+              )
+              .onChanged !=
+          null,
+    );
+    expect(enabled(), true); // 第一条关闭，第二条开启，汇总仍为开启。
+    await t.tap(find.byKey(const ValueKey('cleanup-builtin-trim')));
+    await t.pump();
+    expect(
+      (current()['pipeline'] as List).first['rule']['kind'],
+      'trim_trailing_spaces',
+    );
+    expect(current()['step_exclusions'], [
+      {'step_index': 2, 'source_line': 3},
+    ]);
+    await t.tap(blank);
+    await t.pump();
+    expect(enabled(), false);
+    expect((current()['pipeline'] as List).skip(1).map((r) => r['enabled']), [
+      false,
+      false,
+    ]);
+    await t.tap(blank);
+    await t.pump();
+    expect(enabled(), true);
+    expect((current()['pipeline'] as List).skip(1).map((r) => r['enabled']), [
+      true,
+      true,
+    ]);
+    expect(current()['step_exclusions'], [
+      {'step_index': 2, 'source_line': 3},
+    ]);
+    expect(t.takeException(), isNull);
+    await t.pumpWidget(const SizedBox());
+  });
+
   testWidgets('连续空行合并成一行，可逐行展开；各行操作区等宽；文案（CLEAN-106/107/109）', (t) async {
     size(t, const Size(1500, 1000));
     final library = await open(t, sample);

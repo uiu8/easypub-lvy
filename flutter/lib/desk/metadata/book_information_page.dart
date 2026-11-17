@@ -187,7 +187,7 @@ class _BookInformationPageState extends State<BookInformationPage> {
     for (final node in fieldFocus.values) {
       node.dispose();
     }
-    widget.navigation.check = null;
+    if (widget.navigation.check == canLeave) widget.navigation.check = null;
     _saveTimer?.cancel();
     for (final controller in controllers.values) {
       controller.dispose();

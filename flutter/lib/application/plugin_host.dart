@@ -128,8 +128,11 @@ class PluginRegistry {
   final Map<String, PluginClient> _clients = {};
   bool storageSuspended = false;
   final Map<String, Future<PluginClient>> _starting = {};
+  final Set<String> _installing = {};
 
   Future<void> stopForStorage() async {
+    if (_installing.isNotEmpty)
+      throw const StorageException('storage_plugins_running');
     storageSuspended = true;
     await Future.wait(
       _starting.values.toList().map((f) async {
@@ -176,12 +179,31 @@ class PluginRegistry {
   }
 
   List<PluginEntry> scan({bool fresh = false}) {
+    // 替换中断在“旧目录已移走、新目录尚未发布”时，下次扫描恢复旧版。
+    final userDirectory = Directory(userRoot);
+    if (userDirectory.existsSync()) {
+      for (final backup in userDirectory.listSync().whereType<Directory>()) {
+        final name = backup.uri.pathSegments.where((s) => s.isNotEmpty).last;
+        if (!name.startsWith('.backup-')) continue;
+        final id = name.substring('.backup-'.length);
+        if (!RegExp(r'^[a-z0-9_-]{1,40}$').hasMatch(id) ||
+            _installing.contains(id))
+          continue;
+        final target = Directory('$userRoot${Platform.pathSeparator}$id');
+        if (!target.existsSync()) backup.renameSync(target.path);
+      }
+    }
     final state = _state();
     final seen = <String, PluginEntry>{};
     for (final root in [userRoot, ..._extraRoots]) {
       final dir = Directory(root);
       if (!dir.existsSync()) continue;
       for (final sub in dir.listSync().whereType<Directory>()) {
+        if (sub.uri.pathSegments
+            .where((s) => s.isNotEmpty)
+            .last
+            .startsWith('.'))
+          continue;
         final m = PluginManifest.read(sub);
         if (m == null || seen.containsKey(m.id)) continue;
         seen[m.id] = PluginEntry(
@@ -239,26 +261,70 @@ class PluginRegistry {
     if (m == null) throw const PluginError('这个文件夹里没有有效的 plugin.json');
     final problem = _problem(m, fresh: true);
     if (problem != null) throw PluginError(problem);
-    await _clients.remove(m.id)?.close();
-    final target = Directory('$userRoot${Platform.pathSeparator}${m.id}');
-    if (target.existsSync()) await target.delete(recursive: true);
-    await target.create(recursive: true);
-    await for (final f in Directory(folder).list()) {
-      if (f is File) {
-        await f.copy(
-          '${target.path}${Platform.pathSeparator}${f.uri.pathSegments.last}',
-        );
+    if (!_installing.add(m.id)) throw const PluginError('插件正在安装，请稍后重试');
+    Directory? stage;
+    try {
+      final root = Directory(userRoot);
+      await root.create(recursive: true);
+      stage = await root.createTemp('.install-${m.id}-');
+      await for (final f in Directory(folder).list()) {
+        if (f is File) {
+          await f.copy(
+            '${stage.path}${Platform.pathSeparator}${f.uri.pathSegments.last}',
+          );
+        }
       }
+      final staged = PluginManifest.read(stage);
+      if (staged == null || staged.id != m.id)
+        throw const PluginError('插件安装副本无效');
+      final stagedProblem = _problem(staged, fresh: true);
+      if (stagedProblem != null) throw PluginError(stagedProblem);
+      final starting = _starting[m.id];
+      if (starting != null) {
+        try {
+          await starting;
+        } catch (_) {
+          /* 启动失败也可以替换。 */
+        }
+      }
+      await _clients.remove(m.id)?.close();
+      final target = Directory('$userRoot${Platform.pathSeparator}${m.id}');
+      final backup = Directory(
+        '$userRoot${Platform.pathSeparator}.backup-${m.id}',
+      );
+      if (!target.existsSync() && backup.existsSync())
+        backup.renameSync(target.path);
+      if (target.existsSync()) {
+        if (backup.existsSync()) backup.deleteSync(recursive: true);
+        target.renameSync(backup.path);
+      }
+      try {
+        // 发布与回滚之间不 await，避免扫描或启动观察到半次替换。
+        stage.renameSync(target.path);
+        stage = null;
+      } catch (_) {
+        if (!target.existsSync() && backup.existsSync())
+          backup.renameSync(target.path);
+        rethrow;
+      }
+      // 保留上版备份到下次成功准备新版；扫描不会将它当成可用插件。
+      changes.value++;
+      return find(m.id, fresh: true)!;
+    } finally {
+      _installing.remove(m.id);
+      if (stage != null && stage.existsSync())
+        await stage.delete(recursive: true);
     }
-    changes.value++;
-    return find(m.id)!;
   }
 
   Future<void> uninstall(String id) async {
     if (storageSuspended) throw const PluginError('storage_plugins_suspended');
+    if (_installing.contains(id)) throw const PluginError('插件正在安装，请稍后重试');
     await _clients.remove(id)?.close();
     final target = Directory('$userRoot${Platform.pathSeparator}$id');
-    if (target.existsSync()) await target.delete(recursive: true);
+    final backup = Directory('$userRoot${Platform.pathSeparator}.backup-$id');
+    if (backup.existsSync()) backup.deleteSync(recursive: true);
+    if (target.existsSync()) target.deleteSync(recursive: true);
     changes.value++;
   }
 
@@ -271,6 +337,7 @@ class PluginRegistry {
   /// 启动（或复用）插件进程。
   Future<PluginClient> client(String id) async {
     if (storageSuspended) throw const PluginError('storage_plugins_suspended');
+    if (_installing.contains(id)) throw const PluginError('插件正在安装，请稍后重试');
     final existing = _clients[id];
     if (existing != null && !existing.closed) return existing;
     final pending = _starting[id];

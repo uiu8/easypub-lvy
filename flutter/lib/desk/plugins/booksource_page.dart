@@ -189,9 +189,12 @@ class _BookSourcePageState extends State<BookSourcePage> {
     _connect();
   }
 
+  Future<void> importOptionSave = Future.value();
+
   Future<void> _connect() async {
     try {
       final a = await widget.openApi();
+      if (!mounted) return;
       sub = a.events.listen(_onEvent);
       api = a;
       await _loadSources();

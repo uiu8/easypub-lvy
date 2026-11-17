@@ -20,10 +20,27 @@ class LegacyLayoutSession extends LegacyBookInformationSession
         ChapterStyleStore,
         BookFontSource,
         ImageEstimateSource,
-        OriginalNavigationSource {
+        OriginalNavigationSource,
+        NavigationFilterSource {
   LegacyLayoutSession(super.backend, super.bookId, {this.launchPreview});
   final Future<void> Function(String path)? launchPreview;
   LayoutPublicationPreview? _generatedPreview;
+
+  @override
+  Future<int> previewNavigationFilter(
+    String filter,
+    bool regex,
+    List<String> titles,
+  ) async {
+    final result = await backend.production.productionRequest(
+      jsonEncode({
+        'op': 'navigation_filter',
+        'options': {'toc_filter': filter, 'filter_regex': regex},
+        'titles': titles,
+      }),
+    );
+    return (result['removed'] as num).toInt();
+  }
 
   @override
   Future<Map<String, dynamic>> originalNavigation() =>

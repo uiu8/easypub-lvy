@@ -197,7 +197,9 @@ impl Scope<'_, '_> {
         let response = self.fetch(&url)?;
         let pattern = self.source().book_url_pattern.trim().to_owned();
         if !pattern.is_empty()
-            && pattern::compile(&pattern).is_some_and(|p| p.is_match(&response.url))
+            && pattern::checked(|| {
+                pattern::compile(&pattern).is_some_and(|p| p.is_match(&response.url))
+            })?
         {
             let mut book = Book {
                 book_url: response.url.clone(),
@@ -212,6 +214,9 @@ impl Scope<'_, '_> {
         } else {
             self.get_elements(&list_rule)
         };
+        if let Some(e) = self.inner.st.borrow_mut().script_error.take() {
+            return Err(format!("搜索脚本出错：{e}"));
+        }
         if items.is_empty() && !self.rules(|s| &s.rule_book_info, "name").is_empty() {
             // 没有列表：可能直接是详情页。
             let mut book = Book {
@@ -241,9 +246,7 @@ impl Scope<'_, '_> {
                 books.push(book);
             }
         }
-        if books.is_empty()
-            && let Some(e) = self.inner.st.borrow_mut().script_error.take()
-        {
+        if let Some(e) = self.inner.st.borrow_mut().script_error.take() {
             return Err(format!("搜索脚本出错：{e}"));
         }
         Ok(books)
@@ -281,9 +284,7 @@ impl Scope<'_, '_> {
             })
             .filter(|b| !b.name.is_empty())
             .collect();
-        if books.is_empty()
-            && let Some(e) = self.inner.st.borrow_mut().script_error.take()
-        {
+        if let Some(e) = self.inner.st.borrow_mut().script_error.take() {
             return Err(format!("发现脚本出错：{e}"));
         }
         Ok(books)
@@ -326,11 +327,19 @@ impl Scope<'_, '_> {
             return Err("没有书籍地址".into());
         }
         self.set_book(book.json());
+        self.inner.st.borrow_mut().script_error = None;
         self.fetch(&book.book_url.clone())?;
         self.parse_info(book)
     }
 
     fn parse_info(&self, book: &mut Book) -> Result<(), String> {
+        let mut parsed = book.clone();
+        self.parse_info_inner(&mut parsed)?;
+        *book = parsed;
+        Ok(())
+    }
+
+    fn parse_info_inner(&self, book: &mut Book) -> Result<(), String> {
         let init = self.rules(|s| &s.rule_book_info, "init");
         if !init.is_empty()
             && let Some(first) = self.get_elements(&init).into_iter().next()
@@ -385,6 +394,9 @@ impl Scope<'_, '_> {
             .get("variables")
             .map(Value::to_string)
             .unwrap_or_default();
+        if let Some(e) = self.inner.st.borrow_mut().script_error.take() {
+            return Err(format!("详情规则出错：{e}"));
+        }
         self.set_book(book.json());
         Ok(())
     }
@@ -469,14 +481,21 @@ impl Scope<'_, '_> {
                     }
                 };
                 let title = get("chapterName");
+                if let Some(error) = self.inner.st.borrow_mut().script_error.take() {
+                    return Err(format!("目录规则出错：{error}"));
+                }
                 if title.is_empty() {
                     continue;
                 }
                 let raw_url = self.url_field(&self.rules(|s| &s.rule_toc, "chapterUrl"), &item);
-                if raw_url.is_empty()
-                    && let Some(error) = self.inner.st.borrow_mut().script_error.take()
-                {
-                    address_error.get_or_insert(error);
+                if let Some(error) = self.inner.st.borrow_mut().script_error.take() {
+                    // 混合目录的无链接卷名可能让 match(...)[0] 触发类型错误。
+                    // 仅保留这一兼容回退；正则运行失败等其他错误必须传播。
+                    if raw_url.is_empty() && error == "书源规则脚本类型错误" {
+                        address_error.get_or_insert(error);
+                    } else {
+                        return Err(format!("目录规则出错：{error}"));
+                    }
                 }
                 // 没有链接的目录项先按卷名处理（只保留标题，不去取正文）；整本都没有链接时见循环后。
                 let explicit_volume = truthy(&get("isVolume"));
@@ -519,14 +538,11 @@ impl Scope<'_, '_> {
                 }
             }
         }
-        if chapters.is_empty()
-            && let Some(e) = self.inner.st.borrow_mut().script_error.take()
-        {
+        if let Some(e) = self.inner.st.borrow_mut().script_error.take() {
             return Err(format!("目录脚本出错：{e}"));
         }
         // 整本目录都没有链接（单篇、诗词类书源）：与阅读一致，这些项是章节，正文就在所在目录页。
         if !linked {
-            // 混合目录里的无链接项可以是卷名；只有全目录地址失败才阻止单篇回退。
             if let Some(error) = address_error {
                 return Err(format!("目录脚本出错：{error}"));
             }
@@ -534,6 +550,8 @@ impl Scope<'_, '_> {
                 chapters[i].is_volume = false;
                 chapters[i].url = page;
             }
+        } else if address_error.is_some() {
+            self.log("目录中的无链接项已按卷名保留：链接规则返回类型错误");
         }
         if reverse
             ^ self.inner.st.borrow().book["reverseToc"]

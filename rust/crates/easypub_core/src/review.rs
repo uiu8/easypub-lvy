@@ -220,11 +220,11 @@ impl Review {
             .collect::<BTreeMap<_, _>>();
         let current = |id: &str| self.records.get(id).filter(|r| r.evidence_id == stamp);
         Ok(evidence
-            .items
+            .ordered()
             .iter()
             .enumerate()
             .map(|(index, item)| {
-                let mut item = item.clone();
+                let mut item = evidence.items[*item as usize].clone();
                 let group = item["finding_id"].as_str().unwrap_or("").to_owned();
                 let record = current(item["id"].as_str().unwrap_or(""));
                 item["severity"] = json!(severities.get(group.as_str()).copied().unwrap_or("info"));
@@ -897,9 +897,6 @@ mod tests {
             .collect::<String>();
         let s = source(&indented);
         let evidence = ReviewEvidence::new(&s).unwrap();
-        let report = Review::default()
-            .report_using(&evidence, 0, None, None)
-            .unwrap();
         let items = evidence.items.iter();
         assert!(
             !items

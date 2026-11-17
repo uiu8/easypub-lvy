@@ -110,6 +110,7 @@ extension _BookSourceQueue on _BookSourcePageState {
 
   (String, Tone) _taskState(DownloadTask t) {
     if (t.cancelled || t.status == 'cancelled') return ('已取消', Tone.info);
+    if (t.status == 'failed') return ('失败', Tone.pen);
     if (t.finished) {
       return t.error != null || t.failures.isNotEmpty
           ? ('有未取到的章节', Tone.warn)

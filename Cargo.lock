@@ -797,10 +797,12 @@ name = "easypub_updater"
 version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
+ "flate2",
  "serde",
  "serde_json",
  "sha2",
  "windows-sys 0.61.2",
+ "zip",
 ]
 
 [[package]]

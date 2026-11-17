@@ -166,6 +166,7 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
     lineErrors.clear();
     _notesSource = null;
     segmentText.clear();
+    segmentReading = false;
     error = '';
     failedOffset = null;
     initialPositionApplied = false;
@@ -1085,8 +1086,12 @@ class _ChapterManuscriptState extends State<ChapterManuscript> {
         segmentText.putIfAbsent(line, () => '');
       }
     } catch (e) {
+      if (!mounted || ticket != generation) return;
+      for (final line in lines) {
+        segmentText.putIfAbsent(line, () => '');
+      }
       if (e is ChapterStateChanged) widget.onStale?.call();
-      // 摘录读不出时只显示行号，片段照常列出。
+      // 当前版本读失败不再自动重试；章节刷新后清空摘录缓存。
     } finally {
       if (ticket == generation) segmentReading = false;
       if (mounted && ticket == generation) setState(() {});

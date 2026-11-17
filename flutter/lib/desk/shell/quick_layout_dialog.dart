@@ -39,6 +39,7 @@ class _QuickLayoutDialogState extends State<QuickLayoutDialog> {
   /// 选中的预设与它相对本书当前排版的预览；为 null 时显示预设列表。
   _Entry? chosen;
   BookInformationPreview? plan;
+  int generation = 0;
 
   @override
   void initState() {
@@ -62,6 +63,7 @@ class _QuickLayoutDialogState extends State<QuickLayoutDialog> {
   }
 
   Future<void> choose(_Entry entry) async {
+    final ticket = ++generation;
     setState(() {
       chosen = entry;
       plan = null;
@@ -78,9 +80,9 @@ class _QuickLayoutDialogState extends State<QuickLayoutDialog> {
                 ),
               ),
             );
-      if (mounted && chosen == entry) setState(() => plan = next);
+      if (mounted && ticket == generation) setState(() => plan = next);
     } catch (e) {
-      if (mounted) {
+      if (mounted && ticket == generation) {
         setState(() {
           chosen = null;
           message = deskErrorText(
@@ -90,7 +92,7 @@ class _QuickLayoutDialogState extends State<QuickLayoutDialog> {
         });
       }
     }
-    if (mounted) setState(() => previewing = false);
+    if (mounted && ticket == generation) setState(() => previewing = false);
   }
 
   Future<void> apply() async {
@@ -166,6 +168,8 @@ class _QuickLayoutDialogState extends State<QuickLayoutDialog> {
                 onPressed: applying
                     ? null
                     : () => setState(() {
+                        generation++;
+                        previewing = false;
                         chosen = null;
                         plan = null;
                       }),

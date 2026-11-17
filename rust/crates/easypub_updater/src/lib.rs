@@ -136,6 +136,23 @@ pub struct PluginPackage {
     pub sha256: String,
 }
 
+impl PluginPackage {
+    pub fn verify_declaration(&self, info: &serde_json::Value) -> Result<(), UpdateError> {
+        let permissions: Vec<String> = serde_json::from_value(info["permissions"].clone())
+            .map_err(|_| UpdateError("update_package_invalid"))?;
+        if info["id"].as_str() != Some(self.id.as_str())
+            || info["version"].as_str() != Some(self.version.as_str())
+            || info["executable"].as_str() != Some(self.executable.as_str())
+            || info["sha256"].as_str() != Some(self.exe_sha256.as_str())
+            || permissions.iter().collect::<BTreeSet<_>>()
+                != self.permissions.iter().collect::<BTreeSet<_>>()
+        {
+            return Err(UpdateError("update_package_invalid"));
+        }
+        Ok(())
+    }
+}
+
 /// 随某一版软件发布的插件清单。以后可以加字段：解析时不拒绝多出来的字段。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PluginManifest {
@@ -281,6 +298,40 @@ pub fn plan_swap(app_dir: &Path, source: &Path) -> Result<(Vec<String>, Vec<Stri
         .filter(|n| app_dir.join(n).symlink_metadata().is_ok())
         .collect();
     Ok((outgoing, incoming.into_iter().collect()))
+}
+
+/// A completed replacement may leave its newest backup under the temporary name.
+/// An outstanding journal means that directory can still be only a partial copy.
+pub fn backup_path(work: &Path) -> PathBuf {
+    let pending = work.join("backup-new");
+    if !work.join("journal.json").exists()
+        && pending.join(APP_EXE).is_file()
+        && read_release(&pending).is_some()
+    {
+        pending
+    } else {
+        work.join("backup")
+    }
+}
+
+/// Finish backup publication before starting another replacement. Never erase an
+/// unrecognized nonempty directory: it may be the only surviving previous build.
+pub fn finalize_backup(work: &Path) -> Result<(), UpdateError> {
+    let pending = work.join("backup-new");
+    if !pending.exists() {
+        return Ok(());
+    }
+    if fs::remove_dir(&pending).is_ok() {
+        return Ok(());
+    }
+    if backup_path(work) != pending {
+        return Err(UpdateError("update_backup_recovery_required"));
+    }
+    let old = work.join("backup");
+    if old.exists() {
+        fs::remove_dir_all(&old).map_err(|_| UpdateError("update_backup_failed"))?;
+    }
+    rename(&pending, &old).map_err(|_| UpdateError("update_backup_failed"))
 }
 
 /// 改名；杀毒软件或资源管理器可能短暂占用，重试几次。

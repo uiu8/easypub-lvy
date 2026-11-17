@@ -165,6 +165,35 @@ Future<void> _menu(WidgetTester tester, String key) async {
 }
 
 void main() {
+  testWidgets('关闭书源页后迟到的连接不创建订阅或加载数据', (tester) async {
+    final pending = Completer<BookSourceApi>();
+    final api = FakeApi();
+    final tmp = Directory.systemTemp.createTempSync('ep-late-plugin-');
+    addTearDown(() async {
+      await api.events_.close();
+      await tmp.delete(recursive: true);
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: deskTheme(),
+        home: Scaffold(
+          body: BookSourcePage(
+            openApi: () => pending.future,
+            settingsPath: '${tmp.path}/settings.json',
+            chooseFolder: () async => null,
+            chooseSourceFile: () async => null,
+            importToLibrary: (_) async => null,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    pending.complete(api);
+    await tester.pump();
+    expect(api.events_.hasListener, isFalse);
+    expect(api.calls, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
   test(
     'plugin registry verifies, enables and talks to the real plugin process',
     () async {
@@ -249,6 +278,43 @@ void main() {
         installed.removable,
         isTrue,
         reason: '装进用户目录的插件可卸载（同标识时优先用用户目录里的）',
+      );
+      final target = Directory('${tmp.path}/user2/booksource');
+      final oldDeclaration = File('${target.path}/plugin.json')
+          .readAsStringSync();
+      await expectLater(
+        r2.installFromFolder('${bad.path}/booksource'),
+        throwsA(isA<PluginError>()),
+      );
+      expect(
+        File('${target.path}/plugin.json').readAsStringSync(),
+        oldDeclaration,
+      );
+      final updating = r2.installFromFolder('${bundled.path}/booksource');
+      await expectLater(
+        r2.installFromFolder('${bundled.path}/booksource'),
+        throwsA(isA<PluginError>()),
+      );
+      await updating;
+      final backup = Directory('${tmp.path}/user2/.backup-booksource');
+      expect(backup.existsSync(), isTrue);
+      expect(r2.scan(fresh: true).single.problem, isNull);
+      // 模拟替换在旧版已移入备份、尚未发布新版时中断。
+      target.deleteSync(recursive: true);
+      expect(r2.scan(fresh: true).single.problem, isNull);
+      expect(target.existsSync(), isTrue);
+      expect(backup.existsSync(), isFalse);
+      expect(
+        File('${target.path}/plugin.json').readAsStringSync(),
+        oldDeclaration,
+      );
+      expect(
+        Directory(r2.userRoot).listSync().where(
+          (entry) => entry.uri.pathSegments.any(
+            (part) => part.startsWith('.install-'),
+          ),
+        ),
+        isEmpty,
       );
       await r2.uninstall('booksource');
       expect(Directory('${tmp.path}/user2/booksource').existsSync(), isFalse);

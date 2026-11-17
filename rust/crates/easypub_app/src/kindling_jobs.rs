@@ -55,6 +55,8 @@ enum Command {
     },
     HistoryLoad {
         directory: String,
+        #[serde(default)]
+        after: Option<String>,
     },
     HistorySave {
         directory: String,
@@ -88,7 +90,10 @@ impl Manager {
         self.start_worker(move |control| kindling_export::execute(&source, request, control))
     }
 
-    fn start_worker(&self, work: impl FnOnce(&Control) -> Result<Value, ApiError> + Send + 'static) -> Result<u64, ApiError> {
+    fn start_worker(
+        &self,
+        work: impl FnOnce(&Control) -> Result<Value, ApiError> + Send + 'static,
+    ) -> Result<u64, ApiError> {
         let mut registry = self.registry.lock().unwrap();
         // 同时进行的转换最多 8 个（设置“同时处理的书”的最大档位）。
         if registry.jobs.len() >= 32
@@ -117,10 +122,8 @@ impl Manager {
         std::thread::Builder::new()
             .name(format!("kindling-{id}"))
             .spawn(move || {
-                let result = catch_unwind(AssertUnwindSafe(|| {
-                    work(&worker.control)
-                }))
-                .unwrap_or_else(|_| Err(error(ErrorCode::Internal, "review_export_log")));
+                let result = catch_unwind(AssertUnwindSafe(|| work(&worker.control)))
+                    .unwrap_or_else(|_| Err(error(ErrorCode::Internal, "review_export_log")));
                 *worker.result.lock().unwrap() = Some(result);
                 worker.control.signal.notify();
             })
@@ -235,8 +238,8 @@ impl Manager {
             Command::HistoryVerify { directory, task_id } => {
                 crate::output_history::verify(std::path::Path::new(&directory), &task_id)?
             }
-            Command::HistoryLoad { directory } => {
-                json!({"records": crate::output_history::load(std::path::Path::new(&directory))?})
+            Command::HistoryLoad { directory, after } => {
+                crate::output_history::load_page(std::path::Path::new(&directory), after.as_deref())?
             }
             Command::HistorySave { directory, record, clean_completed } => {
                 let directory = std::path::Path::new(&directory);
@@ -317,16 +320,21 @@ mod tests {
         assert_eq!(phases.first().unwrap(), "preparing");
         assert!(phases.contains(&"converting".to_string()), "{phases:?}");
         manager.forget(id).unwrap();
-        assert_eq!(manager.watch(id, |_| true).unwrap_err().code, ErrorCode::NotFound);
+        assert_eq!(
+            manager.watch(id, |_| true).unwrap_err().code,
+            ErrorCode::NotFound
+        );
     }
 
     #[test]
     fn watch_reports_cancellation() {
         let manager = Manager::default();
         let id = manager
-            .start_worker(|control| loop {
-                control.enter("converting")?;
-                std::thread::sleep(Duration::from_millis(5));
+            .start_worker(|control| {
+                loop {
+                    control.enter("converting")?;
+                    std::thread::sleep(Duration::from_millis(5));
+                }
             })
             .unwrap();
         let mut last = Value::Null;

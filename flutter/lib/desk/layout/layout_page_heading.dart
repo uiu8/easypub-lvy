@@ -137,8 +137,8 @@ extension _LayoutHeadingSection on _LayoutPageState {
   }
 
   /// 章节样式包：单独预览并应用（进变更记录），不经草稿。
-  Future<void> setChapterStyle(Map<String, dynamic>? style, String done) async {
-    if (session == null) return;
+  Future<bool> setChapterStyle(Map<String, dynamic>? style, String done) async {
+    if (session == null) return false;
     update(() => busy = true);
     try {
       await session!.apply(await session!.preview({'chapter_style': style}));
@@ -148,10 +148,12 @@ extension _LayoutHeadingSection on _LayoutPageState {
           message = done;
         });
       }
+      return mounted;
     } catch (error) {
       if (mounted) {
         update(() => message = deskErrorText(error, '章节样式包未能应用'));
       }
+      return false;
     } finally {
       if (mounted) update(() => busy = false);
     }
@@ -181,7 +183,7 @@ extension _LayoutHeadingSection on _LayoutPageState {
     }, '内置样式包未能生成');
     final style = (result?['style'] as Map?)?.cast<String, dynamic>();
     if (style != null && mounted) {
-      await setChapterStyle(style, '已使用样式包“${style['name']}”');
+      if (!await setChapterStyle(style, '已使用样式包“${style['name']}”')) return;
       applyPackBlocks(result?['blocks']);
       applyPackInsets(result?['insets']);
     }
@@ -198,7 +200,7 @@ extension _LayoutHeadingSection on _LayoutPageState {
     }, '样式包未能导入：请检查文件内容');
     final style = (result?['style'] as Map?)?.cast<String, dynamic>();
     if (style != null && mounted) {
-      await setChapterStyle(style, '已导入并使用样式包“${style['name']}”');
+      if (!await setChapterStyle(style, '已导入并使用样式包“${style['name']}”')) return;
       applyPackBlocks(result?['blocks']);
       applyPackInsets(result?['insets']);
     }
