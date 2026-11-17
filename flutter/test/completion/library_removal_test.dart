@@ -234,6 +234,8 @@ void main() {
       expect(library.books.value, hasLength(2));
       await t.tap(find.byTooltip('全选筛选结果'));
       await t.pump();
+      await t.tap(find.byKey(const ValueKey('library-selection-more')));
+      await t.pumpAndSettle();
       await t.tap(find.text('移除所选'));
       await t.pumpAndSettle();
       expect(library.books.value, isEmpty);

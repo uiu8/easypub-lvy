@@ -191,6 +191,8 @@ void main() {
     library.checkBooks(library.books.value.map((b) => b.id), false);
     library.checkBooks([first.id], true);
     await t.pump();
+    await t.tap(find.byKey(const ValueKey('library-selection-more')));
+    await t.pumpAndSettle();
     await t.tap(find.byKey(const ValueKey('library-uncollect-selected')));
     await t.pump();
     expect(library.collections.value.single.books, isNot(contains(first.id)));

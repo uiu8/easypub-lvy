@@ -213,7 +213,7 @@ extension _LibraryShelf on _LibraryPageState {
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: checked
-                    ? d.accentSoft
+                    ? Color.alphaBlend(d.ink2.withValues(alpha: .07), d.paper)
                     : on
                     ? d.surface
                     : null,
@@ -402,10 +402,10 @@ extension _LibraryShelf on _LibraryPageState {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
-                color: on
+                color: checked
+                    ? Color.alphaBlend(d.ink2.withValues(alpha: .07), d.paper)
+                    : on
                     ? d.surface
-                    : checked
-                    ? d.accentSoft
                     : null,
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: on ? d.shadow1 : null,
