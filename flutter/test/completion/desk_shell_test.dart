@@ -64,7 +64,7 @@ void main() {
       final state = PrototypeState(settingsDirectory: '${tmp.path}/settings');
       library = LegacyLibraryAdapter(backend: state);
       await library.load();
-      final file = File('${tmp.path}/山海之间.txt');
+      final file = File('${tmp.path}/山海之间——这是一份用来验证长书名不会推动底部操作按钮的测试书稿.txt');
       await file.writeAsString('第一章 远行\n山路很长。\n\n第二章 归来\n海风很轻。\n');
       expect((await library.importFiles([file.path])).single.succeeded, true);
       bookId = library.books.value.single.id;
@@ -127,6 +127,13 @@ void main() {
         expect(
           t.getRect(find.byKey(const ValueKey('workspace-output-bar'))).bottom,
           closeTo(size.height, .5),
+        );
+        expect(
+          t
+              .getCenter(find.byKey(const ValueKey('workspace-output-actions')))
+              .dx,
+          closeTo(size.width / 2, .5),
+          reason: '长书名下操作组仍以整个窗口居中：$size $route',
         );
         if (capture != null) {
           await t.runAsync(() async {

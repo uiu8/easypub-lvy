@@ -15,7 +15,7 @@ class _WorkspaceBottomBar extends StatefulWidget {
   State<_WorkspaceBottomBar> createState() => _WorkspaceBottomBarState();
 }
 
-/// 底部输出托盘：左侧是待应用预览与本次输出范围，右侧是格式、排版、位置与主操作。
+/// 底部输出托盘：操作组始终居中，左右等宽，书名仅占用左侧余量。
 /// 保存状态已移到标题栏。
 class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
   _RewriteAppState? owner;
@@ -124,333 +124,371 @@ class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
             ),
             child: Row(
               children: [
-                PendingTrayButton(
-                  registry: app.pendingChanges,
-                  onOpen: (location) {
-                    if (GoRouterState.of(context).uri.toString() != location) {
-                      app.router.go(location);
-                    }
-                  },
-                ),
-                if (!conversionPage && checked.isNotEmpty)
-                  DeskCommandMenu<bool>(
-                    tooltip: '转换范围',
-                    enabled: !busy,
-                    initialValue: batch,
-                    onSelected: busy
-                        ? null
-                        : (value) {
-                            if (libraryPage) {
-                              app.libraryConvertChecked = value;
-                            } else {
-                              app.convertChecked = value;
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: PendingTrayButton(
+                          registry: app.pendingChanges,
+                          onOpen: (location) {
+                            if (GoRouterState.of(context).uri.toString() !=
+                                location) {
+                              app.router.go(location);
                             }
-                            draft.changed();
                           },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: false,
-                        enabled: book != null,
-                        child: const Text('当前书'),
+                        ),
                       ),
-                      PopupMenuItem(
-                        value: true,
-                        child: Text('已勾选 ${checked.length} 本'),
-                      ),
-                    ],
-                    child: _TrayChip(
-                      batch ? '已勾选 $count 本' : '当前书',
-                      maxWidth: compact ? 120 : 220,
-                    ),
-                  )
-                else if (!tiny)
-                  Flexible(
-                    child: Text(
-                      scope,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: ui(12, c: d.ink3),
-                    ),
-                  ),
-                const Spacer(),
-                // 转换页内已有格式、排版与输出位置，托盘不重复。
-                if (!conversionPage) ...[
-                  if (!tiny) ...[
-                    Text('输出', style: ui(12, c: d.ink3)),
-                    const SizedBox(width: 8),
-                  ],
-                  // 只有极窄时才收成下拉；其余宽度都用分段按钮（四个格式名本来就短）。
-                  if (!tiny)
-                    KeyedSubtree(
-                      key: ValueKey('quick-format-${draft.format}'),
-                      child: DeskSegmented<String>(
-                        value: draft.format,
-                        options: {for (final f in formats) f: f},
-                        onChanged: busy ? null : app.updateOutputFormat,
-                      ),
-                    )
-                  else
-                    SizedBox(
-                      width: MediaQuery.textScalerOf(context).scale(104),
-                      child: DeskChoice<String>(
-                        key: ValueKey('quick-format-${draft.format}'),
-                        initialValue: draft.format,
-                        isDense: true,
-                        isExpanded: true,
-                        iconSize: 18,
-                        style: ui(13, c: d.ink),
-                        decoration: const InputDecoration(
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
+                      if (!conversionPage && checked.isNotEmpty)
+                        Flexible(
+                          child: DeskCommandMenu<bool>(
+                            tooltip: '转换范围',
+                            enabled: !busy,
+                            initialValue: batch,
+                            onSelected: busy
+                                ? null
+                                : (value) {
+                                    if (libraryPage) {
+                                      app.libraryConvertChecked = value;
+                                    } else {
+                                      app.convertChecked = value;
+                                    }
+                                    draft.changed();
+                                  },
+                            itemBuilder: (_) => [
+                              PopupMenuItem(
+                                value: false,
+                                enabled: book != null,
+                                child: const Text('当前书'),
+                              ),
+                              PopupMenuItem(
+                                value: true,
+                                child: Text('已勾选 ${checked.length} 本'),
+                              ),
+                            ],
+                            child: _TrayChip(
+                              batch ? '已勾选 $count 本' : '当前书',
+                              maxWidth: compact ? 120 : 220,
+                            ),
+                          ),
+                        )
+                      else if (!tiny)
+                        Flexible(
+                          child: Text(
+                            scope,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: ui(12, c: d.ink3),
                           ),
                         ),
-                        items: [
-                          for (final format in formats)
-                            DropdownMenuItem(
-                              value: format,
-                              child: Text(format),
+                    ],
+                  ),
+                ),
+                Row(
+                  key: const ValueKey('workspace-output-actions'),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 转换页内已有格式、排版与输出位置，托盘不重复。
+                    if (!conversionPage) ...[
+                      if (!tiny) ...[
+                        Text('输出', style: ui(12, c: d.ink3)),
+                        const SizedBox(width: 8),
+                      ],
+                      // 只有极窄时才收成下拉；其余宽度都用分段按钮（四个格式名本来就短）。
+                      if (!tiny)
+                        KeyedSubtree(
+                          key: ValueKey('quick-format-${draft.format}'),
+                          child: DeskSegmented<String>(
+                            value: draft.format,
+                            options: {for (final f in formats) f: f},
+                            onChanged: busy ? null : app.updateOutputFormat,
+                          ),
+                        )
+                      else
+                        SizedBox(
+                          width: MediaQuery.textScalerOf(context).scale(104),
+                          child: DeskChoice<String>(
+                            key: ValueKey('quick-format-${draft.format}'),
+                            initialValue: draft.format,
+                            isDense: true,
+                            isExpanded: true,
+                            iconSize: 18,
+                            style: ui(13, c: d.ink),
+                            decoration: const InputDecoration(
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                             ),
-                        ],
-                        onChanged: busy
+                            items: [
+                              for (final format in formats)
+                                DropdownMenuItem(
+                                  value: format,
+                                  child: Text(format),
+                                ),
+                            ],
+                            onChanged: busy
+                                ? null
+                                : (value) {
+                                    if (value != null) {
+                                      app.updateOutputFormat(value);
+                                    }
+                                  },
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      if (epubIds.isNotEmpty) ...[
+                        DeskCommandMenu<bool>(
+                          key: const ValueKey('quick-epub-layout-source'),
+                          tooltip: 'EPUB 原稿的转换排版来源（也适用于转 KFX、AZW3）',
+                          enabled: !busy,
+                          initialValue: originalIds.length == epubIds.length,
+                          onSelected: busy
+                              ? null
+                              : (original) {
+                                  for (final id in epubIds) {
+                                    draft.epubOriginal[id] = original;
+                                  }
+                                  draft.pendingPreview = null;
+                                  draft.confirming = false;
+                                  draft.changed();
+                                },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: true, child: Text('保持原书排版')),
+                            PopupMenuItem(value: false, child: Text('使用软件排版')),
+                          ],
+                          child: _TrayChip(
+                            sourceLabel,
+                            icon: Icons.auto_stories_outlined,
+                            maxWidth: compact ? 106 : 144,
+                            enabled: !busy,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      if (!tiny && originalIds.length != outputBooks.length)
+                        Tooltip(
+                          // 窄时按钮只写“排版”，完整名称放在悬停提示里。
+                          message: [
+                            multipleBooks ? '本次书稿批量排版' : '本次书稿排版预设',
+                            if (compact)
+                              multipleBooks
+                                  ? '沿用各书排版'
+                                  : outputBooks.contains(book?.id)
+                                  ? presetLabel
+                                  : '沿用本书排版',
+                          ].join('：'),
+                          child: InkWell(
+                            onTap: busy || outputBooks.isEmpty
+                                ? null
+                                : () => app.chooseLayout(
+                                    context,
+                                    books: outputBooks,
+                                  ),
+                            borderRadius: BorderRadius.circular(7),
+                            child: _TrayChip(
+                              compact
+                                  ? '排版'
+                                  : multipleBooks
+                                  ? '沿用各书排版'
+                                  : outputBooks.contains(book?.id)
+                                  ? presetLabel
+                                  : '沿用本书排版',
+                              icon: Icons.text_fields_rounded,
+                              maxWidth: compact ? 120 : 176,
+                              enabled: !busy && outputBooks.isNotEmpty,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(width: 4),
+                      Tooltip(
+                        message:
+                            '输出位置：${draft.directory.isEmpty ? '尚未设置' : draft.directory}',
+                        child: wide && draft.directory.isNotEmpty
+                            ? TextButton.icon(
+                                onPressed: busy
+                                    ? null
+                                    : app.chooseOutputDirectory,
+                                icon: const Icon(
+                                  Icons.folder_outlined,
+                                  size: 17,
+                                ),
+                                label: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 220,
+                                  ),
+                                  child: Text(
+                                    draft.directory,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: ui(12, c: d.ink2),
+                                  ),
+                                ),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: d.ink2,
+                                  minimumSize: const Size(0, 30),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                ),
+                              )
+                            : IconButton(
+                                tooltip: '输出位置',
+                                onPressed: busy
+                                    ? null
+                                    : app.chooseOutputDirectory,
+                                icon: Icon(
+                                  Icons.folder_outlined,
+                                  size: 19,
+                                  color: d.ink2,
+                                ),
+                              ),
+                      ),
+                      if (wide)
+                        IconButton(
+                          tooltip: '打开输出文件夹',
+                          onPressed: draft.directory.isEmpty
+                              ? null
+                              : app.openOutputDirectory,
+                          icon: Icon(
+                            Icons.open_in_new_rounded,
+                            size: 17,
+                            color: d.ink2,
+                          ),
+                        ),
+                    ],
+                    if (app.outputMessage.isNotEmpty)
+                      Tooltip(
+                        message: app.outputMessage,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Icon(
+                            Icons.error_outline_rounded,
+                            color: d.pen,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 4),
+                    if (conversionPage && !tiny) ...[
+                      DeskButton(
+                        '检查书稿',
+                        quiet: true,
+                        onPressed: busy || count == 0
                             ? null
-                            : (value) {
-                                if (value != null) {
-                                  app.updateOutputFormat(value);
+                            : draft.checkConversion,
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    if (app.conversion.busy) ...[
+                      if (!compact)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          // 整批进度百分比 + 已完成本数。
+                          child: ConversionPercent(
+                            outputs: app.conversion.outputs,
+                            compact: true,
+                            suffix:
+                                ' · ${app.conversion.outputs.where((o) => o.complete).length}'
+                                ' / ${app.conversion.outputs.length} 已完成',
+                          ),
+                        ),
+                      DeskButton(
+                        '查看任务',
+                        icon: Icons.checklist_rounded,
+                        onPressed: () => app.router.go('/tasks'),
+                      ),
+                    ] else
+                      DeskButton(
+                        startText,
+                        primary: true,
+                        icon: Icons.arrow_forward_rounded,
+                        busy: busy,
+                        disabledReason: count == 0
+                            ? '先选择要转换的书稿'
+                            : busy
+                            ? '等待当前操作完成'
+                            : '请先检查并确认本次输出设置',
+                        onPressed:
+                            busy ||
+                                count == 0 ||
+                                (conversionPage && !draft.actionEnabled)
+                            ? null
+                            : () {
+                                if (conversionPage) {
+                                  draft.startConversion?.call();
+                                } else {
+                                  app.quickConvert(
+                                    context,
+                                    bookId: batch ? null : book!.id,
+                                  );
                                 }
                               },
                       ),
-                    ),
-                  const SizedBox(width: 8),
-                  if (epubIds.isNotEmpty) ...[
-                    DeskCommandMenu<bool>(
-                      key: const ValueKey('quick-epub-layout-source'),
-                      tooltip: 'EPUB 原稿的转换排版来源（也适用于转 KFX、AZW3）',
-                      enabled: !busy,
-                      initialValue: originalIds.length == epubIds.length,
-                      onSelected: busy
-                          ? null
-                          : (original) {
-                              for (final id in epubIds) {
-                                draft.epubOriginal[id] = original;
-                              }
-                              draft.pendingPreview = null;
-                              draft.confirming = false;
-                              draft.changed();
-                            },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: true, child: Text('保持原书排版')),
-                        PopupMenuItem(value: false, child: Text('使用软件排版')),
-                      ],
-                      child: _TrayChip(
-                        sourceLabel,
-                        icon: Icons.auto_stories_outlined,
-                        maxWidth: compact ? 106 : 144,
-                        enabled: !busy,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                  if (!tiny && originalIds.length != outputBooks.length)
-                    Tooltip(
-                      // 窄时按钮只写“排版”，完整名称放在悬停提示里。
-                      message: [
-                        multipleBooks ? '本次书稿批量排版' : '本次书稿排版预设',
-                        if (compact)
-                          multipleBooks
-                              ? '沿用各书排版'
-                              : outputBooks.contains(book?.id)
-                              ? presetLabel
-                              : '沿用本书排版',
-                      ].join('：'),
-                      child: InkWell(
-                        onTap: busy || outputBooks.isEmpty
-                            ? null
-                            : () =>
-                                  app.chooseLayout(context, books: outputBooks),
-                        borderRadius: BorderRadius.circular(7),
-                        child: _TrayChip(
-                          compact
-                              ? '排版'
-                              : multipleBooks
-                              ? '沿用各书排版'
-                              : outputBooks.contains(book?.id)
-                              ? presetLabel
-                              : '沿用本书排版',
-                          icon: Icons.text_fields_rounded,
-                          maxWidth: compact ? 120 : 176,
-                          enabled: !busy && outputBooks.isNotEmpty,
-                        ),
-                      ),
-                    ),
-                  const SizedBox(width: 4),
-                  Tooltip(
-                    message:
-                        '输出位置：${draft.directory.isEmpty ? '尚未设置' : draft.directory}',
-                    child: wide && draft.directory.isNotEmpty
-                        ? TextButton.icon(
-                            onPressed: busy ? null : app.chooseOutputDirectory,
-                            icon: const Icon(Icons.folder_outlined, size: 17),
-                            label: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 220),
-                              child: Text(
-                                draft.directory,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: ui(12, c: d.ink2),
-                              ),
-                            ),
-                            style: TextButton.styleFrom(
-                              foregroundColor: d.ink2,
-                              minimumSize: const Size(0, 30),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                            ),
-                          )
-                        : IconButton(
-                            tooltip: '输出位置',
-                            onPressed: busy ? null : app.chooseOutputDirectory,
-                            icon: Icon(
-                              Icons.folder_outlined,
-                              size: 19,
-                              color: d.ink2,
-                            ),
-                          ),
-                  ),
-                  if (wide)
-                    IconButton(
-                      tooltip: '打开输出文件夹',
-                      onPressed: draft.directory.isEmpty
-                          ? null
-                          : app.openOutputDirectory,
+                    const SizedBox(width: 2),
+                    DeskCommandMenu<String>(
+                      tooltip: '快捷操作',
                       icon: Icon(
-                        Icons.open_in_new_rounded,
-                        size: 17,
+                        Icons.more_horiz_rounded,
+                        size: 20,
                         color: d.ink2,
                       ),
-                    ),
-                ],
-                if (app.outputMessage.isNotEmpty)
-                  Tooltip(
-                    message: app.outputMessage,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Icon(
-                        Icons.error_outline_rounded,
-                        color: d.pen,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 4),
-                if (conversionPage && !tiny) ...[
-                  DeskButton(
-                    '检查书稿',
-                    quiet: true,
-                    onPressed: busy || count == 0
-                        ? null
-                        : draft.checkConversion,
-                  ),
-                  const SizedBox(width: 6),
-                ],
-                if (app.conversion.busy) ...[
-                  if (!compact)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      // 整批进度百分比 + 已完成本数。
-                      child: ConversionPercent(
-                        outputs: app.conversion.outputs,
-                        compact: true,
-                        suffix:
-                            ' · ${app.conversion.outputs.where((o) => o.complete).length}'
-                            ' / ${app.conversion.outputs.length} 已完成',
-                      ),
-                    ),
-                  DeskButton(
-                    '查看任务',
-                    icon: Icons.checklist_rounded,
-                    onPressed: () => app.router.go('/tasks'),
-                  ),
-                ] else
-                  DeskButton(
-                    startText,
-                    primary: true,
-                    icon: Icons.arrow_forward_rounded,
-                    busy: busy,
-                    disabledReason: count == 0
-                        ? '先选择要转换的书稿'
-                        : busy
-                        ? '等待当前操作完成'
-                        : '请先检查并确认本次输出设置',
-                    onPressed:
-                        busy ||
-                            count == 0 ||
-                            (conversionPage && !draft.actionEnabled)
-                        ? null
-                        : () {
-                            if (conversionPage) {
-                              draft.startConversion?.call();
-                            } else {
-                              app.quickConvert(
-                                context,
-                                bookId: batch ? null : book!.id,
-                              );
+                      onSelected: (value) async {
+                        switch (value) {
+                          case 'layout':
+                            await app.chooseLayout(context, books: outputBooks);
+                          case 'output':
+                            await app.chooseOutputDirectory();
+                          case 'open':
+                            if (draft.directory.isNotEmpty) {
+                              await app.openOutputDirectory();
                             }
-                          },
-                  ),
-                const SizedBox(width: 2),
-                DeskCommandMenu<String>(
-                  tooltip: '快捷操作',
-                  icon: Icon(Icons.more_horiz_rounded, size: 20, color: d.ink2),
-                  onSelected: (value) async {
-                    switch (value) {
-                      case 'layout':
-                        await app.chooseLayout(context, books: outputBooks);
-                      case 'output':
-                        await app.chooseOutputDirectory();
-                      case 'open':
-                        if (draft.directory.isNotEmpty) {
-                          await app.openOutputDirectory();
+                          case 'check':
+                            await draft.checkConversion?.call();
+                          case 'settings':
+                            app.router.go('/conversion');
+                          case 'tasks':
+                            app.router.go('/tasks');
                         }
-                      case 'check':
-                        await draft.checkConversion?.call();
-                      case 'settings':
-                        app.router.go('/conversion');
-                      case 'tasks':
-                        app.router.go('/tasks');
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'layout',
-                      enabled: !busy && outputBooks.isNotEmpty,
-                      child: Text(multipleBooks ? '本次书稿批量排版' : '本次书稿排版预设'),
+                      },
+                      itemBuilder: (_) => [
+                        PopupMenuItem(
+                          value: 'layout',
+                          enabled: !busy && outputBooks.isNotEmpty,
+                          child: Text(multipleBooks ? '本次书稿批量排版' : '本次书稿排版预设'),
+                        ),
+                        PopupMenuItem(
+                          value: 'output',
+                          enabled: !busy,
+                          child: const Text('更改输出位置'),
+                        ),
+                        PopupMenuItem(
+                          value: 'open',
+                          enabled: draft.directory.isNotEmpty,
+                          child: const Text('打开输出文件夹'),
+                        ),
+                        const PopupMenuDivider(),
+                        if (conversionPage)
+                          PopupMenuItem(
+                            value: 'check',
+                            enabled:
+                                !busy &&
+                                count != 0 &&
+                                draft.checkConversion != null,
+                            child: const Text('检查本次书稿'),
+                          ),
+                        const PopupMenuItem(
+                          value: 'settings',
+                          child: Text('转换设置'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'tasks',
+                          child: Text('转换任务'),
+                        ),
+                      ],
                     ),
-                    PopupMenuItem(
-                      value: 'output',
-                      enabled: !busy,
-                      child: const Text('更改输出位置'),
-                    ),
-                    PopupMenuItem(
-                      value: 'open',
-                      enabled: draft.directory.isNotEmpty,
-                      child: const Text('打开输出文件夹'),
-                    ),
-                    const PopupMenuDivider(),
-                    if (conversionPage)
-                      PopupMenuItem(
-                        value: 'check',
-                        enabled:
-                            !busy &&
-                            count != 0 &&
-                            draft.checkConversion != null,
-                        child: const Text('检查本次书稿'),
-                      ),
-                    const PopupMenuItem(value: 'settings', child: Text('转换设置')),
-                    const PopupMenuItem(value: 'tasks', child: Text('转换任务')),
                   ],
                 ),
+                const Expanded(child: SizedBox.shrink()),
               ],
             ),
           );

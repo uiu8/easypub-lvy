@@ -17,7 +17,7 @@ tokio-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-reqwest = { version = "0.13", default-features = false, features = ["blocking", "gzip", "brotli", "native-tls"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "gzip", "brotli", "native-tls", "system-proxy"] }
 scraper = "0.24"
 # EPUB 里的 HTML 命名字符表，scraper 已经带着。
 markup5ever = "=0.35.0"
