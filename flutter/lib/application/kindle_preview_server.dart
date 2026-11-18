@@ -497,6 +497,7 @@ class KindlePreviewServer {
     'woff': 'font/woff',
     'woff2': 'font/woff2',
     'ttc': 'font/collection',
+    'xml': 'application/xml; charset=utf-8',
     'ncx': 'application/xml; charset=utf-8',
     'opf': 'application/xml; charset=utf-8',
   };
