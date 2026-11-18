@@ -70,6 +70,7 @@ class LayoutPage extends StatefulWidget {
     this.pickImage,
     this.pickFont,
     this.keepsOriginal,
+    this.conversionChanges,
     this.setKeepsOriginal,
     this.pickStylePack,
     this.pickStylePackFolder,
@@ -83,6 +84,7 @@ class LayoutPage extends StatefulWidget {
 
   /// 这本书转换时是否保持原格式，以及改它。转换页也用同一个值。
   final bool Function()? keepsOriginal;
+  final Listenable? conversionChanges;
   final void Function(bool value)? setKeepsOriginal;
   final LayoutNavigationGuard navigation;
   final Future<String?> Function() pickPresetFile, pickPresetDestination;
@@ -812,6 +814,7 @@ class _LayoutPageState extends State<LayoutPage> {
 
   Map<String, Object?> _kindleState() => {
     'title': '',
+    'layout_source': keepsOriginal ? 'original' : 'software',
     'devices': [
       for (final k in kindleDevices) _kindleDevice(k),
       if (device.id == 'custom') _kindleDevice(device.device),
@@ -1166,9 +1169,13 @@ class _LayoutPageState extends State<LayoutPage> {
           Expanded(
             child: LayoutBuilder(
               builder: (context, c) {
-                final preview = ValueListenableBuilder<int>(
-                  valueListenable: _previewRevision,
-                  builder: (_, _, _) => reading(),
+                final preview = AnimatedBuilder(
+                  animation: Listenable.merge([
+                    _previewRevision,
+                    if (widget.conversionChanges != null)
+                      widget.conversionChanges!,
+                  ]),
+                  builder: (_, _) => reading(),
                 );
                 // 设置栏宽度和两栏所需宽度都随字号放大；放不下时改用“排版设置 / 阅读预览”
                 // 切换，不再把选项缩成小字。

@@ -28,6 +28,8 @@ class DeskTitleBar extends StatefulWidget {
 class _DeskTitleBarState extends State<DeskTitleBar> with WindowListener {
   bool maximized = false;
   bool closing = false;
+  bool pinned = false;
+  bool pinBusy = false;
 
   /// 原生窗口底色跟随主题（用户反馈最大化时边缘闪黑）：窗口变大、Flutter 还没画出
   /// 新尺寸的一帧时，新露出的区域用这个颜色填充（windows/runner/flutter_window.cpp）。
@@ -55,6 +57,19 @@ class _DeskTitleBarState extends State<DeskTitleBar> with WindowListener {
   Future<void> refresh() async {
     final value = await windowManager.isMaximized();
     if (mounted) setState(() => maximized = value);
+  }
+
+  Future<void> togglePinned() async {
+    if (pinBusy) return;
+    pinBusy = true;
+    try {
+      final current = await windowManager.isAlwaysOnTop();
+      await windowManager.setAlwaysOnTop(!current);
+      final actual = await windowManager.isAlwaysOnTop();
+      if (mounted) setState(() => pinned = actual);
+    } finally {
+      pinBusy = false;
+    }
   }
 
   Future<void> requestClose() async {
@@ -146,6 +161,12 @@ class _DeskTitleBarState extends State<DeskTitleBar> with WindowListener {
           const SizedBox(width: 8),
           ?widget.trailing,
           const SizedBox(width: 4),
+          _WindowButton(
+            pinned ? '取消窗口置顶' : '窗口置顶（方便拖入文件）',
+            pinned ? Icons.push_pin : Icons.push_pin_outlined,
+            togglePinned,
+            selected: pinned,
+          ),
           _WindowButton('最小化', Icons.remove_rounded, windowManager.minimize),
           _WindowButton(
             maximized ? '还原' : '最大化',
@@ -223,12 +244,14 @@ class _WindowButton extends StatefulWidget {
     this.action, {
     this.iconSize = 16,
     this.close = false,
+    this.selected = false,
   });
   final String name;
   final IconData icon;
   final VoidCallback action;
   final double iconSize;
   final bool close;
+  final bool selected;
   @override
   State<_WindowButton> createState() => _WindowButtonState();
 }
@@ -247,6 +270,7 @@ class _WindowButtonState extends State<_WindowButton> {
         child: Semantics(
           button: true,
           label: widget.name,
+          toggled: widget.selected,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: widget.action,
@@ -255,7 +279,7 @@ class _WindowButtonState extends State<_WindowButton> {
               height: double.infinity,
               color: danger
                   ? const Color(0xFFC42B1C)
-                  : hover
+                  : hover || widget.selected
                   ? d.ink.withValues(alpha: .06)
                   : null,
               child: Icon(

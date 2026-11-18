@@ -85,6 +85,16 @@ class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
               : batch
               ? checked
               : {if (book != null) book.id};
+          final epubIds = library.books.value
+              .where((b) => outputBooks.contains(b.id) && isEpubBook(b))
+              .map((b) => b.id)
+              .toSet();
+          final originalIds = keepOriginalEpubFor(draft, library, epubIds);
+          final sourceLabel = originalIds.isEmpty
+              ? '软件排版'
+              : originalIds.length == epubIds.length
+              ? '原书排版'
+              : '排版混合';
           final multipleBooks = outputBooks.length > 1;
           final busy =
               app.quickActivity.value ||
@@ -212,7 +222,36 @@ class _WorkspaceBottomBarState extends State<_WorkspaceBottomBar> {
                       ),
                     ),
                   const SizedBox(width: 8),
-                  if (!tiny)
+                  if (epubIds.isNotEmpty) ...[
+                    DeskCommandMenu<bool>(
+                      key: const ValueKey('quick-epub-layout-source'),
+                      tooltip: 'EPUB 原稿的转换排版来源（也适用于转 KFX、AZW3）',
+                      enabled: !busy,
+                      initialValue: originalIds.length == epubIds.length,
+                      onSelected: busy
+                          ? null
+                          : (original) {
+                              for (final id in epubIds) {
+                                draft.epubOriginal[id] = original;
+                              }
+                              draft.pendingPreview = null;
+                              draft.confirming = false;
+                              draft.changed();
+                            },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: true, child: Text('保持原书排版')),
+                        PopupMenuItem(value: false, child: Text('使用软件排版')),
+                      ],
+                      child: _TrayChip(
+                        sourceLabel,
+                        icon: Icons.auto_stories_outlined,
+                        maxWidth: compact ? 106 : 144,
+                        enabled: !busy,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  if (!tiny && originalIds.length != outputBooks.length)
                     Tooltip(
                       // 窄时按钮只写“排版”，完整名称放在悬停提示里。
                       message: [

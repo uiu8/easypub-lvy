@@ -270,6 +270,7 @@ class KindlePreviewServer {
             'content': preview.content,
             'anchor': preview.anchor,
             'title': preview.title,
+            'layout_source': preview.layoutSource,
           });
         } on FormatException catch (error) {
           return await _json(response, {'ok': false, 'message': error.message});

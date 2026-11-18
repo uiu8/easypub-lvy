@@ -265,9 +265,20 @@ fn render_preview(service: &ImportService, request: &str) -> Result<String, ApiE
     struct Preview {
         publication: publication_resources::Request,
         entry_id: Option<String>,
+        original_epub: Option<String>,
     }
     let req: Preview = serde_json::from_str(request)
         .map_err(|_| invalid(ErrorCode::InvalidRule, "review_preview"))?;
+    if let Some(path) = req.original_epub.as_deref() {
+        let source = service.source(&req.publication.source_id, req.publication.revision)?;
+        let prepared = publication_resources::prepare(&source, req.publication)?;
+        let original = crate::epub_passthrough::read_original(path)?;
+        let (bytes, _) = crate::epub_passthrough::rebuild(
+            &original.bytes,
+            &crate::epub_passthrough::Overrides::from_prepared(&prepared, false, false),
+        )?;
+        return render_original_archive(bytes, prepared.id());
+    }
     // Screen preview is a scrolling viewport, not a print page. Project author
     // page margins into viewport padding only in extracted preview documents.
     // The Kindle reader overrides this padding and applies its own page area.
@@ -379,6 +390,12 @@ fn render_preview(service: &ImportService, request: &str) -> Result<String, ApiE
     fs::write(&html, format!("<!doctype html><html lang=\"zh\"><meta charset=\"utf-8\"><title>{}</title><style>html,body,iframe{{margin:0;width:100%;height:100%;border:0;display:block}}</style><iframe title=\"生成内容预览\" src=\"{}\"></iframe></html>",
         crate::navigation_documents::escaped(&prepared.manifest().title)?,
         crate::navigation_documents::escaped(&destination)?)).map_err(|_|invalid(ErrorCode::Io,"retry_preview"))?;
+    retain_preview(&root, &directory);
+    Ok(json!({"publication_id":prepared.id(),"directory":directory,"selected_path":html,"content_path":selected,
+        "anchor":anchor,"documents":documents}).to_string())
+}
+
+fn retain_preview(root: &Path, directory: &Path) {
     // Retain only previews created by this process; never enumerate or remove
     // another application's directory, or a user-supplied output path.
     static PREVIEWS: OnceLock<Mutex<Vec<std::path::PathBuf>>> = OnceLock::new();
@@ -386,15 +403,99 @@ fn render_preview(service: &ImportService, request: &str) -> Result<String, ApiE
         .get_or_init(|| Mutex::new(Vec::new()))
         .lock()
         .expect("preview cache");
-    previews.push(directory.clone());
+    previews.push(directory.to_path_buf());
     while previews.len() > 4 {
         let old = previews.remove(0);
-        if old.parent() == Some(root.as_path()) && !old.is_symlink() {
+        if old.parent() == Some(root) && !old.is_symlink() {
             let _ = fs::remove_dir_all(old);
         }
     }
-    Ok(json!({"publication_id":prepared.id(),"directory":directory,"selected_path":html,"content_path":selected,
-        "anchor":anchor,"documents":documents}).to_string())
+}
+
+/// 原书预览保留容器路径、spine 边界和 CSS，不走软件章节重排。
+fn render_original_archive(bytes: Vec<u8>, publication_id: &str) -> Result<String, ApiError> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
+        .map_err(|_| invalid(ErrorCode::InvalidRule, "review_preview"))?;
+    let mut container = String::new();
+    archive
+        .by_name("META-INF/container.xml")
+        .map_err(|_| invalid(ErrorCode::InvalidRule, "review_preview"))?
+        .read_to_string(&mut container)
+        .map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+    let container_doc = roxmltree::Document::parse(&container)
+        .map_err(|_| invalid(ErrorCode::InvalidRule, "review_preview"))?;
+    let opf_path = container_doc
+        .descendants()
+        .find(|n| n.has_tag_name("rootfile"))
+        .and_then(|n| n.attribute("full-path"))
+        .ok_or_else(|| invalid(ErrorCode::InvalidRule, "review_preview"))?;
+    let mut opf = String::new();
+    archive
+        .by_name(opf_path)
+        .map_err(|_| invalid(ErrorCode::InvalidRule, "review_preview"))?
+        .read_to_string(&mut opf)
+        .map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+    let package = roxmltree::Document::parse(&opf)
+        .map_err(|_| invalid(ErrorCode::InvalidRule, "review_preview"))?;
+    let base = opf_path
+        .rsplit_once('/')
+        .map(|(base, _)| base)
+        .unwrap_or("");
+    let paths: Vec<String> = package
+        .descendants()
+        .filter(|n| n.has_tag_name("itemref"))
+        .filter_map(|n| n.attribute("idref"))
+        .filter_map(|id| {
+            package
+                .descendants()
+                .find(|n| n.has_tag_name("item") && n.attribute("id") == Some(id))
+        })
+        .filter_map(|n| n.attribute("href"))
+        .filter_map(|href| crate::epub_passthrough::join(base, href))
+        .collect();
+    let content = paths
+        .first()
+        .ok_or_else(|| invalid(ErrorCode::InvalidRule, "review_preview"))?;
+    let root = crate::storage::retain_cache("content_preview")
+        .map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+    let directory = root.join(format!(
+        "{}-{}",
+        std::process::id(),
+        time::OffsetDateTime::now_utc().unix_timestamp_nanos()
+    ));
+    fs::create_dir_all(&directory).map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+    for i in 0..archive.len() {
+        let mut item = archive
+            .by_index(i)
+            .map_err(|_| invalid(ErrorCode::InvalidRule, "review_preview"))?;
+        if item.is_dir() {
+            continue;
+        }
+        let relative = item
+            .enclosed_name()
+            .ok_or_else(|| invalid(ErrorCode::InvalidRule, "review_preview"))?;
+        let target = directory.join(relative);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+        }
+        let mut file = File::create(target).map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+        std::io::copy(&mut item, &mut file).map_err(|_| invalid(ErrorCode::Io, "retry_preview"))?;
+    }
+    let selected = directory.join(content);
+    if !selected.is_file() {
+        return Err(invalid(ErrorCode::InvalidRule, "review_preview"));
+    }
+    let documents: Vec<Value> = paths
+        .iter()
+        .map(|p| json!({"path": directory.join(p), "title":p}))
+        .collect();
+    retain_preview(&root, &directory);
+    // 直接打开原书首个 spine 文档，链接仍按原 EPUB 相对路径解析。
+    Ok(
+        json!({"publication_id":publication_id,"directory":directory,
+        "selected_path":selected,"content_path":selected,"anchor":null,"documents":documents})
+        .to_string(),
+    )
 }
 
 #[cfg(test)]

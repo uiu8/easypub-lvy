@@ -67,10 +67,11 @@ extension _LayoutPreviewSection on _LayoutPageState {
           ? await (chapters as ChapterOutlineSession).readOutline()
           : await chapters.read(0, includeBody: true);
       outline = page;
+      final candidates = page.nodes.isEmpty ? [chapterPrefixNode] : page.nodes;
       final selected =
-          page.nodes.where((node) => node.id == selectedChapter).firstOrNull ??
-          page.nodes.where((node) => node.role == 'chapter').firstOrNull ??
-          page.nodes.firstOrNull;
+          candidates.where((node) => node.id == selectedChapter).firstOrNull ??
+          candidates.where((node) => node.role == 'chapter').firstOrNull ??
+          candidates.firstOrNull;
       selectedChapter = selected?.id;
       // 正文按块续读（每块约 30 行），预览最多取 400 行，避免只排出开头一小段。
       final lines = <String>[];
@@ -201,10 +202,17 @@ extension _LayoutPreviewSection on _LayoutPageState {
       await save();
       if (identity != baseline) throw const FormatException('请先补全排版数值。');
       final service = session as LayoutPublicationPreviewSession;
-      final generated = await service.renderPreview(entryId: selectedChapter);
+      final generated = await service.renderPreview(
+        entryId: selectedChapter,
+        original: keepsOriginal,
+      );
       await service.openPreview(generated);
       if (mounted) {
-        update(() => message = '已在浏览器打开实际生成内容，使用本书 XHTML、CSS 和资源。');
+        update(
+          () => message = keepsOriginal
+              ? '已在浏览器打开原书排版（含原书样式设置）。'
+              : '已在浏览器打开软件排版生成的 XHTML、CSS 和资源。',
+        );
       }
     } catch (error) {
       if (mounted) {
@@ -311,16 +319,21 @@ extension _LayoutPreviewSection on _LayoutPageState {
       throw const FormatException('排版页已关闭。');
     }
     final (rest, style) = _kindleStyle(draft);
-    return (current as LayoutDraftPreviewSession).renderDraftPreview({
-      for (final e in values.entries)
-        if (e.value != null) e.key: e.value,
-      ...rest,
-      if (chapterStyle != null) 'chapter_style': style,
-    }, entryId: entry ?? selectedChapter);
+    return (current as LayoutDraftPreviewSession).renderDraftPreview(
+      {
+        for (final e in values.entries)
+          if (e.value != null) e.key: e.value,
+        ...rest,
+        if (chapterStyle != null) 'chapter_style': style,
+      },
+      entryId: entry ?? selectedChapter,
+      original: keepsOriginal,
+    );
   }
 
   Future<String?> _kindleApply(Map<String, Object?> request) async {
     if (!mounted || session == null) return '排版页已关闭。';
+    if (keepsOriginal) return '当前使用原书排版，请先切换为软件排版。';
     if (busy) return '排版页正在处理，请稍后再试。';
     final styled =
         request.containsKey('chapter_style_on') ||
@@ -437,6 +450,43 @@ extension _LayoutPreviewSection on _LayoutPageState {
     // 书页模拟 Kindle 白纸，不随软件主题变：纸色与字色固定取宣纸令牌。
     const page = Desk.light;
     if (loading) return const Center(child: CircularProgressIndicator());
+    if (keepsOriginal) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('当前使用原书排版', style: ui(16, c: d.ink)),
+              const SizedBox(height: 10),
+              Text(
+                '小预览只支持软件排版。原书的章节、CSS 和字体请在独立预览中查看。',
+                textAlign: TextAlign.center,
+                style: ui(13, c: d.ink2),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  DeskButton(
+                    '打开原书真机预览',
+                    onPressed: busy ? null : openKindlePreview,
+                  ),
+                  DeskButton(
+                    '查看原书网页排版',
+                    quiet: true,
+                    onPressed: busy || generatingPreview
+                        ? null
+                        : generatePreview,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     // 字号与行高按机型和阅读器设置换算：书内字号以 110% 为基准缩放。
     final lengths = LayoutUnits(values, device);
     final metrics = lengths.metrics;
@@ -452,6 +502,8 @@ extension _LayoutPreviewSection on _LayoutPageState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text('预览来源：软件排版', style: ui(12, c: d.ink3)),
+          const SizedBox(height: 6),
           // 预览设置收成一行：章节、机型、阅读器设置（弹出面板）、实际生成预览。
           Wrap(
             spacing: 8,

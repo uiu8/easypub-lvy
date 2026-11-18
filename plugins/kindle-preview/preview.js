@@ -62,6 +62,7 @@ const $ = (id) => document.getElementById(id);
 const frame = $('book');
 const S = {
   devices: [], device: null, reader: { level: 8, margin: 'narrow', spacing: 'medium', font: 'publisher' },
+  original: false,
   saved: {}, draft: {}, metrics: null, render: null, title: '',
   page: 0, pages: 1, vertical: false, headings: [], entry: null, seq: 0, timer: 0,
   // 书的文字：sc 简体、tc 繁体（按内容的 lang 判断）。
@@ -86,6 +87,16 @@ async function api(name, body) {
     throw new Error('HTTP ' + response.status);
   }
   return response.json();
+}
+
+function sourceMode(state) {
+  const original = state.layout_source === 'original';
+  const changed = S.original !== original;
+  S.original = original;
+  $('layout-source').textContent = original ? '预览来源：原书排版' : '预览来源：软件排版';
+  $('software-layout').hidden = original;
+  $('original-notice').hidden = !original;
+  return changed;
 }
 
 function gone() { $('gone').hidden = false; }
@@ -521,12 +532,12 @@ function layout(keepRatio) {
         : 'height:' + h + 'px!important;width:auto!important;column-width:' + a.width + 'px!important}'),
     // 真机规则（KPW5）：阅读器行间距只乘到正文上，标题保留书里写的行高。
     // 标题里面的小块（标点挤压包出的 span 等）也不乘（标题带“：”“。”时整行被撑高约 24 像素）。
-    m.unitsVersion === 1 ? 'body{line-height:' + (S.draft.line_height_unit === 'number' || !S.draft.line_height_unit ? m.lineRatio : m.linePixels+'px') + '!important}' : (
+    S.original ? '' : m.unitsVersion === 1 ? 'body{line-height:' + (S.draft.line_height_unit === 'number' || !S.draft.line_height_unit ? m.lineRatio : m.linePixels+'px') + '!important}' : (
     (kfx ? 'body *:not(rt):not(:is(h1,h2,h3,h4,h5,h6,.heading,h1 *,h2 *,h3 *,h4 *,h5 *,h6 *,.heading *))' : 'body *:not(rt)')
       + '{line-height:' + m.lineRatio + '!important}'),
     // 真机规则（KPW5）：正文两端对齐；按取整后的字宽断行，用字距补齐。
-    m.justify ? 'p{text-align:justify;text-justify:inter-character}' : '',
-    m.tracking ? 'p{letter-spacing:' + m.tracking + 'em}' : '',
+    m.justify && !S.original ? 'p{text-align:justify;text-justify:inter-character}' : '',
+    m.tracking && !S.original ? 'p{letter-spacing:' + m.tracking + 'em}' : '',
     'img,svg{max-width:100%!important;max-height:' + a.height + 'px!important}',
     // 书里写了楷体的段落（书信、系统提示“细线楷体”等）保留楷体：KFX 真机上 STKai/楷体能显示。
     font ? 'body,body *:not(rt):not([data-ep-kai]){font-family:' + font + '!important}' : '',
@@ -555,7 +566,7 @@ function layout(keepRatio) {
     kfx ? 'html .ep-adj{letter-spacing:-0.5em!important}html .ep-adjs{display:none!important}'
       + 'html .ep-oa{margin-left:-0.5em!important}html .ep-cl{letter-spacing:' + (0.075 + (m.tracking || 0)) + 'em!important}' : '',
     // 真机允许段落只有一行留在页底或页顶（第四章首页实测），浏览器默认至少两行。
-    kfx ? 'body *{orphans:1;widows:1}' : '',
+    kfx && !S.original ? 'body *{orphans:1;widows:1}' : '',
   ].join('\n');
   // 导入的字体异步载入：载入后按新字宽重新分页一次。
   if (user && doc.__epUser !== user.id) {
@@ -566,6 +577,19 @@ function layout(keepRatio) {
         if (frame.contentDocument === doc) layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
       })
       .catch(() => status('导入的字体“' + user.name + '”无法显示，请换一个字体文件。', true));
+  }
+  if (S.original) {
+    const multiplier = m.lineRatio / 1.2;
+    const paragraphs = [...doc.querySelectorAll('p,li,blockquote')];
+    for (const el of paragraphs) {
+      if (el.__epOriginalLine === undefined) {
+        const computed = getComputedStyle(el);
+        el.__epOriginalLine = parseFloat(computed.lineHeight) / parseFloat(computed.fontSize) || 1.2;
+      }
+    }
+    for (const el of paragraphs) {
+      el.style.setProperty('line-height', String(el.__epOriginalLine * multiplier), 'important');
+    }
   }
   setHalfSpace(doc, vertical);
   const lead = vertical ? 0 : bodyLead(doc);
@@ -675,21 +699,33 @@ async function loadSpine(base) {
   const spine = [];
   const chapters = [];
   try {
-    const opf = await parse('package.opf', 'application/xml');
+    let packagePath = 'package.opf';
+    if (S.original) {
+      const container = await parse('META-INF/container.xml', 'application/xml');
+      packagePath = container.getElementsByTagNameNS('*', 'rootfile')[0].getAttribute('full-path');
+    }
+    const relative = (path, parent) => {
+      const root = new URL(base, location.href);
+      const url = new URL(path, new URL(parent, root));
+      if (!url.href.startsWith(root.href)) return '';
+      return url.href.slice(root.href.length);
+    };
+    const opf = await parse(packagePath, 'application/xml');
     const items = [...opf.getElementsByTagNameNS('*', 'item')];
-    const hrefs = Object.fromEntries(items.map((i) => [i.getAttribute('id'), i.getAttribute('href')]));
+    const hrefs = Object.fromEntries(items.map((i) => [i.getAttribute('id'), relative(i.getAttribute('href'), packagePath)]));
     for (const ref of opf.getElementsByTagNameNS('*', 'itemref')) {
       const href = hrefs[ref.getAttribute('idref')];
       if (href) spine.push(href);
     }
     const nav = items.find((i) => (i.getAttribute('properties') || '').split(' ').includes('nav'));
     if (nav) {
-      const doc = await parse(nav.getAttribute('href'), 'application/xhtml+xml');
+      const navPath = relative(nav.getAttribute('href'), packagePath);
+      const doc = await parse(navPath, 'application/xhtml+xml');
       // 只取目录（epub:type="toc"），不取地标导航里的“封面 / 正文”等链接。
       const navs = [...doc.getElementsByTagNameNS(XHTML, 'nav')];
       const toc = navs.find((n) => /(^|\s)toc(\s|$)/.test(epubType(n))) || navs[0] || doc;
       for (const a of toc.getElementsByTagNameNS(XHTML, 'a')) {
-        const href = a.getAttribute('href') || '';
+        const href = relative(a.getAttribute('href') || '', navPath);
         // 前后附页在目录里链接整个文件，不带锚点，也列出来。
         if (!spine.includes(href.split('#')[0])) continue;
         let level = 0;
@@ -829,7 +865,7 @@ async function refreshMetrics() {
     metrics = await api('metrics', {
     device: d.id, level: S.reader.level, margin: S.reader.margin, spacing: S.reader.spacing,
     // 出版商字体在真机上多半落到自带宋体（书里写的雅黑等 Kindle 没有），按衬线算。
-    serif: !['hei', 'yuan'].includes(S.reader.font), values: S.draft,
+    serif: !['hei', 'yuan'].includes(S.reader.font), values: S.original ? {font_size:110, font_size_unit:'%', line_height:1.2} : S.draft,
   });
   } catch (error) {
     if (sequence !== metricsSequence) return false;
@@ -845,9 +881,12 @@ async function rerender(entry) {
   const seq = ++S.seq;
   const ratio = S.pages > 1 ? S.page / (S.pages - 1) : 0;
   status('正在生成…');
+  sourceMode(await api('state'));
   const r = await api('render', { values: S.draft, entry: entry || undefined });
   if (seq !== S.seq) return;
   if (!r.ok) { status(r.message, true); return; }
+  if (r.layout_source && sourceMode(r)) await refreshMetrics();
+  if (seq !== S.seq) return;
   S.render = r;
   S.title = r.title || S.title;
   document.title = '真机预览 · ' + S.title;
@@ -941,7 +980,7 @@ async function changeUnit(el) {
   el.disabled = true;
   try {
     const metrics = await api('metrics', {
-      device: S.device.id, ...S.reader, serif: !['hei', 'yuan'].includes(S.reader.font), values: S.draft,
+      device: S.device.id, ...S.reader, serif: !['hei', 'yuan'].includes(S.reader.font), values: S.original ? {font_size:110, font_size_unit:'%', line_height:1.2} : S.draft,
     });
     if (before !== JSON.stringify([S.draft, S.device.id, S.reader])) return;
     S.draft[key] = Number(metrics.unitConversions[key][target].toFixed(4));
@@ -1100,13 +1139,14 @@ function setupControls() {
   window.addEventListener('resize', drawDevice);
   // 回到窗口时：没有未写回的改动就同步排版页的最新值。
   window.addEventListener('focus', async () => {
-    if (dirtyKeys().length) return;
     try {
       const state = await api('state');
+      const modeChanged = sourceMode(state);
+      if (!modeChanged && dirtyKeys().length) return;
       $('chapter-head').hidden = !state.chapter_head;
       showStyle(state);
       const values = pick(state.values);
-      if (BOOK_KEYS.some((k) => String(values[k]) !== String(S.saved[k]))) {
+      if (modeChanged || BOOK_KEYS.some((k) => String(values[k]) !== String(S.saved[k]))) {
         S.saved = values;
         S.draft = { ...values };
         syncControls();
@@ -1159,6 +1199,7 @@ async function chooseFont(value) {
 
 async function start() {
   const state = await api('state');
+  sourceMode(state);
   S.devices = state.devices;
   S.device = S.devices.find((d) => d.id === state.device) || S.devices[0];
   S.reader = { ...S.reader, ...state.reader };

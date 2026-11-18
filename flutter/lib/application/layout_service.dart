@@ -623,7 +623,10 @@ abstract interface class LayoutPreviewDeviceStore {
 }
 
 abstract interface class LayoutPublicationPreviewSession {
-  Future<LayoutPublicationPreview> renderPreview({String? entryId});
+  Future<LayoutPublicationPreview> renderPreview({
+    String? entryId,
+    bool original = false,
+  });
   Future<void> openPreview(LayoutPublicationPreview preview);
 }
 
@@ -632,6 +635,7 @@ abstract interface class LayoutDraftPreviewSession {
   Future<LayoutDraftPreview> renderDraftPreview(
     Map<String, Object?> values, {
     String? entryId,
+    bool original = false,
   });
 }
 
@@ -641,10 +645,12 @@ class LayoutDraftPreview {
     required this.content,
     required this.title,
     this.anchor,
+    this.layoutSource = 'software',
   });
 
   /// 生成内容所在目录；[content] 为其中正文 XHTML 的相对路径（用 / 分隔）。
   final String directory, content, title;
+  final String layoutSource;
   final String? anchor;
 }
 

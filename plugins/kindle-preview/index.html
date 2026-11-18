@@ -11,6 +11,7 @@
   <strong id="book-title">真机预览</strong>
   <label class="pick"><span class="sr">机型</span><select id="device" aria-label="机型"></select></label>
   <label class="pick"><span class="sr">章节</span><select id="chapter" aria-label="章节"></select></label>
+  <span id="layout-source" role="status"></span>
   <span class="grow"></span>
   <span id="status" role="status"></span>
 </header>
@@ -39,6 +40,8 @@
     </nav>
   </section>
   <aside>
+    <p id="original-notice" hidden>正在读取原 EPUB 的章节、样式和字体，并应用“原书样式”设置。下方阅读器设置仅影响模拟显示；浏览器排版不等于 Kindle 原生引擎。</p>
+    <section id="software-layout">
     <h2>本书排版 <span id="dirty"></span></h2>
     <div class="label">书写方向</div>
     <div class="seg" data-key="writing_mode" data-options="horizontal:横排,vertical:竖排"></div>
@@ -119,6 +122,7 @@
       <button id="revert" disabled>还原</button>
     </div>
     <hr>
+    </section>
     <h2>Kindle 阅读器 <span class="muted">只影响预览</span></h2>
     <div class="label">字号</div>
     <div class="row">

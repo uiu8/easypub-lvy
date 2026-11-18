@@ -156,8 +156,11 @@ class LegacyLayoutSession extends LegacyBookInformationSession
   }
 
   @override
-  Future<LayoutPublicationPreview> renderPreview({String? entryId}) async {
-    final data = await _render(entryId: entryId);
+  Future<LayoutPublicationPreview> renderPreview({
+    String? entryId,
+    bool original = false,
+  }) async {
+    final data = await _render(entryId: entryId, original: original);
     return _generatedPreview = LayoutPublicationPreview(
       publicationId: data['publication_id'] as String,
       path: data['selected_path'] as String,
@@ -172,6 +175,7 @@ class LegacyLayoutSession extends LegacyBookInformationSession
   Future<LayoutDraftPreview> renderDraftPreview(
     Map<String, Object?> values, {
     String? entryId,
+    bool original = false,
   }) async {
     // 章节样式包：真机预览可临时停用或改卷页边框，只用于这一次生成。
     if (values.keys.any(
@@ -179,7 +183,11 @@ class LegacyLayoutSession extends LegacyBookInformationSession
     )) {
       throw const FormatException('预览只接受排版字段。');
     }
-    final data = await _render(entryId: entryId, draft: values);
+    final data = await _render(
+      entryId: entryId,
+      draft: original ? null : values,
+      original: original,
+    );
     final directory = data['directory'] as String;
     final content = (data['content_path'] as String)
         .substring(directory.length)
@@ -190,11 +198,16 @@ class LegacyLayoutSession extends LegacyBookInformationSession
       content: content,
       title: backend.production.settings(bookId)['title'] as String? ?? '',
       anchor: data['anchor'] as String?,
+      layoutSource: original ? 'original' : 'software',
     );
   }
 
   /// 生成实际内容；[draft] 为还没保存的排版值（真机预览），只用于这一次生成。
-  Future<Map> _render({String? entryId, Map<String, Object?>? draft}) async {
+  Future<Map> _render({
+    String? entryId,
+    Map<String, Object?>? draft,
+    bool original = false,
+  }) async {
     fresh();
     final guard = backend.publicationContext(bookId);
     final publication = backend.publicationRequest(bookId);
@@ -225,6 +238,11 @@ class LegacyLayoutSession extends LegacyBookInformationSession
         await api.epubExportText(
           requestJson: jsonEncode({
             'op': 'render_preview',
+            if (original)
+              'original_epub': backend.shelf.books
+                  .firstWhere((b) => b.id == bookId)
+                  .source!
+                  .originPath,
             'publication': publication,
             'entry_id': ?entryId,
           }),

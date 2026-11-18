@@ -46,7 +46,8 @@ extension _Routes on _RewriteAppState {
                             '导入书稿',
                             onPressed: () async {
                               final paths = await widget.picker.chooseBooks();
-                              if (paths.isEmpty || !mounted || !context.mounted) return;
+                              if (paths.isEmpty || !mounted || !context.mounted)
+                                return;
                               final imported = await importWithFeedback(
                                 context,
                                 paths,
@@ -260,6 +261,7 @@ extension _Routes on _RewriteAppState {
             importCss: importCssFile,
             pickImage: pickCoverImage,
             pickFont: pickFontFile,
+            conversionChanges: conversionDraft,
             keepsOriginal: () => keepOriginalEpubFor(
               conversionDraft,
               widget.library,
