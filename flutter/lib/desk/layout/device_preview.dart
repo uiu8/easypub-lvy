@@ -425,6 +425,7 @@ class ReaderMetrics {
     this.tracking = 0,
     this.justify = false,
     this.cssPx = 1,
+    this.engineGroup = 'legacy',
   });
   final double fontPx, lineRatio;
   final EdgeInsets padding;
@@ -438,6 +439,9 @@ class ReaderMetrics {
   /// 书内 CSS 的 1px 在屏幕上画几个像素（KPW5 为 300 / 160 = 1.875，按标题内边距与下框实测）。
   /// 为 1 时不换算。
   final double cssPx;
+
+  /// 固件候选断点管线分组，传给真机预览网页。
+  final String engineGroup;
 }
 
 /// KFX 真机规则（2026-10-29 用户 KPW5 真机截图实测，docs/research/2026-10-29_KPW5真机实测.md）。
@@ -567,6 +571,7 @@ ReaderMetrics kfxMetrics(
     justify: true,
     // 书内 1px 画成 ppi/160 个像素（KPW5 上 1.875）。
     cssPx: device.ppi / 160,
+    engineGroup: kindleEngineGroupForDevice(device.id),
   );
 }
 
@@ -632,6 +637,7 @@ ReaderMetrics readerMetrics(
     fontPx: font * bookScale,
     lineRatio: line / font,
     padding: EdgeInsets.fromLTRB(side, top, side, bottom),
+    engineGroup: kindleEngineGroupForDevice(device.id),
     measured: true,
     note: '按真机校准',
   );
@@ -874,6 +880,7 @@ class PreviewStyle {
     this.headImage,
     this.headFraction = .5,
     this.systemStyles,
+    this.lineEngine = KindleLineEngine.kpw5,
   });
 
   /// 系统提示与诗词样式，见 `systemBlockStyles`、`verseBlockStyles`。
@@ -881,6 +888,9 @@ class PreviewStyle {
 
   /// “分类样式”下单行提示与面板的样式参数：`{note: {...}, panel: {...}}`。
   final Map? systemStyles;
+
+  /// 该页对应的 Kindle 固件候选断点管线。
+  final KindleLineEngine lineEngine;
 
   /// 统一章首图：画在章标题上方，宽度为版心的 [headFraction]，保持原比例。
   final ui.Image? headImage;
@@ -1136,6 +1146,7 @@ double _advance(TextStyle body, int code) {
     em: em,
     indent: indent,
     justify: style.align == TextAlign.justify,
+    engine: style.lineEngine,
     advance: (c) => _advance(body, c),
   );
   final base = body.letterSpacing ?? 0;

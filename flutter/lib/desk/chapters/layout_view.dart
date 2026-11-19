@@ -11,6 +11,7 @@ import '../../application/library_service.dart';
 import '../../application/rule_catalog_service.dart';
 import '../errors.dart';
 import '../layout/device_preview.dart';
+import '../layout/kindle_lines.dart';
 import '../layout/layout_units.dart';
 import '../layout/system_block_look.dart';
 import '../tokens.dart';
@@ -147,6 +148,7 @@ class ChapterLayoutView extends ChangeNotifier {
           : null,
       verseBlock: verseBlock,
       ruleScale: size / 17.6,
+      lineEngine: kindleLineEngineForDevice(device.device.id),
     );
     return KindleColumn(
       style: style,

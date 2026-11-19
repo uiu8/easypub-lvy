@@ -746,6 +746,7 @@ extension _LayoutPreviewSection on _LayoutPageState {
                               margin('right'),
                               margin('bottom'),
                             ),
+                        lineEngine: kindleLineEngineForDevice(k.id),
                       );
                       final fullwidth = number(
                         'fullwidth_indent',

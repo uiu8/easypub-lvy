@@ -30,6 +30,7 @@ import '../widgets.dart';
 import 'book_batch_dialog.dart';
 import 'css_dialog.dart';
 import 'device_preview.dart';
+import 'kindle_lines.dart';
 import 'layout_units.dart';
 import 'layout_origins_dialog.dart';
 import 'layout_presets_dialog.dart';
@@ -947,6 +948,7 @@ class _LayoutPageState extends State<LayoutPage> {
       'tracking': m.tracking,
       'justify': m.justify,
       'cssPx': m.cssPx,
+      'engineGroup': m.engineGroup,
     };
   }
 

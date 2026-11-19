@@ -10,8 +10,30 @@
 // ·（KPW5 宋体与苹方截图逐字同位）：弯引号与其他中文标点一样按一个字宽，与字体无关；后置引号在行末、
 //   紧跟后置标点时半宽；后置标点紧跟前置标点时前一个半宽；省略号可以放在行首；
 // · 除段末一行外两端对齐。
-// 这是普通中文正文的近似模型，不是完整的 Kindle 排版引擎：没有实现伸缩评分选择断点、孤行回退等。
+// 这是普通中文正文的近似模型：KPW5/新组使用已逆向确认的候选评分比较，
+// 仍未实现完整引擎的孤行回退与跨段落重排。
 import 'dart:math' as math;
+
+/// 固件排版管线分组。
+///
+/// KPW5、Basic 11 与 Oasis 3 的候选比较器和宽度评分核心相同；KPW6、
+/// Colorsoft、Scribe 在此基础上增加了新的候选标记/回退阶段；Voyage 是
+/// 旧的 ARM 软浮点管线，不能把新组的回退规则套过去。
+enum KindleLineEngine { legacy, kpw5, modern }
+
+KindleLineEngine kindleLineEngineForDevice(String id) => switch (id) {
+  'kpw6' || 'colorsoft' || 'scribe' => KindleLineEngine.modern,
+  'kpw5' || 'basic11' || 'oasis3' => KindleLineEngine.kpw5,
+  _ => KindleLineEngine.legacy,
+};
+
+String kindleEngineGroupForDevice(String id) => switch (
+  kindleLineEngineForDevice(id)
+) {
+  KindleLineEngine.modern => 'modern',
+  KindleLineEngine.kpw5 => 'kpw5',
+  KindleLineEngine.legacy => 'legacy',
+};
 
 /// 行末压成半宽、相邻挤压的后置标点。
 const kindleClosing = '。，、；：？！」』）》】〉';
@@ -66,6 +88,7 @@ List<KindleLine> kindleLines(
   required double Function(int codePoint) advance,
   double indent = 0,
   bool justify = true,
+  KindleLineEngine engine = KindleLineEngine.kpw5,
 }) {
   final runes = text.runes.toList();
   if (runes.isEmpty) return const [];
@@ -130,6 +153,7 @@ List<KindleLine> kindleLines(
     final avail = math.max(em, width - (firstLine ? indent : 0));
     var used = 0.0;
     var best = -1;
+    var bestDistance = double.infinity;
     var i = start;
     for (; i < n; i++) {
       used += base[i] + adjust[i];
@@ -137,7 +161,21 @@ List<KindleLine> kindleLines(
       if (used - endCut(i) - (adjust[i] > 0 ? adjust[i] : 0) > avail + .01) {
         break;
       }
-      if (end == n || breakable(end)) best = end;
+      if (end == n || breakable(end)) {
+        if (engine != KindleLineEngine.legacy) {
+          // KPW5 与新组比较器先按候选的伸缩评分绝对值比较；对普通 CJK 行，
+          // 评分单调等价于选最接近版心的候选。和固件一样，同分时
+          // 后遍历到的候选胜出。
+          final natural = used - endCut(i) - (adjust[i] > 0 ? adjust[i] : 0);
+          final distance = (avail - natural).abs();
+          if (distance <= bestDistance + 1e-9) {
+            best = end;
+            bestDistance = distance;
+          }
+        } else {
+          best = end;
+        }
+      }
     }
     if (best <= start) {
       // 一个可断点都放不下（超长西文词等）：放得下多少放多少，至少一个字。

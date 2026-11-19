@@ -512,6 +512,10 @@ function layout(keepRatio) {
   const vertical = getComputedStyle(doc.documentElement).writingMode.startsWith('vertical');
   S.vertical = vertical;
   const m = S.metrics;
+  // 固件组别只改变候选断点管线，不改变 EPUB 原文。新组使用严格的 CJK
+  // 标点边界；旧 ARM 管线保留浏览器默认的自动断行。普通汉字之间仍交给
+  // 版心和字体度量决定，避免把 break-all 错套到 C02 这类正文上。
+  doc.documentElement.setAttribute('data-ep-engine', m.engineGroup || 'legacy');
   const font = readerFont();
   const user = userFont();
   markPageBreaks(doc);
@@ -530,6 +534,9 @@ function layout(keepRatio) {
       + 'column-fill:auto!important;' + (vertical
         ? 'width:' + a.width + 'px!important;height:auto!important;column-width:' + a.height + 'px!important}'
         : 'height:' + h + 'px!important;width:auto!important;column-width:' + a.width + 'px!important}'),
+    (m.engineGroup === 'modern' || m.engineGroup === 'kpw5')
+      ? 'html{line-break:strict;word-break:normal;overflow-wrap:normal}'
+      : 'html{line-break:auto}',
     // 真机规则（KPW5）：阅读器行间距只乘到正文上，标题保留书里写的行高。
     // 标题里面的小块（标点挤压包出的 span 等）也不乘（标题带“：”“。”时整行被撑高约 24 像素）。
     S.original ? '' : m.unitsVersion === 1 ? 'body{line-height:' + (S.draft.line_height_unit === 'number' || !S.draft.line_height_unit ? m.lineRatio : m.linePixels+'px') + '!important}' : (
