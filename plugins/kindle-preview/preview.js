@@ -524,6 +524,17 @@ function layout(keepRatio) {
   scaleCssPixels(doc, m.cssPx || 1);
   kindleTypography(doc);
   const kfx = !!m.justify;
+  const strictKfx = m.engineGroup === 'modern' || m.engineGroup === 'kpw5';
+  if (strictKfx) {
+    // 固件的候选比较器会把两端对齐的候选行按伸缩评分再比较，
+    // 不是简单地按浏览器的自然宽度截断。给这类块留下一个很小的
+    // 候选余量；左对齐的 START 说明页不参与，所以不会改变其断行。
+    for (const el of doc.querySelectorAll('p,li,blockquote')) {
+      if (getComputedStyle(el).textAlign === 'justify') {
+        el.setAttribute('data-ep-kfx-justify', '');
+      }
+    }
+  }
   // 正文按列分页：横排的列向右排、竖排的列向下排；每页一列。
   style.textContent = [
     user ? '@font-face{font-family:"EPUser-' + user.id + '";src:url("' + new URL('fonts/' + user.file, location.href) + '")}' : '',
@@ -570,6 +581,11 @@ function layout(keepRatio) {
       + 'html .ep-q' + k + '.ep-qc,html .ep-q' + k + '.ep-qa{letter-spacing:calc(var(--ep-q' + k + ',0) - 0.5em)!important}').join('')
       + 'html .ep-qs{word-spacing:var(--ep-ws,0)!important}'
       : 'html .ep-qs,html .ep-br{display:none!important}',
+    // KPW5/新 KFX 管线的后置标点在行中直接按固件的半宽压缩处理。
+    // 额外的空格若保留为可参与两端对齐的文本节点，会被 Chromium 再拉宽，
+    // 使 START 少一个字、C02 多出一行；旧管线继续保留原来的近似行为。
+    strictKfx ? 'html .ep-s,html .ep-qs{display:none!important}' : '',
+    strictKfx ? 'html [data-ep-kfx-justify]{width:calc(100% + 0.08em)!important}' : '',
     kfx ? 'html .ep-adj{letter-spacing:-0.5em!important}html .ep-adjs{display:none!important}'
       + 'html .ep-oa{margin-left:-0.5em!important}html .ep-cl{letter-spacing:' + (0.075 + (m.tracking || 0)) + 'em!important}' : '',
     // 真机允许段落只有一行留在页底或页顶（第四章首页实测），浏览器默认至少两行。
