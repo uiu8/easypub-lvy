@@ -73,7 +73,12 @@ void main() {
       em: 1,
       advance: (c) => c < 0x80 ? .5 : 1,
     );
-    expect(lines.single.spacing, [.075, 0, 0, 0, .075, 0]);
+    expect(lines.single.spacing[0], closeTo(.075, 1e-6));
+    expect(lines.single.spacing[1], 0);
+    expect(lines.single.spacing[2], 0);
+    expect(lines.single.spacing[3], 0);
+    expect(lines.single.spacing[4], closeTo(.075, 1e-6));
+    expect(lines.single.spacing[5], 0);
   });
 
   test('禁则：前置标点不在行末，破折号、省略号不拆开，西文单词不拆开', () {
@@ -149,6 +154,69 @@ void main() {
       '甲乙丙丁',
       '九，十',
     ]);
+  });
+
+  test('23 个固件描述符按评分节点插值，并分别乘前后字号', () {
+    for (var descriptor = 1; descriptor <= 23; descriptor++) {
+      final unit = kindleDescriptorWidth(descriptor, 1, 0);
+      expect(unit, greaterThanOrEqualTo(0));
+      expect(kindleDescriptorWidth(descriptor, 2, 0), closeTo(unit * 2, 1e-6));
+    }
+    expect(
+      kindleDescriptorPairWidth(19, 2, 16, 24, 0),
+      closeTo(
+        kindleDescriptorWidth(19, 16, 0) + kindleDescriptorWidth(2, 24, 0),
+        1e-6,
+      ),
+    );
+    expect(
+      kindleDescriptorPairWidth(19, 2, 24, 16, 0),
+      isNot(closeTo(kindleDescriptorPairWidth(19, 2, 16, 24, 0), 1e-6)),
+    );
+  });
+
+  test('固件字符分类表的标点对使用独立描述符', () {
+    expect(kindlePairDescriptor('甲'.runes.single, '，'.runes.single), (
+      left: 0,
+      right: 0,
+    ));
+    expect(kindlePairDescriptor('，'.runes.single, '甲'.runes.single), (
+      left: 5,
+      right: 2,
+    ));
+    expect(kindlePairDescriptor('。'.runes.single, '甲'.runes.single), (
+      left: 4,
+      right: 2,
+    ));
+    expect(kindlePairDescriptor('”'.runes.single, '“'.runes.single), (
+      left: 5,
+      right: 2,
+    ));
+    expect(kindlePairDescriptor('）'.runes.single, '（'.runes.single), (
+      left: 5,
+      right: 2,
+    ));
+  });
+
+  test('分页状态机遵守孤行、寡行和显式换页', () {
+    final paragraph = [
+      for (var i = 0; i < 5; i++) const KindleLine(0, 1, <double>[]),
+    ];
+    final second = [
+      for (var i = 0; i < 2; i++) const KindleLine(0, 1, <double>[]),
+    ];
+    final pages = kindlePaginate(
+      [paragraph, second],
+      height: 30,
+      lineHeight: 10,
+      orphans: 2,
+      widows: 2,
+      breakBefore: const [false, true],
+    );
+    expect(pages, hasLength(3));
+    expect(pages[0].lines.map((line) => line.line), [0, 1, 2]);
+    expect(pages[1].lines.map((line) => line.line), [3, 4]);
+    expect(pages[2].lines.map((line) => line.paragraph), [1, 1]);
   });
 
   testWidgets('小预览、排版视图按同一模型断行：Flutter 不再另行折行；首字放大、诗句仍交给 Flutter', (t) async {

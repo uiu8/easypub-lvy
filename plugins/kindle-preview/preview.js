@@ -227,7 +227,7 @@ function kindleTypography(doc) {
   if (doc.__easypubTypography || !doc.body) return;
   doc.__easypubTypography = true;
   const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) => (n.parentElement && n.parentElement.closest('rt,rp,script,style'))
+    acceptNode: (n) => (n.parentElement && n.parentElement.closest('rt,rp,script,style,[data-ep-kindle-lines]'))
       ? NodeFilter.FILTER_REJECT
       : NodeFilter.FILTER_ACCEPT,
   });
@@ -304,7 +304,7 @@ function kindleCandidateBoundaries(doc) {
   if (doc.__easypubCandidates || !doc.body) return;
   doc.__easypubCandidates = true;
   const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) => (n.parentElement && n.parentElement.closest('rt,rp,script,style,svg,.ep-k'))
+    acceptNode: (n) => (n.parentElement && n.parentElement.closest('rt,rp,script,style,svg,.ep-k,[data-ep-kindle-lines]'))
       ? NodeFilter.FILTER_REJECT
       : NodeFilter.FILTER_ACCEPT,
   });
@@ -347,6 +347,165 @@ function kindleCandidateBoundaries(doc) {
     flush();
     node.replaceWith(frag);
   });
+}
+
+// 对文本和简单内联结构使用与 Flutter 小预览相同的行模型。文本运行会记录
+// 原节点的字体、颜色和链接属性，换行后按原运行恢复，因此 <em>/<strong>/<a>
+// 不会再绕过固件候选扫描器。图片、ruby、音视频和显式 br 仍由原书结构处理。
+function kindleLayoutBlocks(doc, metrics, contentWidth) {
+  const core = window.EasyPubKindleLayout;
+  if (!core || !doc.body) return;
+  const blocks = [...doc.querySelectorAll('p,li,blockquote,h1,h2,h3,h4,h5,h6')];
+  const ctx = doc.createElement('canvas').getContext('2d');
+  const unsupported = 'img,svg,rt,rp,audio,video,iframe,br,table,ul,ol,dl';
+  const copyRun = (node) => {
+    const host = node.parentElement || node;
+    const style = getComputedStyle(host);
+    const anchor = node.parentElement?.closest('a');
+    return {
+      font: style.font,
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      fontStyle: style.fontStyle,
+      color: style.color,
+      textDecoration: style.textDecoration,
+      verticalAlign: style.verticalAlign,
+      href: anchor ? anchor.getAttribute('href') : null,
+      target: anchor ? anchor.getAttribute('target') : null,
+      rel: anchor ? anchor.getAttribute('rel') : null,
+    };
+  };
+  const capture = (el) => {
+    const runs = [];
+    const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.data || node.parentElement?.closest('script,style,rt,rp')) continue;
+      const text = node.data.replace(/\s+/g, ' ');
+      const run = copyRun(node);
+      for (const ch of Array.from(text)) runs.push({ ch, run });
+    }
+    return runs;
+  };
+  const runStyle = (glyph, run) => {
+    if (!run) return;
+    if (run.font) glyph.style.font = run.font;
+    for (const key of ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle',
+      'color', 'textDecoration', 'verticalAlign']) {
+      if (run[key]) glyph.style[key] = run[key];
+    }
+  };
+  for (const el of blocks) {
+    if (!el.isConnected || el.querySelector(unsupported)) continue;
+    if (el.querySelector('p,li,blockquote,h1,h2,h3,h4,h5,h6')) continue;
+    if (el.__epKindleSource === undefined) {
+      const runs = capture(el);
+      el.__epKindleRuns = runs;
+      el.__epKindleSource = runs.map((item) => item.ch).join('');
+    }
+    const source = el.__epKindleSource;
+    if (!source || !source.trim()) continue;
+    const runs = el.__epKindleRuns || Array.from(source).map((ch) => ({ ch, run: null }));
+    const computed = getComputedStyle(el);
+    const fontSize = parseFloat(computed.fontSize) || Number(metrics.rootPx) || 16;
+    const lineHeight = parseFloat(computed.lineHeight) || fontSize * 1.2;
+    const indent = Math.max(0, parseFloat(computed.textIndent) || 0);
+    const font = computed.font || [computed.fontStyle, computed.fontVariant, computed.fontWeight,
+      fontSize + 'px/' + lineHeight + 'px', computed.fontFamily || 'sans-serif'].join(' ');
+    ctx.font = font;
+    const text = source.replace(/\s+/g, ' ');
+    const lines = core.layoutText(text, {
+      width: Math.max(1, Number(contentWidth) || el.getBoundingClientRect().width),
+      em: fontSize,
+      indent,
+      justify: metrics.justify || computed.textAlign === 'justify',
+      engine: metrics.engineGroup || 'legacy',
+      advance: (ch, index) => {
+        const runFont = runs[index]?.run?.font;
+        ctx.font = runFont || font;
+        return ctx.measureText(ch).width || fontSize;
+      },
+    });
+    if (!lines.length) continue;
+    el.dataset.epKindleLines = '1';
+    el.style.textIndent = '0';
+    el.style.whiteSpace = 'normal';
+    const fragment = doc.createDocumentFragment();
+    lines.forEach((line, lineIndex) => {
+      const row = doc.createElementNS(XHTML, 'span');
+      row.className = 'ep-line';
+      row.style.display = 'block';
+      row.style.whiteSpace = 'nowrap';
+      row.style.breakInside = 'avoid';
+      row.style.lineHeight = String(lineHeight / fontSize);
+      if (lineIndex === 0 && indent > 0) row.style.textIndent = indent + 'px';
+      const chars = Array.from(line.text);
+      chars.forEach((ch, index) => {
+        const sourceIndex = line.start + index;
+        const data = runs[sourceIndex] || { ch, run: null };
+        const glyph = data.run?.href ? doc.createElementNS(XHTML, 'a')
+          : doc.createElementNS(XHTML, 'span');
+        glyph.className = 'ep-line-char';
+        glyph.textContent = ch;
+        glyph.style.display = 'inline-block';
+        runStyle(glyph, data.run?.run);
+        if (data.run?.href) {
+          glyph.setAttribute('href', data.run.href);
+          if (data.run.target) glyph.setAttribute('target', data.run.target);
+          if (data.run.rel) glyph.setAttribute('rel', data.run.rel);
+        }
+        const spacing = line.spacing[index] || 0;
+        if (spacing) glyph.style.marginRight = spacing + 'px';
+        row.appendChild(glyph);
+      });
+      row.dataset.epParagraph = String([...blocks].indexOf(el));
+      row.dataset.epLine = String(lineIndex);
+      row.dataset.epLineHeight = String(lineHeight);
+      fragment.appendChild(row);
+    });
+    el.replaceChildren(fragment);
+  }
+}
+
+// 把已经生成的 Kindle 行按行高显式分配到列。Chromium 的 widows/orphans
+// 默认值会把整段推到下一列，和固件的候选回退不同，所以这里只给跨页的
+// 第一行设置换栏，其余行仍保持同一段的连续状态。
+function kindlePaginationState(doc, metrics, pageHeight) {
+  const core = window.EasyPubKindleLayout;
+  const rows = [...doc.querySelectorAll('[data-ep-kindle-lines] > .ep-line')];
+  if (!core?.paginateLines || !rows.length) return;
+  const groups = [];
+  const groupRows = [];
+  let currentKey = null;
+  for (const row of rows) {
+    row.style.removeProperty('break-before');
+    const key = row.dataset.epParagraph || String(groups.length);
+    if (currentKey !== key) {
+      currentKey = key;
+      groups.push(0);
+      groupRows.push([]);
+    }
+    groups[groups.length - 1]++;
+    groupRows[groupRows.length - 1].push(row);
+  }
+  const lineHeight = parseFloat(rows[0].dataset.epLineHeight)
+    || parseFloat(getComputedStyle(rows[0]).lineHeight)
+    || Number(metrics.rootPx) * Number(metrics.lineRatio) || 1;
+  const pages = core.paginateLines(groups, {
+    height: Math.max(1, Number(pageHeight) || 1),
+    lineHeight,
+    paragraphSpacing: 0,
+    orphans: Number(metrics.orphans) || 1,
+    widows: Number(metrics.widows) || 1,
+  });
+  for (const page of pages) {
+    const first = page[0];
+    const row = groupRows[first.paragraph]?.[first.line];
+    if (row && (first.paragraph !== 0 || first.line !== 0)) {
+      row.style.setProperty('break-before', 'column', 'important');
+    }
+  }
 }
 
 // 书内 CSS 的 px 换算到屏幕像素：KPW5 上 1px 画成 300/160 个像素（标题内边距与下框实测）。
@@ -579,8 +738,6 @@ function layout(keepRatio) {
   markKai(doc);
   keywordFontSizes(doc);
   scaleCssPixels(doc, m.cssPx || 1);
-  kindleCandidateBoundaries(doc);
-  kindleTypography(doc);
   const kfx = !!m.justify;
   const strictKfx = m.engineGroup === 'modern' || m.engineGroup === 'kpw5';
   if (strictKfx) {
@@ -644,7 +801,7 @@ function layout(keepRatio) {
     // 额外的空格若保留为可参与两端对齐的文本节点，会被 Chromium 再拉宽，
     // 使 START 少一个字、C02 多出一行；旧管线继续保留原来的近似行为。
     strictKfx ? 'html .ep-s,html .ep-qs{display:none!important}' : '',
-    strictKfx ? 'html [data-ep-kfx-justify]{width:calc(100% + 0.08em)!important}' : '',
+    strictKfx ? 'html [data-ep-kfx-justify]:not([data-ep-kindle-lines]){width:calc(100% + 0.08em)!important}' : '',
     kfx ? 'html .ep-adj{letter-spacing:-0.5em!important}html .ep-adjs{display:none!important}'
       + 'html .ep-oa{margin-left:-0.5em!important}html .ep-cl{letter-spacing:' + (0.075 + (m.tracking || 0)) + 'em!important}' : '',
     // 新 KFX 管线允许段落只有一行留在页底或页顶（C02 第 6 段首行实测）。
@@ -652,6 +809,10 @@ function layout(keepRatio) {
     // 否则浏览器默认 widows:2 会把整段推到下一页。旧管线继续保留原书行为。
     strictKfx ? 'body *{orphans:1;widows:1}' : '',
   ].join('\n');
+  kindleLayoutBlocks(doc, m, a.width);
+  kindlePaginationState(doc, m, h);
+  kindleCandidateBoundaries(doc);
+  kindleTypography(doc);
   // 导入的字体异步载入：载入后按新字宽重新分页一次。
   if (user && doc.__epUser !== user.id) {
     doc.__epUser = user.id;

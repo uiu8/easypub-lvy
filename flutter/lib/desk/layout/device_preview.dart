@@ -1407,6 +1407,28 @@ List<List<PreviewPiece>> paginatePreview({
         used += m.height;
         fit++;
       }
+      // 普通文本的行高稳定时，使用与浏览器预览相同的分页状态机，
+      // 让 Flutter 页底也遵守固件孤行/寡行回退。包含上下标、图片等
+      // 不等高运行仍保留 TextPainter 的逐行度量。
+      final stableHeight =
+          metrics.isNotEmpty &&
+          metrics.every((m) => (m.height - metrics.first.height).abs() < .5);
+      if (stableHeight && fit > 0 && !piece.title) {
+        final rows = [
+          for (var i = 0; i < metrics.length; i++)
+            const KindleLine(0, 0, <double>[]),
+        ];
+        final statePages = kindlePaginate(
+          [rows],
+          height:
+              remaining + _lineLead(metrics.first, style.body.fontSize ?? 16),
+          lineHeight: metrics.first.height,
+          orphans: 1,
+          widows: 1,
+        );
+        final stateFit = statePages.isEmpty ? 0 : statePages.first.lines.length;
+        fit = math.min(fit, stateFit);
+      }
       final shift = piece.indent && style.indent > 0 ? 1 : 0;
       final cuts = _kindleCuts[painter];
       // 前 f 行在原文里的结束位置。

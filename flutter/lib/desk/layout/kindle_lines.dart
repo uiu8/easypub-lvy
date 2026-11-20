@@ -10,9 +10,10 @@
 // ·（KPW5 宋体与苹方截图逐字同位）：弯引号与其他中文标点一样按一个字宽，与字体无关；后置引号在行末、
 //   紧跟后置标点时半宽；后置标点紧跟前置标点时前一个半宽；省略号可以放在行首；
 // · 除段末一行外两端对齐。
-// 这是普通中文正文的近似模型：KPW5/新组使用已逆向确认的候选评分比较，
-// 仍未实现完整引擎的孤行回退与跨段落重排。
+// 普通正文使用已逆向确认的候选评分比较，分页状态机另外处理孤行、寡行和
+// 显式换页。旧 ARM 组保留其顺序扫描器，避免把新组比较器套到旧设备。
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 /// 固件排版管线分组。
 ///
@@ -27,6 +28,73 @@ enum KindleLineEngine {
   modern,
 }
 
+/// 五组固件排版管线共用的布局参数。
+///
+/// 各组使用同一套字符描述和禁则数据，差异集中在候选扫描器和比较器。
+/// 这样小预览、排版视图和真机预览不会再各自维护一份“近似规则”。
+class KindleLayoutProfile {
+  const KindleLayoutProfile({
+    required this.id,
+    required this.engine,
+    required this.scoredCandidates,
+    required this.breakTolerance,
+    required this.allowEllipsisAtLineStart,
+    required this.tieBreakLast,
+  });
+
+  final String id;
+  final KindleLineEngine engine;
+  final bool scoredCandidates;
+  final double breakTolerance;
+  final bool allowEllipsisAtLineStart;
+  final bool tieBreakLast;
+}
+
+KindleLayoutProfile kindleLayoutProfile(KindleLineEngine engine) =>
+    switch (engine) {
+      KindleLineEngine.modern => const KindleLayoutProfile(
+        id: 'modern',
+        engine: KindleLineEngine.modern,
+        scoredCandidates: true,
+        breakTolerance: .001,
+        allowEllipsisAtLineStart: true,
+        tieBreakLast: true,
+      ),
+      KindleLineEngine.kpw5 => const KindleLayoutProfile(
+        id: 'kpw5',
+        engine: KindleLineEngine.kpw5,
+        scoredCandidates: true,
+        breakTolerance: .001,
+        allowEllipsisAtLineStart: true,
+        tieBreakLast: true,
+      ),
+      KindleLineEngine.legacyVoyage => const KindleLayoutProfile(
+        id: 'legacy-voyage',
+        engine: KindleLineEngine.legacyVoyage,
+        scoredCandidates: false,
+        breakTolerance: .001,
+        allowEllipsisAtLineStart: false,
+        tieBreakLast: true,
+      ),
+      KindleLineEngine.legacyKpw3 => const KindleLayoutProfile(
+        id: 'legacy-kpw3',
+        engine: KindleLineEngine.legacyKpw3,
+        scoredCandidates: false,
+        breakTolerance: .001,
+        allowEllipsisAtLineStart: false,
+        tieBreakLast: true,
+      ),
+      KindleLineEngine.legacyKpw4 ||
+      KindleLineEngine.legacy => const KindleLayoutProfile(
+        id: 'legacy-kpw4',
+        engine: KindleLineEngine.legacyKpw4,
+        scoredCandidates: false,
+        breakTolerance: .001,
+        allowEllipsisAtLineStart: false,
+        tieBreakLast: true,
+      ),
+    };
+
 KindleLineEngine kindleLineEngineForDevice(String id) => switch (id) {
   'kpw6' || 'colorsoft' || 'scribe' => KindleLineEngine.modern,
   'kpw5' || 'basic11' || 'oasis3' => KindleLineEngine.kpw5,
@@ -36,16 +104,15 @@ KindleLineEngine kindleLineEngineForDevice(String id) => switch (id) {
   _ => KindleLineEngine.legacy,
 };
 
-String kindleEngineGroupForDevice(String id) => switch (
-  kindleLineEngineForDevice(id)
-) {
-  KindleLineEngine.modern => 'modern',
-  KindleLineEngine.kpw5 => 'kpw5',
-  KindleLineEngine.legacyVoyage => 'legacy-voyage',
-  KindleLineEngine.legacyKpw3 => 'legacy-kpw3',
-  KindleLineEngine.legacyKpw4 => 'legacy-kpw4',
-  KindleLineEngine.legacy => 'legacy',
-};
+String kindleEngineGroupForDevice(String id) =>
+    switch (kindleLineEngineForDevice(id)) {
+      KindleLineEngine.modern => 'modern',
+      KindleLineEngine.kpw5 => 'kpw5',
+      KindleLineEngine.legacyVoyage => 'legacy-voyage',
+      KindleLineEngine.legacyKpw3 => 'legacy-kpw3',
+      KindleLineEngine.legacyKpw4 => 'legacy-kpw4',
+      KindleLineEngine.legacy => 'legacy',
+    };
 
 /// 行末压成半宽、相邻挤压的后置标点。
 const kindleClosing = '。，、；：？！」』）》】〉';
@@ -88,6 +155,536 @@ bool _latin(int c) =>
     (c >= 0x41 && c <= 0x5A) ||
     (c >= 0x61 && c <= 0x7A);
 
+double _f32(double value) => Float32List.fromList([value])[0].toDouble();
+
+bool _isCjk(int c) => _han(c);
+
+/// 固件 23 个间距描述的有限评分节点。节点来自 ARM 宽度函数的实际执行，
+/// 每一行按字号 1 归一化，实际宽度再乘对应字体实例的 size。
+const _descriptorScores = <double>[
+  -7,
+  -6,
+  -5.5,
+  -5,
+  -4.5,
+  -4,
+  -3.5,
+  -3,
+  -2.5,
+  -2,
+  -1,
+  0,
+  1,
+  2,
+  2.5,
+  3,
+  4,
+  7,
+];
+
+const _descriptorWidths = <List<double>>[
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, .0625, .125, 1.125, 4.125],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 4],
+  [
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+  ],
+  [
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    1.5,
+    4.5,
+  ],
+  [0, 0, 0, 0, .25, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, 1.5, 4.5],
+  [0, 0, 0, 0, .25, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5],
+  [
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .375,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+    1.5,
+    4.5,
+  ],
+  [
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .375,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+    .5,
+  ],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, .5, .5, .5, .5, .5, .5, .5, .5, .5],
+  [
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+  ],
+  [0, 0, 0, 0, 0, 0, 0, 0, .125, .25, .25, .25, .25, .25, .25, .25, .25, .25],
+  [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    .125,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+  ],
+  [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    .125,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    1.25,
+    4.25,
+  ],
+  [
+    .125,
+    .125,
+    .1875,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+  ],
+  [
+    .125,
+    .125,
+    .1875,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .5,
+    .5,
+    .5,
+    1.5,
+    4.5,
+  ],
+  [
+    .125,
+    .125,
+    .1875,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    1.25,
+    4.25,
+  ],
+  [
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .5,
+    .5,
+    .5,
+    1.5,
+    4.5,
+  ],
+  [
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    1.25,
+    4.25,
+  ],
+  [
+    0,
+    0,
+    .0375,
+    .075,
+    .075,
+    .075,
+    .075,
+    .075,
+    .075,
+    .075,
+    .075,
+    .075,
+    .075,
+    .075,
+    .075,
+    .075,
+    1.075,
+    4.075,
+  ],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2.5, 3, 4, 7],
+  [
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    .25,
+    1.25,
+    2.25,
+    2.75,
+    3.25,
+    4.25,
+    7.25,
+  ],
+  [.5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, 1.5, 2.5, 3, 3.5, 4.5, 7.5],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+];
+
+/// 固件字符描述表的可观察部分。
+///
+/// 描述符的完整曲线在固件中以 23 个编号保存。对行宽有影响的组合在这里
+/// 统一折算为相邻字符之间的增量，编号与逆向交接文档保持一致。普通汉字
+/// 默认使用描述符 1/1，中文与西文切换使用 19/2。
+({int left, int right}) kindlePairDescriptor(int left, int right) {
+  if (_isCjk(left) && _latin(right)) return (left: 19, right: 2);
+  if (_latin(left) && _isCjk(right)) return (left: 2, right: 19);
+  // 固件分类表中的标点对不是按 Unicode 名称推导的：逗号/句号
+  // 后接正文时分别走 5/2 与 4/2，闭引号/左引号和括号对也有独立项。
+  if (left == 0xFF0C &&
+      (_isCjk(right) || kindleOpening.runes.contains(right))) {
+    return (left: 5, right: 2);
+  }
+  if (left == 0x3002 && _isCjk(right)) {
+    return (left: 4, right: 2);
+  }
+  if (left == 0x3002 && right == 0x201D) {
+    return (left: 0, right: 0);
+  }
+  if (left == 0x201D && right == 0x201C) {
+    return (left: 5, right: 2);
+  }
+  if (left == 0xFF09 && right == 0xFF08) {
+    return (left: 5, right: 2);
+  }
+  if (left == 0x3001 && right == 0xFF0C) {
+    return (left: 0, right: 0);
+  }
+  if (kindleClosingAll.runes.contains(left) &&
+      (kindleClosingAll.runes.contains(right) ||
+          kindleOpening.runes.contains(right))) {
+    return (left: 0, right: 0);
+  }
+  if (kindleOpening.runes.contains(left) &&
+      kindleOpening.runes.contains(right)) {
+    return (left: 5, right: 2);
+  }
+  if (kindleNoStart.contains(right) || kindleNoEnd.contains(left)) {
+    return (left: 0, right: 0);
+  }
+  return (left: 1, right: 1);
+}
+
+/// 描述符 19 的浮点宽度曲线。q 是候选行相对版心的伸缩量，S 是字号。
+/// 该曲线只在中西文相邻时使用，避免把浏览器字体的实际字宽混入固件评分。
+double kindleDescriptorWidth(int descriptor, double scale, double q) {
+  if (descriptor < 1 || descriptor > _descriptorWidths.length || scale == 0) {
+    return 0;
+  }
+  final row = _descriptorWidths[descriptor - 1];
+  final value = _f32(q);
+  if (value <= _descriptorScores.first) return _f32(scale * row.first);
+  if (value >= _descriptorScores.last) {
+    final i = _descriptorScores.length - 2;
+    final t =
+        (value - _descriptorScores[i]) /
+        (_descriptorScores[i + 1] - _descriptorScores[i]);
+    return _f32(scale * (row[i] + (row[i + 1] - row[i]) * t));
+  }
+  for (var i = 0; i + 1 < _descriptorScores.length; i++) {
+    final left = _descriptorScores[i];
+    final right = _descriptorScores[i + 1];
+    if (value <= right) {
+      final t = (value - left) / (right - left);
+      return _f32(scale * (row[i] + (row[i + 1] - row[i]) * t));
+    }
+  }
+  return _f32(scale * row.last);
+}
+
+double kindleDescriptorWidth19(double scale, double q) =>
+    kindleDescriptorWidth(19, scale, q);
+
+double kindleDescriptorPairWidth(
+  int leftDescriptor,
+  int rightDescriptor,
+  double previousScale,
+  double currentScale,
+  double q,
+) => _f32(
+  kindleDescriptorWidth(leftDescriptor, previousScale, q) +
+      kindleDescriptorWidth(rightDescriptor, currentScale, q),
+);
+
+double _kindleCandidateDescriptorScore(
+  List<int> runes,
+  int start,
+  int end,
+  double scale,
+  double q,
+) {
+  var score = 0.0;
+  for (var i = start; i + 1 < end; i++) {
+    final pair = kindlePairDescriptor(runes[i], runes[i + 1]);
+    score = _f32(
+      score + kindleDescriptorPairWidth(pair.left, pair.right, scale, scale, q),
+    );
+  }
+  return score;
+}
+
+/// 分页后的行引用。paragraph/line 都是从 0 开始的索引。
+class KindlePageLine {
+  const KindlePageLine(this.paragraph, this.line);
+
+  final int paragraph;
+  final int line;
+}
+
+class KindlePage {
+  const KindlePage(this.lines);
+
+  final List<KindlePageLine> lines;
+}
+
+/// 按 Kindle 的段落状态、孤行/寡行和显式分页标记把已断好的行排入页面。
+///
+/// 这里的输入是同一段落已经经过 [kindleLines] 的行。状态机只决定行属于
+/// 哪一页，因此不会再次使用浏览器的 widows/orphans 默认值，也不会把
+/// `break-before`、`break-after` 交给 Chromium 自己解释。
+List<KindlePage> kindlePaginate(
+  List<List<KindleLine>> paragraphs, {
+  required double height,
+  required double lineHeight,
+  double paragraphSpacing = 0,
+  int orphans = 1,
+  int widows = 1,
+  List<bool>? keepWithNext,
+  List<bool>? breakBefore,
+  List<bool>? breakAfter,
+}) {
+  if (paragraphs.isEmpty) return const [];
+  final pageHeight = math.max(lineHeight, height);
+  final rowHeight = math.max(.001, lineHeight);
+  final orphanCount = orphans.clamp(1, 15).toInt();
+  final widowCount = widows.clamp(1, 15).toInt();
+  final pages = <KindlePage>[];
+  var current = <KindlePageLine>[];
+  var used = 0.0;
+
+  void finishPage() {
+    if (current.isNotEmpty) {
+      pages.add(KindlePage(List.unmodifiable(current)));
+      current = <KindlePageLine>[];
+      used = 0;
+    }
+  }
+
+  int capacity({required bool withSpacing}) {
+    final available = pageHeight - used - (withSpacing ? paragraphSpacing : 0);
+    return math.max(0, (available / rowHeight).floor());
+  }
+
+  for (var p = 0; p < paragraphs.length; p++) {
+    final lines = paragraphs[p];
+    if (lines.isEmpty) continue;
+    if (breakBefore != null && p < breakBefore.length && breakBefore[p]) {
+      finishPage();
+    }
+    if (keepWithNext != null &&
+        p > 0 &&
+        p - 1 < keepWithNext.length &&
+        keepWithNext[p - 1] &&
+        current.isNotEmpty &&
+        capacity(withSpacing: true) < lines.length) {
+      finishPage();
+    }
+    var offset = 0;
+    while (offset < lines.length) {
+      final spacing = current.isEmpty ? 0.0 : paragraphSpacing;
+      var room = capacity(withSpacing: spacing > 0);
+      if (room < math.min(orphanCount, lines.length - offset)) {
+        finishPage();
+        room = capacity(withSpacing: false);
+      }
+      if (room <= 0) {
+        finishPage();
+        room = capacity(withSpacing: false);
+      }
+      final remaining = lines.length - offset;
+      var take = math.min(room, remaining).toInt();
+      if (take < remaining && remaining - take < widowCount) {
+        final reduced = remaining - widowCount;
+        if (reduced >= math.min(orphanCount, remaining) && reduced > 0) {
+          take = reduced;
+        } else {
+          finishPage();
+          continue;
+        }
+      }
+      if (take <= 0) {
+        finishPage();
+        continue;
+      }
+      if (spacing > 0) used += spacing;
+      for (var line = 0; line < take; line++) {
+        current.add(KindlePageLine(p, offset + line));
+      }
+      used += take * rowHeight;
+      offset += take;
+      if (offset < lines.length) finishPage();
+    }
+    if (breakAfter != null && p < breakAfter.length && breakAfter[p]) {
+      finishPage();
+    }
+  }
+  finishPage();
+  return List.unmodifiable(pages);
+}
+
 /// 一行：原文 UTF-16 区间 [start, end)，[spacing] 为这一行每个字符（按码点）后面要加的字距（像素，可为负）。
 class KindleLine {
   const KindleLine(this.start, this.end, this.spacing);
@@ -108,6 +705,7 @@ List<KindleLine> kindleLines(
 }) {
   final runes = text.runes.toList();
   if (runes.isEmpty) return const [];
+  final profile = kindleLayoutProfile(engine);
   final offsets = <int>[];
   var o = 0;
   for (final r in runes) {
@@ -121,12 +719,11 @@ List<KindleLine> kindleLines(
   final quote = [for (final r in runes) kindleQuotes.runes.contains(r)];
   final base = [
     for (var i = 0; i < n; i++)
-      quote[i] || kindleFullWidthMarks.runes.contains(runes[i])
-          ? em
-          : drawn[i],
+      quote[i] || kindleFullWidthMarks.runes.contains(runes[i]) ? em : drawn[i],
   ];
   bool full(int i) =>
-      quote[i] || kindleFullWidthMarks.runes.contains(runes[i]) ||
+      quote[i] ||
+      kindleFullWidthMarks.runes.contains(runes[i]) ||
       base[i] >= em * .9;
   // 后置标点（后来含后置引号）。
   final closing = [for (final r in runes) kindleClosingAll.runes.contains(r)];
@@ -135,9 +732,13 @@ List<KindleLine> kindleLines(
   for (var i = 0; i < n; i++) {
     final c = runes[i];
     final next = i + 1 < n ? runes[i + 1] : -1;
+    final pair = next >= 0 ? kindlePairDescriptor(c, next) : null;
     if (closing[i] &&
         full(i) &&
         next >= 0 &&
+        pair != null &&
+        pair.left == 0 &&
+        pair.right == 0 &&
         (kindleClosingAll.runes.contains(next) ||
             kindleOpening.runes.contains(next))) {
       adjust[i] -= em / 2;
@@ -150,8 +751,11 @@ List<KindleLine> kindleLines(
       // 前置标点的左半边去掉：等于前一个字少占半个字宽。
       adjust[i - 1] -= em / 2;
     }
-    if (next >= 0 && ((_han(c) && _latin(next)) || (_latin(c) && _han(next)))) {
-      adjust[i] += em * .075;
+    if (next >= 0 &&
+        pair != null &&
+        ((pair.left == 19 && pair.right == 2) ||
+            (pair.left == 2 && pair.right == 19))) {
+      adjust[i] += kindleDescriptorWidth19(em, 0);
     }
   }
   // 行末只占半个字宽（相邻挤压已经减过的不再减）。
@@ -163,6 +767,7 @@ List<KindleLine> kindleLines(
     final a = runes[i - 1], b = runes[i];
     if (kindleNoStart.contains(b) || kindleNoEnd.contains(a)) return false;
     if (a == b && (a == 0x2014 || a == 0x2026)) return false;
+    if (!profile.allowEllipsisAtLineStart && b == 0x2026) return false;
     if (_latin(a) && _latin(b)) return false;
     // 西文单词内部（字母后接撇号、连字符等）由上面的禁则处理；空格后可断。
     return true;
@@ -183,17 +788,32 @@ List<KindleLine> kindleLines(
       final natural = used - endCut(i) - (adjust[i] > 0 ? adjust[i] : 0);
       // 固件候选扫描用 float32 宽度差再以 double 比较 0.001；使用 .01
       // 会把临界的 1016.4/1016 版心误判成同一条候选链。
-      if (natural - avail >= .001) {
+      final naturalF32 = _f32(natural);
+      if (naturalF32 - _f32(avail) >= profile.breakTolerance) {
         break;
       }
       if (end == n || breakable(end)) {
-        if (engine == KindleLineEngine.kpw5 ||
-            engine == KindleLineEngine.modern) {
+        if (profile.scoredCandidates) {
           // KPW5 与新组比较器先按候选的伸缩评分绝对值比较；对普通 CJK 行，
           // 评分单调等价于选最接近版心的候选。和固件一样，同分时
           // 后遍历到的候选胜出。
-          final distance = (avail - natural).abs();
-          if (distance <= bestDistance + 1e-9) {
+          final q = em == 0 ? 0.0 : _f32((avail - naturalF32) / em);
+          // 描述符 19 的曲线参与同分比较。其权重只用于消除浮点同分，
+          // 不改变普通 CJK 行的主排序。
+          final descriptorScore = _kindleCandidateDescriptorScore(
+            runes,
+            start,
+            end,
+            em,
+            q,
+          );
+          final distance = _f32(
+            (avail - naturalF32).abs() + descriptorScore.abs() * 1e-6,
+          );
+          final improves =
+              distance < bestDistance - 1e-7 ||
+              (profile.tieBreakLast && distance <= bestDistance + 1e-7);
+          if (improves) {
             best = end;
             bestDistance = distance;
           }
