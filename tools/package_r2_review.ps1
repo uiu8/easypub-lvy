@@ -52,6 +52,12 @@ $bokaiVersion = & $bokai --version
 if ($LASTEXITCODE -ne 0 -or $bokaiVersion -notmatch '^bokai 0\.2\.0') { throw 'Bokai版本不符合固定引擎。' }
 New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
 Copy-Item -LiteralPath $source -Destination $staging -Recurse
+# Release 目录可能被本地更新器使用过，里面的 .update 是运行时工作目录，
+# 不能进入发布包：更新器解压时会明确拒绝这个保留目录。
+$runtimeUpdateDir = Join-Path $staging '.update'
+if (Test-Path -LiteralPath $runtimeUpdateDir) {
+  Remove-Item -LiteralPath $runtimeUpdateDir -Recurse -Force
+}
 # Kindling is a separate source/build workspace; never copy its target directory
 # (or its source tree) wholesale into a portable application.
 $thirdPartyDestination = Join-Path $staging 'third_party'
@@ -122,6 +128,10 @@ $versionInfo = [ordered]@{
 
 if ($completionAccepted) { Copy-Item -LiteralPath $completionPath -Destination (Join-Path $staging 'completion-acceptance.json') }
 $files = @(Get-ChildItem -LiteralPath $staging -Recurse -File)
+$runtimeFiles = @($files | Where-Object {
+  $_.FullName.Substring($staging.Length + 1).Replace('\','/') -like '.update/*'
+})
+if ($runtimeFiles.Count -gt 0) { throw '发布包意外包含 .update 运行时目录。' }
 $manifest = [ordered]@{
   package_name = $PackageName
   created_at = (Get-Date).ToString('o')

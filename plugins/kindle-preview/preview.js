@@ -588,8 +588,10 @@ function layout(keepRatio) {
     strictKfx ? 'html [data-ep-kfx-justify]{width:calc(100% + 0.08em)!important}' : '',
     kfx ? 'html .ep-adj{letter-spacing:-0.5em!important}html .ep-adjs{display:none!important}'
       + 'html .ep-oa{margin-left:-0.5em!important}html .ep-cl{letter-spacing:' + (0.075 + (m.tracking || 0)) + 'em!important}' : '',
-    // 真机允许段落只有一行留在页底或页顶（第四章首页实测），浏览器默认至少两行。
-    kfx && !S.original ? 'body *{orphans:1;widows:1}' : '',
+    // 新 KFX 管线允许段落只有一行留在页底或页顶（C02 第 6 段首行实测）。
+    // 这条规则与“原书排版/软件排版”无关；原书排版也必须复现 Kindle 的分页，
+    // 否则浏览器默认 widows:2 会把整段推到下一页。旧管线继续保留原书行为。
+    strictKfx ? 'body *{orphans:1;widows:1}' : '',
   ].join('\n');
   // 导入的字体异步载入：载入后按新字宽重新分页一次。
   if (user && doc.__epUser !== user.id) {
