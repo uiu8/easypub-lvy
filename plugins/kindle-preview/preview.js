@@ -207,8 +207,11 @@ const QUOTES = '“”‘’';
 // 前置标点（引号、括号）前面是全角空格或另一个前置标点时占半个字宽。
 const CLOSING_ALL = CLOSING + '”’';
 const OPENING = '“‘「『（《【〈';
+// 固件候选断点的两端禁则。浏览器的 line-break:strict 只覆盖一部分
+// CJK 标点，原书 CSS 还可能把它覆盖掉，所以要把真正不允许的相邻字符
+// 包成一个不可拆分的小组，再交给浏览器分页。
 const NO_END = new Set(['(', '/', '<', '[', '{', '‘', '“', '〈', '《', '「', '『', '【', '〔', '〖', '（', '［', '｛']);
-const NO_START = new Set(['!', ')', ',', '-', '.', '/', ':', ';', '>', '?', ']', '}', '~', '·', '–', '—', '’', '”', '•', '‧', '‼', '⁇', '、', '。', '〉', '》', '」', '』', '】', '〔', '〕', '〗', '〉', '」', '』', '〉', '！', '）', '，', '．', '／', '：', '；', '？', '］', '｝', '～']);
+const NO_START = new Set(['!', ')', ',', '-', '.', '/', ':', ';', '>', '?', ']', '}', '~', '·', '–', '—', '’', '”', '•', '‧', '‼', '⁇', '、', '。', '〉', '》', '」', '』', '】', '〔', '〕', '〗', '〉', '」', '』', '〉', '！', '）', '，', '．', '／', '：', '；', '？', '］', '｝', '～', '…']);
 // 中文与西文字母、数字相邻处多 0.075 个字宽（固件间距描述 19；KPW5 真机“1890年”的“0”与“年”之间实测 9 像素，
 // 不加为 5.2、加上为 8.8）。只认汉字、假名与 ASCII 字母数字。
 const HAN = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
@@ -242,12 +245,12 @@ function kindleTypography(doc) {
   };
   all.forEach((node, k) => {
     const chars = [...node.data];
+    if (!chars.some(special)) return;
     // 同一段落里前一个、后一个文字节点的末字与首字（跨元素）。
     let before = '';
     for (let m = k - 1; m >= 0 && blocks[m] === blocks[k] && !before; m--) before = [...all[m].data].pop() || '';
     let after = '';
     for (let m = k + 1; m < all.length && blocks[m] === blocks[k] && !after; m++) after = all[m].data[0] || '';
-    if (!chars.some(special)) return;
     const frag = doc.createDocumentFragment();
     let plain = '';
     const flush = () => {
@@ -272,7 +275,7 @@ function kindleTypography(doc) {
         frag.appendChild(span(cls.join(' '), ch));
         // 后置引号后面跟一个半宽空格（同句号）：行中合起来一个字宽，行末空格去掉后只剩半宽。
         if (close && !adjacent) frag.appendChild(span('ep-qs', ' '));
-      } else if (ch === '\u2026' && prev !== '' && kindleBreakable(prev, ch) && !OPENING.includes(prev)) {
+      } else if (ch === '\u2026' && prev !== '' && prev !== '\u2026' && !OPENING.includes(prev)) {
         // 省略号可以放在行首（KPW5 宋体实测一行以“……您是怎么”开头）；浏览器不在省略号前断行，
         // 前面放一个零宽空格。两个省略号之间仍不断开。只在 KFX 规则下生效。
         flush();
@@ -294,11 +297,56 @@ function kindleTypography(doc) {
   });
 }
 
-function kindleBreakable(a, b) {
-  if (NO_START.has(b) || NO_END.has(a)) return false;
-  if (a === b && (a === '—' || a === '…')) return false;
-  if (LATIN.test(a) && LATIN.test(b)) return false;
-  return true;
+// 在原书排版链路里，候选断点必须先于浏览器的自然断行确定。
+// 这里只包住固件明确禁止的边界，不改普通汉字之间的候选，也不把
+// 英文单词切成成对 span，避免改变正常字宽和两端对齐。
+function kindleCandidateBoundaries(doc) {
+  if (doc.__easypubCandidates || !doc.body) return;
+  doc.__easypubCandidates = true;
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.parentElement && n.parentElement.closest('rt,rp,script,style,svg,.ep-k'))
+      ? NodeFilter.FILTER_REJECT
+      : NodeFilter.FILTER_ACCEPT,
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach((node) => {
+    const chars = [...node.data];
+    let hasForbidden = false;
+    for (let i = 0; i + 1 < chars.length; i++) {
+      if (NO_START.has(chars[i + 1]) || NO_END.has(chars[i])
+        || (chars[i] === chars[i + 1] && (chars[i] === '—' || chars[i] === '…'))) {
+        hasForbidden = true;
+        break;
+      }
+    }
+    if (!hasForbidden) return;
+    const frag = doc.createDocumentFragment();
+    let plain = '';
+    const flush = () => {
+      if (plain) frag.appendChild(doc.createTextNode(plain));
+      plain = '';
+    };
+    for (let i = 0; i < chars.length; i++) {
+      const next = chars[i + 1];
+      const forbidden = next && (NO_START.has(next) || NO_END.has(chars[i])
+        || (chars[i] === next && (chars[i] === '—' || chars[i] === '…')));
+      if (forbidden) {
+        flush();
+        const keep = doc.createElementNS(XHTML, 'span');
+        keep.setAttribute('class', 'ep-k');
+        let end = i + 1;
+        while (end + 1 < chars.length && NO_START.has(chars[end + 1])) end++;
+        keep.textContent = chars.slice(i, end + 1).join('');
+        frag.appendChild(keep);
+        i = end;
+      } else {
+        plain += chars[i];
+      }
+    }
+    flush();
+    node.replaceWith(frag);
+  });
 }
 
 // 书内 CSS 的 px 换算到屏幕像素：KPW5 上 1px 画成 300/160 个像素（标题内边距与下框实测）。
@@ -521,8 +569,9 @@ function layout(keepRatio) {
   const vertical = getComputedStyle(doc.documentElement).writingMode.startsWith('vertical');
   S.vertical = vertical;
   const m = S.metrics;
-  // 固件组别只改变候选断点管线，不改变 EPUB 原文。各已知固件组都使用
-  // 固件中文禁则；未知设备保留浏览器默认行为。
+  // 固件组别只改变候选断点管线，不改变 EPUB 原文。新组使用严格的 CJK
+  // 标点边界；旧 ARM 管线保留浏览器默认的自动断行。普通汉字之间仍交给
+  // 版心和字体度量决定，避免把 break-all 错套到 C02 这类正文上。
   doc.documentElement.setAttribute('data-ep-engine', m.engineGroup || 'legacy');
   const font = readerFont();
   const user = userFont();
@@ -530,13 +579,20 @@ function layout(keepRatio) {
   markKai(doc);
   keywordFontSizes(doc);
   scaleCssPixels(doc, m.cssPx || 1);
+  kindleCandidateBoundaries(doc);
   kindleTypography(doc);
   const kfx = !!m.justify;
-  // 已知旧管线与新管线都使用同一套中文左右禁则；只有 KPW5/新组
-  // 的分页器确认允许段首/段尾只留一行。
-  const strictLineBreaks = m.engineGroup !== 'legacy';
-  const allowSingleLineWidows =
-    m.engineGroup === 'kpw5' || m.engineGroup === 'modern';
+  const strictKfx = m.engineGroup === 'modern' || m.engineGroup === 'kpw5';
+  if (strictKfx) {
+    // 固件的候选比较器会把两端对齐的候选行按伸缩评分再比较，
+    // 不是简单地按浏览器的自然宽度截断。给这类块留下一个很小的
+    // 候选余量；左对齐的 START 说明页不参与，所以不会改变其断行。
+    for (const el of doc.querySelectorAll('p,li,blockquote')) {
+      if (getComputedStyle(el).textAlign === 'justify') {
+        el.setAttribute('data-ep-kfx-justify', '');
+      }
+    }
+  }
   // 正文按列分页：横排的列向右排、竖排的列向下排；每页一列。
   style.textContent = [
     user ? '@font-face{font-family:"EPUser-' + user.id + '";src:url("' + new URL('fonts/' + user.file, location.href) + '")}' : '',
@@ -547,7 +603,7 @@ function layout(keepRatio) {
       + 'column-fill:auto!important;' + (vertical
         ? 'width:' + a.width + 'px!important;height:auto!important;column-width:' + a.height + 'px!important}'
         : 'height:' + h + 'px!important;width:auto!important;column-width:' + a.width + 'px!important}'),
-    strictLineBreaks
+    (m.engineGroup === 'modern' || m.engineGroup === 'kpw5')
       ? 'html{line-break:strict;word-break:normal;overflow-wrap:normal}'
       : 'html{line-break:auto}',
     // 真机规则（KPW5）：阅读器行间距只乘到正文上，标题保留书里写的行高。
@@ -570,9 +626,9 @@ function layout(keepRatio) {
     // 书里嵌入的字体与导入的字体只有一种字重：Kindle 不会伪加粗，标题仍是常规体（KPW5 实测）。
     font ? '' : '[data-ep-emb]{font-synthesis:none!important}',
     user ? 'body,body *{font-synthesis:none!important}' : '',
-    // 标点字形保留可见 advance，布局宽度取半个字；后面的辅助空格把
-    // 行中总宽补回一个字，行尾空格由浏览器折叠后自然只剩半宽。
-    'html .ep-p{display:inline-block!important;width:.5em!important;letter-spacing:0!important;overflow:visible!important}',
+    // 用负字距而不是负外边距：负外边距加行末空格时，浏览器断行仍按整字宽计算。
+    'html .ep-p{letter-spacing:-0.5em!important}',
+    'html .ep-k{white-space:nowrap!important}',
     'html .ep-s{word-spacing:var(--ep-ws,0)!important}',
     vertical || kfx ? '' : 'html .ep-q{font-family:"Segoe UI",Arial,sans-serif!important}',
     // 相邻标点挤压（KPW5）：前一个后置标点只占半个字宽；缩进后的前置引号去掉左半边。
@@ -584,14 +640,17 @@ function layout(keepRatio) {
       + 'html .ep-q' + k + '.ep-qc,html .ep-q' + k + '.ep-qa{letter-spacing:calc(var(--ep-q' + k + ',0) - 0.5em)!important}').join('')
       + 'html .ep-qs{word-spacing:var(--ep-ws,0)!important}'
       : 'html .ep-qs,html .ep-br{display:none!important}',
-    // ep-s 不再按管线隐藏；它是行中恢复一个整字宽、行尾保留半宽的必要部分。
-    'html .ep-p,html .ep-s{white-space:nowrap!important}',
-    kfx ? 'html .ep-adj{width:.5em!important;letter-spacing:0!important}html .ep-adjs{display:none!important}'
+    // KPW5/新 KFX 管线的后置标点在行中直接按固件的半宽压缩处理。
+    // 额外的空格若保留为可参与两端对齐的文本节点，会被 Chromium 再拉宽，
+    // 使 START 少一个字、C02 多出一行；旧管线继续保留原来的近似行为。
+    strictKfx ? 'html .ep-s,html .ep-qs{display:none!important}' : '',
+    strictKfx ? 'html [data-ep-kfx-justify]{width:calc(100% + 0.08em)!important}' : '',
+    kfx ? 'html .ep-adj{letter-spacing:-0.5em!important}html .ep-adjs{display:none!important}'
       + 'html .ep-oa{margin-left:-0.5em!important}html .ep-cl{letter-spacing:' + (0.075 + (m.tracking || 0)) + 'em!important}' : '',
     // 新 KFX 管线允许段落只有一行留在页底或页顶（C02 第 6 段首行实测）。
     // 这条规则与“原书排版/软件排版”无关；原书排版也必须复现 Kindle 的分页，
     // 否则浏览器默认 widows:2 会把整段推到下一页。旧管线继续保留原书行为。
-    allowSingleLineWidows ? 'body *{orphans:1;widows:1}' : '',
+    strictKfx ? 'body *{orphans:1;widows:1}' : '',
   ].join('\n');
   // 导入的字体异步载入：载入后按新字宽重新分页一次。
   if (user && doc.__epUser !== user.id) {
