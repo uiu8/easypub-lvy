@@ -130,6 +130,27 @@ void main() {
     expect(lines.last.spacing.last, -.5);
   });
 
+  test('按固件二进制分组旧管线，窄字体标点仍按整字候选宽度', () {
+    expect(kindleEngineGroupForDevice('voyage'), 'legacy-voyage');
+    expect(kindleEngineGroupForDevice('kpw3'), 'legacy-kpw3');
+    expect(kindleEngineGroupForDevice('oasis2'), 'legacy-kpw3');
+    expect(kindleEngineGroupForDevice('kpw4'), 'legacy-kpw4');
+    expect(kindleEngineGroupForDevice('basic10'), 'legacy-kpw4');
+    expect(kindleEngineGroupForDevice('kpw5'), 'kpw5');
+    expect(kindleEngineGroupForDevice('kpw6'), 'modern');
+    final lines = kindleLines(
+      '甲乙丙丁九，十',
+      width: 5.0,
+      em: 1,
+      advance: (c) => c == 0xFF0C ? .45 : 1,
+      engine: KindleLineEngine.legacyKpw4,
+    );
+    expect(lines.map((line) => '甲乙丙丁九，十'.substring(line.start, line.end)), [
+      '甲乙丙丁',
+      '九，十',
+    ]);
+  });
+
   testWidgets('小预览、排版视图按同一模型断行：Flutter 不再另行折行；首字放大、诗句仍交给 Flutter', (t) async {
     const body = TextStyle(fontSize: 64, height: 1.5);
     const style = PreviewStyle(

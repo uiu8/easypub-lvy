@@ -16,14 +16,23 @@ import 'dart:math' as math;
 
 /// 固件排版管线分组。
 ///
-/// KPW5、Basic 11 与 Oasis 3 的候选比较器和宽度评分核心相同；KPW6、
-/// Colorsoft、Scribe 在此基础上增加了新的候选标记/回退阶段；Voyage 是
-/// 旧的 ARM 软浮点管线，不能把新组的回退规则套过去。
-enum KindleLineEngine { legacy, kpw5, modern }
+/// 固件排版管线。旧设备虽然共用中文字符表，但候选扫描器不是同一个：
+/// Voyage、KPW3/Oasis1/2、KPW4/Basic10 分别对应三套旧实现。
+enum KindleLineEngine {
+  legacy,
+  legacyVoyage,
+  legacyKpw3,
+  legacyKpw4,
+  kpw5,
+  modern,
+}
 
 KindleLineEngine kindleLineEngineForDevice(String id) => switch (id) {
   'kpw6' || 'colorsoft' || 'scribe' => KindleLineEngine.modern,
   'kpw5' || 'basic11' || 'oasis3' => KindleLineEngine.kpw5,
+  'voyage' => KindleLineEngine.legacyVoyage,
+  'kpw3' || 'oasis1' || 'oasis2' => KindleLineEngine.legacyKpw3,
+  'kpw4' || 'basic10' => KindleLineEngine.legacyKpw4,
   _ => KindleLineEngine.legacy,
 };
 
@@ -32,6 +41,9 @@ String kindleEngineGroupForDevice(String id) => switch (
 ) {
   KindleLineEngine.modern => 'modern',
   KindleLineEngine.kpw5 => 'kpw5',
+  KindleLineEngine.legacyVoyage => 'legacy-voyage',
+  KindleLineEngine.legacyKpw3 => 'legacy-kpw3',
+  KindleLineEngine.legacyKpw4 => 'legacy-kpw4',
   KindleLineEngine.legacy => 'legacy',
 };
 
@@ -46,6 +58,10 @@ const kindleQuotes = '“”‘’';
 
 /// 前置标点。
 const kindleOpening = '“‘「『（《【〈';
+
+/// 固件按整字处理的中文标点。不能使用字体实际 advance 判定是否“全角”，
+/// 否则苹方的窄字形会把同一候选链错误地当成半角。
+const kindleFullWidthMarks = '$kindleClosing$kindleOpening$kindleQuotes';
 
 /// 固件左侧禁则（不能放在行末）：0028 002F 003C 005B 007B 2018 201C 3008 300A 300C 300E 3010 3014 3016 FF08 FF3B FF5B。
 final kindleNoEnd = Set<int>.unmodifiable(const [
@@ -103,9 +119,15 @@ List<KindleLine> kindleLines(
   // 弯引号按一个字宽排；画的时候字体里的实际宽度与一个字宽之差补进字距（drawFix）。
   final drawn = [for (final r in runes) advance(r)];
   final quote = [for (final r in runes) kindleQuotes.runes.contains(r)];
-  final base = [for (var i = 0; i < n; i++) quote[i] ? em : drawn[i]];
-  // 全角标点才挤压：比例宽度的字体里本来就窄的不再减。
-  bool full(int i) => base[i] >= em * .9;
+  final base = [
+    for (var i = 0; i < n; i++)
+      quote[i] || kindleFullWidthMarks.runes.contains(runes[i])
+          ? em
+          : drawn[i],
+  ];
+  bool full(int i) =>
+      quote[i] || kindleFullWidthMarks.runes.contains(runes[i]) ||
+      base[i] >= em * .9;
   // 后置标点（后来含后置引号）。
   final closing = [for (final r in runes) kindleClosingAll.runes.contains(r)];
   // 行中的固定调整：相邻后置标点、段首或连续的前置标点、汉字与西文间距。
@@ -158,15 +180,18 @@ List<KindleLine> kindleLines(
     for (; i < n; i++) {
       used += base[i] + adjust[i];
       final end = i + 1;
-      if (used - endCut(i) - (adjust[i] > 0 ? adjust[i] : 0) > avail + .01) {
+      final natural = used - endCut(i) - (adjust[i] > 0 ? adjust[i] : 0);
+      // 固件候选扫描用 float32 宽度差再以 double 比较 0.001；使用 .01
+      // 会把临界的 1016.4/1016 版心误判成同一条候选链。
+      if (natural - avail >= .001) {
         break;
       }
       if (end == n || breakable(end)) {
-        if (engine != KindleLineEngine.legacy) {
+        if (engine == KindleLineEngine.kpw5 ||
+            engine == KindleLineEngine.modern) {
           // KPW5 与新组比较器先按候选的伸缩评分绝对值比较；对普通 CJK 行，
           // 评分单调等价于选最接近版心的候选。和固件一样，同分时
           // 后遍历到的候选胜出。
-          final natural = used - endCut(i) - (adjust[i] > 0 ? adjust[i] : 0);
           final distance = (avail - natural).abs();
           if (distance <= bestDistance + 1e-9) {
             best = end;
