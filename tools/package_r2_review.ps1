@@ -261,18 +261,52 @@ $psi.Environment['EASYPUB_WINDOW_STATE'] = 'ignore'
 $psi.Environment['LOCALAPPDATA'] = Join-Path $verify 'smoke-user-data'
 $process = [Diagnostics.Process]::Start($psi)
 $ownedId = $process.Id
+if (-not ('EasyPubPackageWin32' -as [type])) {
+  Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class EasyPubPackageWin32 {
+  public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc lpEnumFunc, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder sb, int max);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+  public static IntPtr FindFlutterWindow(int targetPid) {
+    IntPtr found = IntPtr.Zero;
+    EnumWindows((h, l) => {
+      uint pid; GetWindowThreadProcessId(h, out pid);
+      if (pid == (uint)targetPid) {
+        var sb = new StringBuilder(128);
+        GetClassName(h, sb, sb.Capacity);
+        if (sb.ToString() == "FLUTTER_RUNNER_WIN32_WINDOW") { found = h; return false; }
+      }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
+}
+"@
+}
 $windowFound = $false
+$flutterWindow = [IntPtr]::Zero
 $forcedExit = $false
 $exitCode = $null
 try {
   for ($i = 0; $i -lt 80; $i++) {
     Start-Sleep -Milliseconds 100
     $process.Refresh()
+    $flutterWindow = [EasyPubPackageWin32]::FindFlutterWindow($ownedId)
+    if ($flutterWindow -ne [IntPtr]::Zero) { $windowFound = $true; break }
     if ($process.MainWindowHandle -ne [IntPtr]::Zero) { $windowFound = $true; break }
   }
 } finally {
   if ($process -and -not $process.HasExited) {
-    $process.CloseMainWindow() | Out-Null
+    if ($flutterWindow -ne [IntPtr]::Zero) {
+      [EasyPubPackageWin32]::PostMessage($flutterWindow, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+    } else {
+      $process.CloseMainWindow() | Out-Null
+    }
     if (-not $process.WaitForExit(5000)) {
       $forcedExit = $true
       $process.Kill($true)

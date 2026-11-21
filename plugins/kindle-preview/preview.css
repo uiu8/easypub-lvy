@@ -41,7 +41,7 @@ main { flex: 1; display: flex; min-height: 0; }
 #page-head, #page-foot { position: absolute; left: 0; right: 0; font-size: 9px; color: #3E3C38;
   font-family: "Microsoft YaHei UI", sans-serif; display: flex; justify-content: center; align-items: center; }
 #page-foot { justify-content: space-between; }
-/* 按屏幕像素排版的机型（KPW5）：页脚按真机截图的位置与字号。 */
+/* 屏幕像素排版的机型：页脚字号随机型 PPI 缩放。 */
 #viewport.pixel #page-foot { font-size: calc(30px * var(--ppx, 1)); font-weight: 600; align-items: flex-end;
   padding-bottom: calc(18px * var(--ppx, 1)); box-sizing: border-box; }
 header.bar > button { border: 1px solid var(--line2); border-radius: 6px; background: var(--field); padding: 3px 10px; cursor: pointer; }

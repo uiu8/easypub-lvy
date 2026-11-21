@@ -359,9 +359,17 @@ function invalidateKindleLayoutCaches(doc) {
   doc.__epKindleFontGeneration = (doc.__epKindleFontGeneration || 0) + 1;
   for (const el of doc.querySelectorAll('[data-ep-kindle-lines]')) {
     if (el.__epKindleOriginalHTML !== undefined) el.innerHTML = el.__epKindleOriginalHTML;
+    if (el.__epKindleOriginalStyle === null) el.removeAttribute('style');
+    else if (el.__epKindleOriginalStyle !== undefined) el.setAttribute('style', el.__epKindleOriginalStyle);
     el.removeAttribute('data-ep-kindle-lines');
     delete el.__epKindleSource;
     delete el.__epKindleRuns;
+    delete el.__epKindleOriginalHTML;
+    delete el.__epKindleOriginalStyle;
+    delete el.__epKindleIndent;
+    delete el.__epKindleBreakInside;
+    delete el.__epKindlePageBreakBefore;
+    delete el.__epKindlePageBreakAfter;
   }
   delete doc.__epKindleFontsReady;
   delete doc.__epKindleFontsWaiting;
@@ -425,6 +433,9 @@ function kindleLayoutBlocks(doc, metrics, contentWidth) {
     // and painting. Original padding/width rules were the source of right-edge
     // clipping after a reader-size change.
     const sourceStyle = getComputedStyle(el);
+    if (el.__epKindleOriginalStyle === undefined) {
+      el.__epKindleOriginalStyle = el.getAttribute('style');
+    }
     if (el.__epKindleIndent === undefined) {
       el.__epKindleIndent = Math.max(0, parseFloat(sourceStyle.textIndent) || 0);
     }
@@ -577,7 +588,7 @@ function kindlePaginationState(doc, metrics, pageHeight) {
       + (Number.parseFloat(style.paddingBottom) || 0);
     return Math.max(top, bottom);
   });
-  const pages = core.paginateLines(groups, {
+  const paginationOptions = {
     height: Math.max(1, Number(pageHeight) || 1),
     lineHeight,
     paragraphSpacing,
@@ -592,7 +603,12 @@ function kindlePaginationState(doc, metrics, pageHeight) {
       || pageBreak(element, 'pageBreakBefore')),
     breakAfter: groupElements.map((element) => pageBreak(element, 'breakAfter')
       || pageBreak(element, 'pageBreakAfter')),
-  });
+    };
+  const paginated = core.paginateLinesDetailed
+    ? core.paginateLinesDetailed(groups, paginationOptions)
+    : { pages: core.paginateLines(groups, paginationOptions), events: [], state: 'legacy' };
+  doc.__epKindlePagination = paginated;
+  const pages = paginated.pages;
   for (const page of pages) {
     const first = page[0];
     const row = groupRows[first.paragraph]?.[first.line];
@@ -770,7 +786,7 @@ function area() {
   const extra = S.metrics.unitsVersion === 1 ? S.metrics.bookMargins : {};
   const p = Object.fromEntries(['left','right','top','bottom'].map(k=>[k, original[k]+(extra[k]||0)]));
   return {
-    left: p.left, top: p.top,
+    left: p.left, top: p.top, right: p.right, bottom: p.bottom,
     // Keep the logical Kindle area fractional until the final browser raster.
     // Rounding the width here while centering with the unrounded padding made
     // the right edge one pixel different from the left edge at smaller sizes.
@@ -813,10 +829,11 @@ function layout(keepRatio) {
   Object.assign(frame.style, { left: a.left + 'px', top: a.top + 'px', width: a.width + 'px', height: h + 'px' });
   Object.assign($('page-head').style, { top: '0px', height: a.top + 'px' });
   Object.assign($('page-foot').style, {
-    bottom: '0px', height: (S.device.viewportHeight - a.top - a.height) + 'px',
-    // 按屏幕像素排版时页脚文字离屏幕左右各约 81 像素（KPW5 真机截图）。
-    paddingLeft: ($('viewport').classList.contains('pixel') ? 81 * S.device.ppi / 300 : a.left) + 'px',
-    paddingRight: ($('viewport').classList.contains('pixel') ? 81 * S.device.ppi / 300 : a.left) + 'px',
+    bottom: '0px', height: a.bottom + 'px',
+    // 页脚沿用同一组固件内容边缘。不要把 KPW5 某张截图中的像素
+    // 坐标复制到其他分辨率，页脚和正文应共享版心的左右边界。
+    paddingLeft: a.left + 'px',
+    paddingRight: a.right + 'px',
   });
   let style = doc.getElementById('easypub-reader');
   if (!style) {
@@ -864,12 +881,12 @@ function layout(keepRatio) {
       : 'html{line-break:auto}',
     // 真机规则（KPW5）：阅读器行间距只乘到正文上，标题保留书里写的行高。
     // 标题里面的小块（标点挤压包出的 span 等）也不乘（标题带“：”“。”时整行被撑高约 24 像素）。
-    S.original ? '' : m.unitsVersion === 1 ? 'body{line-height:' + (S.draft.line_height_unit === 'number' || !S.draft.line_height_unit ? m.lineRatio : m.linePixels+'px') + '!important}' : (
+    m.unitsVersion === 1 ? 'body{line-height:' + (S.draft.line_height_unit === 'number' || !S.draft.line_height_unit ? m.lineRatio : m.linePixels+'px') + '!important}' : (
     (kfx ? 'body *:not(rt):not(:is(h1,h2,h3,h4,h5,h6,.heading,h1 *,h2 *,h3 *,h4 *,h5 *,h6 *,.heading *))' : 'body *:not(rt)')
       + '{line-height:' + m.lineRatio + '!important}'),
     // 真机规则（KPW5）：正文两端对齐；按取整后的字宽断行，用字距补齐。
-    m.justify && !S.original ? 'p{text-align:justify;text-justify:inter-character}' : '',
-    m.tracking && !S.original ? 'p{letter-spacing:' + m.tracking + 'em}' : '',
+    m.justify ? 'p{text-align:justify;text-justify:inter-character}' : '',
+    m.tracking ? 'p{letter-spacing:' + m.tracking + 'em}' : '',
     'img,svg{max-width:100%!important;max-height:' + a.height + 'px!important}',
     // 书里写了楷体的段落（书信、系统提示“细线楷体”等）保留楷体：KFX 真机上 STKai/楷体能显示。
     font ? 'body,body *:not(rt):not([data-ep-kai]){font-family:' + font + '!important}' : '',
@@ -889,7 +906,7 @@ function layout(keepRatio) {
     // 生成行已经包含了固件计算出的字距。清除原书段落和字符节点的
     // 继承字距，避免 CSS letter-spacing 与行模型的 marginRight 叠加。
     'html [data-ep-kindle-lines]{box-sizing:border-box!important;width:100%!important;margin-left:0!important;margin-right:0!important;padding-left:0!important;padding-right:0!important;break-inside:auto!important;orphans:1!important;widows:1!important}',
-    'html [data-ep-kindle-lines]>.ep-line{display:block!important;width:100%!important;box-sizing:border-box!important;overflow:visible!important;text-align:left!important;white-space:nowrap!important;letter-spacing:0!important}',
+    'html [data-ep-kindle-lines]>.ep-line{display:block!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important;overflow:hidden!important;text-align:left!important;white-space:nowrap!important;letter-spacing:0!important}',
     'html [data-ep-kindle-lines]>.ep-line>.ep-line-char{display:inline-block!important;white-space:pre!important;letter-spacing:0!important}',
     vertical || kfx ? '' : 'html .ep-q{font-family:"Segoe UI",Arial,sans-serif!important}',
     // 相邻标点挤压（KPW5）：前一个后置标点只占半个字宽；缩进后的前置引号去掉左半边。
@@ -960,17 +977,25 @@ function layout(keepRatio) {
     return;
   }
   // Quote and candidate normalization is shared by both preview sources.
-  // Only the software-layout source replaces paragraphs with generated rows.
-  // Original-layout pages keep their EPUB block structure so CSS margins,
-  // inline elements and explicit breaks cannot be duplicated by the row model.
+  // The source selector changes the loaded book values and UI label, while
+  // simple text blocks use the same firmware line and pagination model.
   kindleTypography(doc);
   kindleCandidateBoundaries(doc);
-  if (!S.original) {
-    // The row builder carries the measured quote compensation into the same
-    // line result used for painting.
-    kindleLayoutBlocks(doc, m, a.width);
-    kindlePaginationState(doc, m, h);
+  if (S.original) {
+    const multiplier = m.lineRatio / 1.2;
+    const paragraphs = [...doc.querySelectorAll('p,li,blockquote')];
+    for (const el of paragraphs) {
+      if (el.__epOriginalLine === undefined) {
+        const computed = getComputedStyle(el);
+        el.__epOriginalLine = parseFloat(computed.lineHeight) / parseFloat(computed.fontSize) || 1.2;
+      }
+      el.style.setProperty('line-height', String(el.__epOriginalLine * multiplier), 'important');
+    }
   }
+  // The row builder carries the measured quote compensation into the same
+  // line result used for painting for both preview sources.
+  kindleLayoutBlocks(doc, m, a.width);
+  kindlePaginationState(doc, m, h);
   // 导入的字体异步载入：载入后按新字宽重新分页一次。
   if (user && doc.__epUser !== user.id) {
     doc.__epUser = user.id;
@@ -982,19 +1007,6 @@ function layout(keepRatio) {
         }
       })
       .catch(() => status('导入的字体“' + user.name + '”无法显示，请换一个字体文件。', true));
-  }
-  if (S.original) {
-    const multiplier = m.lineRatio / 1.2;
-    const paragraphs = [...doc.querySelectorAll('p,li,blockquote')];
-    for (const el of paragraphs) {
-      if (el.__epOriginalLine === undefined) {
-        const computed = getComputedStyle(el);
-        el.__epOriginalLine = parseFloat(computed.lineHeight) / parseFloat(computed.fontSize) || 1.2;
-      }
-    }
-    for (const el of paragraphs) {
-      el.style.setProperty('line-height', String(el.__epOriginalLine * multiplier), 'important');
-    }
   }
   setHalfSpace(doc, vertical);
   const lead = vertical ? 0 : bodyLead(doc);

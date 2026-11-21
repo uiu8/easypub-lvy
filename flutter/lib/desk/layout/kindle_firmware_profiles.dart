@@ -28,7 +28,7 @@ class KindleFirmwareProfile {
   final List<double> cjkRampPt;
   final double screenFactor, verticalMarginPt, footerHeightPt;
 
-  /// 窄、中、宽；固件资源中的顺序为宽、中、窄。
+  /// 窄、中、宽。预览层已经把阅读器选项统一映射到这个顺序。
   final List<double> sideMarginPt;
 
   /// 小、中、大；不包含固件里未在本软件开放的额外档位。

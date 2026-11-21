@@ -139,10 +139,9 @@ const kindleOpening = '“‘「『（《【〈';
 
 /// 固件按整字处理的中文标点。不能使用字体实际 advance 判定是否“全角”，
 /// 否则苹方的窄字形会把同一候选链错误地当成半角。
-// KFX treats paired ellipses and em dashes as full-width CJK marks. Using
-// the font advance here shifts the P10 punctuation probe by one character.
-const kindleFullWidthMarks =
-    '$kindleClosing$kindleOpening$kindleQuotes—…';
+// Paired ellipses and em dashes are kept together by candidate scanning. Their
+// actual advance still comes from the selected font instance.
+const kindleFullWidthMarks = '$kindleClosing$kindleOpening$kindleQuotes';
 
 /// 固件左侧禁则（不能放在行末）：0028 002F 003C 005B 007B 2018 201C 3008 300A 300C 300E 3010 3014 3016 FF08 FF3B FF5B。
 final kindleNoEnd = Set<int>.unmodifiable(const [
@@ -540,6 +539,11 @@ double kindleDescriptorWidth(int descriptor, double scale, double q) {
   }
   final row = _descriptorWidths[descriptor - 1];
   final value = _f32(q);
+  // The ARM implementation treats +/-FLT_MAX as explicit chain sentinels.
+  // Do not extrapolate the last finite segment for those values.
+  if (value.abs() > 1e20) {
+    return _f32(scale * (value < 0 ? row.first : row[11]));
+  }
   if (value <= _descriptorScores.first) return _f32(scale * row.first);
   if (value >= _descriptorScores.last) {
     final i = _descriptorScores.length - 2;
@@ -573,21 +577,61 @@ double kindleDescriptorPairWidth(
       kindleDescriptorWidth(rightDescriptor, currentScale, q),
 );
 
-double _kindleCandidateDescriptorScore(
+double _kindleCandidateStretchScore(
   List<int> runes,
   int start,
   int end,
   double scale,
-  double q,
+  double target,
+  double base,
+  double tolerance,
 ) {
-  var score = 0.0;
-  for (var i = start; i + 1 < end; i++) {
-    final pair = kindlePairDescriptor(runes[i], runes[i + 1]);
-    score = _f32(
-      score + kindleDescriptorPairWidth(pair.left, pair.right, scale, scale, q),
-    );
+  final pairs = [
+    for (var i = start; i + 1 < end; i++)
+      kindlePairDescriptor(runes[i], runes[i + 1]),
+  ];
+  if (pairs.isEmpty) {
+    return (target - base).abs() < tolerance ? 0 : double.infinity;
   }
-  return score;
+  double at(double q) {
+    var value = 0.0;
+    for (final pair in pairs) {
+      value +=
+          kindleDescriptorPairWidth(pair.left, pair.right, scale, scale, q) -
+          kindleDescriptorPairWidth(pair.left, pair.right, scale, scale, 0);
+    }
+    return _f32(value);
+  }
+
+  final delta = _f32(target - base);
+  if (delta.abs() < tolerance || (at(0) - delta).abs() < tolerance) return 0;
+  const bound = 7.0;
+  if (delta < 0) {
+    if (at(-bound) > delta + tolerance) return -double.infinity;
+    var low = -bound;
+    var high = 0.0;
+    for (var i = 0; i < 28; i++) {
+      final mid = _f32((low + high) / 2);
+      if (at(mid) > delta) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    return _f32((low + high) / 2);
+  }
+  if (at(bound) < delta - tolerance) return double.infinity;
+  var low = 0.0;
+  var high = bound;
+  for (var i = 0; i < 28; i++) {
+    final mid = _f32((low + high) / 2);
+    if (at(mid) < delta) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  return _f32((low + high) / 2);
 }
 
 /// 分页后的行引用。paragraph/line 都是从 0 开始的索引。
@@ -604,6 +648,33 @@ class KindlePage {
   final List<KindlePageLine> lines;
 }
 
+/// 分页状态机的可观测转移。它让预览和排版视图使用同一套候选、回退、换区
+/// 过程，调试时也能区分“自然放满”与“孤行/寡行回退”。
+class KindlePaginationEvent {
+  const KindlePaginationEvent(
+    this.state, {
+    this.paragraph,
+    this.line,
+    this.from,
+    this.count,
+    this.reason,
+  });
+
+  final String state;
+  final int? paragraph;
+  final int? line;
+  final int? from;
+  final int? count;
+  final String? reason;
+}
+
+class KindlePaginationResult {
+  const KindlePaginationResult(this.pages, this.events);
+
+  final List<KindlePage> pages;
+  final List<KindlePaginationEvent> events;
+}
+
 /// 从固件管线取得分页默认值。旧管线的实际 orphans/widows 可能由 EPUB
 /// 样式覆盖，网页入口会把计算样式传给同一状态机。
 ({int orphans, int widows}) kindlePaginationDefaults(KindleLineEngine engine) {
@@ -616,7 +687,7 @@ class KindlePage {
 /// 这里的输入是同一段落已经经过 [kindleLines] 的行。状态机只决定行属于
 /// 哪一页，因此不会再次使用浏览器的 widows/orphans 默认值，也不会把
 /// `break-before`、`break-after` 交给 Chromium 自己解释。
-List<KindlePage> kindlePaginate(
+KindlePaginationResult kindlePaginateDetailed(
   List<List<KindleLine>> paragraphs, {
   required double height,
   required double lineHeight,
@@ -628,18 +699,20 @@ List<KindlePage> kindlePaginate(
   List<bool>? breakBefore,
   List<bool>? breakAfter,
 }) {
-  if (paragraphs.isEmpty) return const [];
+  if (paragraphs.isEmpty) return const KindlePaginationResult([], []);
   final pageHeight = math.max(lineHeight, height);
   final rowHeight = math.max(.001, lineHeight);
   final orphanCount = orphans.clamp(1, 15).toInt();
   final widowCount = widows.clamp(1, 15).toInt();
   final pages = <KindlePage>[];
+  final events = <KindlePaginationEvent>[];
   var current = <KindlePageLine>[];
   var used = 0.0;
 
-  void finishPage() {
+  void finishPage([String reason = 'capacity']) {
     if (current.isNotEmpty) {
       pages.add(KindlePage(List.unmodifiable(current)));
+      events.add(KindlePaginationEvent('next-region', reason: reason));
       current = <KindlePageLine>[];
       used = 0;
     }
@@ -660,7 +733,7 @@ List<KindlePage> kindlePaginate(
     final lines = paragraphs[p];
     if (lines.isEmpty) continue;
     if (breakBefore != null && p < breakBefore.length && breakBefore[p]) {
-      finishPage();
+      finishPage('break-before');
     }
     if (keepWithNext != null &&
         p > 0 &&
@@ -668,18 +741,21 @@ List<KindlePage> kindlePaginate(
         keepWithNext[p - 1] &&
         current.isNotEmpty &&
         capacity(spacing: spacingFor(p)) < lines.length) {
-      finishPage();
+      finishPage('keep-with-next');
     }
     var offset = 0;
     while (offset < lines.length) {
+      events.add(
+        KindlePaginationEvent('candidate', paragraph: p, line: offset),
+      );
       final spacing = current.isEmpty ? 0.0 : spacingFor(p);
       var room = capacity(spacing: spacing);
       if (room < math.min(orphanCount, lines.length - offset)) {
-        finishPage();
+        finishPage('orphan-rollback');
         room = capacity();
       }
       if (room <= 0) {
-        finishPage();
+        finishPage('empty-region');
         room = capacity();
       }
       final remaining = lines.length - offset;
@@ -689,7 +765,7 @@ List<KindlePage> kindlePaginate(
         if (reduced >= math.min(orphanCount, remaining) && reduced > 0) {
           take = reduced;
         } else {
-          finishPage();
+          finishPage('widow-rollback');
           continue;
         }
       }
@@ -702,16 +778,51 @@ List<KindlePage> kindlePaginate(
         current.add(KindlePageLine(p, offset + line));
       }
       used += take * rowHeight;
+      events.add(
+        KindlePaginationEvent(
+          'commit',
+          paragraph: p,
+          from: offset,
+          count: take,
+        ),
+      );
       offset += take;
-      if (offset < lines.length) finishPage();
+      if (offset < lines.length) finishPage('paragraph-overflow');
     }
     if (breakAfter != null && p < breakAfter.length && breakAfter[p]) {
-      finishPage();
+      finishPage('break-after');
     }
   }
   finishPage();
-  return List.unmodifiable(pages);
+  return KindlePaginationResult(
+    List.unmodifiable(pages),
+    List.unmodifiable(events),
+  );
 }
+
+List<KindlePage> kindlePaginate(
+  List<List<KindleLine>> paragraphs, {
+  required double height,
+  required double lineHeight,
+  double paragraphSpacing = 0,
+  List<double>? paragraphSpacings,
+  int orphans = 1,
+  int widows = 1,
+  List<bool>? keepWithNext,
+  List<bool>? breakBefore,
+  List<bool>? breakAfter,
+}) => kindlePaginateDetailed(
+  paragraphs,
+  height: height,
+  lineHeight: lineHeight,
+  paragraphSpacing: paragraphSpacing,
+  paragraphSpacings: paragraphSpacings,
+  orphans: orphans,
+  widows: widows,
+  keepWithNext: keepWithNext,
+  breakBefore: breakBefore,
+  breakAfter: breakAfter,
+).pages;
 
 /// 一行：原文 UTF-16 区间 [start, end)，[spacing] 为这一行每个字符（按码点）后面要加的字距（像素，可为负）。
 class KindleLine {
@@ -720,14 +831,16 @@ class KindleLine {
   final List<double> spacing;
 }
 
-/// 按 Kindle 规则把一段分成行。[advance] 为单个字符（码点）的宽度（已含正文字距）；
-/// [width] 为版心宽，[indent] 为首行缩进；[em] 为正文字号。[justify] 为 false 时不补两端对齐的字距。
+/// 按 Kindle 规则把一段分成行。[advance] 为单个字符（码点）的原始字形宽度；
+/// [tracking] 为固件字距，加入每个候选字符之间；[width] 为版心宽，
+/// [indent] 为首行缩进；[em] 为正文字号。[justify] 为 false 时不补两端对齐的字距。
 List<KindleLine> kindleLines(
   String text, {
   required double width,
   required double em,
   required double Function(int codePoint) advance,
   double indent = 0,
+  double tracking = 0,
   bool justify = true,
   KindleLineEngine engine = KindleLineEngine.kpw5,
 }) {
@@ -747,7 +860,10 @@ List<KindleLine> kindleLines(
   final quote = [for (final r in runes) kindleQuotes.runes.contains(r)];
   final base = [
     for (var i = 0; i < n; i++)
-      quote[i] || kindleFullWidthMarks.runes.contains(runes[i]) ? em : drawn[i],
+      (quote[i] || kindleFullWidthMarks.runes.contains(runes[i])
+              ? em
+              : drawn[i]) +
+          (i + 1 < n ? tracking : 0),
   ];
   bool full(int i) =>
       quote[i] ||
@@ -785,13 +901,6 @@ List<KindleLine> kindleLines(
             (pair.left == 2 && pair.right == 19))) {
       adjust[i] += kindleDescriptorWidth19(em, 0);
     }
-    // Paired em dashes and ellipses stay together in the firmware candidate
-    // chain and carry a small separation. This prevents an exact-width pair
-    // from being rounded into the next Kindle column.
-    if (next >= 0 && runes[i] == runes[i + 1] &&
-        (runes[i] == 0x2014 || runes[i] == 0x2026)) {
-      adjust[i] += em * .2;
-    }
   }
   // 行末只占半个字宽（相邻挤压已经减过的不再减）。
   double endCut(int last) =>
@@ -815,7 +924,7 @@ List<KindleLine> kindleLines(
     final avail = math.max(em, width - (firstLine ? indent : 0));
     var used = 0.0;
     var best = -1;
-    var bestDistance = double.infinity;
+    var bestScore = double.infinity;
     var i = start;
     for (; i < n; i++) {
       used += base[i] + adjust[i];
@@ -829,28 +938,25 @@ List<KindleLine> kindleLines(
       }
       if (end == n || breakable(end)) {
         if (profile.scoredCandidates) {
-          // KPW5 与新组比较器先按候选的伸缩评分绝对值比较；对普通 CJK 行，
-          // 评分单调等价于选最接近版心的候选。和固件一样，同分时
-          // 后遍历到的候选胜出。
-          final q = em == 0 ? 0.0 : _f32((avail - naturalF32) / em);
-          // 描述符 19 的曲线参与同分比较。其权重只用于消除浮点同分，
-          // 不改变普通 CJK 行的主排序。
-          final descriptorScore = _kindleCandidateDescriptorScore(
+          // 固件先用合并后的分段伸缩曲线把目标版心反算为评分，
+          // 再比较评分绝对值。同分时后扫描到的候选胜出。
+          final score = _kindleCandidateStretchScore(
             runes,
             start,
             end,
             em,
-            q,
-          );
-          final distance = _f32(
-            (avail - naturalF32).abs() + descriptorScore.abs() * 1e-6,
+            avail,
+            naturalF32,
+            profile.breakTolerance,
           );
           final improves =
-              distance < bestDistance - 1e-7 ||
-              (profile.tieBreakLast && distance <= bestDistance + 1e-7);
+              score.isFinite &&
+              (score.abs() < bestScore.abs() - 1e-7 ||
+                  (profile.tieBreakLast &&
+                      score.abs() <= bestScore.abs() + 1e-7));
           if (improves) {
             best = end;
-            bestDistance = distance;
+            bestScore = score;
           }
         } else {
           best = end;

@@ -272,7 +272,7 @@ class LegacyLibraryAdapter
       LegacyChapterRulesSession(_backend, bookId);
   @override
   bool get hasUnsavedChanges => _autosaveStarted
-      ? workspaceSave.value.phase != WorkspaceSavePhase.saved
+      ? (_autosave?.hasUnsavedChanges ?? false)
       : (_books.value.isNotEmpty || _backend.savedProjectIdentity != null) &&
             (_backend.savedProjectIdentity == null ||
                 _backend.savedProjectIdentity != _backend.projectIdentity);

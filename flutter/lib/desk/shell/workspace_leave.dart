@@ -86,6 +86,10 @@ Future<bool> _confirmWorkspaceLeave(
     await explain('仍有导入、检查、编辑或转换任务运行。请等待完成，或在任务页面取消后再$action。');
     return false;
   }
+  // A second instance may be unable to acquire the workspace lock.  If this
+  // window has no edits, closing it is safe and must not be blocked by a
+  // failed autosave flush.
+  if (!dirty() && !requiresExplicitChoice) return true;
   if (!requiresExplicitChoice && library is WorkspaceAutosaveService) {
     final autosave = library as WorkspaceAutosaveService;
     if (await autosave.flushWorkspace()) {
@@ -100,7 +104,6 @@ Future<bool> _confirmWorkspaceLeave(
     }
     return false;
   }
-  if (!dirty() && !requiresExplicitChoice) return true;
   final identity = service?.workspaceIdentity;
   final choice = await showDialog<String>(
     context: context,

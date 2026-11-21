@@ -45,7 +45,7 @@ extension _LibrarySelection on _LibraryPageState {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                '已勾选 ${selected.length} 本${hiddenCount > 0 ? ' · 筛选外 $hiddenCount 本' : ''}',
+                '已勾选 ${selected.length} 本书${hiddenCount > 0 ? ' · 筛选外 $hiddenCount 本' : ''}',
                 style: ui(12, w: 600, c: d.ink2),
               ),
             ),

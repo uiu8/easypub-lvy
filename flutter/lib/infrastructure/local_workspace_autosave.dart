@@ -50,6 +50,13 @@ class LocalWorkspaceAutosave {
   Map<String, dynamic>? _payload;
   String? _identity, _projectIdentity, _projectDirectory, _loadedDirectory;
 
+  /// Whether this instance has changes that still need persistence.
+  ///
+  /// A failed workspace lock is not itself an unsaved edit.  Keeping this
+  /// separate from [status] lets a second application instance close cleanly
+  /// when it has not changed anything.
+  bool get hasUnsavedChanges => _changed;
+
   Map<String, dynamic> _copy(Map<String, dynamic> value) =>
       _copyValue(value) as Map<String, dynamic>;
 

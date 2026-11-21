@@ -463,12 +463,8 @@ const kpw5SpacingFactor = {'small': 1.14, 'medium': 1.35, 'large': 1.54};
 /// 取中间值 1064 / 861 / 734，每侧 86 / 187.5 / 251 像素，按 300 ppi 换成磅。仅保留给 KPW5 和自定义推算。
 const kfxSideMarginPt = {'narrow': 20.64, 'medium': 45.0, 'wide': 60.24};
 
-/// KPW5 字号 5 窄边距的真机版心校准值。
-///
-/// 这一档的固件可用宽落在 1056–1072.5 像素之间。C02 和 P10 的真机首屏
-/// 同时约束出 1065 像素。旧实现先把可用宽吸附为 21 个字号，得到 1016.4，
-/// 导致普通汉字和带标点候选链都少了一档。仅对已用真机截图核对的组合启用，
-/// 其他字号继续使用原有的固件整数倍版心规则。
+/// KPW5 5 窄边距的真机校准版心。该入口仍保留给旧调用方和历史校准
+/// 记录，正文版心计算只在这一个已验证组合使用它，其余组合走固件资源。
 double? kpw5CalibratedContentWidth(
   KindleDevice device,
   int level,
@@ -487,6 +483,18 @@ double? kpw5CalibratedContentWidth(
   }
   return null;
 }
+
+const kpw5MeasuredCases = {
+  '4:narrow:medium',
+  '5:narrow:medium',
+  '6:narrow:medium',
+  '8:narrow:medium',
+  '10:narrow:medium',
+  '12:narrow:medium',
+  '8:medium:medium',
+  '8:wide:medium',
+  '8:narrow:large',
+};
 
 /// 固件屏幕系数（KPW5 固件 5.17.1.0.3 KindleResourceBundle.pixVal）：阅读器资源里的磅数换像素时
 /// 乘这个系数——6.8 英寸 1236×1648 为 1.13，7 英寸 1264×1680、1272×1696 为 1.16，其他屏幕为 1。
@@ -519,19 +527,6 @@ double firmwareVerticalMarginPx(KindleDevice d) {
       .toDouble();
 }
 
-/// 实测过的情况：档位:页边距:行间距。
-const kpw5MeasuredCases = {
-  '4:narrow:medium',
-  '5:narrow:medium',
-  '6:narrow:medium',
-  '8:narrow:medium',
-  '10:narrow:medium',
-  '12:narrow:medium',
-  '8:medium:medium',
-  '8:wide:medium',
-  '8:narrow:large',
-};
-
 /// 已核对机型使用本机固件中文表；自定义设备仍是按 PPI 推算。
 List<double> kfxRamp(KindleDevice d) =>
     kindleFirmwareProfiles[d.id]?.cjkRampPt ??
@@ -558,21 +553,21 @@ ReaderMetrics kfxMetrics(
       kpw5SpacingFactor[choice.spacing] ??
       1.35;
   final line = (font * bookLineHeight * spacing).roundToDouble();
+  final marginIndex =
+      const {'narrow': 0, 'medium': 1, 'wide': 2}[choice.margin] ?? 0;
   final sidePt = kfxSideMarginPt[choice.margin] ?? kfxSideMarginPt['narrow']!;
-  // KPW5 保留实测版心；其余已核对机型按本机 pixVal 资源值取整。
+  // KPW5 保留实测版心；其余已核对机型按本机固件 pixVal 资源值取整。
   final sidePixels = device.id == 'kpw5' || profile == null
       ? sidePt * px * firmwareScreenFactor(device) / 1.13
       : firmwarePixVal(
-          profile.sideMarginPt[const {
-                'narrow': 0,
-                'medium': 1,
-                'wide': 2,
-              }[choice.margin] ??
-              0],
+          profile.sideMarginPt[marginIndex],
           device.ppi,
           profile.screenFactor,
         );
   final available = device.width - 2 * sidePixels;
+  // The firmware snaps the effective span to whole font units, then shares
+  // the remaining edge space. The same rule applies across levels and device
+  // groups, so a screenshot-specific width override is unnecessary.
   final box =
       kpw5CalibratedContentWidth(
         device,
@@ -608,7 +603,7 @@ ReaderMetrics kfxMetrics(
         ? '按 KPW5 真机规则推算'
         : profile != null
         ? '按 ${kindleShortName(device.name)} 固件 ${profile.version} · 未经真机核对'
-        : '按 KPW5 真机规则按 ${device.ppi} PPI 推算 · 未经真机核对',
+        : '按 KPW5 固件规则按 ${device.ppi} PPI 推算 · 未经真机核对',
     // 真机按取整后的字宽断行（字号 6、8 时一行少放一个字），这里用字距补到整数宽。
     tracking: (font.roundToDouble() - font) / font,
     justify: true,
@@ -631,23 +626,20 @@ List<double> kindleRamp(KindleDevice d) => d.ppi < 190
     ? kindleFontRamp[212]!
     : kindleFontRamp[300]!;
 
-/// 磅换算为机型视口中的 CSS 像素（磅 → 机器像素 → 视口）。
-double kindlePtToCss(KindleDevice d, double pt) =>
-    pt * d.ppi / 72 * d.viewportWidth / d.width;
-
-/// 每侧左右页边距（CSS 像素）：固件磅数乘屏幕系数。
-double readerSideMargin(KindleDevice d, String margin) => kindlePtToCss(
-  d,
-  (kindleFirmwareProfiles[d.id]?.sideMarginPt[const {
-                'narrow': 0,
-                'medium': 1,
-                'wide': 2,
-              }[margin] ??
-              0] ??
-          readerMarginPt[margin] ??
-          readerMarginPt['narrow']!) *
-      firmwareScreenFactor(d),
-);
+/// 每侧左右页边距（CSS 像素）。阅读器设置面板需要保留固件资源的连续
+/// 磅值，正文版心再在屏幕像素阶段按 pixVal 取整，避免显示比例和排版
+/// 容器各自使用一套边距。
+double readerSideMargin(KindleDevice d, String margin) {
+  final profile = kindleFirmwareProfiles[d.id];
+  final index = const {'narrow': 0, 'medium': 1, 'wide': 2}[margin] ?? 0;
+  final px = profile != null
+      ? profile.sideMarginPt[index] * profile.screenFactor * d.ppi / 72
+      : (readerMarginPt[margin] ?? readerMarginPt['narrow']!) *
+            d.ppi /
+            72 *
+            firmwareScreenFactor(d);
+  return px * d.viewportWidth / d.width;
+}
 
 /// 按机型与阅读器设置计算正文字号与行高。
 /// [bookScale] 为书内字号相对 110% 的倍数；[bookLineHeight] 为书内行高。
@@ -1189,6 +1181,8 @@ double _advance(TextStyle body, int code) {
   final body = style.body;
   final em = body.fontSize ?? 16;
   final indent = piece.indent && style.indent > 0 ? style.indent : 0.0;
+  final tracking = body.letterSpacing ?? 0;
+  final measuredBody = body.copyWith(letterSpacing: 0);
   final lines = kindleLines(
     piece.text,
     width: width,
@@ -1196,9 +1190,10 @@ double _advance(TextStyle body, int code) {
     indent: indent,
     justify: style.align == TextAlign.justify,
     engine: style.lineEngine,
-    advance: (c) => _advance(body, c),
+    tracking: tracking,
+    advance: (c) => _advance(measuredBody, c),
   );
-  final base = body.letterSpacing ?? 0;
+  final base = tracking;
   final children = <InlineSpan>[
     if (indent > 0) WidgetSpan(child: SizedBox(width: indent)),
   ];
@@ -1273,10 +1268,7 @@ TextPainter _painter(
     }
     // 行已经由 Kindle 行模型断好。绘制宽度必须与逻辑版心相同，额外放宽
     // 一个字号会把最后一个字符画到版心外，造成字号切换后的右侧裁切。
-    painter.layout(
-      minWidth: width,
-      maxWidth: width,
-    );
+    painter.layout(minWidth: width, maxWidth: width);
     _kindleCuts[painter] = kindle.$2;
     return painter;
   }
@@ -1469,7 +1461,7 @@ List<List<PreviewPiece>> paginatePreview({
           for (var i = 0; i < metrics.length; i++)
             const KindleLine(0, 0, <double>[]),
         ];
-        final statePages = kindlePaginate(
+        final paginationResult = kindlePaginateDetailed(
           [rows],
           height:
               remaining + _lineLead(metrics.first, style.body.fontSize ?? 16),
@@ -1477,7 +1469,9 @@ List<List<PreviewPiece>> paginatePreview({
           orphans: pagination.orphans,
           widows: pagination.widows,
         );
-        final stateFit = statePages.isEmpty ? 0 : statePages.first.lines.length;
+        final stateFit = paginationResult.pages.isEmpty
+            ? 0
+            : paginationResult.pages.first.lines.length;
         fit = math.min(fit, stateFit);
       }
       final shift = piece.indent && style.indent > 0 ? 1 : 0;

@@ -7,10 +7,10 @@
   const CLOSING_ALL = CLOSING + '”’';
   const QUOTES = '“”‘’';
   const OPENING = '“‘「『（《【〈';
-  // KFX treats the paired ellipsis and em dash as full-width CJK marks.
-  // Measuring the glyph advance would make them half-width in common fonts,
-  // shifting the P10 punctuation probe by one character.
-  const FULL_MARKS = CLOSING + OPENING + QUOTES + '—…';
+  // The firmware classifies the paired ellipsis and em dash separately from
+  // their glyph advance. Keep their no-break rule in the candidate scan, but
+  // let the selected font provide the actual advance.
+  const FULL_MARKS = CLOSING + OPENING + QUOTES;
   const NO_END = new Set(['(', '/', '<', '[', '{', '‘', '“', '〈', '《', '「', '『', '【', '〔', '〖', '（', '［', '｛']);
   const NO_START = new Set(['!', ')', ',', '-', '.', '/', ':', ';', '>', '?', ']', '}', '~', '·', '–', '—', '’', '”', '•', '‧', '‼', '⁇', '、', '。', '〉', '》', '」', '』', '】', '〔', '〕', '〗', '！', '）', '，', '．', '／', '：', '；', '？', '］', '｝', '～']);
 
@@ -90,6 +90,10 @@
     if (id < 1 || id > DESCRIPTOR_WIDTHS.length || !scale) return 0;
     const row = DESCRIPTOR_WIDTHS[id - 1];
     const value = f32(q);
+    // The firmware has explicit +/-FLT_MAX sentinels. They select the
+    // terminal width of the chosen chain, rather than extrapolating the last
+    // finite segment to an enormous score.
+    if (Math.abs(value) > 1e20) return f32(scale * (value < 0 ? row[0] : row[11]));
     if (value <= DESCRIPTOR_SCORES[0]) return f32(scale * row[0]);
     let i = DESCRIPTOR_SCORES.length - 2;
     if (value < DESCRIPTOR_SCORES[DESCRIPTOR_SCORES.length - 1]) {
@@ -108,12 +112,43 @@
 
   function descriptor19(em, q) { return descriptorWidth(19, em, q); }
 
-  function candidateDescriptorScore(chars, start, end, em, q) {
-    let score = 0;
-    for (let i = start; i + 1 < end; i++) {
-      score = f32(score + descriptorPairWidth(descriptor(chars[i], chars[i + 1]), em, em, q));
+  function candidateStretchScore(chars, start, end, em, target, base, tolerance) {
+    const pairs = [];
+    for (let i = start; i + 1 < end; i++) pairs.push(descriptor(chars[i], chars[i + 1]));
+    if (!pairs.length) return Math.abs(target - base) < tolerance ? 0 : Infinity;
+    const at = (q) => {
+      let value = 0;
+      for (const pair of pairs) {
+        value += descriptorPairWidth(pair, em, em, q)
+          - descriptorPairWidth(pair, em, em, 0);
+      }
+      return f32(value);
+    };
+    const delta = f32(target - base);
+    if (Math.abs(delta) < tolerance) return 0;
+    const zero = at(0);
+    if (Math.abs(zero - delta) < tolerance) return 0;
+    const bound = 7;
+    if (delta < 0) {
+      if (at(-bound) > delta + tolerance) return -Infinity;
+      let low = -bound;
+      let high = 0;
+      for (let i = 0; i < 28; i++) {
+        const mid = f32((low + high) / 2);
+        if (at(mid) > delta) low = mid;
+        else high = mid;
+      }
+      return f32((low + high) / 2);
     }
-    return score;
+    if (at(bound) < delta - tolerance) return Infinity;
+    let low = 0;
+    let high = bound;
+    for (let i = 0; i < 28; i++) {
+      const mid = f32((low + high) / 2);
+      if (at(mid) < delta) low = mid;
+      else high = mid;
+    }
+    return f32((low + high) / 2);
   }
 
   function layoutText(text, options) {
@@ -147,13 +182,6 @@
         && (CLOSING_ALL.includes(next) || OPENING.includes(next))) adjust[i] -= em / 2;
       if (OPENING.includes(next) && full[i] && (chars[i] === '　' || OPENING.includes(chars[i]))) adjust[i] -= em / 2;
       if ((pair[0] === 19 && pair[1] === 2) || (pair[0] === 2 && pair[1] === 19)) adjust[i] += descriptor19(em, 0);
-      // The firmware keeps a paired em dash or ellipsis as one candidate
-      // unit and gives the pair a small non-zero separation. Without that
-      // separation a 1064.8px candidate is rounded into a 1065px column and
-      // P10 admits one extra character at the line end.
-      if (chars[i] === chars[i + 1] && (chars[i] === '—' || chars[i] === '…')) {
-        adjust[i] += em * .2;
-      }
     }
     const endCut = (i) => closing[i] && full[i] && adjust[i] >= 0 ? em / 2 : 0;
     const breakable = (i) => {
@@ -173,7 +201,7 @@
       const avail = Math.max(em, width - (first ? indent : 0));
       let used = 0;
       let best = -1;
-      let bestDistance = Infinity;
+      let bestScore = Infinity;
       let i = start;
       for (; i < n; i++) {
         used += base[i] + adjust[i];
@@ -186,12 +214,11 @@
           best = end;
           continue;
         }
-        const q = em ? f32((avail - natural32) / em) : 0;
-        const score = candidateDescriptorScore(chars, start, end, em, q);
-        const distance = f32(Math.abs(avail - natural32) + Math.abs(score) * 1e-6);
-        if (distance <= bestDistance + 1e-7) {
+        const score = candidateStretchScore(chars, start, end, em, avail, natural32, profile.tolerance);
+        if (Number.isFinite(score) && (Math.abs(score) < Math.abs(bestScore) - 1e-7
+          || (profile.tieBreakLast && Math.abs(score) <= Math.abs(bestScore) + 1e-7))) {
           best = end;
-          bestDistance = distance;
+          bestScore = score;
         }
       }
       if (best <= start) best = Math.max(start + 1, i);
@@ -216,7 +243,7 @@
     return lines;
   }
 
-  function paginateLines(paragraphs, options = {}) {
+  function paginateLinesDetailed(paragraphs, options = {}) {
     const height = Math.max(Number(options.height) || 1, 1);
     const lineHeight = Math.max(Number(options.lineHeight) || 1, .001);
     const valueAt = (value, index, fallback) => {
@@ -235,10 +262,16 @@
       return Number.isFinite(number) && number > 0 ? number : 0;
     };
     const pages = [];
+    const events = [];
     let page = [];
     let used = 0;
-    const flush = () => {
-      if (page.length) pages.push(page), page = [], used = 0;
+    const flush = (reason = 'capacity') => {
+      if (page.length) {
+        pages.push(page);
+        events.push({ state: 'next-region', reason, page: pages.length - 1 });
+        page = [];
+        used = 0;
+      }
     };
     const capacity = (paragraphGap) => Math.max(
       0,
@@ -247,37 +280,52 @@
     for (let p = 0; p < paragraphs.length; p++) {
       const count = paragraphs[p] || 0;
       if (!count) continue;
-      if (before[p]) flush();
+      if (before[p]) flush('break-before');
       if (p > 0 && keep[p - 1] && page.length && capacity(spacingAt(p)) < count) flush();
       let offset = 0;
       while (offset < count) {
+        events.push({ state: 'candidate', paragraph: p, line: offset });
         const orphan = valueAt(options.orphans, p, 1);
         const widow = valueAt(options.widows, p, 1);
         const paragraphGap = spacingAt(p);
         let room = capacity(page.length > 0 ? paragraphGap : 0);
-        if (room < Math.min(orphan, count - offset)) flush(), room = capacity(0);
-        if (room <= 0) flush(), room = capacity(0);
+        if (room < Math.min(orphan, count - offset)) {
+          flush('orphan-rollback');
+          room = capacity(0);
+        }
+        if (room <= 0) {
+          flush('empty-region');
+          room = capacity(0);
+        }
         const remaining = count - offset;
         let take = Math.min(room, remaining);
         if (take < remaining && remaining - take < widow) {
           const reduced = remaining - widow;
           if (reduced >= Math.min(orphan, remaining) && reduced > 0) take = reduced;
-          else { flush(); continue; }
+          else {
+            flush('widow-rollback');
+            continue;
+          }
         }
         if (page.length && paragraphGap > 0) used += paragraphGap;
         for (let line = 0; line < take; line++) page.push({ paragraph: p, line: offset + line });
         used += take * lineHeight;
+        events.push({ state: 'commit', paragraph: p, from: offset, count: take });
         offset += take;
-        if (offset < count) flush();
+        if (offset < count) flush('paragraph-overflow');
       }
-      if (after[p]) flush();
+      if (after[p]) flush('break-after');
     }
     flush();
-    return pages;
+    return { pages, events, state: 'complete' };
+  }
+
+  function paginateLines(paragraphs, options = {}) {
+    return paginateLinesDetailed(paragraphs, options).pages;
   }
 
   global.EasyPubKindleLayout = {
-    layoutText, paginateLines, profileFor, descriptor, descriptorWidth, descriptorPairWidth,
+    layoutText, paginateLines, paginateLinesDetailed, profileFor, descriptor, descriptorWidth, descriptorPairWidth,
   };
 })(window);
 
