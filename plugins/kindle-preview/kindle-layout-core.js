@@ -18,11 +18,26 @@
 
   function profileFor(engine) {
     switch (engine) {
-      case 'modern': return { id: 'modern', scored: true, tolerance: .001, ellipsisStart: true };
-      case 'kpw5': return { id: 'kpw5', scored: true, tolerance: .001, ellipsisStart: true };
-      case 'legacy-voyage': return { id: 'legacy-voyage', scored: false, tolerance: .001, ellipsisStart: false };
-      case 'legacy-kpw3': return { id: 'legacy-kpw3', scored: false, tolerance: .001, ellipsisStart: false };
-      default: return { id: 'legacy-kpw4', scored: false, tolerance: .001, ellipsisStart: false };
+      case 'modern': return {
+        id: 'modern', scored: true, tolerance: .001, ellipsisStart: true,
+        orphans: 1, widows: 1, explicitPagination: true,
+      };
+      case 'kpw5': return {
+        id: 'kpw5', scored: true, tolerance: .001, ellipsisStart: true,
+        orphans: 1, widows: 1, explicitPagination: true,
+      };
+      case 'legacy-voyage': return {
+        id: 'legacy-voyage', scored: false, tolerance: .001, ellipsisStart: false,
+        orphans: 1, widows: 1, explicitPagination: true,
+      };
+      case 'legacy-kpw3': return {
+        id: 'legacy-kpw3', scored: false, tolerance: .001, ellipsisStart: false,
+        orphans: 1, widows: 1, explicitPagination: true,
+      };
+      default: return {
+        id: 'legacy-kpw4', scored: false, tolerance: .001, ellipsisStart: false,
+        orphans: 1, widows: 1, explicitPagination: true,
+      };
     }
   }
 
@@ -102,6 +117,9 @@
     const width = Math.max(1, Number(options.width) || 1);
     const em = Math.max(.01, Number(options.em) || 1);
     const indent = Math.max(0, Number(options.indent) || 0);
+    // 浏览器的 letter-spacing 不会进入 canvas.measureText。把书内字距放进
+    // 候选宽度，保证生成的 .ep-line 与实际绘制仍使用同一条固件链。
+    const tracking = Number(options.tracking) || 0;
     const justify = options.justify !== false;
     const profile = profileFor(options.engine);
     const advance = options.advance || (() => em);
@@ -110,8 +128,12 @@
     const n = chars.length;
     const drawn = chars.map((ch, index) => Number(advance(ch, index)) || 0);
     const quote = chars.map((ch) => QUOTES.includes(ch));
-    const base = chars.map((ch, i) => FULL_MARKS.includes(ch) || quote[i] ? em : drawn[i]);
-    const full = chars.map((ch, i) => FULL_MARKS.includes(ch) || quote[i] || base[i] >= em * .9);
+    const naturalBase = chars.map((ch, i) => {
+      const advance = FULL_MARKS.includes(ch) || quote[i] ? em : drawn[i];
+      return advance;
+    });
+    const base = naturalBase.map((value, i) => value + (i + 1 < n ? tracking : 0));
+    const full = chars.map((ch, i) => FULL_MARKS.includes(ch) || quote[i] || naturalBase[i] >= em * .9);
     const closing = chars.map((ch) => CLOSING_ALL.includes(ch));
     const adjust = new Array(n).fill(0);
     for (let i = 0; i < n; i++) {
@@ -187,27 +209,44 @@
   function paginateLines(paragraphs, options = {}) {
     const height = Math.max(Number(options.height) || 1, 1);
     const lineHeight = Math.max(Number(options.lineHeight) || 1, .001);
-    const spacing = Math.max(Number(options.paragraphSpacing) || 0, 0);
-    const orphan = Math.max(1, Math.min(15, Math.trunc(Number(options.orphans) || 1)));
-    const widow = Math.max(1, Math.min(15, Math.trunc(Number(options.widows) || 1)));
+    const valueAt = (value, index, fallback) => {
+      const raw = Array.isArray(value) ? value[index] : value;
+      const number = Math.trunc(Number(raw));
+      return Math.max(1, Math.min(15, Number.isFinite(number) && number > 0 ? number : fallback));
+    };
     const before = options.breakBefore || [];
     const after = options.breakAfter || [];
+    const keep = options.keepWithNext || [];
+    const spacingAt = (index) => {
+      const raw = Array.isArray(options.paragraphSpacing)
+        ? options.paragraphSpacing[index]
+        : options.paragraphSpacing;
+      const number = Number(raw);
+      return Number.isFinite(number) && number > 0 ? number : 0;
+    };
     const pages = [];
     let page = [];
     let used = 0;
     const flush = () => {
       if (page.length) pages.push(page), page = [], used = 0;
     };
-    const capacity = (withSpacing) => Math.max(0, Math.floor((height - used - (withSpacing ? spacing : 0)) / lineHeight));
+    const capacity = (paragraphGap) => Math.max(
+      0,
+      Math.floor((height - used - Math.max(0, Number(paragraphGap) || 0)) / lineHeight),
+    );
     for (let p = 0; p < paragraphs.length; p++) {
       const count = paragraphs[p] || 0;
       if (!count) continue;
       if (before[p]) flush();
+      if (p > 0 && keep[p - 1] && page.length && capacity(spacingAt(p)) < count) flush();
       let offset = 0;
       while (offset < count) {
-        let room = capacity(page.length > 0 && spacing > 0);
-        if (room < Math.min(orphan, count - offset)) flush(), room = capacity(false);
-        if (room <= 0) flush(), room = capacity(false);
+        const orphan = valueAt(options.orphans, p, 1);
+        const widow = valueAt(options.widows, p, 1);
+        const paragraphGap = spacingAt(p);
+        let room = capacity(page.length > 0 ? paragraphGap : 0);
+        if (room < Math.min(orphan, count - offset)) flush(), room = capacity(0);
+        if (room <= 0) flush(), room = capacity(0);
         const remaining = count - offset;
         let take = Math.min(room, remaining);
         if (take < remaining && remaining - take < widow) {
@@ -215,7 +254,7 @@
           if (reduced >= Math.min(orphan, remaining) && reduced > 0) take = reduced;
           else { flush(); continue; }
         }
-        if (page.length && spacing > 0) used += spacing;
+        if (page.length && paragraphGap > 0) used += paragraphGap;
         for (let line = 0; line < take; line++) page.push({ paragraph: p, line: offset + line });
         used += take * lineHeight;
         offset += take;

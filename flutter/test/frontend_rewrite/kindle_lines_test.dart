@@ -50,6 +50,7 @@ void main() {
     expect(split('一二三四五六七八九十，再'), ['一二三四五六七八九', '十，再']);
     // 问号、叹号与句号同类。
     expect(split('一二三四五六七八九？十'), ['一二三四五六七八九？', '十']);
+    expect(split('一二三四五六七八九！十'), ['一二三四五六七八九！', '十']);
   });
 
   test('相邻后置标点前一个半宽；段首全角空格后的前置标点半宽', () {
@@ -156,6 +157,49 @@ void main() {
     ]);
   });
 
+  test('五组管线覆盖全部机型，并把版心分页默认值接到同一模型', () {
+    final expected = {
+      'voyage': 'legacy-voyage',
+      'kpw3': 'legacy-kpw3',
+      'oasis1': 'legacy-kpw3',
+      'oasis2': 'legacy-kpw3',
+      'kpw4': 'legacy-kpw4',
+      'basic10': 'legacy-kpw4',
+      'kpw5': 'kpw5',
+      'basic11': 'kpw5',
+      'oasis3': 'kpw5',
+      'kpw6': 'modern',
+      'scribe': 'modern',
+      'colorsoft': 'modern',
+    };
+    expect(expected.keys.toSet(), kindleDevices.map((d) => d.id).toSet());
+    for (final entry in expected.entries) {
+      final engine = kindleLineEngineForDevice(entry.key);
+      expect(kindleEngineGroupForDevice(entry.key), entry.value);
+      final profile = kindleLayoutProfile(engine);
+      final defaults = kindlePaginationDefaults(engine);
+      expect(defaults.orphans, profile.defaultOrphans);
+      expect(defaults.widows, profile.defaultWidows);
+      expect(profile.applyExplicitPagination, isTrue);
+
+      final lines = kindleLines(
+        '甲乙丙丁戊己庚辛壬癸，甲乙丙丁。',
+        width: 10,
+        em: 1,
+        advance: (_) => 1,
+        engine: engine,
+      );
+      expect(lines, isNotEmpty, reason: entry.key);
+      expect(
+        lines
+            .map((line) => '甲乙丙丁戊己庚辛壬癸，甲乙丙丁。'.substring(line.start, line.end))
+            .join(),
+        '甲乙丙丁戊己庚辛壬癸，甲乙丙丁。',
+        reason: entry.key,
+      );
+    }
+  });
+
   test('23 个固件描述符按评分节点插值，并分别乘前后字号', () {
     for (var descriptor = 1; descriptor <= 23; descriptor++) {
       final unit = kindleDescriptorWidth(descriptor, 1, 0);
@@ -217,6 +261,24 @@ void main() {
     expect(pages[0].lines.map((line) => line.line), [0, 1, 2]);
     expect(pages[1].lines.map((line) => line.line), [3, 4]);
     expect(pages[2].lines.map((line) => line.paragraph), [1, 1]);
+  });
+
+  test('分页状态机按段间距数组分配跨页段落', () {
+    final pages = kindlePaginate(
+      [
+        [
+          const KindleLine(0, 1, <double>[]),
+          const KindleLine(0, 1, <double>[]),
+        ],
+        [const KindleLine(0, 1, <double>[])],
+      ],
+      height: 25,
+      lineHeight: 10,
+      paragraphSpacings: const [0, 5],
+    );
+    expect(pages, hasLength(2));
+    expect(pages.first.lines.map((line) => line.paragraph), [0, 0]);
+    expect(pages.last.lines.map((line) => line.paragraph), [1]);
   });
 
   testWidgets('小预览、排版视图按同一模型断行：Flutter 不再另行折行；首字放大、诗句仍交给 Flutter', (t) async {

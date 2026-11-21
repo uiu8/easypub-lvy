@@ -426,6 +426,8 @@ class ReaderMetrics {
     this.justify = false,
     this.cssPx = 1,
     this.engineGroup = 'legacy',
+    this.orphans = 1,
+    this.widows = 1,
   });
   final double fontPx, lineRatio;
   final EdgeInsets padding;
@@ -442,6 +444,10 @@ class ReaderMetrics {
 
   /// 固件候选断点管线分组，传给真机预览网页。
   final String engineGroup;
+
+  /// 统一分页状态机的默认孤行、寡行约束。旧管线会在网页入口优先读取
+  /// 原书的计算样式，新 KFX 管线使用固件的 1/1 规则。
+  final int orphans, widows;
 }
 
 /// KFX 真机规则（2026-10-29 用户 KPW5 真机截图实测，docs/research/2026-10-29_KPW5真机实测.md）。
@@ -456,6 +462,31 @@ const kpw5SpacingFactor = {'small': 1.14, 'medium': 1.35, 'large': 1.54};
 /// 三档页边距每侧扣掉的宽度（磅）：KPW5 实测可用宽窄 1056–1072、中 829–893、宽 702–766 像素，
 /// 取中间值 1064 / 861 / 734，每侧 86 / 187.5 / 251 像素，按 300 ppi 换成磅。仅保留给 KPW5 和自定义推算。
 const kfxSideMarginPt = {'narrow': 20.64, 'medium': 45.0, 'wide': 60.24};
+
+/// KPW5 字号 5 窄边距的真机版心校准值。
+///
+/// 这一档的固件可用宽落在 1056–1072.5 像素之间。C02 和 P10 的真机首屏
+/// 同时约束出 1065 像素。旧实现先把可用宽吸附为 21 个字号，得到 1016.4，
+/// 导致普通汉字和带标点候选链都少了一档。仅对已用真机截图核对的组合启用，
+/// 其他字号继续使用原有的固件整数倍版心规则。
+double? kpw5CalibratedContentWidth(
+  KindleDevice device,
+  int level,
+  String margin, {
+  double bookScale = 1,
+  double bookLineHeight = 1.2,
+}) {
+  if (device.id != 'kpw5' || device.width != 1236 || device.height != 1648) {
+    return null;
+  }
+  if (level == 5 &&
+      margin == 'narrow' &&
+      (bookScale - 1).abs() < 1e-9 &&
+      (bookLineHeight - 1.2).abs() < 1e-9) {
+    return 1065;
+  }
+  return null;
+}
 
 /// 固件屏幕系数（KPW5 固件 5.17.1.0.3 KindleResourceBundle.pixVal）：阅读器资源里的磅数换像素时
 /// 乘这个系数——6.8 英寸 1236×1648 为 1.13，7 英寸 1264×1680、1272×1696 为 1.16，其他屏幕为 1。
@@ -491,6 +522,7 @@ double firmwareVerticalMarginPx(KindleDevice d) {
 /// 实测过的情况：档位:页边距:行间距。
 const kpw5MeasuredCases = {
   '4:narrow:medium',
+  '5:narrow:medium',
   '6:narrow:medium',
   '8:narrow:medium',
   '10:narrow:medium',
@@ -541,9 +573,20 @@ ReaderMetrics kfxMetrics(
           profile.screenFactor,
         );
   final available = device.width - 2 * sidePixels;
-  final box = (available / font).floor() * font;
+  final box =
+      kpw5CalibratedContentWidth(
+        device,
+        level,
+        choice.margin,
+        bookScale: bookScale,
+        bookLineHeight: bookLineHeight,
+      ) ??
+      (available / font).floor() * font;
   final side = (device.viewportWidth - box) / 2;
   final kpw5 = device.id == 'kpw5';
+  final pagination = kindlePaginationDefaults(
+    kindleLineEngineForDevice(device.id),
+  );
   final measured =
       kpw5 &&
       kpw5MeasuredCases.contains('$level:${choice.margin}:${choice.spacing}') &&
@@ -572,6 +615,8 @@ ReaderMetrics kfxMetrics(
     // 书内 1px 画成 ppi/160 个像素（KPW5 上 1.875）。
     cssPx: device.ppi / 160,
     engineGroup: kindleEngineGroupForDevice(device.id),
+    orphans: pagination.orphans,
+    widows: pagination.widows,
   );
 }
 
@@ -640,6 +685,10 @@ ReaderMetrics readerMetrics(
     engineGroup: kindleEngineGroupForDevice(device.id),
     measured: true,
     note: '按真机校准',
+    orphans: kindlePaginationDefaults(kindleLineEngineForDevice(device.id))
+        .orphans,
+    widows: kindlePaginationDefaults(kindleLineEngineForDevice(device.id))
+        .widows,
   );
 }
 
@@ -1414,6 +1463,7 @@ List<List<PreviewPiece>> paginatePreview({
           metrics.isNotEmpty &&
           metrics.every((m) => (m.height - metrics.first.height).abs() < .5);
       if (stableHeight && fit > 0 && !piece.title) {
+        final pagination = kindlePaginationDefaults(style.lineEngine);
         final rows = [
           for (var i = 0; i < metrics.length; i++)
             const KindleLine(0, 0, <double>[]),
@@ -1423,8 +1473,8 @@ List<List<PreviewPiece>> paginatePreview({
           height:
               remaining + _lineLead(metrics.first, style.body.fontSize ?? 16),
           lineHeight: metrics.first.height,
-          orphans: 1,
-          widows: 1,
+          orphans: pagination.orphans,
+          widows: pagination.widows,
         );
         final stateFit = statePages.isEmpty ? 0 : statePages.first.lines.length;
         fit = math.min(fit, stateFit);

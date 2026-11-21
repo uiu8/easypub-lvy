@@ -419,6 +419,7 @@ function kindleLayoutBlocks(doc, metrics, contentWidth) {
       width: Math.max(1, Number(contentWidth) || el.getBoundingClientRect().width),
       em: fontSize,
       indent,
+      tracking: (Number(metrics.tracking) || 0) * fontSize,
       justify: metrics.justify || computed.textAlign === 'justify',
       engine: metrics.engineGroup || 'legacy',
       advance: (ch, index) => {
@@ -477,6 +478,7 @@ function kindlePaginationState(doc, metrics, pageHeight) {
   if (!core?.paginateLines || !rows.length) return;
   const groups = [];
   const groupRows = [];
+  const groupElements = [];
   let currentKey = null;
   for (const row of rows) {
     row.style.removeProperty('break-before');
@@ -485,6 +487,7 @@ function kindlePaginationState(doc, metrics, pageHeight) {
       currentKey = key;
       groups.push(0);
       groupRows.push([]);
+      groupElements.push(row.parentElement);
     }
     groups[groups.length - 1]++;
     groupRows[groupRows.length - 1].push(row);
@@ -492,12 +495,45 @@ function kindlePaginationState(doc, metrics, pageHeight) {
   const lineHeight = parseFloat(rows[0].dataset.epLineHeight)
     || parseFloat(getComputedStyle(rows[0]).lineHeight)
     || Number(metrics.rootPx) * Number(metrics.lineRatio) || 1;
+  const strictKfx = metrics.engineGroup === 'modern' || metrics.engineGroup === 'kpw5';
+  const cssNumber = (element, property, fallback) => {
+    if (strictKfx) return fallback;
+    const value = Number.parseInt(getComputedStyle(element || doc.body)[property], 10);
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+  };
+  const pageBreak = (element, property) => {
+    const style = getComputedStyle(element || doc.body);
+    const value = style[property] || '';
+    return /^(column|page|left|right|recto|verso|always)$/u.test(value);
+  };
+  const keepWithNext = groupElements.map((element) => {
+    if (strictKfx) return false;
+    const style = getComputedStyle(element || doc.body);
+    return style.breakAfter === 'avoid' || style.pageBreakAfter === 'avoid'
+      || style.breakInside === 'avoid' || style.pageBreakInside === 'avoid';
+  });
+  const paragraphSpacing = groupElements.map((element) => {
+    if (!element) return 0;
+    const style = getComputedStyle(element);
+    const top = Number.parseFloat(style.marginTop) || 0;
+    const bottom = Number.parseFloat(style.marginBottom) || 0;
+    return Math.max(top, bottom);
+  });
   const pages = core.paginateLines(groups, {
     height: Math.max(1, Number(pageHeight) || 1),
     lineHeight,
-    paragraphSpacing: 0,
-    orphans: Number(metrics.orphans) || 1,
-    widows: Number(metrics.widows) || 1,
+    paragraphSpacing,
+    orphans: strictKfx
+      ? Number(metrics.orphans) || 1
+      : groupElements.map((element) => cssNumber(element, 'orphans', Number(metrics.orphans) || 2)),
+    widows: strictKfx
+      ? Number(metrics.widows) || 1
+      : groupElements.map((element) => cssNumber(element, 'widows', Number(metrics.widows) || 2)),
+    keepWithNext,
+    breakBefore: groupElements.map((element) => pageBreak(element, 'breakBefore')
+      || pageBreak(element, 'pageBreakBefore')),
+    breakAfter: groupElements.map((element) => pageBreak(element, 'breakAfter')
+      || pageBreak(element, 'pageBreakAfter')),
   });
   for (const page of pages) {
     const first = page[0];

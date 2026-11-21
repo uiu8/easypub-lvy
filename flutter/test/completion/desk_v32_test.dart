@@ -142,4 +142,27 @@ void main() {
     expect(readerLineEms(16), greaterThanOrEqualTo(15.5));
     expect(readerLineEms(16), lessThan(16));
   });
+
+  test('KPW5 字号 5 窄边距使用真机版心，其他字号保留原固件版心', () {
+    final level5 = readerMetrics(choice('kpw5', level: 5));
+    expect(level5.padding.left, closeTo(85.5, 1e-9));
+    expect(level5.padding.right, closeTo(85.5, 1e-9));
+    expect(level5.measured, isTrue);
+    expect(level5.note, '按 KPW5 真机实测');
+    final level8 = readerMetrics(choice('kpw5', level: 8));
+    expect(level8.padding.left, closeTo(107.6, 1e-9));
+    expect(kpw5CalibratedContentWidth(device('kpw5'), 5, 'narrow'), 1065);
+    expect(kpw5CalibratedContentWidth(device('kpw5'), 8, 'narrow'), isNull);
+  });
+
+  test('五组管线的每款机型都使用固件版心，并带分页默认值', () {
+    for (final d in kindleDevices) {
+      final m = readerMetrics(choice(d.id, level: 5));
+      expect(m.padding.left, greaterThan(0), reason: d.id);
+      expect(m.padding.right, closeTo(m.padding.left, 1e-9), reason: d.id);
+      expect(m.orphans, 1, reason: d.id);
+      expect(m.widows, 1, reason: d.id);
+      expect(m.engineGroup, isNotEmpty, reason: d.id);
+    }
+  });
 }

@@ -949,6 +949,8 @@ class _LayoutPageState extends State<LayoutPage> {
       'justify': m.justify,
       'cssPx': m.cssPx,
       'engineGroup': m.engineGroup,
+      'orphans': m.orphans,
+      'widows': m.widows,
     };
   }
 

@@ -40,6 +40,9 @@ class KindleLayoutProfile {
     required this.breakTolerance,
     required this.allowEllipsisAtLineStart,
     required this.tieBreakLast,
+    this.defaultOrphans = 1,
+    this.defaultWidows = 1,
+    this.applyExplicitPagination = true,
   });
 
   final String id;
@@ -48,6 +51,14 @@ class KindleLayoutProfile {
   final double breakTolerance;
   final bool allowEllipsisAtLineStart;
   final bool tieBreakLast;
+
+  /// 固件正文分页的最小页首、页尾行数。KFX 组由固件预览规则固定为 1，
+  /// 旧组在网页预览中会优先使用原书 CSS 的值，缺省才回到这里。
+  final int defaultOrphans;
+  final int defaultWidows;
+
+  /// 是否由统一状态机把已断好的行显式分配到页面。
+  final bool applyExplicitPagination;
 }
 
 KindleLayoutProfile kindleLayoutProfile(KindleLineEngine engine) =>
@@ -590,6 +601,13 @@ class KindlePage {
   final List<KindlePageLine> lines;
 }
 
+/// 从固件管线取得分页默认值。旧管线的实际 orphans/widows 可能由 EPUB
+/// 样式覆盖，网页入口会把计算样式传给同一状态机。
+({int orphans, int widows}) kindlePaginationDefaults(KindleLineEngine engine) {
+  final profile = kindleLayoutProfile(engine);
+  return (orphans: profile.defaultOrphans, widows: profile.defaultWidows);
+}
+
 /// 按 Kindle 的段落状态、孤行/寡行和显式分页标记把已断好的行排入页面。
 ///
 /// 这里的输入是同一段落已经经过 [kindleLines] 的行。状态机只决定行属于
@@ -600,6 +618,7 @@ List<KindlePage> kindlePaginate(
   required double height,
   required double lineHeight,
   double paragraphSpacing = 0,
+  List<double>? paragraphSpacings,
   int orphans = 1,
   int widows = 1,
   List<bool>? keepWithNext,
@@ -623,10 +642,16 @@ List<KindlePage> kindlePaginate(
     }
   }
 
-  int capacity({required bool withSpacing}) {
-    final available = pageHeight - used - (withSpacing ? paragraphSpacing : 0);
+  int capacity({double spacing = 0}) {
+    final available =
+        pageHeight - used - spacing.clamp(0, double.infinity).toDouble();
     return math.max(0, (available / rowHeight).floor());
   }
+
+  double spacingFor(int paragraph) =>
+      paragraphSpacings != null && paragraph < paragraphSpacings.length
+      ? math.max(0, paragraphSpacings[paragraph])
+      : math.max(0, paragraphSpacing);
 
   for (var p = 0; p < paragraphs.length; p++) {
     final lines = paragraphs[p];
@@ -639,20 +664,20 @@ List<KindlePage> kindlePaginate(
         p - 1 < keepWithNext.length &&
         keepWithNext[p - 1] &&
         current.isNotEmpty &&
-        capacity(withSpacing: true) < lines.length) {
+        capacity(spacing: spacingFor(p)) < lines.length) {
       finishPage();
     }
     var offset = 0;
     while (offset < lines.length) {
-      final spacing = current.isEmpty ? 0.0 : paragraphSpacing;
-      var room = capacity(withSpacing: spacing > 0);
+      final spacing = current.isEmpty ? 0.0 : spacingFor(p);
+      var room = capacity(spacing: spacing);
       if (room < math.min(orphanCount, lines.length - offset)) {
         finishPage();
-        room = capacity(withSpacing: false);
+        room = capacity();
       }
       if (room <= 0) {
         finishPage();
-        room = capacity(withSpacing: false);
+        room = capacity();
       }
       final remaining = lines.length - offset;
       var take = math.min(room, remaining).toInt();
