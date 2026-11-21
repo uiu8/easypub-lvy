@@ -1271,10 +1271,11 @@ TextPainter _painter(
         ),
       ]);
     }
-    // 行已经断好：留出一个字宽的余量，避免浮点误差让 Flutter 再折一次行。
+    // 行已经由 Kindle 行模型断好。绘制宽度必须与逻辑版心相同，额外放宽
+    // 一个字号会把最后一个字符画到版心外，造成字号切换后的右侧裁切。
     painter.layout(
       minWidth: width,
-      maxWidth: width + (style.body.fontSize ?? 16),
+      maxWidth: width,
     );
     _kindleCuts[painter] = kindle.$2;
     return painter;

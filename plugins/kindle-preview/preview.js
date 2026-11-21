@@ -64,7 +64,7 @@ const S = {
   devices: [], device: null, reader: { level: 8, margin: 'narrow', spacing: 'medium', font: 'publisher' },
   original: false,
   saved: {}, draft: {}, metrics: null, render: null, title: '',
-  page: 0, pages: 1, vertical: false, headings: [], entry: null, seq: 0, timer: 0,
+  page: 0, pages: 1, vertical: false, headings: [], entry: null, seq: 0, layoutSeq: 0, timer: 0,
   // 书的文字：sc 简体、tc 繁体（按内容的 lang 判断）。
   script: 'sc',
   // 每章一个文件：spine 为阅读顺序中的文件，doc 为当前文件，chapters 为章节列表。
@@ -352,10 +352,27 @@ function kindleCandidateBoundaries(doc) {
 // 对文本和简单内联结构使用与 Flutter 小预览相同的行模型。文本运行会记录
 // 原节点的字体、颜色和链接属性，换行后按原运行恢复，因此 <em>/<strong>/<a>
 // 不会再绕过固件候选扫描器。图片、ruby、音视频和显式 br 仍由原书结构处理。
+// 字体切换时恢复这份源 DOM，再按新字体重建运行缓存。否则生成行里的旧字体
+// 会继续参与 canvas.measureText，页面上虽然换了字体，断行仍是旧结果。
+function invalidateKindleLayoutCaches(doc) {
+  if (!doc) return;
+  doc.__epKindleFontGeneration = (doc.__epKindleFontGeneration || 0) + 1;
+  for (const el of doc.querySelectorAll('[data-ep-kindle-lines]')) {
+    if (el.__epKindleOriginalHTML !== undefined) el.innerHTML = el.__epKindleOriginalHTML;
+    el.removeAttribute('data-ep-kindle-lines');
+    delete el.__epKindleSource;
+    delete el.__epKindleRuns;
+  }
+  delete doc.__epKindleFontsReady;
+  delete doc.__epKindleFontsWaiting;
+  delete doc.__epUser;
+}
+
 function kindleLayoutBlocks(doc, metrics, contentWidth) {
   const core = window.EasyPubKindleLayout;
   if (!core || !doc.body) return;
-  const blocks = [...doc.querySelectorAll('p,li,blockquote,h1,h2,h3,h4,h5,h6')];
+  const blockSelector = 'p,div,section,article,li,blockquote,h1,h2,h3,h4,h5,h6,td,th,dt,dd,figcaption';
+  const blocks = [...doc.querySelectorAll(blockSelector)];
   const ctx = doc.createElement('canvas').getContext('2d');
   const unsupported = 'img,svg,rt,rp,audio,video,iframe,br,table,ul,ol,dl';
   const copyRun = (node) => {
@@ -381,7 +398,10 @@ function kindleLayoutBlocks(doc, metrics, contentWidth) {
     const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     let node;
     while ((node = walker.nextNode())) {
-      if (!node.data || node.parentElement?.closest('script,style,rt,rp')) continue;
+      // Typography adds helper spaces and zero-width break markers for the
+      // browser path. They are already represented by the core line spacing,
+      // so they must not become source characters in generated Kindle rows.
+      if (!node.data || node.parentElement?.closest('script,style,rt,rp,.ep-s,.ep-qs,.ep-br')) continue;
       const text = node.data.replace(/\s+/g, ' ');
       const run = copyRun(node);
       for (const ch of Array.from(text)) runs.push({ ch, run });
@@ -398,8 +418,33 @@ function kindleLayoutBlocks(doc, metrics, contentWidth) {
   };
   for (const el of blocks) {
     if (!el.isConnected || el.querySelector(unsupported)) continue;
-    if (el.querySelector('p,li,blockquote,h1,h2,h3,h4,h5,h6')) continue;
+    if (el.localName === 'pre' || el.querySelector(blockSelector)) continue;
+    // The generated Kindle rows are the geometry authority. Preserve the
+    // paragraph's vertical margins for pagination, but remove horizontal CSS
+    // geometry and inherited tracking so the same width is used for measuring
+    // and painting. Original padding/width rules were the source of right-edge
+    // clipping after a reader-size change.
+    const sourceStyle = getComputedStyle(el);
+    if (el.__epKindleIndent === undefined) {
+      el.__epKindleIndent = Math.max(0, parseFloat(sourceStyle.textIndent) || 0);
+    }
+    const originalIndent = el.__epKindleIndent;
+    if (el.__epKindleBreakInside === undefined) {
+      el.__epKindleBreakInside = sourceStyle.breakInside || '';
+      el.__epKindlePageBreakBefore = sourceStyle.breakBefore || sourceStyle.pageBreakBefore || '';
+      el.__epKindlePageBreakAfter = sourceStyle.breakAfter || sourceStyle.pageBreakAfter || '';
+    }
+    el.style.setProperty('box-sizing', 'border-box', 'important');
+    el.style.setProperty('width', '100%', 'important');
+    el.style.setProperty('margin-left', '0', 'important');
+    el.style.setProperty('margin-right', '0', 'important');
+    el.style.setProperty('padding-left', '0', 'important');
+    el.style.setProperty('padding-right', '0', 'important');
+    el.style.setProperty('text-indent', '0', 'important');
+    el.style.setProperty('letter-spacing', '0', 'important');
+    el.style.setProperty('break-inside', 'auto', 'important');
     if (el.__epKindleSource === undefined) {
+      if (el.__epKindleOriginalHTML === undefined) el.__epKindleOriginalHTML = el.innerHTML;
       const runs = capture(el);
       el.__epKindleRuns = runs;
       el.__epKindleSource = runs.map((item) => item.ch).join('');
@@ -410,7 +455,7 @@ function kindleLayoutBlocks(doc, metrics, contentWidth) {
     const computed = getComputedStyle(el);
     const fontSize = parseFloat(computed.fontSize) || Number(metrics.rootPx) || 16;
     const lineHeight = parseFloat(computed.lineHeight) || fontSize * 1.2;
-    const indent = Math.max(0, parseFloat(computed.textIndent) || 0);
+    const indent = originalIndent;
     const font = computed.font || [computed.fontStyle, computed.fontVariant, computed.fontWeight,
       fontSize + 'px/' + lineHeight + 'px', computed.fontFamily || 'sans-serif'].join(' ');
     ctx.font = font;
@@ -437,9 +482,13 @@ function kindleLayoutBlocks(doc, metrics, contentWidth) {
       const row = doc.createElementNS(XHTML, 'span');
       row.className = 'ep-line';
       row.style.display = 'block';
+      row.style.width = '100%';
+      row.style.boxSizing = 'border-box';
       row.style.whiteSpace = 'nowrap';
       row.style.breakInside = 'avoid';
-      row.style.lineHeight = String(lineHeight / fontSize);
+      row.style.textAlign = 'left';
+      row.style.letterSpacing = '0';
+      row.style.setProperty('line-height', lineHeight + 'px', 'important');
       if (lineIndex === 0 && indent > 0) row.style.textIndent = indent + 'px';
       const chars = Array.from(line.text);
       chars.forEach((ch, index) => {
@@ -450,6 +499,8 @@ function kindleLayoutBlocks(doc, metrics, contentWidth) {
         glyph.className = 'ep-line-char';
         glyph.textContent = ch;
         glyph.style.display = 'inline-block';
+        glyph.style.whiteSpace = 'pre';
+        glyph.style.setProperty('letter-spacing', '0', 'important');
         runStyle(glyph, data.run?.run);
         if (data.run?.href) {
           glyph.setAttribute('href', data.run.href);
@@ -502,6 +553,10 @@ function kindlePaginationState(doc, metrics, pageHeight) {
     return Number.isFinite(value) && value > 0 ? value : fallback;
   };
   const pageBreak = (element, property) => {
+    const remembered = property === 'breakBefore' || property === 'pageBreakBefore'
+      ? element?.__epKindlePageBreakBefore
+      : element?.__epKindlePageBreakAfter;
+    if (remembered) return /^(column|page|left|right|recto|verso|always)$/u.test(remembered);
     const style = getComputedStyle(element || doc.body);
     const value = style[property] || '';
     return /^(column|page|left|right|recto|verso|always)$/u.test(value);
@@ -509,14 +564,17 @@ function kindlePaginationState(doc, metrics, pageHeight) {
   const keepWithNext = groupElements.map((element) => {
     if (strictKfx) return false;
     const style = getComputedStyle(element || doc.body);
+    const breakInside = element?.__epKindleBreakInside || style.breakInside;
     return style.breakAfter === 'avoid' || style.pageBreakAfter === 'avoid'
-      || style.breakInside === 'avoid' || style.pageBreakInside === 'avoid';
+      || breakInside === 'avoid' || style.pageBreakInside === 'avoid';
   });
   const paragraphSpacing = groupElements.map((element) => {
     if (!element) return 0;
     const style = getComputedStyle(element);
-    const top = Number.parseFloat(style.marginTop) || 0;
-    const bottom = Number.parseFloat(style.marginBottom) || 0;
+    const top = (Number.parseFloat(style.marginTop) || 0)
+      + (Number.parseFloat(style.paddingTop) || 0);
+    const bottom = (Number.parseFloat(style.marginBottom) || 0)
+      + (Number.parseFloat(style.paddingBottom) || 0);
     return Math.max(top, bottom);
   });
   const pages = core.paginateLines(groups, {
@@ -713,8 +771,11 @@ function area() {
   const p = Object.fromEntries(['left','right','top','bottom'].map(k=>[k, original[k]+(extra[k]||0)]));
   return {
     left: p.left, top: p.top,
-    width: Math.max(1, Math.floor(d.viewportWidth - p.left - p.right)),
-    height: Math.max(1, Math.floor(d.viewportHeight - p.top - p.bottom)),
+    // Keep the logical Kindle area fractional until the final browser raster.
+    // Rounding the width here while centering with the unrounded padding made
+    // the right edge one pixel different from the left edge at smaller sizes.
+    width: Math.max(1, d.viewportWidth - p.left - p.right),
+    height: Math.max(1, d.viewportHeight - p.top - p.bottom),
   };
 }
 
@@ -744,6 +805,8 @@ function bodyLead(doc) {
 function layout(keepRatio) {
   const doc = frame.contentDocument;
   if (!doc || !doc.documentElement || !S.metrics) return;
+  const layoutSeq = ++S.layoutSeq;
+  const fontGeneration = doc.__epKindleFontGeneration || 0;
   const a = area();
   // 横排时正文区延伸一个正文行的下留白（见 bodyLead）。
   const h = a.height + (doc.__epLead || 0);
@@ -823,6 +886,11 @@ function layout(keepRatio) {
     'html .ep-p{letter-spacing:-0.5em!important}',
     'html .ep-k{white-space:nowrap!important}',
     'html .ep-s{word-spacing:var(--ep-ws,0)!important}',
+    // 生成行已经包含了固件计算出的字距。清除原书段落和字符节点的
+    // 继承字距，避免 CSS letter-spacing 与行模型的 marginRight 叠加。
+    'html [data-ep-kindle-lines]{box-sizing:border-box!important;width:100%!important;margin-left:0!important;margin-right:0!important;padding-left:0!important;padding-right:0!important;break-inside:auto!important;orphans:1!important;widows:1!important}',
+    'html [data-ep-kindle-lines]>.ep-line{display:block!important;width:100%!important;box-sizing:border-box!important;overflow:visible!important;text-align:left!important;white-space:nowrap!important;letter-spacing:0!important}',
+    'html [data-ep-kindle-lines]>.ep-line>.ep-line-char{display:inline-block!important;white-space:pre!important;letter-spacing:0!important}',
     vertical || kfx ? '' : 'html .ep-q{font-family:"Segoe UI",Arial,sans-serif!important}',
     // 相邻标点挤压（KPW5）：前一个后置标点只占半个字宽；缩进后的前置引号去掉左半边。
     // 弯引号（KFX 规则）：前置引号左边补到一个字宽，段首等处再去掉半个字宽；后置引号右边补到一个字宽，
@@ -845,17 +913,73 @@ function layout(keepRatio) {
     // 否则浏览器默认 widows:2 会把整段推到下一页。旧管线继续保留原书行为。
     strictKfx ? 'body *{orphans:1;widows:1}' : '',
   ].join('\n');
-  kindleLayoutBlocks(doc, m, a.width);
-  kindlePaginationState(doc, m, h);
-  kindleCandidateBoundaries(doc);
+  // Do not expose the intermediate fallback-font geometry. The first layout
+  // must be built only after the selected reader font has settled, otherwise
+  // the cached source runs keep the fallback widths for the later reflow.
+  if (!doc.__epKindleFontsReady) {
+    if (!doc.__epKindleFontsWaiting) {
+      doc.__epKindleFontsWaiting = true;
+      frame.style.visibility = 'hidden';
+      const waits = [doc.fonts?.ready || Promise.resolve()];
+      const face = readerFont().split(',')[0].trim();
+      if (face && doc.fonts?.load) {
+        waits.push(doc.fonts.load('16px ' + face, '中文').catch(() => []));
+      }
+      const finishFonts = () => {
+        const current = frame.contentDocument;
+        // An XHTML iframe can replace its Document object while Chromium is
+        // settling the font set. In that case finish the current document,
+        // rather than leaving the newly loaded page hidden behind the stale
+        // promise from the previous object.
+        if (current !== doc || doc.__epKindleFontGeneration !== fontGeneration) {
+          frame.style.visibility = 'visible';
+          if (current && current.__epKindleFontsWaiting) {
+            current.__epKindleFontsReady = true;
+            current.__epKindleFontsWaiting = false;
+            layout(layoutSeq === S.layoutSeq ? keepRatio : undefined);
+          }
+          return;
+        }
+        doc.__epKindleFontsReady = true;
+        doc.__epKindleFontsWaiting = false;
+        frame.style.visibility = 'visible';
+        // A reader setting may have changed while the font promise was
+        // pending. Re-run the latest document layout even when this promise
+        // belongs to the previous request.
+        layout(layoutSeq === S.layoutSeq ? keepRatio : undefined);
+      };
+      // Chromium can leave document.fonts.ready pending for an XHTML iframe
+      // whose font set is already reported as loaded. Do not leave the page
+      // hidden forever when that happens. A settled font promise still wins,
+      // while the timeout only releases the same measured fallback geometry.
+      Promise.race([
+        Promise.all(waits),
+        new Promise((resolve) => setTimeout(resolve, 800)),
+      ]).finally(finishFonts);
+    }
+    return;
+  }
+  // Quote and candidate normalization is shared by both preview sources.
+  // Only the software-layout source replaces paragraphs with generated rows.
+  // Original-layout pages keep their EPUB block structure so CSS margins,
+  // inline elements and explicit breaks cannot be duplicated by the row model.
   kindleTypography(doc);
+  kindleCandidateBoundaries(doc);
+  if (!S.original) {
+    // The row builder carries the measured quote compensation into the same
+    // line result used for painting.
+    kindleLayoutBlocks(doc, m, a.width);
+    kindlePaginationState(doc, m, h);
+  }
   // 导入的字体异步载入：载入后按新字宽重新分页一次。
   if (user && doc.__epUser !== user.id) {
     doc.__epUser = user.id;
     doc.fonts.load('16px "EPUser-' + user.id + '"', '中文')
       .then((faces) => {
         if (!faces.length) throw new Error('font');
-        if (frame.contentDocument === doc) layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
+        if (frame.contentDocument === doc && layoutSeq === S.layoutSeq) {
+          layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
+        }
       })
       .catch(() => status('导入的字体“' + user.name + '”无法显示，请换一个字体文件。', true));
   }
@@ -881,7 +1005,14 @@ function layout(keepRatio) {
   }
   const root = doc.scrollingElement || doc.documentElement;
   const step = vertical ? a.height + GAP : a.width + GAP;
-  const extent = vertical ? root.scrollHeight : root.scrollWidth;
+  // scrollWidth/scrollHeight are integer CSS pixels. Prefer the fractional
+  // body geometry when available so a 1016.4px Kindle column does not drift
+  // into a false extra page after the browser rounds the scroll extent.
+  const bodyRect = doc.body?.getBoundingClientRect();
+  const bodyExtent = vertical ? bodyRect?.height : bodyRect?.width;
+  const viewportExtent = vertical ? a.height : a.width;
+  const extent = Number.isFinite(bodyExtent) && bodyExtent > viewportExtent + 0.5
+    ? bodyExtent : (vertical ? root.scrollHeight : root.scrollWidth);
   S.pages = Math.max(1, Math.round((extent + GAP) / step));
   S.headings = [...doc.querySelectorAll('h1[id^="node-"],h2[id^="node-"],h3[id^="node-"],h4[id^="node-"]')]
     .map((el) => ({ id: el.id, page: pageOf(el), text: el.textContent.trim(), level: Number(el.tagName[1]) }));
@@ -897,7 +1028,9 @@ function layout(keepRatio) {
   if (!doc.__epFontsHooked && doc.fonts) {
     doc.__epFontsHooked = true;
     const again = () => {
-      if (frame.contentDocument === doc) layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
+      if (frame.contentDocument === doc && layoutSeq === S.layoutSeq) {
+        layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
+      }
     };
     doc.fonts.addEventListener('loadingdone', () => setTimeout(again, 0));
     doc.fonts.ready.then(() => setTimeout(again, 0));
@@ -910,8 +1043,8 @@ function pageOf(el) {
   const a = area();
   const rect = el.getBoundingClientRect();
   return S.vertical
-    ? Math.max(0, Math.floor((rect.top + root.scrollTop) / (a.height + GAP)))
-    : Math.max(0, Math.floor((rect.left + root.scrollLeft) / (a.width + GAP)));
+    ? Math.max(0, Math.floor((rect.top + root.scrollTop + 1e-6) / (a.height + GAP)))
+    : Math.max(0, Math.floor((rect.left + root.scrollLeft + 1e-6) / (a.width + GAP)));
 }
 
 function show(page) {
@@ -920,8 +1053,8 @@ function show(page) {
   S.page = Math.max(0, Math.min(S.pages - 1, page));
   const root = doc.scrollingElement || doc.documentElement;
   const a = area();
-  if (S.vertical) root.scrollTop = S.page * (a.height + GAP);
-  else root.scrollLeft = S.page * (a.width + GAP);
+  if (S.vertical) root.scrollTop = Math.round(S.page * (a.height + GAP));
+  else root.scrollLeft = Math.round(S.page * (a.width + GAP));
   $('page-no').textContent = '第 ' + (S.page + 1) + ' 页';
   // 进度按全书文件顺序估算：前面的文件加上本文件已读的比例。
   const index = S.spine.indexOf(S.doc);
@@ -1474,6 +1607,9 @@ async function chooseFont(value) {
   syncControls();
   // 选择记在本机，下次打开预览沿用（只影响预览）。
   api('font-select', { font: S.reader.font }).catch(() => {});
+  // 生成行缓存了旧字体的 canvas 字宽。先恢复到源 DOM，再按新字体
+  // 重新捕获运行，避免“字形已变、断行没变”的混合状态。
+  invalidateKindleLayoutCaches(frame.contentDocument);
   if (!await refreshMetrics()) return;
   layout(S.pages > 1 ? S.page / (S.pages - 1) : 0);
 }

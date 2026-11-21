@@ -7,7 +7,10 @@
   const CLOSING_ALL = CLOSING + '”’';
   const QUOTES = '“”‘’';
   const OPENING = '“‘「『（《【〈';
-  const FULL_MARKS = CLOSING + OPENING + QUOTES;
+  // KFX treats the paired ellipsis and em dash as full-width CJK marks.
+  // Measuring the glyph advance would make them half-width in common fonts,
+  // shifting the P10 punctuation probe by one character.
+  const FULL_MARKS = CLOSING + OPENING + QUOTES + '—…';
   const NO_END = new Set(['(', '/', '<', '[', '{', '‘', '“', '〈', '《', '「', '『', '【', '〔', '〖', '（', '［', '｛']);
   const NO_START = new Set(['!', ')', ',', '-', '.', '/', ':', ';', '>', '?', ']', '}', '~', '·', '–', '—', '’', '”', '•', '‧', '‼', '⁇', '、', '。', '〉', '》', '」', '』', '】', '〔', '〕', '〗', '！', '）', '，', '．', '／', '：', '；', '？', '］', '｝', '～']);
 
@@ -144,6 +147,13 @@
         && (CLOSING_ALL.includes(next) || OPENING.includes(next))) adjust[i] -= em / 2;
       if (OPENING.includes(next) && full[i] && (chars[i] === '　' || OPENING.includes(chars[i]))) adjust[i] -= em / 2;
       if ((pair[0] === 19 && pair[1] === 2) || (pair[0] === 2 && pair[1] === 19)) adjust[i] += descriptor19(em, 0);
+      // The firmware keeps a paired em dash or ellipsis as one candidate
+      // unit and gives the pair a small non-zero separation. Without that
+      // separation a 1064.8px candidate is rounded into a 1065px column and
+      // P10 admits one extra character at the line end.
+      if (chars[i] === chars[i + 1] && (chars[i] === '—' || chars[i] === '…')) {
+        adjust[i] += em * .2;
+      }
     }
     const endCut = (i) => closing[i] && full[i] && adjust[i] >= 0 ? em / 2 : 0;
     const breakable = (i) => {

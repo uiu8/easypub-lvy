@@ -139,7 +139,10 @@ const kindleOpening = '“‘「『（《【〈';
 
 /// 固件按整字处理的中文标点。不能使用字体实际 advance 判定是否“全角”，
 /// 否则苹方的窄字形会把同一候选链错误地当成半角。
-const kindleFullWidthMarks = '$kindleClosing$kindleOpening$kindleQuotes';
+// KFX treats paired ellipses and em dashes as full-width CJK marks. Using
+// the font advance here shifts the P10 punctuation probe by one character.
+const kindleFullWidthMarks =
+    '$kindleClosing$kindleOpening$kindleQuotes—…';
 
 /// 固件左侧禁则（不能放在行末）：0028 002F 003C 005B 007B 2018 201C 3008 300A 300C 300E 3010 3014 3016 FF08 FF3B FF5B。
 final kindleNoEnd = Set<int>.unmodifiable(const [
@@ -781,6 +784,13 @@ List<KindleLine> kindleLines(
         ((pair.left == 19 && pair.right == 2) ||
             (pair.left == 2 && pair.right == 19))) {
       adjust[i] += kindleDescriptorWidth19(em, 0);
+    }
+    // Paired em dashes and ellipses stay together in the firmware candidate
+    // chain and carry a small separation. This prevents an exact-width pair
+    // from being rounded into the next Kindle column.
+    if (next >= 0 && runes[i] == runes[i + 1] &&
+        (runes[i] == 0x2014 || runes[i] == 0x2026)) {
+      adjust[i] += em * .2;
     }
   }
   // 行末只占半个字宽（相邻挤压已经减过的不再减）。

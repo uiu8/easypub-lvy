@@ -725,7 +725,11 @@ extension _LayoutPreviewSection on _LayoutPageState {
                             : null,
                         verseBlock: verseBlockStyle,
                         ruleScale: size / 17.6,
-                        body: face(size),
+                        // 真机正文的字距由阅读器字号带入。这里必须和章节页
+                        // 使用同一份度量，否则小预览会比真机少排或多排一个字。
+                        body: face(size).copyWith(
+                          letterSpacing: metrics.tracking * size,
+                        ),
                         align: switch (alignment) {
                           'start' => TextAlign.start,
                           'left' => TextAlign.left,

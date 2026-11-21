@@ -117,17 +117,16 @@ class ChapterLayoutView extends ChangeNotifier {
     final size = lengths.modern
         ? metrics.fontPx
         : metrics.fontPx.clamp(6.0, 96.0);
-    final face =
-        (device.serif
-                ? serif(size, c: page.ink, h: metrics.lineRatio)
-                : ui(size, c: page.ink, h: metrics.lineRatio))
-            .copyWith(letterSpacing: metrics.tracking * size);
+    final face = device.serif
+        ? serif(size, c: page.ink, h: metrics.lineRatio)
+        : ui(size, c: page.ink, h: metrics.lineRatio);
+    final bodyFace = face.copyWith(letterSpacing: metrics.tracking * size);
     double margin(String side) => lengths.margin(side);
     final fullwidth = n('fullwidth_indent', 0).clamp(0, 8).toInt();
     final align = book['text_alignment'] as String? ?? 'start';
     final style = PreviewStyle(
       title: face,
-      body: face,
+      body: bodyFace,
       align: switch (align) {
         'center' => TextAlign.center,
         'right' => TextAlign.right,
